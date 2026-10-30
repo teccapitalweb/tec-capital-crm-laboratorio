@@ -25,8 +25,8 @@ test('laboratorio: siete clientes, tiempo real, permisos, automatización y pers
     const data=await res.json();assert.equal(res.status,expected,JSON.stringify(data));return {data,cookie:res.headers.get('set-cookie')?.split(';')[0]};
   }
   const post=(path,cookie,body,expected=200)=>call(path,{method:'POST',cookie,body,expected});
-  async function register(username,inviteCode){return post('/api/auth/register','',{username,name:'Prueba '+username,password:'Password-de-prueba-2026!',inviteCode});}
-  const admin=await register('admin',adminCode),agent=await register('asesor',agentCode),agent2=await register('asesor2',agentCode);
+  async function register(username,inviteCode){if(inviteCode===agentCode){const i=await post('/api/team/invites',admin.cookie,{username,brandIds:['globalvet','odonteck','dermalysse']},201);inviteCode=i.data.token;}return post('/api/auth/register','',{username,name:'Prueba '+username,password:'Password-de-prueba-2026!',inviteCode});}
+  const admin=await register('admin',adminCode);const agent=await register('asesor',agentCode),agent2=await register('asesor2',agentCode);
   const clients=await Promise.all(Array.from({length:7},(_,i)=>register('cliente'+i)));
   assert.equal(new Set(clients.map(c=>c.data.user.testNumber)).size,7);
   assert.ok(clients.every(c=>c.data.user.role==='customer'));

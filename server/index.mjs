@@ -8,11 +8,14 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { openDatabase, transaction } from './database.mjs';
 import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
+import { migrateCRM, createCRM } from './crm.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
+if(db.prepare('PRAGMA user_version').get().user_version<3&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v3-'+Date.now()+'.sqlite'));}
+migrateCRM(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -20,7 +23,7 @@ const port=Number(process.env.PORT||3100);
 const host=process.env.HOST||(production?'0.0.0.0':'127.0.0.1');
 const sessions=new Map(), limits=new Map();
 const ttl=7*24*60*60*1000;
-const staff=person=>person.role==='agent'||person.role==='admin';
+const staff=person=>person&&!person.disabled&&(person.role==='agent'||person.role==='admin');
 const safeUser=user=>({id:user.id,username:user.username,name:user.name,role:user.role,testNumber:user.test_number});
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const clean=(v,max=5000)=>typeof v==='string'?v.trim().slice(0,max):'';
@@ -49,13 +52,15 @@ function readSession(req){
   const token=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('tc_session='))?.slice(11);
   if(!token||!/^[a-f0-9]{64}$/.test(token))return null;
   const user=db.prepare('SELECT u.*,s.token_hash,s.expires_at FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?').get(hash(token),Date.now());
-  return user||null;
+  return user&&!user.disabled?user:null;
 }
 function requireUser(req){const user=readSession(req);if(!user)throw fail(401,'Inicia sesión para continuar.');return user;}
 function requireStaff(user){if(!staff(user))throw fail(403,'Esta acción es para el equipo de atención.');}
 function requireAdmin(user){if(user.role!=='admin')throw fail(403,'Esta acción requiere un administrador.');}
-function accessConversation(id,user){const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(id);if(!c||(!staff(user)&&c.customer_id!==user.id))throw fail(404,'Conversación no disponible.');return c;}
-function canSee(c,user){return staff(user)||c.customer_id===user.id;}
+function accessConversation(id,user){const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(id);if(!c||!canSee(c,user))throw fail(404,'Conversación no disponible.');return c;}
+function canSee(c,user){return !user.disabled&&(c.customer_id===user.id||crm.canBrand(user,c.brand_id));}
+function disconnect(userId){for(const [socket,user]of sessions)if(user.id===userId)socket.close(1008,'Actualiza tu acceso');}
+const crm=createCRM({db,body,json,audit,passwordHash,checkPassword,rate,disconnect,broadcast});
 async function body(req){
   let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>5_800_000)throw fail(413,'El archivo es demasiado grande. Máximo 4 MB.');chunks.push(chunk);}
   try{const data=JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}');if(!data||typeof data!=='object'||Array.isArray(data))throw Error();return data;}catch{throw fail(400,'Solicitud no válida.');}
@@ -65,17 +70,17 @@ async function checkPassword(password,stored){const [salt,expected]=stored.split
 function setSession(res,user){const token=randomBytes(32).toString('hex');db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(hash(token),user.id,Date.now()+ttl);res.setHeader('Set-Cookie',`tc_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${ttl/1000}${production?'; Secure':''}`);}
 function broadcast(type,conversationId=null,extra={}){
   const c=conversationId?db.prepare('SELECT * FROM conversations WHERE id=?').get(conversationId):null;
-  for(const [socket,user] of sessions){if(socket.readyState===WebSocket.OPEN&&(!c||canSee(c,user)))socket.send(JSON.stringify({type,conversationId,...extra}));}
+  for(const [socket,saved] of sessions){const user=db.prepare('SELECT * FROM users WHERE id=?').get(saved.id);if(user&&!user.disabled&&socket.readyState===WebSocket.OPEN&&(!c||canSee(c,user))&&(type!=='crm'||(staff(user)&&(!extra.brandId||crm.canBrand(user,extra.brandId)))))socket.send(JSON.stringify({type,conversationId,...extra}));}
 }
 function online(userId){return [...sessions.values()].some(u=>u.id===userId);}
-function conversationList(user){
+function conversationList(user,query='',offset=0){
   const all=db.prepare(`SELECT c.*,u.name customer_name,u.test_number,b.name brand_name,k.title course_title,
     a.name agent_name,(SELECT text FROM messages m WHERE m.conversation_id=c.id ORDER BY seq DESC LIMIT 1) last_text,
     (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id AND m.read_at IS NULL AND m.sender_kind IN ('agent','automation')) customer_unread,
     (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id AND m.read_at IS NULL AND ${staff(user)?"m.sender_kind='customer'":"m.sender_kind IN ('agent','automation')"}) unread
     FROM conversations c JOIN users u ON u.id=c.customer_id JOIN brands b ON b.id=c.brand_id JOIN courses k ON k.id=c.course_id
-    LEFT JOIN users a ON a.id=c.assigned_to ${staff(user)?'':'WHERE c.customer_id=?'} ORDER BY c.updated_at DESC LIMIT 300`);
-  return (staff(user)?all.all():all.all(user.id)).map(c=>({...c,customer_online:online(c.customer_id)}));
+    LEFT JOIN users a ON a.id=c.assigned_to WHERE (c.customer_id=@user OR @admin=1 OR (@agent=1 AND EXISTS(SELECT 1 FROM brand_members bm WHERE bm.user_id=@user AND bm.brand_id=c.brand_id))) AND (@query='' OR instr(lower(u.name||' '||u.test_number||' '||b.name||' '||k.title),lower(@query))>0 OR EXISTS(SELECT 1 FROM messages sm WHERE sm.conversation_id=c.id AND instr(lower(sm.text),lower(@query))>0)) ORDER BY c.updated_at DESC,c.id LIMIT 300 OFFSET @offset`);
+  return all.all({user:user.id,admin:user.role==='admin'?1:0,agent:user.role==='agent'?1:0,query,offset}).map(c=>({...c,customer_online:online(c.customer_id)}));
 }
 function messageList(id,before=Number.MAX_SAFE_INTEGER){
   return db.prepare(`SELECT m.*,u.name sender_name,a.filename,a.mime,a.size FROM messages m LEFT JOIN users u ON u.id=m.sender_id
@@ -106,7 +111,7 @@ function botReply(c,trigger){
   const ref='automation:'+trigger.id;
   if(db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref))return;
   insertMessage(c,null,reply,'automation',ref,null,flyer);
-  if(stage)db.prepare('UPDATE conversations SET stage=? WHERE id=?').run(stage,c.id);
+  if(stage){db.prepare('UPDATE conversations SET stage=? WHERE id=?').run(stage,c.id);crm.setStage(c,stage);}
   if(handoff)db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);
 }
 function processJobs(){
@@ -136,9 +141,10 @@ function flyer(course,brand){
 const server=http.createServer(async(req,res)=>{
   security(res);const url=new URL(req.url,'http://localhost'),path=url.pathname;
   try{
-    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.1.0',transport:'websocket',mode:'laboratorio'});}
+    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.2.0',transport:'websocket',mode:'laboratorio'});}
     if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!originAllowed(req))throw fail(403,'Origen no permitido.');
     const ip=req.socket.remoteAddress||'unknown';
+    if(req.method==='POST'&&path==='/api/auth/recover'){rate('recovery:'+ip,12,900000);await crm.recover(await body(req));return json(res,200,{ok:true});}
     if(req.method==='POST'&&['/api/auth/register','/api/auth/login'].includes(path)){
       rate('auth:'+ip,240,3600000);const input=await body(req),username=clean(input.username,40).toLowerCase(),password=typeof input.password==='string'?input.password:'';
       rate('auth-user:'+username,20,900000);
@@ -148,27 +154,29 @@ const server=http.createServer(async(req,res)=>{
         const name=clean(input.name,60);if(name.length<2)throw fail(400,'Escribe tu nombre.');
         if(db.prepare('SELECT id FROM users WHERE username=?').get(username))throw fail(409,'Ese usuario ya existe. Elige otro o inicia sesión.');
         const code=clean(input.inviteCode,200);let role='customer';
-        if(code){if(secureEqual(code,process.env.ADMIN_INVITE_CODE))role='admin';else if(secureEqual(code,process.env.STAFF_INVITE_CODE))role='agent';else throw fail(400,'El código del equipo no es válido.');}
+        if(code){if(!db.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get()&&secureEqual(code,process.env.ADMIN_INVITE_CODE))role='admin';else crm.inviteFor(code,username);}
         const password_hash=await passwordHash(password);const id=randomUUID(),now=Date.now();
-        transaction(db,()=>{const number=db.prepare('SELECT COALESCE(MAX(test_number),100000)+1 n FROM users').get().n;db.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,?,?)').run(id,username,name,password_hash,role,number,now,now);});
+        transaction(db,()=>{if(role==='admin'&&db.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get())throw fail(409,'El administrador ya fue configurado. Solicita una invitación individual.');const number=db.prepare('SELECT COALESCE(MAX(test_number),100000)+1 n FROM users').get().n;db.prepare('INSERT INTO users(id,username,name,password_hash,role,test_number,created_at,last_seen) VALUES(?,?,?,?,?,?,?,?)').run(id,username,name,password_hash,role,number,now,now);if(code&&role!=='admin')crm.acceptInvite(code,{id,username,role});});
         user=db.prepare('SELECT * FROM users WHERE id=?').get(id);audit(user,'profile.created',id);
       }else{
         user=db.prepare('SELECT * FROM users WHERE username=?').get(username);
-        if(!user||!await checkPassword(password,user.password_hash))throw fail(401,'Usuario o contraseña incorrectos.');
+        if(!user||user.disabled||!await checkPassword(password,user.password_hash))throw fail(401,'Usuario o contraseña incorrectos.');
       }
       setSession(res,user);return json(res,200,{user:safeUser(user)});
     }
     if(path.startsWith('/api/')){
       const user=requireUser(req);
+      if(await crm.handle(req,res,path,user))return;
       if(req.method==='POST'&&path==='/api/auth/logout'){db.prepare('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash);for(const [ws,u]of sessions)if(u.token_hash===user.token_hash)ws.close(1000,'Sesión cerrada');res.setHeader('Set-Cookie','tc_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'+(production?'; Secure':''));return json(res,200,{ok:true});}
-      if(req.method==='GET'&&path==='/api/bootstrap')return json(res,200,{user:safeUser(user),brands:db.prepare('SELECT * FROM brands ORDER BY created_at').all(),courses:db.prepare('SELECT * FROM courses WHERE active=1 ORDER BY title').all().map(publicCourse),conversations:conversationList(user),onlineAgents:[...new Set([...sessions.values()].filter(staff).map(x=>x.id))].length});
-      if(req.method==='GET'&&path==='/api/conversations')return json(res,200,{conversations:conversationList(user)});
+      if(req.method==='GET'&&path==='/api/bootstrap')return json(res,200,{user:safeUser(user),brands:crm.brandsFor(user),courses:db.prepare('SELECT * FROM courses WHERE active=1 ORDER BY title').all().filter(c=>user.role==='customer'||crm.canBrand(user,c.brand_id)).map(publicCourse),conversations:conversationList(user),onlineAgents:[...new Set([...sessions.values()].filter(staff).map(x=>x.id))].length});
+      if(req.method==='GET'&&path==='/api/conversations'){const offset=Math.max(0,Math.min(100000,Number(url.searchParams.get('offset'))||0));return json(res,200,{conversations:conversationList(user,clean(url.searchParams.get('q'),100),Math.floor(offset))});}
       if(req.method==='POST'&&path==='/api/conversations'){
         rate('new:'+user.id,20);const input=await body(req);const course=db.prepare('SELECT * FROM courses WHERE id=? AND active=1').get(clean(input.courseId,60));
         if(!course||!['whatsapp','instagram','facebook'].includes(input.channel))throw fail(400,'Elige un curso y un canal válidos.');
+        if(staff(user))crm.requireBrand(user,course.brand_id);
         let c=db.prepare("SELECT * FROM conversations WHERE customer_id=? AND course_id=? AND channel=? AND status!='resolved'").get(user.id,course.id,input.channel);
         if(!c){const id=randomUUID(),now=Date.now();db.prepare('INSERT INTO conversations(id,customer_id,brand_id,course_id,channel,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,user.id,course.brand_id,course.id,input.channel,now,now);c=db.prepare('SELECT * FROM conversations WHERE id=?').get(id);audit(user,'conversation.created',id);broadcast('conversation',id);}
-        return json(res,200,{conversation:c});
+        transaction(db,()=>crm.syncConversation(c));broadcast('crm',null,{brandId:c.brand_id});return json(res,200,{conversation:c});
       }
       const messages=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/messages$/);
       if(messages){const c=accessConversation(messages[1],user);
@@ -180,7 +188,7 @@ const server=http.createServer(async(req,res)=>{
           if(existing){if(existing.conversation_id!==c.id)throw fail(409,'Referencia ya utilizada.');return json(res,200,{id:existing.id,duplicate:true});}
           if(c.status==='resolved')throw fail(409,'La conversación está cerrada. Abre una nueva para continuar la prueba.');
           const isCustomer=c.customer_id===user.id&&!input.asAgent;
-          if(!isCustomer){requireStaff(user);if(c.assigned_to&&c.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor está atendiendo esta conversación.');}
+          if(!isCustomer){requireStaff(user);crm.requireBrand(user,c.brand_id);if(c.assigned_to&&c.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor está atendiendo esta conversación.');}
           const attachment=attachmentData(input.attachment);let attachmentId=null;
           if(attachment){attachmentId=randomUUID();await writeFile(resolve(dataDir,'uploads',attachment.storageName),attachment.buffer,{flag:'wx'});}
           let messageId,duplicate=false;try{transaction(db,()=>{
@@ -188,7 +196,7 @@ const server=http.createServer(async(req,res)=>{
             const current=accessConversation(c.id,user);if(current.status==='resolved')throw fail(409,'La conversación se cerró mientras enviabas.');
             if(!isCustomer&&current.assigned_to&&current.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor tomó la conversación.');
             if(attachment)db.prepare('INSERT INTO attachments VALUES(?,?,?,?,?,?,?,?)').run(attachmentId,c.id,user.id,attachment.filename,attachment.storageName,attachment.mime,attachment.buffer.length,Date.now());
-            if(!isCustomer){db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);}
+            if(!isCustomer){crm.assignConversation(c,user.id);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);}
             messageId=insertMessage(c,user,text,isCustomer?'customer':'agent',ref,attachmentId);
             if(isCustomer&&current.bot_enabled&&!current.assigned_to)db.prepare('INSERT INTO jobs(id,conversation_id,message_id,due_at) VALUES(?,?,?,?)').run(randomUUID(),c.id,messageId,Date.now()+700);
           });}catch(error){if(attachment)await unlink(resolve(dataDir,'uploads',attachment.storageName)).catch(()=>{});throw error;}
@@ -197,15 +205,15 @@ const server=http.createServer(async(req,res)=>{
         }
       }
       const read=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/read$/);
-      if(read&&req.method==='POST'){const c=accessConversation(read[1],user);const input=await body(req);if(input.asAgent)requireStaff(user);const max=Number(input.upTo)||0;if(!Number.isSafeInteger(max)||max<0)throw fail(400,'Lectura no válida.');const kind=c.customer_id===user.id&&!input.asAgent?"sender_kind IN ('agent','automation')":"sender_kind='customer'";const changed=db.prepare(`UPDATE messages SET read_at=? WHERE conversation_id=? AND seq<=? AND read_at IS NULL AND ${kind}`).run(Date.now(),c.id,max);if(changed.changes)broadcast('read',c.id);return json(res,200,{ok:true});}
+      if(read&&req.method==='POST'){const c=accessConversation(read[1],user);const input=await body(req);if(input.asAgent){requireStaff(user);crm.requireBrand(user,c.brand_id);}const max=Number(input.upTo)||0;if(!Number.isSafeInteger(max)||max<0)throw fail(400,'Lectura no válida.');const kind=c.customer_id===user.id&&!input.asAgent?"sender_kind IN ('agent','automation')":"sender_kind='customer'";const changed=db.prepare(`UPDATE messages SET read_at=? WHERE conversation_id=? AND seq<=? AND read_at IS NULL AND ${kind}`).run(Date.now(),c.id,max);if(changed.changes)broadcast('read',c.id);return json(res,200,{ok:true});}
       const action=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/action$/);
       if(action&&req.method==='POST'){
-        requireStaff(user);const input=await body(req);transaction(db,()=>{const c=accessConversation(action[1],user);if(c.assigned_to&&c.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor está atendiendo esta conversación.');
+        requireStaff(user);const input=await body(req);transaction(db,()=>{const c=accessConversation(action[1],user);crm.requireBrand(user,c.brand_id);if(c.assigned_to&&c.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor está atendiendo esta conversación.');
           if(c.status==='resolved'&&input.action!=='stage')throw fail(409,'La conversación está cerrada. El cliente puede iniciar otra prueba.');
-          if(input.action==='take')db.prepare("UPDATE conversations SET assigned_to=?,bot_enabled=0,status='open',updated_at=? WHERE id=?").run(user.id,Date.now(),c.id);
+          if(input.action==='take'){crm.assignConversation(c,user.id);db.prepare("UPDATE conversations SET assigned_to=?,bot_enabled=0,status='open',updated_at=? WHERE id=?").run(user.id,Date.now(),c.id);}
           else if(input.action==='automate')db.prepare("UPDATE conversations SET assigned_to=NULL,bot_enabled=1,status='open',updated_at=? WHERE id=?").run(Date.now(),c.id);
           else if(input.action==='resolve')db.prepare("UPDATE conversations SET bot_enabled=0,status='resolved',updated_at=? WHERE id=?").run(Date.now(),c.id);
-          else if(input.action==='stage'&&['nuevo','interesado','inscripcion','inscrito'].includes(input.stage))db.prepare('UPDATE conversations SET stage=?,updated_at=? WHERE id=?').run(input.stage,Date.now(),c.id);
+          else if(input.action==='stage'&&['nuevo','interesado','inscripcion','inscrito'].includes(input.stage)){crm.setStage(c,input.stage,user);db.prepare('UPDATE conversations SET stage=?,updated_at=? WHERE id=?').run(input.stage,Date.now(),c.id);}
           else throw fail(400,'Acción no válida.');
           if(input.action!=='stage')db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);
           audit(user,'conversation.'+input.action,c.id);
@@ -213,18 +221,18 @@ const server=http.createServer(async(req,res)=>{
       }
       const template=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/template$/);
       if(template&&req.method==='POST'){
-        requireStaff(user);const c=accessConversation(template[1],user),input=await body(req);if(c.status==='resolved')throw fail(409,'La conversación está cerrada.');if(c.assigned_to&&c.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor está atendiendo.');
+        requireStaff(user);const c=accessConversation(template[1],user),input=await body(req);crm.requireBrand(user,c.brand_id);if(c.status==='resolved')throw fail(409,'La conversación está cerrada.');if(c.assigned_to&&c.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor está atendiendo.');
         const course=db.prepare('SELECT * FROM courses WHERE id=?').get(c.course_id);const text=input.kind==='syllabus'?'Temario:\n\n'+course.syllabus:input.kind==='price'?`Precio de ejemplo: $${(course.price_cents/100).toFixed(2)} MXN. Edición de prueba.`:'Te comparto el flyer de práctica de '+course.title+'.';
         const clientRef=clean(input.clientRef,100);if(!/^[a-zA-Z0-9-]{16,100}$/.test(clientRef)||!['syllabus','price','flyer'].includes(input.kind))throw fail(400,'Plantilla o referencia no válida.');const ref=user.id+':'+clientRef;
         const existing=db.prepare('SELECT conversation_id FROM messages WHERE client_ref=?').get(ref);if(existing&&existing.conversation_id!==c.id)throw fail(409,'Referencia ya utilizada.');
-        if(!db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref)){transaction(db,()=>{insertMessage(c,user,text,'agent',ref,null,input.kind==='flyer'?course.id:null);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);});broadcast('conversation',c.id);}return json(res,200,{ok:true});
+        if(!db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref)){transaction(db,()=>{crm.assignConversation(c,user.id);insertMessage(c,user,text,'agent',ref,null,input.kind==='flyer'?course.id:null);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);});broadcast('conversation',c.id);}return json(res,200,{ok:true});
       }
       const file=path.match(/^\/api\/files\/([a-f0-9-]+)$/);
       if(file&&req.method==='GET'){const f=db.prepare('SELECT * FROM attachments WHERE id=?').get(file[1]);if(!f)throw fail(404,'Archivo no disponible.');accessConversation(f.conversation_id,user);const bytes=await readFile(resolve(dataDir,'uploads',f.storage_name));res.writeHead(200,{'Content-Type':f.mime,'Content-Disposition':`${f.mime==='application/pdf'?'attachment':'inline'}; filename*=UTF-8''${encodeURIComponent(f.filename)}`});return res.end(bytes);}
       const snapshotImage=path.match(/^\/api\/messages\/([a-f0-9-]+)\/flyer$/);
       if(snapshotImage&&req.method==='GET'){const message=db.prepare('SELECT * FROM messages WHERE id=?').get(snapshotImage[1]);if(!message?.flyer_snapshot)throw fail(404,'Flyer no disponible.');accessConversation(message.conversation_id,user);const snapshot=JSON.parse(message.flyer_snapshot);if(!snapshot)throw fail(404,'Flyer no disponible.');return await serveFlyer(res,snapshot.course,snapshot.brand,snapshot.artworkId);}
       const image=path.match(/^\/api\/courses\/([a-zA-Z0-9-]+)\/flyer$/);
-      if(image&&req.method==='GET'){const course=db.prepare('SELECT * FROM courses WHERE id=?').get(image[1]);if(!course)throw fail(404,'Curso no disponible.');const brand=db.prepare('SELECT * FROM brands WHERE id=?').get(course.brand_id);return await serveFlyer(res,course,brand,courseArtwork(course));}
+      if(image&&req.method==='GET'){const course=db.prepare('SELECT * FROM courses WHERE id=?').get(image[1]);if(!course)throw fail(404,'Curso no disponible.');if(staff(user))crm.requireBrand(user,course.brand_id);const brand=db.prepare('SELECT * FROM brands WHERE id=?').get(course.brand_id);return await serveFlyer(res,course,brand,courseArtwork(course));}
       if(path==='/api/catalog'&&req.method==='POST'){
         requireAdmin(user);const input=await body(req),title=clean(input.title,100),brand=clean(input.brandId,60),price=Number(input.price);
         if(!title||!Number.isFinite(price)||price<0||price>1000000||!clean(input.dateLabel)||!clean(input.syllabus)||!clean(input.welcome)||!db.prepare('SELECT id FROM brands WHERE id=?').get(brand))throw fail(400,'Completa el título, la marca, el precio, la fecha, el temario y la presentación.');
@@ -234,11 +242,17 @@ const server=http.createServer(async(req,res)=>{
         audit(user,'course.saved',id);broadcast('catalog');return json(res,200,{ok:true,id});
       }
       if(path==='/api/brands'&&req.method==='POST'){requireAdmin(user);const input=await body(req),name=clean(input.name,60);if(name.length<2)throw fail(400,'Escribe el nombre de la marca.');const id=randomUUID();db.prepare('INSERT INTO brands VALUES(?,?,?,?)').run(id,name,clean(input.description,200)||'Marca de prueba',Date.now());audit(user,'brand.created',id);broadcast('catalog');return json(res,201,{id});}
-      if(path==='/api/metrics'&&req.method==='GET'){requireStaff(user);return json(res,200,{profiles:db.prepare('SELECT COUNT(*) n FROM users').get().n,conversations:db.prepare('SELECT COUNT(*) n FROM conversations').get().n,messages:db.prepare('SELECT COUNT(*) n FROM messages').get().n,waiting:db.prepare("SELECT COUNT(*) n FROM conversations WHERE status='waiting'").get().n,online:new Set([...sessions.values()].map(u=>u.id)).size,byChannel:db.prepare('SELECT channel,COUNT(*) count FROM conversations GROUP BY channel').all(),recent:db.prepare('SELECT a.action,a.created_at,u.name FROM audit a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 15').all()});}
+      if(path==='/api/metrics'&&req.method==='GET'){
+        requireStaff(user);const list=db.prepare('SELECT * FROM conversations').all().filter(c=>crm.canBrand(user,c.brand_id)),ids=new Set(list.map(c=>c.id));
+        const byChannel=['whatsapp','instagram','facebook'].map(channel=>({channel,count:list.filter(c=>c.channel===channel).length}));
+        const messages=db.prepare('SELECT conversation_id,COUNT(*) n FROM messages GROUP BY conversation_id').all().filter(m=>ids.has(m.conversation_id)).reduce((n,m)=>n+m.n,0);
+        const recent=db.prepare('SELECT a.*,u.name FROM audit a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 300').all().filter(a=>user.role==='admin'||ids.has(a.entity_id)).slice(0,15);
+        return json(res,200,{profiles:user.role==='admin'?db.prepare('SELECT COUNT(*) n FROM users').get().n:new Set(list.map(c=>c.customer_id)).size,conversations:list.length,messages,waiting:list.filter(c=>c.status==='waiting').length,online:new Set([...sessions.values()].filter(u=>user.role==='admin'||u.id===user.id||list.some(c=>c.customer_id===u.id)).map(u=>u.id)).size,byChannel,recent});
+      }
       throw fail(404,'Ruta no disponible.');
     }
     if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'Método no permitido.');
-    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
     const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.'});}
 });
@@ -249,7 +263,7 @@ server.on('upgrade',(req,socket,head)=>{
   if([...sessions.values()].filter(u=>u.id===user.id).length>=8){socket.end('HTTP/1.1 429 Too Many Requests\r\n\r\n');return;}
   wss.handleUpgrade(req,socket,head,ws=>{sessions.set(ws,user);ws.isAlive=true;db.prepare('UPDATE users SET last_seen=? WHERE id=?').run(Date.now(),user.id);ws.send(JSON.stringify({type:'connected',user:safeUser(user)}));broadcast('presence');
     ws.on('pong',()=>{ws.isAlive=true;});
-    ws.on('message',raw=>{try{rate('ws:'+user.id,90);if(user.expires_at<Date.now())return ws.close(1008,'Sesión vencida');const event=JSON.parse(raw.toString());if(event.type==='typing'){const c=accessConversation(clean(event.conversationId,60),user);broadcast('typing',c.id,{name:user.name,userId:user.id,expiresAt:Date.now()+3500});}}catch{/* Ignore invalid client events. */}});
+    ws.on('message',raw=>{try{rate('ws:'+user.id,90);if(user.expires_at<Date.now())return ws.close(1008,'Sesión vencida');const event=JSON.parse(raw.toString());if(event.type==='typing'){const currentUser=db.prepare('SELECT * FROM users WHERE id=?').get(user.id);const c=accessConversation(clean(event.conversationId,60),currentUser);broadcast('typing',c.id,{name:user.name,userId:user.id,expiresAt:Date.now()+3500});}}catch{/* Ignore invalid client events. */}});
     ws.on('error',()=>{});ws.on('close',()=>{sessions.delete(ws);db.prepare('UPDATE users SET last_seen=? WHERE id=?').run(Date.now(),user.id);broadcast('presence');});
   });
 });
