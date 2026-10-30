@@ -9,13 +9,16 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { openDatabase, transaction } from './database.mjs';
 import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
 import { migrateCRM, createCRM } from './crm.mjs';
+import { migrateFollowup } from './followup.mjs';
+import { conversationPage } from './conversations.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<3&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v3-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<4&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v4-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
+migrateFollowup(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -29,6 +32,7 @@ const fail=(status,message)=>Object.assign(new Error(message),{status});
 const clean=(v,max=5000)=>typeof v==='string'?v.trim().slice(0,max):'';
 const normalized=v=>v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 const secureEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length>0&&b.length>0&&timingSafeEqual(Buffer.from(hash(a)),Buffer.from(hash(b)));
+db.function('search_text',{deterministic:true},value=>normalized(String(value??'')));
 const publicCourse=c=>({...c,price:c.price_cents/100,hasArtwork:Boolean(courseArtwork(c))});
 
 function rate(key,max,window=60000) {
@@ -73,15 +77,7 @@ function broadcast(type,conversationId=null,extra={}){
   for(const [socket,saved] of sessions){const user=db.prepare('SELECT * FROM users WHERE id=?').get(saved.id);if(user&&!user.disabled&&socket.readyState===WebSocket.OPEN&&(!c||canSee(c,user))&&(type!=='crm'||(staff(user)&&(!extra.brandId||crm.canBrand(user,extra.brandId)))))socket.send(JSON.stringify({type,conversationId,...extra}));}
 }
 function online(userId){return [...sessions.values()].some(u=>u.id===userId);}
-function conversationList(user,query='',offset=0){
-  const all=db.prepare(`SELECT c.*,u.name customer_name,u.test_number,b.name brand_name,k.title course_title,
-    a.name agent_name,(SELECT text FROM messages m WHERE m.conversation_id=c.id ORDER BY seq DESC LIMIT 1) last_text,
-    (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id AND m.read_at IS NULL AND m.sender_kind IN ('agent','automation')) customer_unread,
-    (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id AND m.read_at IS NULL AND ${staff(user)?"m.sender_kind='customer'":"m.sender_kind IN ('agent','automation')"}) unread
-    FROM conversations c JOIN users u ON u.id=c.customer_id JOIN brands b ON b.id=c.brand_id JOIN courses k ON k.id=c.course_id
-    LEFT JOIN users a ON a.id=c.assigned_to WHERE (c.customer_id=@user OR @admin=1 OR (@agent=1 AND EXISTS(SELECT 1 FROM brand_members bm WHERE bm.user_id=@user AND bm.brand_id=c.brand_id))) AND (@query='' OR instr(lower(u.name||' '||u.test_number||' '||b.name||' '||k.title),lower(@query))>0 OR EXISTS(SELECT 1 FROM messages sm WHERE sm.conversation_id=c.id AND instr(lower(sm.text),lower(@query))>0)) ORDER BY c.updated_at DESC,c.id LIMIT 300 OFFSET @offset`);
-  return all.all({user:user.id,admin:user.role==='admin'?1:0,agent:user.role==='agent'?1:0,query,offset}).map(c=>({...c,customer_online:online(c.customer_id)}));
-}
+function conversationList(user){return conversationPage(db,user,{size:300},online).conversations;}
 function messageList(id,before=Number.MAX_SAFE_INTEGER){
   return db.prepare(`SELECT m.*,u.name sender_name,a.filename,a.mime,a.size FROM messages m LEFT JOIN users u ON u.id=m.sender_id
     LEFT JOIN attachments a ON a.id=m.attachment_id WHERE m.conversation_id=? AND m.seq<? ORDER BY m.seq DESC LIMIT 150`).all(id,before).reverse().map(m=>({...m,flyer_snapshot:undefined,attachmentUrl:m.attachment_id?'/api/files/'+m.attachment_id:m.flyer_course_id?'/api/messages/'+m.id+'/flyer':null}));
@@ -111,7 +107,7 @@ function botReply(c,trigger){
   const ref='automation:'+trigger.id;
   if(db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref))return;
   insertMessage(c,null,reply,'automation',ref,null,flyer);
-  if(stage){db.prepare('UPDATE conversations SET stage=? WHERE id=?').run(stage,c.id);crm.setStage(c,stage);}
+  if(stage)crm.setStage(c,stage);
   if(handoff)db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);
 }
 function processJobs(){
@@ -141,7 +137,7 @@ function flyer(course,brand){
 const server=http.createServer(async(req,res)=>{
   security(res);const url=new URL(req.url,'http://localhost'),path=url.pathname;
   try{
-    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.2.0',transport:'websocket',mode:'laboratorio'});}
+    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.3.0',transport:'websocket',mode:'laboratorio'});}
     if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!originAllowed(req))throw fail(403,'Origen no permitido.');
     const ip=req.socket.remoteAddress||'unknown';
     if(req.method==='POST'&&path==='/api/auth/recover'){rate('recovery:'+ip,12,900000);await crm.recover(await body(req));return json(res,200,{ok:true});}
@@ -169,18 +165,27 @@ const server=http.createServer(async(req,res)=>{
       if(await crm.handle(req,res,path,user))return;
       if(req.method==='POST'&&path==='/api/auth/logout'){db.prepare('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash);for(const [ws,u]of sessions)if(u.token_hash===user.token_hash)ws.close(1000,'Sesión cerrada');res.setHeader('Set-Cookie','tc_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'+(production?'; Secure':''));return json(res,200,{ok:true});}
       if(req.method==='GET'&&path==='/api/bootstrap')return json(res,200,{user:safeUser(user),brands:crm.brandsFor(user),courses:db.prepare('SELECT * FROM courses WHERE active=1 ORDER BY title').all().filter(c=>user.role==='customer'||crm.canBrand(user,c.brand_id)).map(publicCourse),conversations:conversationList(user),onlineAgents:[...new Set([...sessions.values()].filter(staff).map(x=>x.id))].length});
-      if(req.method==='GET'&&path==='/api/conversations'){const offset=Math.max(0,Math.min(100000,Number(url.searchParams.get('offset'))||0));return json(res,200,{conversations:conversationList(user,clean(url.searchParams.get('q'),100),Math.floor(offset))});}
+      if(req.method==='GET'&&path==='/api/conversations'){
+        const offset=Math.max(0,Math.min(100000,Number(url.searchParams.get('offset'))||0));
+        return json(res,200,conversationPage(db,user,{q:clean(url.searchParams.get('q'),100),offset:Math.floor(offset),cursor:url.searchParams.get('cursor'),brand:url.searchParams.get('brand'),channel:url.searchParams.get('channel'),filter:url.searchParams.get('filter'),mode:url.searchParams.get('mode')},online));
+      }
+      const detail=path.match(/^\/api\/conversations\/([a-f0-9-]+)$/);
+      if(detail&&req.method==='GET'){const c=conversationPage(db,user,{id:detail[1]},online).conversations[0];if(!c)throw fail(404,'Conversación no disponible.');return json(res,200,{conversation:c});}
       if(req.method==='POST'&&path==='/api/conversations'){
         rate('new:'+user.id,20);const input=await body(req);const course=db.prepare('SELECT * FROM courses WHERE id=? AND active=1').get(clean(input.courseId,60));
         if(!course||!['whatsapp','instagram','facebook'].includes(input.channel))throw fail(400,'Elige un curso y un canal válidos.');
         if(staff(user))crm.requireBrand(user,course.brand_id);
         let c=db.prepare("SELECT * FROM conversations WHERE customer_id=? AND course_id=? AND channel=? AND status!='resolved'").get(user.id,course.id,input.channel);
         if(!c){const id=randomUUID(),now=Date.now();db.prepare('INSERT INTO conversations(id,customer_id,brand_id,course_id,channel,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,user.id,course.brand_id,course.id,input.channel,now,now);c=db.prepare('SELECT * FROM conversations WHERE id=?').get(id);audit(user,'conversation.created',id);broadcast('conversation',id);}
-        transaction(db,()=>crm.syncConversation(c));broadcast('crm',null,{brandId:c.brand_id});return json(res,200,{conversation:c});
+        transaction(db,()=>crm.syncConversation(c));broadcast('crm',null,{brandId:c.brand_id});return json(res,200,{conversation:conversationPage(db,user,{id:c.id},online).conversations[0]});
       }
       const messages=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/messages$/);
       if(messages){const c=accessConversation(messages[1],user);
-        if(req.method==='GET'){const before=Number(url.searchParams.get('before'))||Number.MAX_SAFE_INTEGER;return json(res,200,{messages:messageList(c.id,before)});}
+        if(req.method==='GET'){
+          const before=Number(url.searchParams.get('before'))||Number.MAX_SAFE_INTEGER,q=clean(url.searchParams.get('q'),100);
+          if(q){const matches=db.prepare('SELECT m.id,m.seq,m.text,m.sender_kind,m.created_at,u.name sender_name FROM messages m LEFT JOIN users u ON u.id=m.sender_id WHERE m.conversation_id=? AND m.seq<? AND instr(search_text(m.text),search_text(?))>0 ORDER BY m.seq DESC LIMIT 51').all(c.id,before,q);return json(res,200,{messages:matches.slice(0,50),nextBefore:matches.length>50?matches[49].seq:null});}
+          return json(res,200,{messages:messageList(c.id,before)});
+        }
         if(req.method==='POST'){
           rate('send:'+user.id,45);const input=await body(req),text=clean(input.text),clientRef=clean(input.clientRef,100);
           if(!/^[a-zA-Z0-9-]{16,100}$/.test(clientRef)||(!text&&!input.attachment))throw fail(400,'Escribe un mensaje o adjunta un archivo.');
@@ -213,7 +218,7 @@ const server=http.createServer(async(req,res)=>{
           if(input.action==='take'){crm.assignConversation(c,user.id);db.prepare("UPDATE conversations SET assigned_to=?,bot_enabled=0,status='open',updated_at=? WHERE id=?").run(user.id,Date.now(),c.id);}
           else if(input.action==='automate')db.prepare("UPDATE conversations SET assigned_to=NULL,bot_enabled=1,status='open',updated_at=? WHERE id=?").run(Date.now(),c.id);
           else if(input.action==='resolve')db.prepare("UPDATE conversations SET bot_enabled=0,status='resolved',updated_at=? WHERE id=?").run(Date.now(),c.id);
-          else if(input.action==='stage'&&['nuevo','interesado','inscripcion','inscrito'].includes(input.stage)){crm.setStage(c,input.stage,user);db.prepare('UPDATE conversations SET stage=?,updated_at=? WHERE id=?').run(input.stage,Date.now(),c.id);}
+          else if(input.action==='stage'&&['nuevo','interesado','inscripcion','inscrito','ganada','perdida'].includes(input.stage)){crm.setStage(c,input.stage,user,input);}
           else throw fail(400,'Acción no válida.');
           if(input.action!=='stage')db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);
           audit(user,'conversation.'+input.action,c.id);
@@ -254,7 +259,7 @@ const server=http.createServer(async(req,res)=>{
     if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'Método no permitido.');
     const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
     const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
-  }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.'});}
+  }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.',...(error.status&&error.code?{code:error.code}:{}),...(error.status&&error.activeOpportunityId?{activeOpportunityId:error.activeOpportunityId}:{})});}
 });
 
 const wss=new WebSocketServer({noServer:true,maxPayload:2048,perMessageDeflate:false});

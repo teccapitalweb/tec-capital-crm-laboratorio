@@ -1,6 +1,6 @@
 {
   "name": "tec-capital-crm-laboratorio",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Laboratorio multicanal de TEC Capital con perfiles, conversaciones persistentes y WebSocket.",
@@ -11,7 +11,7 @@
     "start": "node --env-file-if-exists=.env server/index.mjs",
     "dev": "node --env-file-if-exists=.env --watch server/index.mjs",
     "test": "node --test test/*.test.mjs",
-    "check": "node --check server/index.mjs && node --check public/app.js && node --check public/crm.js && node --check server/crm.mjs"
+    "check": "node --check server/index.mjs && node --check public/app.js && node --check public/crm.js && node --check server/crm.mjs && node --check server/followup.mjs && node --check server/conversations.mjs"
   },
   "dependencies": {
     "lucide": "1.65.0",

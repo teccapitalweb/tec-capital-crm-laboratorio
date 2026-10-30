@@ -1,5 +1,6 @@
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
+import { createFollowup } from './followup.mjs';
 
 const tokenHash=value=>createHash('sha256').update(value).digest('hex');
 const fail=(status,message)=>Object.assign(new Error(message),{status});
@@ -38,6 +39,7 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
   const validOwner=(id,brand)=>{if(!id)return null;const u=db.prepare('SELECT * FROM users WHERE id=?').get(id);if(!canBrand(u,brand))throw fail(400,'El responsable no tiene acceso a esta marca.');return id;};
   const scoped=(table,id,user)=>{const r=db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);if(!r)throw fail(404,'Registro no disponible.');requireBrand(user,r.brand_id);return r;};
   const sendChange=brand=>broadcast('crm',null,{brandId:brand});
+  const followup=createFollowup({db,scoped,validOwner,body,json,sendChange,audit,broadcast});
   const inviteFor=(token,username)=>{
     const row=db.prepare('SELECT * FROM team_invites WHERE token_hash=? AND username=? AND used_by IS NULL AND revoked_at IS NULL AND expires_at>?').get(tokenHash(text(token,200)),username,Date.now());
     if(!row)throw fail(400,'La invitación no es válida para este usuario, venció o ya fue utilizada.');
@@ -62,10 +64,10 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
     let opportunity=db.prepare("SELECT * FROM opportunities WHERE contact_id=? AND course_id=? AND stage NOT IN ('ganada','perdida')").get(contact.id,c.course_id);
     if(!opportunity){
       const id=randomUUID(),stage=c.stage==='inscrito'?'ganada':c.stage,owner=c.assigned_to&&canBrand(db.prepare('SELECT * FROM users WHERE id=?').get(c.assigned_to),c.brand_id)?c.assigned_to:null;
-      db.prepare('INSERT INTO opportunities VALUES(?,?,?,?,?,?,?,?,?)').run(id,contact.id,c.brand_id,c.course_id,stage,owner,'',c.created_at,now);
+      db.prepare('INSERT INTO opportunities(id,contact_id,brand_id,course_id,stage,owner_id,lost_reason,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').run(id,contact.id,c.brand_id,c.course_id,stage,owner,'',c.created_at,now);
       opportunity={id,stage};
-      db.prepare('INSERT INTO opportunity_events VALUES(?,?,?,?,?,?)').run(randomUUID(),id,null,null,stage,now);
-      if(stage!=='ganada')db.prepare('INSERT INTO tasks(id,opportunity_id,brand_id,title,owner_id,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').run(randomUUID(),id,c.brand_id,'Dar seguimiento al interés',owner,now+86400000,now,now);
+      followup.stageEvent(id,null,null,stage,'','initial');
+      if(stage!=='ganada'){const taskId=randomUUID();db.prepare('INSERT INTO tasks(id,opportunity_id,brand_id,title,owner_id,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').run(taskId,id,c.brand_id,'Dar seguimiento al interés',owner,now+86400000,now,now);followup.taskCreated(taskId,null);}
     }
     db.prepare('INSERT INTO conversation_opportunities VALUES(?,?)').run(c.id,opportunity.id);
     return opportunity.id;
@@ -74,16 +76,14 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
   transaction(db,()=>{for(const c of db.prepare('SELECT * FROM conversations ORDER BY created_at').all())syncConversation(c);});
 
   function assignConversation(c,userId){
-    const id=syncConversation(c);
-    db.prepare('UPDATE opportunities SET owner_id=?,updated_at=? WHERE id=?').run(userId,Date.now(),id);
-    db.prepare("UPDATE tasks SET owner_id=?,updated_at=? WHERE opportunity_id=? AND status='open'").run(userId,Date.now(),id);
+    followup.assign(syncConversation(c),userId,userId?{id:userId}:null);
   }
-  function setStage(c,stage,actor=null){
-    const id=syncConversation(c),to=stage==='inscrito'?'ganada':stage;
-    const previous=db.prepare('SELECT stage FROM opportunities WHERE id=?').get(id).stage;
-    if(['ganada','perdida'].includes(previous)&&!actor)return;
-    if(previous!==to){db.prepare('UPDATE opportunities SET stage=?,updated_at=? WHERE id=?').run(to,Date.now(),id);db.prepare('INSERT INTO opportunity_events VALUES(?,?,?,?,?,?)').run(randomUUID(),id,actor?.id||null,previous,to,Date.now());}
-    if(['ganada','perdida'].includes(to))db.prepare("UPDATE tasks SET status='cancelled',updated_at=? WHERE opportunity_id=? AND status='open'").run(Date.now(),id);
+  function setStage(c,stage,actor=null,input={}){
+    const id=syncConversation(c),o=db.prepare('SELECT * FROM opportunities WHERE id=?').get(id);
+    if(actor)followup.checkRevision(o,input);
+    const to=stage==='inscrito'?'ganada':stage;
+    if(to==='perdida'&&!text(input.lostReason,300))throw fail(400,'Indica el motivo desde la oportunidad.');
+    return followup.changeStage(id,to,actor,text(input.lostReason,300));
   }
   function staffList(user){
     return db.prepare("SELECT u.id,u.name,u.username,u.role,u.disabled,p.availability FROM users u LEFT JOIN preferences p ON p.user_id=u.id WHERE u.role IN ('agent','admin') ORDER BY u.name").all().map(u=>({...u,brandIds:u.role==='admin'?brandsFor(user).map(b=>b.id):db.prepare('SELECT brand_id FROM brand_members WHERE user_id=?').all(u.id).map(b=>b.brand_id).filter(id=>canBrand(user,id))})).filter(u=>user.role==='admin'||(!u.disabled&&u.brandIds.length));
@@ -114,6 +114,7 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
     }
     if(!path.startsWith('/api/crm')&&!path.startsWith('/api/team'))return false;
     if(!isStaff(user))throw fail(403,'Este espacio es para el equipo autorizado.');
+    if(await followup.handle(req,res,path,user))return true;
     if(path==='/api/crm'&&req.method==='GET'){json(res,200,snapshot(user));return true;}
     if(path==='/api/team'&&req.method==='GET'){
       if(user.role!=='admin')throw fail(403,'Sólo administración puede gestionar accesos.');
@@ -163,27 +164,13 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
       if(!course)throw fail(400,'Elige un curso de la marca del contacto.');if(db.prepare("SELECT id FROM opportunities WHERE contact_id=? AND course_id=? AND stage NOT IN ('ganada','perdida')").get(c.id,course.id))throw fail(409,'Ya existe un interés activo en este curso.');
       const id=randomUUID(),owner=validOwner(input.ownerId||user.id,c.brand_id),now=Date.now(),due=Number(input.dueAt);
       if(!Number.isSafeInteger(due)||due<now-60000||due>now+366*86400000||!text(input.nextAction,180))throw fail(400,'Indica la siguiente acción y una fecha futura válida.');
-      transaction(db,()=>{db.prepare('INSERT INTO opportunities VALUES(?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,course.id,'nuevo',owner,'',now,now);db.prepare('INSERT INTO tasks(id,opportunity_id,brand_id,title,owner_id,due_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').run(randomUUID(),id,c.brand_id,text(input.nextAction,180),owner,due,user.id,now,now);db.prepare('INSERT INTO opportunity_events VALUES(?,?,?,?,?,?)').run(randomUUID(),id,user.id,null,'nuevo',now);});audit(user,'opportunity.created',id);sendChange(c.brand_id);json(res,201,{id});return true;
-    }
-    const opportunity=path.match(/^\/api\/crm\/opportunities\/([a-f0-9-]+)$/);
-    if(opportunity&&req.method==='PATCH'){
-      const o=scoped('opportunities',opportunity[1],user),input=await body(req),stage=input.stage,owner=validOwner(input.ownerId||null,o.brand_id),reason=text(input.lostReason,300);requireBrand(user,o.brand_id);
-      if(!stages.includes(stage)||(stage==='perdida'&&!reason))throw fail(400,'Indica una etapa y, si se perdió, el motivo.');
-      if(!['ganada','perdida'].includes(stage)&&!owner)throw fail(400,'Asigna un responsable para continuar.');
-      transaction(db,()=>{if(owner!==o.owner_id){db.prepare("UPDATE conversations SET assigned_to=?,bot_enabled=0,updated_at=? WHERE id IN (SELECT conversation_id FROM conversation_opportunities WHERE opportunity_id=?) AND status!='resolved'").run(owner,Date.now(),o.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id IN (SELECT conversation_id FROM conversation_opportunities WHERE opportunity_id=?) AND state='pending'").run(o.id);}db.prepare('UPDATE opportunities SET stage=?,owner_id=?,lost_reason=?,updated_at=? WHERE id=?').run(stage,owner,stage==='perdida'?reason:'',Date.now(),o.id);if(stage!==o.stage)db.prepare('INSERT INTO opportunity_events VALUES(?,?,?,?,?,?)').run(randomUUID(),o.id,user.id,o.stage,stage,Date.now());db.prepare("UPDATE tasks SET owner_id=?,status=CASE WHEN ? IN ('ganada','perdida') THEN 'cancelled' ELSE status END,updated_at=? WHERE opportunity_id=? AND status='open'").run(owner,stage,Date.now(),o.id);});audit(user,'opportunity.updated',o.id);for(const link of db.prepare('SELECT conversation_id FROM conversation_opportunities WHERE opportunity_id=?').all(o.id))broadcast('conversation',link.conversation_id);sendChange(o.brand_id);json(res,200,{ok:true});return true;
+      transaction(db,()=>{db.prepare('INSERT INTO opportunities(id,contact_id,brand_id,course_id,stage,owner_id,lost_reason,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,course.id,'nuevo',owner,'',now,now);db.prepare('INSERT INTO tasks(id,opportunity_id,brand_id,title,owner_id,due_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').run(randomUUID(),id,c.brand_id,text(input.nextAction,180),owner,due,user.id,now,now);followup.stageEvent(id,user,null,'nuevo');for(const task of db.prepare('SELECT id FROM tasks WHERE opportunity_id=?').all(id))followup.taskCreated(task.id,user);});audit(user,'opportunity.created',id);sendChange(c.brand_id);json(res,201,{id});return true;
     }
     if(path==='/api/crm/tasks'&&req.method==='POST'){
       const input=await body(req),o=scoped('opportunities',input.opportunityId,user),title=text(input.title,180),due=Number(input.dueAt),owner=validOwner(input.ownerId||o.owner_id||user.id,o.brand_id);
       if(['ganada','perdida'].includes(o.stage))throw fail(400,'Reabre la oportunidad antes de añadir seguimiento.');
       if(!title||!Number.isSafeInteger(due)||due<Date.now()-60000||due>Date.now()+366*86400000)throw fail(400,'Escribe la tarea y una fecha futura válida.');
-      const id=randomUUID(),now=Date.now();db.prepare('INSERT INTO tasks(id,opportunity_id,brand_id,title,owner_id,due_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').run(id,o.id,o.brand_id,title,owner,due,user.id,now,now);audit(user,'task.created',id);sendChange(o.brand_id);json(res,201,{id});return true;
-    }
-    const task=path.match(/^\/api\/crm\/tasks\/([a-f0-9-]+)$/);
-    if(task&&req.method==='PATCH'){
-      const t=scoped('tasks',task[1],user),input=await body(req);requireBrand(user,t.brand_id);if(t.owner_id&&t.owner_id!==user.id&&user.role!=='admin')throw fail(403,'Esta tarea pertenece a otro asesor.');
-      if(!['open','done','cancelled'].includes(input.status))throw fail(400,'Estado no válido.');
-      if(input.status==='open'&&['ganada','perdida'].includes(db.prepare('SELECT stage FROM opportunities WHERE id=?').get(t.opportunity_id).stage))throw fail(400,'Reabre primero la oportunidad.');
-      db.prepare('UPDATE tasks SET status=?,updated_at=? WHERE id=?').run(input.status,Date.now(),t.id);audit(user,'task.'+input.status,t.id);sendChange(t.brand_id);json(res,200,{ok:true});return true;
+      const id=randomUUID(),now=Date.now();transaction(db,()=>{db.prepare('INSERT INTO tasks(id,opportunity_id,brand_id,title,owner_id,due_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').run(id,o.id,o.brand_id,title,owner,due,user.id,now,now);followup.taskCreated(id,user);audit(user,'task.created',id);});sendChange(o.brand_id);json(res,201,{id});return true;
     }
     throw fail(404,'Acción no disponible.');
   }

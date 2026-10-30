@@ -4,6 +4,20 @@ Aplicación de pruebas multicanal: los participantes crean perfiles y envían me
 
 **[Abrir laboratorio](https://crm-laboratorio-production.up.railway.app)** · [Repositorio público](https://github.com/teccapitalweb/tec-capital-crm-laboratorio)
 
+## Seguimiento consistente · v0.3
+
+- Chat y oportunidad muestran la misma etapa comercial. El estado abierto/cerrado del chat se mantiene independiente. `conversations.stage` queda como dato heredado para importar conversaciones antiguas; las lecturas y transiciones actuales usan `opportunities.stage`.
+- Las reglas sólo avanzan el interés: una pregunta de precio no retrocede una inscripción solicitada ni reabre una oportunidad cerrada.
+- Reabrir una oportunidad cuando ya hay otra activa del mismo contacto/curso devuelve un conflicto explicativo y permite abrir la vigente. No modifica ninguno de los dos históricos.
+- Tareas editables: título, fecha, responsable y estado; atajos de reprogramación, cancelación/reapertura y vistas de pendientes, completadas y canceladas. La fecha se muestra en la zona horaria del dispositivo y se guarda como instante UTC.
+- Historial por oportunidad: etapas, responsables y cambios de tareas, con autor, fecha, valores anteriores y motivo cuando se proporciona. Importa los eventos de etapas disponibles de v0.2; los cambios de tareas anteriores a esta entrega no pueden reconstruirse.
+- Los formularios envían la revisión del registro. Si otra persona ya lo cambió, el servidor devuelve 409 y la interfaz conserva el borrador y ofrece recargar los datos.
+- Búsqueda en servidor por nombre, número, curso, marca y texto de mensajes, sin distinguir tildes o mayúsculas. Filtros por marca/canal/estado y páginas de 50 conversaciones; acceso directo a conversaciones antiguas desde la oportunidad. La lupa del chat busca mensajes en todo ese historial, también por páginas.
+
+La migración de esquema v4 añade revisiones e historial sin reescribir cuentas, mensajes ni flyers. Una base existente con usuarios genera primero `/data/backups/before-crm-v4-*.sqlite`; las pruebas comprueban integridad y lectura de ese respaldo. Esto no configura un servicio periódico de respaldo ni prueba la restauración completa de producción con sus adjuntos.
+
+Para probar: editar y posponer una tarea, abrir su oportunidad y revisar el historial, buscar una palabra de un mensaje antiguo y entrar a la lupa del chat. Abrir un formulario en dos sesiones permite comprobar el aviso de edición simultánea.
+
 ## Primera entrega del espacio comercial · v0.2
 
 **[Entrar al CRM del equipo](https://crm-laboratorio-production.up.railway.app/crm)** con la cuenta existente. Una persona que todavía tenga rol de cliente puede aceptar una invitación individual sin perder su perfil ni sus chats.
@@ -11,7 +25,7 @@ Aplicación de pruebas multicanal: los participantes crean perfiles y envían me
 - **Mi día:** seguimientos propios, solicitudes de atención, intereses sin responsable y oportunidades sin próxima tarea.
 - **Contactos:** fichas por marca, teléfono/correo opcionales, contactos manuales independientes de las cuentas y notas internas que nunca se envían al cliente.
 - **Oportunidades:** varios cursos por contacto, tablero, responsable, motivo de pérdida y próxima acción. «Ganada · prueba» no confirma dinero ni matrícula.
-- **Tareas:** programar seguimientos, completar/reabrir y consultar pendientes del equipo. Cerrar una oportunidad cancela sus tareas abiertas.
+- **Tareas:** programar, editar, reprogramar, cancelar, completar/reabrir y consultar pendientes del equipo. Cerrar una oportunidad cancela sus tareas abiertas.
 - **Mi configuración:** nombre, disponibilidad visible y firma que se puede insertar manualmente en un borrador; cambio de contraseña con cierre de sesiones.
 - **Equipo:** administración invita asesores por usuario exacto y marcas. Los códigos duran 24 horas, son de un uso y sólo se almacenan como hash. Se pueden revocar; no conceden administración.
 - **Recuperación asistida:** administración verifica a la persona por un medio conocido y genera un código de 30 minutos para un asesor o participante. No existe recuperación automática por correo ni recuperación de administradores desde esta interfaz.
@@ -21,14 +35,14 @@ La migración v3 conserva perfiles, mensajes y flyers. Los asesores existentes c
 
 El código administrador de entorno sólo permite crear el primer administrador cuando todavía no existe ninguno. Los antiguos códigos compartidos de asesor dejan de conceder acceso. Para incorporar personas nuevas, un administrador debe iniciar sesión y crear invitaciones. No se cambian contraseñas ni se elevan cuentas existentes automáticamente.
 
-Esta entrega implementa el primer bloque de F0/F1. Siguen pendientes, entre otros: MFA, notificaciones fuera de la aplicación, horarios/turnos, búsqueda y navegación completas de grandes históricos, supervisores con roles específicos, automatizaciones editables, integración real de Meta, IA, pagos y gestión de ediciones/flyers. Los procesos comerciales continúan simulados.
+Esta entrega implementa el primer bloque de F0/F1. Siguen pendientes, entre otros: MFA, notificaciones fuera de la aplicación, horarios/turnos, paginación del resumen de CRM, supervisores con roles específicos, automatizaciones editables, integración real de Meta, IA, pagos y gestión de ediciones/flyers. Los procesos comerciales continúan simulados.
 
 ## Qué puedes probar
 
 - Registro con nombre, usuario y contraseña; identificador de prueba único, sin pedir teléfono real.
 - Conversaciones cliente-equipo con WebSocket, escritura, lectura y reconexión.
 - Perfiles independientes; un cliente ve sólo sus conversaciones. Asesores atienden las marcas autorizadas y administración conserva la vista general.
-- Bandeja por canal y marca, búsqueda por nombre/número/curso y estados comerciales.
+- Bandeja por canal y marca, búsqueda por nombre/número/curso/mensajes en el histórico y estados comerciales.
 - Imágenes y PDF de hasta 4 MB, descargables sólo por participantes autorizados.
 - Respuestas por curso: información, precio, temario, fecha y solicitud de asesor.
 - Seis flyers fotográficos de demostración: dos por marca. Vista completa y ampliable en catálogo, envío automático y manual por chat, e imágenes históricas que conservan su versión.
@@ -97,13 +111,13 @@ npm run check
 npm test
 ```
 
-Las pruebas levantan un servidor y una base temporal, conectan siete clientes y comprueban entrega, permisos, archivos, versiones de flyer, idempotencia, lectura, atención humana y persistencia tras reinicio. No usan Meta ni servicios de IA.
+Las pruebas levantan un servidor y una base temporal, conectan siete clientes y comprueban entrega, permisos, archivos, versiones de flyer, idempotencia, lectura, atención humana y persistencia tras reinicio. También cubren las tres regresiones comerciales, versiones concurrentes, tareas editables, migración v3→v4, permisos del historial y búsqueda con más de 300 conversaciones. No usan Meta ni servicios de IA.
 
 ## Arquitectura y límites del piloto
 
 Node HTTP + `ws` para comunicación; SQLite en WAL para persistencia; frontend HTML/CSS/JavaScript sin compilación. Contraseñas derivadas con scrypt, sesiones HttpOnly con tokens almacenados como hash, comprobación de origen y autorización de mensajes/archivos en el servidor. Los códigos de equipo sólo se verifican en el servidor.
 
-Todos los asesores pertenecen a la misma empresa; su acceso se limita a las marcas asignadas. Aún no hay MFA, recuperación autónoma por correo, búsqueda completa de históricos desde interfaz, borrado/retención desde interfaz, carga de flyers propios en el catálogo ni notificaciones push. La bandeja lista las 300 conversaciones más recientes y el historial carga páginas de 150 mensajes. El resumen de CRM se carga completo para el volumen del laboratorio; debe paginarse antes de grandes históricos. Los avisos en vivo requieren tener abierta la aplicación.
+Todos los asesores pertenecen a la misma empresa; su acceso se limita a las marcas asignadas. Aún no hay MFA, recuperación autónoma por correo, borrado/retención desde interfaz, carga de flyers propios en el catálogo ni notificaciones push. La bandeja busca y pagina de 50 en 50; los mensajes se leen en páginas de 150 y sus coincidencias en páginas de 50. El bootstrap conserva un resumen de las 300 conversaciones más recientes para los contadores de inicio, que todavía no representan totales globales en grandes volúmenes. El resumen de CRM se carga completo para el volumen del laboratorio; debe paginarse antes de grandes históricos. Los avisos en vivo requieren tener abierta la aplicación.
 
 Usar datos ficticios. Antes de operar con clientes reales se requieren completar retención, respaldos periódicos y restauración, observabilidad, controles de abuso y pruebas de carga, además de evaluar la seguridad de los nuevos flujos. PostgreSQL y una cola compartida reemplazarán SQLite/procesamiento local si se necesitan varias instancias. No desplegar un binario antiguo sobre una base migrada sin verificar compatibilidad: la reversión de esquema requiere restaurar la copia previa de forma controlada y evaluar los datos posteriores.
 
