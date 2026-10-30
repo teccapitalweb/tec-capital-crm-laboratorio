@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { demoFlyers } from './demo-catalog.mjs';
 
 export function openDatabase(directory) {
   mkdirSync(directory, { recursive: true });
@@ -73,6 +74,16 @@ export function openDatabase(directory) {
       }
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
+  }
+  if(version<2){
+    transaction(db,()=>{
+      for(const item of demoFlyers.filter(item=>item.syllabus)){
+        // Add the three new sample courses once; preserve existing records and chats.
+        db.prepare('INSERT OR IGNORE INTO courses(id,brand_id,title,price_cents,date_label,syllabus,welcome,updated_at) VALUES(?,?,?,?,?,?,?,?)')
+          .run(item.courseId,item.brandId,item.title,item.price*100,'Fecha de práctica por confirmar',item.syllabus,'Hola, {{nombre}}. Te comparto la información de {{curso}}. ¿Quieres conocer el temario, el precio o cómo inscribirte?',Date.now());
+      }
+      db.exec('PRAGMA user_version=2');
+    });
   }
   return db;
 }

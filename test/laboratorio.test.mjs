@@ -39,6 +39,19 @@ test('laboratorio: siete clientes, tiempo real, permisos, automatización y pers
   const messages=(id,session=cookie)=>call(`/api/conversations/${id}/messages`,{cookie:session}).then(r=>r.data.messages);
   const send=(id,session,text,extra={})=>post(`/api/conversations/${id}/messages`,session,{text,clientRef:randomUUID(),...extra},201);
 
+  await t.test('catálogo con dos flyers fotográficos distintos por marca',async()=>{
+    const bootstrap=await call('/api/bootstrap',{cookie});const courses=bootstrap.data.courses;
+    assert.equal(courses.length,6);const signatures=new Set();
+    for(const brand of bootstrap.data.brands)assert.equal(courses.filter(c=>c.brand_id===brand.id).length,2);
+    for(const course of courses){
+      assert.equal(course.hasArtwork,true);
+      const response=await fetch(origin+`/api/courses/${course.id}/flyer`,{headers:{Cookie:cookie}});assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'image/png');
+      const bytes=Buffer.from(await response.arrayBuffer());assert.ok(bytes.length>50000);assert.equal(bytes.subarray(1,4).toString(),'PNG');signatures.add(bytes.subarray(-2048).toString('base64'));
+    }
+    assert.equal(signatures.size,6);
+    assert.equal((await fetch(origin+'/api/courses/aves/flyer')).status,401);
+  });
+
   await t.test('mensajes simultáneos llegan a siete clientes y al equipo sin recargar',async()=>{
     await Promise.all(convs.map((c,i)=>send(c.id,clients[i].cookie,'Hola, quiero información')));
     await eventually(async()=>{for(const c of convs){assert.ok(events.some(e=>e.type==='conversation'&&e.conversationId===c.id));const m=await messages(c.id,admin.cookie);assert.equal(m.length,2);assert.equal(m[1].sender_kind,'automation');assert.equal(m[1].flyer_course_id,'aves');}});
@@ -57,11 +70,11 @@ test('laboratorio: siete clientes, tiempo real, permisos, automatización y pers
     await post('/api/auth/register','',{username:'sinpermiso',name:'No admin',password:'Password-de-prueba!',inviteCode:'incorrecto'},400);
   });
   await t.test('los datos recientes actualizan respuestas y mantienen flyers históricos',async()=>{
-    const old=(await messages(first.id)).find(m=>m.flyer_course_id);const oldSvg=await fetch(origin+old.attachmentUrl,{headers:{Cookie:cookie}}).then(r=>r.text());assert.match(oldSvg,/>\$379 MXN</);
+    const old=(await messages(first.id)).find(m=>m.flyer_course_id);const original=await fetch(origin+old.attachmentUrl,{headers:{Cookie:cookie}});assert.equal(original.headers.get('content-type'),'image/png');const oldArtwork=Buffer.from(await original.arrayBuffer());
     const b=await call('/api/bootstrap',{cookie:admin.cookie});const course=b.data.courses.find(c=>c.id==='aves');
     await post('/api/catalog',admin.cookie,{id:course.id,brandId:course.brand_id,title:course.title,price:421,dateLabel:'Noviembre de prueba',syllabus:'Temario actualizado',welcome:'Hola {{nombre}}, este es {{curso}}.'});
     await send(first.id,cookie,'Precio');await eventually(async()=>assert.ok((await messages(first.id)).some(m=>m.sender_kind==='automation'&&m.text.includes('421.00'))));
-    const oldAgain=await fetch(origin+old.attachmentUrl,{headers:{Cookie:cookie}}).then(r=>r.text());assert.equal(oldAgain,oldSvg);
+    const oldAgain=Buffer.from(await fetch(origin+old.attachmentUrl,{headers:{Cookie:cookie}}).then(r=>r.arrayBuffer()));assert.deepEqual(oldAgain,oldArtwork);
     const current=await fetch(origin+'/api/courses/aves/flyer',{headers:{Cookie:cookie}}).then(r=>r.text());assert.match(current,/>\$421 MXN</);
     const unauthorized=await fetch(origin+old.attachmentUrl,{headers:{Cookie:clients[1].cookie}});assert.equal(unauthorized.status,404);
   });

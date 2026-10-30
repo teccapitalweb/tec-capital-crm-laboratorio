@@ -7,6 +7,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { openDatabase, transaction } from './database.mjs';
+import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
@@ -25,7 +26,7 @@ const fail=(status,message)=>Object.assign(new Error(message),{status});
 const clean=(v,max=5000)=>typeof v==='string'?v.trim().slice(0,max):'';
 const normalized=v=>v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 const secureEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length>0&&b.length>0&&timingSafeEqual(Buffer.from(hash(a)),Buffer.from(hash(b)));
-const publicCourse=c=>({...c,price:c.price_cents/100});
+const publicCourse=c=>({...c,price:c.price_cents/100,hasArtwork:Boolean(courseArtwork(c))});
 
 function rate(key,max,window=60000) {
   const now=Date.now(); let item=limits.get(key);
@@ -84,6 +85,7 @@ function audit(user,action,id){db.prepare('INSERT INTO audit(user_id,action,enti
 function insertMessage(c,user,text,kind,ref,attachmentId=null,flyer=null){
   const id=randomUUID(),now=Date.now();
   const snapshot=flyer?{course:db.prepare('SELECT * FROM courses WHERE id=?').get(flyer),brand:db.prepare('SELECT * FROM brands WHERE id=?').get(c.brand_id)}:null;
+  if(snapshot)snapshot.artworkId=courseArtwork(snapshot.course);
   db.prepare('INSERT INTO messages(id,conversation_id,sender_id,sender_kind,text,attachment_id,flyer_course_id,flyer_snapshot,client_ref,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,c.id,user?.id||null,kind,text,attachmentId,flyer,JSON.stringify(snapshot),ref,now);
   db.prepare('UPDATE conversations SET updated_at=? WHERE id=?').run(now,c.id);
   return id;
@@ -121,6 +123,11 @@ function attachmentData(input){
   return {filename:filename||'archivo.'+allowed[mime],mime,buffer,storageName:randomUUID()+'.'+allowed[mime]};
 }
 const xml=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+async function serveFlyer(res,course,brand,artworkId){
+  const asset=artworkAsset(artworkId);
+  if(asset){const bytes=await readFile(resolve(root,'public','flyers',asset.filename));res.writeHead(200,{'Content-Type':asset.mime,'Content-Length':bytes.length});return res.end(bytes);}
+  res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8'});return res.end(flyer(course,brand));
+}
 function flyer(course,brand){
   const words=course.title.split(' '),lines=[];let line='';for(const word of words){if((line+' '+word).length>24){lines.push(line);line=word;}else line=(line+' '+word).trim();}if(line)lines.push(line);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="760" height="720" viewBox="0 0 760 720"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#23232d"/><stop offset="1" stop-color="#4c4c61"/></linearGradient></defs><rect width="760" height="720" rx="28" fill="#f8f8fa"/><rect width="760" height="470" rx="28" fill="url(#g)"/><circle cx="700" cy="70" r="210" fill="none" stroke="#ffffff15" stroke-width="55"/><text x="48" y="67" font-family="Arial,sans-serif" font-size="22" fill="#ffffffc0" letter-spacing="3">${xml(brand.name.toUpperCase())}</text><text x="48" y="139" font-family="Arial,sans-serif" font-size="17" fill="#ffffffa0" letter-spacing="2">CURSO · EDICIÓN DE PRUEBA</text>${lines.slice(0,5).map((l,i)=>`<text x="48" y="${211+i*55}" font-family="Arial,sans-serif" font-size="43" font-weight="700" fill="#fff">${xml(l)}</text>`).join('')}<text x="48" y="532" font-family="Arial,sans-serif" font-size="19" fill="#666">PRECIO DE EJEMPLO</text><text x="48" y="590" font-family="Arial,sans-serif" font-size="45" font-weight="700" fill="#24242b">$${(course.price_cents/100).toFixed(0)} MXN</text><text x="48" y="647" font-family="Arial,sans-serif" font-size="18" fill="#666">Material simulado. No constituye una oferta real.</text><text x="48" y="684" font-family="Arial,sans-serif" font-size="16" fill="#888">TEC CAPITAL · LABORATORIO CRM · v${course.version}</text></svg>`;
@@ -215,9 +222,9 @@ const server=http.createServer(async(req,res)=>{
       const file=path.match(/^\/api\/files\/([a-f0-9-]+)$/);
       if(file&&req.method==='GET'){const f=db.prepare('SELECT * FROM attachments WHERE id=?').get(file[1]);if(!f)throw fail(404,'Archivo no disponible.');accessConversation(f.conversation_id,user);const bytes=await readFile(resolve(dataDir,'uploads',f.storage_name));res.writeHead(200,{'Content-Type':f.mime,'Content-Disposition':`${f.mime==='application/pdf'?'attachment':'inline'}; filename*=UTF-8''${encodeURIComponent(f.filename)}`});return res.end(bytes);}
       const snapshotImage=path.match(/^\/api\/messages\/([a-f0-9-]+)\/flyer$/);
-      if(snapshotImage&&req.method==='GET'){const message=db.prepare('SELECT * FROM messages WHERE id=?').get(snapshotImage[1]);if(!message?.flyer_snapshot)throw fail(404,'Flyer no disponible.');accessConversation(message.conversation_id,user);const snapshot=JSON.parse(message.flyer_snapshot);if(!snapshot)throw fail(404,'Flyer no disponible.');res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8'});return res.end(flyer(snapshot.course,snapshot.brand));}
+      if(snapshotImage&&req.method==='GET'){const message=db.prepare('SELECT * FROM messages WHERE id=?').get(snapshotImage[1]);if(!message?.flyer_snapshot)throw fail(404,'Flyer no disponible.');accessConversation(message.conversation_id,user);const snapshot=JSON.parse(message.flyer_snapshot);if(!snapshot)throw fail(404,'Flyer no disponible.');return await serveFlyer(res,snapshot.course,snapshot.brand,snapshot.artworkId);}
       const image=path.match(/^\/api\/courses\/([a-zA-Z0-9-]+)\/flyer$/);
-      if(image&&req.method==='GET'){const course=db.prepare('SELECT * FROM courses WHERE id=?').get(image[1]);if(!course)throw fail(404,'Curso no disponible.');const brand=db.prepare('SELECT * FROM brands WHERE id=?').get(course.brand_id);res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8'});return res.end(flyer(course,brand));}
+      if(image&&req.method==='GET'){const course=db.prepare('SELECT * FROM courses WHERE id=?').get(image[1]);if(!course)throw fail(404,'Curso no disponible.');const brand=db.prepare('SELECT * FROM brands WHERE id=?').get(course.brand_id);return await serveFlyer(res,course,brand,courseArtwork(course));}
       if(path==='/api/catalog'&&req.method==='POST'){
         requireAdmin(user);const input=await body(req),title=clean(input.title,100),brand=clean(input.brandId,60),price=Number(input.price);
         if(!title||!Number.isFinite(price)||price<0||price>1000000||!clean(input.dateLabel)||!clean(input.syllabus)||!clean(input.welcome)||!db.prepare('SELECT id FROM brands WHERE id=?').get(brand))throw fail(400,'Completa el título, la marca, el precio, la fecha, el temario y la presentación.');

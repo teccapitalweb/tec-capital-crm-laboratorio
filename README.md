@@ -12,13 +12,26 @@ Aplicación de pruebas multicanal: los participantes crean perfiles y envían me
 - Bandeja por canal y marca, búsqueda por nombre/número/curso y estados comerciales.
 - Imágenes y PDF de hasta 4 MB, descargables sólo por participantes autorizados.
 - Respuestas por curso: información, precio, temario, fecha y solicitud de asesor.
-- Flyers de ejemplo generados a partir del curso. Las imágenes ya enviadas conservan los datos de su versión.
+- Seis flyers fotográficos de demostración: dos por marca. Vista completa y ampliable en catálogo, envío automático y manual por chat, e imágenes históricas que conservan su versión.
 - Control humano que cancela las respuestas automáticas pendientes; exclusión entre asesores.
 - Catálogo editable por administradores: crear marcas, crear cursos y actualizar datos.
 - Historial persistente en SQLite, trabajos automáticos persistidos y métricas de actividad real.
 - Interfaz adaptable a teléfono y computadora, blanca y gris, con distintivos de canal.
 
-**La automatización de esta versión utiliza reglas y plantillas, no un modelo de IA.** No hay cobros, inscripciones comerciales ni envíos a WhatsApp reales. Los tres cursos iniciales son ejemplos, no ofertas vigentes. No existe límite fijo de siete cuentas; la capacidad debe medirse antes de ampliar el piloto.
+**La automatización de esta versión utiliza reglas y plantillas, no un modelo de IA.** Los flyers sí se crearon con generación de imágenes. No hay cobros, inscripciones comerciales ni envíos a WhatsApp reales. Los seis cursos son ejemplos, no ofertas vigentes. No existe límite fijo de siete cuentas; la capacidad debe medirse antes de ampliar el piloto.
+
+### Flyers incluidos
+
+| Marca | Curso ficticio | Precio de ejemplo |
+| --- | --- | --- |
+| GlobalVet | Plan sanitario para aves | $379 MXN |
+| GlobalVet | Nutrición en perros y gatos | $449 MXN |
+| OdonTeck | Actualización en odontología | $499 MXN |
+| OdonTeck | Estética dental y fotografía clínica | $599 MXN |
+| Dermalysse | Fundamentos de la piel | $399 MXN |
+| Dermalysse | Diseño de rutinas de cuidado facial | $459 MXN |
+
+Los archivos originales están en `public/flyers/`. En la aplicación se entregan a través de rutas autenticadas; los mensajes conservan el identificador de su imagen al enviarse. Si se edita un curso, su diseño fijo se sustituye automáticamente por una ficha con los datos vigentes para evitar precios contradictorios. Las imágenes de mensajes anteriores no cambian. La ampliación del catálogo añade tres cursos y conserva las cuentas, chats y ediciones existentes.
 
 ## Iniciar localmente
 
