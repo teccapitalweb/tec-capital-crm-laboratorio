@@ -70,6 +70,7 @@ function online(userId){return [...sessions.values()].some(u=>u.id===userId);}
 function conversationList(user){
   const all=db.prepare(`SELECT c.*,u.name customer_name,u.test_number,b.name brand_name,k.title course_title,
     a.name agent_name,(SELECT text FROM messages m WHERE m.conversation_id=c.id ORDER BY seq DESC LIMIT 1) last_text,
+    (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id AND m.read_at IS NULL AND m.sender_kind IN ('agent','automation')) customer_unread,
     (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id AND m.read_at IS NULL AND ${staff(user)?"m.sender_kind='customer'":"m.sender_kind IN ('agent','automation')"}) unread
     FROM conversations c JOIN users u ON u.id=c.customer_id JOIN brands b ON b.id=c.brand_id JOIN courses k ON k.id=c.course_id
     LEFT JOIN users a ON a.id=c.assigned_to ${staff(user)?'':'WHERE c.customer_id=?'} ORDER BY c.updated_at DESC LIMIT 300`);

@@ -2,6 +2,8 @@
 
 Aplicación de pruebas multicanal: los participantes crean perfiles y envían mensajes reales a una bandeja de atención compartida. Los canales **WhatsApp, Instagram y Facebook son simulados dentro del laboratorio**. No se conecta ninguna cuenta de Meta.
 
+**[Abrir laboratorio](https://crm-laboratorio-production.up.railway.app)** · [Repositorio público](https://github.com/teccapitalweb/tec-capital-crm-laboratorio)
+
 ## Qué puedes probar
 
 - Registro con nombre, usuario y contraseña; identificador de prueba único, sin pedir teléfono real.
