@@ -1,0 +1,252 @@
+import http from 'node:http';
+import { randomBytes, randomUUID, createHash, scrypt, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { mkdirSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { WebSocketServer, WebSocket } from 'ws';
+import { openDatabase, transaction } from './database.mjs';
+
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
+mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
+const db=openDatabase(dataDir);
+const hash = value=>createHash('sha256').update(value).digest('hex');
+const derive=promisify(scrypt);
+const production=process.env.NODE_ENV==='production';
+const port=Number(process.env.PORT||3100);
+const host=process.env.HOST||(production?'0.0.0.0':'127.0.0.1');
+const sessions=new Map(), limits=new Map();
+const ttl=7*24*60*60*1000;
+const staff=person=>person.role==='agent'||person.role==='admin';
+const safeUser=user=>({id:user.id,username:user.username,name:user.name,role:user.role,testNumber:user.test_number});
+const fail=(status,message)=>Object.assign(new Error(message),{status});
+const clean=(v,max=5000)=>typeof v==='string'?v.trim().slice(0,max):'';
+const normalized=v=>v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const secureEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length>0&&b.length>0&&timingSafeEqual(Buffer.from(hash(a)),Buffer.from(hash(b)));
+const publicCourse=c=>({...c,price:c.price_cents/100});
+
+function rate(key,max,window=60000) {
+  const now=Date.now(); let item=limits.get(key);
+  if(!item||item.end<now){item={count:0,end:now+window};limits.set(key,item);}
+  if(++item.count>max)throw fail(429,'Demasiados intentos. Espera un momento y vuelve a probar.');
+}
+function security(res){
+  res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');
+  res.setHeader('X-Frame-Options','DENY');res.setHeader('Cache-Control','no-store');
+  res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
+  if(production)res.setHeader('Strict-Transport-Security','max-age=31536000');
+}
+function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(data));}
+function originAllowed(req){
+  const origin=req.headers.origin;if(!origin)return false;
+  if(process.env.APP_ORIGIN)return origin===process.env.APP_ORIGIN.replace(/\/$/,'');
+  try{const url=new URL(origin);return ['http:','https:'].includes(url.protocol)&&url.host===req.headers.host;}catch{return false;}
+}
+function readSession(req){
+  const token=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('tc_session='))?.slice(11);
+  if(!token||!/^[a-f0-9]{64}$/.test(token))return null;
+  const user=db.prepare('SELECT u.*,s.token_hash,s.expires_at FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?').get(hash(token),Date.now());
+  return user||null;
+}
+function requireUser(req){const user=readSession(req);if(!user)throw fail(401,'Inicia sesión para continuar.');return user;}
+function requireStaff(user){if(!staff(user))throw fail(403,'Esta acción es para el equipo de atención.');}
+function requireAdmin(user){if(user.role!=='admin')throw fail(403,'Esta acción requiere un administrador.');}
+function accessConversation(id,user){const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(id);if(!c||(!staff(user)&&c.customer_id!==user.id))throw fail(404,'Conversación no disponible.');return c;}
+function canSee(c,user){return staff(user)||c.customer_id===user.id;}
+async function body(req){
+  let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>5_800_000)throw fail(413,'El archivo es demasiado grande. Máximo 4 MB.');chunks.push(chunk);}
+  try{const data=JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}');if(!data||typeof data!=='object'||Array.isArray(data))throw Error();return data;}catch{throw fail(400,'Solicitud no válida.');}
+}
+async function passwordHash(password){const salt=randomBytes(16).toString('hex');const value=await derive(password,salt,64);return salt+':'+value.toString('hex');}
+async function checkPassword(password,stored){const [salt,expected]=stored.split(':');const value=await derive(password,salt,64);return expected.length===128&&timingSafeEqual(value,Buffer.from(expected,'hex'));}
+function setSession(res,user){const token=randomBytes(32).toString('hex');db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(hash(token),user.id,Date.now()+ttl);res.setHeader('Set-Cookie',`tc_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${ttl/1000}${production?'; Secure':''}`);}
+function broadcast(type,conversationId=null,extra={}){
+  const c=conversationId?db.prepare('SELECT * FROM conversations WHERE id=?').get(conversationId):null;
+  for(const [socket,user] of sessions){if(socket.readyState===WebSocket.OPEN&&(!c||canSee(c,user)))socket.send(JSON.stringify({type,conversationId,...extra}));}
+}
+function online(userId){return [...sessions.values()].some(u=>u.id===userId);}
+function conversationList(user){
+  const all=db.prepare(`SELECT c.*,u.name customer_name,u.test_number,b.name brand_name,k.title course_title,
+    a.name agent_name,(SELECT text FROM messages m WHERE m.conversation_id=c.id ORDER BY seq DESC LIMIT 1) last_text,
+    (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id AND m.read_at IS NULL AND ${staff(user)?"m.sender_kind='customer'":"m.sender_kind IN ('agent','automation')"}) unread
+    FROM conversations c JOIN users u ON u.id=c.customer_id JOIN brands b ON b.id=c.brand_id JOIN courses k ON k.id=c.course_id
+    LEFT JOIN users a ON a.id=c.assigned_to ${staff(user)?'':'WHERE c.customer_id=?'} ORDER BY c.updated_at DESC LIMIT 300`);
+  return (staff(user)?all.all():all.all(user.id)).map(c=>({...c,customer_online:online(c.customer_id)}));
+}
+function messageList(id,before=Number.MAX_SAFE_INTEGER){
+  return db.prepare(`SELECT m.*,u.name sender_name,a.filename,a.mime,a.size FROM messages m LEFT JOIN users u ON u.id=m.sender_id
+    LEFT JOIN attachments a ON a.id=m.attachment_id WHERE m.conversation_id=? AND m.seq<? ORDER BY m.seq DESC LIMIT 150`).all(id,before).reverse().map(m=>({...m,flyer_snapshot:undefined,attachmentUrl:m.attachment_id?'/api/files/'+m.attachment_id:m.flyer_course_id?'/api/messages/'+m.id+'/flyer':null}));
+}
+function audit(user,action,id){db.prepare('INSERT INTO audit(user_id,action,entity_id,created_at) VALUES(?,?,?,?)').run(user?.id||null,action,id,Date.now());}
+function insertMessage(c,user,text,kind,ref,attachmentId=null,flyer=null){
+  const id=randomUUID(),now=Date.now();
+  const snapshot=flyer?{course:db.prepare('SELECT * FROM courses WHERE id=?').get(flyer),brand:db.prepare('SELECT * FROM brands WHERE id=?').get(c.brand_id)}:null;
+  db.prepare('INSERT INTO messages(id,conversation_id,sender_id,sender_kind,text,attachment_id,flyer_course_id,flyer_snapshot,client_ref,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,c.id,user?.id||null,kind,text,attachmentId,flyer,JSON.stringify(snapshot),ref,now);
+  db.prepare('UPDATE conversations SET updated_at=? WHERE id=?').run(now,c.id);
+  return id;
+}
+function botReply(c,trigger){
+  const course=db.prepare('SELECT * FROM courses WHERE id=?').get(c.course_id);
+  const user=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id);
+  const count=db.prepare("SELECT count(*) n FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id).n;
+  const text=normalized(trigger.text);let reply='',flyer=null,stage=null,handoff=false;
+  if(/asesor|humano|persona|atencion|reembolso|devolucion/.test(text)) {reply='Ya avisé al equipo. Un asesor puede tomar esta conversación para continuar contigo.';handoff=true;}
+  else if(/inscrib|registr|apuntar/.test(text)){reply='Anoté tu interés en '+course.title+'. Un asesor continuará con tu inscripción de práctica. En este laboratorio no se realizan cobros ni inscripciones reales.';stage='inscripcion';handoff=true;}
+  else if(/comprobante|pague|pago|transferencia/.test(text)){reply='Gracias. El equipo revisará tu consulta de pago. No confirmamos pagos automáticamente y aquí no se realizan cobros reales.';handoff=true;}
+  else if(/precio|cuesta|costo|promocion/.test(text)){reply=`El precio de ejemplo de ${course.title} es $${(course.price_cents/100).toFixed(2)} MXN. Es una oferta de práctica, no una venta real. ¿Te comparto el temario?`;stage='interesado';}
+  else if(/temario|incluye|tema|contenido/.test(text)){reply='El temario de práctica incluye:\n\n'+course.syllabus+'\n\n¿Quieres conocer la fecha o hablar con un asesor?';}
+  else if(/fecha|horario|cuando|dia/.test(text)){reply='La edición de prueba indica: '+course.date_label+'. El equipo puede actualizar este dato desde el catálogo.';}
+  else if(/flyer|imagen|informacion|info|hola|buen/.test(text)||count===1){reply=course.welcome.replaceAll('{{nombre}}',user.name.split(' ')[0]).replaceAll('{{curso}}',course.title);flyer=course.id;}
+  else{reply='Puedo ayudarte con el precio, el temario o la fecha de este curso. Si prefieres, escribe “asesor” y el equipo continuará contigo.';}
+  const ref='automation:'+trigger.id;
+  if(db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref))return;
+  insertMessage(c,null,reply,'automation',ref,null,flyer);
+  if(stage)db.prepare('UPDATE conversations SET stage=? WHERE id=?').run(stage,c.id);
+  if(handoff)db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);
+}
+function processJobs(){
+  const jobs=db.prepare("SELECT * FROM jobs WHERE state='pending' AND due_at<=? LIMIT 15").all(Date.now());
+  for(const job of jobs){try{transaction(db,()=>{const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(job.conversation_id);if(!c.bot_enabled||c.assigned_to||c.status!=='open'){db.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").run(job.id);return;}const trigger=db.prepare('SELECT * FROM messages WHERE id=?').get(job.message_id);botReply(c,trigger);db.prepare("UPDATE jobs SET state='done' WHERE id=?").run(job.id);});broadcast('conversation',job.conversation_id);}catch(error){console.error('Automation job failed',error.name);}}
+}
+function attachmentData(input){
+  if(!input)return null;const filename=clean(input.name,120).replace(/[\r\n\x00-\x1f]/g,'');const mime=input.type;
+  const allowed={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif','application/pdf':'pdf'};
+  if(!allowed[mime]||typeof input.base64!=='string'||input.base64.length>5_600_000)throw fail(400,'Admite PNG, JPG, WEBP, GIF o PDF de hasta 4 MB.');
+  const buffer=Buffer.from(input.base64,'base64');if(!buffer.length||buffer.length>4*1024*1024)throw fail(413,'Máximo 4 MB por archivo.');
+  const valid=mime==='image/png'?buffer.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):mime==='image/jpeg'?buffer[0]===255&&buffer[1]===216&&buffer[2]===255:mime==='application/pdf'?buffer.subarray(0,5).toString()==='%PDF-':mime==='image/webp'?buffer.subarray(0,4).toString()==='RIFF'&&buffer.subarray(8,12).toString()==='WEBP':buffer.subarray(0,4).toString()==='GIF8';
+  if(!valid)throw fail(400,'El contenido del archivo no coincide con su formato.');
+  return {filename:filename||'archivo.'+allowed[mime],mime,buffer,storageName:randomUUID()+'.'+allowed[mime]};
+}
+const xml=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+function flyer(course,brand){
+  const words=course.title.split(' '),lines=[];let line='';for(const word of words){if((line+' '+word).length>24){lines.push(line);line=word;}else line=(line+' '+word).trim();}if(line)lines.push(line);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="760" height="720" viewBox="0 0 760 720"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#23232d"/><stop offset="1" stop-color="#4c4c61"/></linearGradient></defs><rect width="760" height="720" rx="28" fill="#f8f8fa"/><rect width="760" height="470" rx="28" fill="url(#g)"/><circle cx="700" cy="70" r="210" fill="none" stroke="#ffffff15" stroke-width="55"/><text x="48" y="67" font-family="Arial,sans-serif" font-size="22" fill="#ffffffc0" letter-spacing="3">${xml(brand.name.toUpperCase())}</text><text x="48" y="139" font-family="Arial,sans-serif" font-size="17" fill="#ffffffa0" letter-spacing="2">CURSO · EDICIÓN DE PRUEBA</text>${lines.slice(0,5).map((l,i)=>`<text x="48" y="${211+i*55}" font-family="Arial,sans-serif" font-size="43" font-weight="700" fill="#fff">${xml(l)}</text>`).join('')}<text x="48" y="532" font-family="Arial,sans-serif" font-size="19" fill="#666">PRECIO DE EJEMPLO</text><text x="48" y="590" font-family="Arial,sans-serif" font-size="45" font-weight="700" fill="#24242b">$${(course.price_cents/100).toFixed(0)} MXN</text><text x="48" y="647" font-family="Arial,sans-serif" font-size="18" fill="#666">Material simulado. No constituye una oferta real.</text><text x="48" y="684" font-family="Arial,sans-serif" font-size="16" fill="#888">TEC CAPITAL · LABORATORIO CRM · v${course.version}</text></svg>`;
+}
+
+const server=http.createServer(async(req,res)=>{
+  security(res);const url=new URL(req.url,'http://localhost'),path=url.pathname;
+  try{
+    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.1.0',transport:'websocket',mode:'laboratorio'});}
+    if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!originAllowed(req))throw fail(403,'Origen no permitido.');
+    const ip=req.socket.remoteAddress||'unknown';
+    if(req.method==='POST'&&['/api/auth/register','/api/auth/login'].includes(path)){
+      rate('auth:'+ip,240,3600000);const input=await body(req),username=clean(input.username,40).toLowerCase(),password=typeof input.password==='string'?input.password:'';
+      rate('auth-user:'+username,20,900000);
+      if(!/^[a-z0-9_.-]{3,40}$/.test(username)||password.length<8||password.length>128)throw fail(400,'Usa un usuario de 3 a 40 caracteres y una contraseña de 8 a 128 caracteres.');
+      let user;
+      if(path.endsWith('register')){
+        const name=clean(input.name,60);if(name.length<2)throw fail(400,'Escribe tu nombre.');
+        if(db.prepare('SELECT id FROM users WHERE username=?').get(username))throw fail(409,'Ese usuario ya existe. Elige otro o inicia sesión.');
+        const code=clean(input.inviteCode,200);let role='customer';
+        if(code){if(secureEqual(code,process.env.ADMIN_INVITE_CODE))role='admin';else if(secureEqual(code,process.env.STAFF_INVITE_CODE))role='agent';else throw fail(400,'El código del equipo no es válido.');}
+        const password_hash=await passwordHash(password);const id=randomUUID(),now=Date.now();
+        transaction(db,()=>{const number=db.prepare('SELECT COALESCE(MAX(test_number),100000)+1 n FROM users').get().n;db.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,?,?)').run(id,username,name,password_hash,role,number,now,now);});
+        user=db.prepare('SELECT * FROM users WHERE id=?').get(id);audit(user,'profile.created',id);
+      }else{
+        user=db.prepare('SELECT * FROM users WHERE username=?').get(username);
+        if(!user||!await checkPassword(password,user.password_hash))throw fail(401,'Usuario o contraseña incorrectos.');
+      }
+      setSession(res,user);return json(res,200,{user:safeUser(user)});
+    }
+    if(path.startsWith('/api/')){
+      const user=requireUser(req);
+      if(req.method==='POST'&&path==='/api/auth/logout'){db.prepare('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash);for(const [ws,u]of sessions)if(u.token_hash===user.token_hash)ws.close(1000,'Sesión cerrada');res.setHeader('Set-Cookie','tc_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'+(production?'; Secure':''));return json(res,200,{ok:true});}
+      if(req.method==='GET'&&path==='/api/bootstrap')return json(res,200,{user:safeUser(user),brands:db.prepare('SELECT * FROM brands ORDER BY created_at').all(),courses:db.prepare('SELECT * FROM courses WHERE active=1 ORDER BY title').all().map(publicCourse),conversations:conversationList(user),onlineAgents:[...new Set([...sessions.values()].filter(staff).map(x=>x.id))].length});
+      if(req.method==='GET'&&path==='/api/conversations')return json(res,200,{conversations:conversationList(user)});
+      if(req.method==='POST'&&path==='/api/conversations'){
+        rate('new:'+user.id,20);const input=await body(req);const course=db.prepare('SELECT * FROM courses WHERE id=? AND active=1').get(clean(input.courseId,60));
+        if(!course||!['whatsapp','instagram','facebook'].includes(input.channel))throw fail(400,'Elige un curso y un canal válidos.');
+        let c=db.prepare("SELECT * FROM conversations WHERE customer_id=? AND course_id=? AND channel=? AND status!='resolved'").get(user.id,course.id,input.channel);
+        if(!c){const id=randomUUID(),now=Date.now();db.prepare('INSERT INTO conversations(id,customer_id,brand_id,course_id,channel,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,user.id,course.brand_id,course.id,input.channel,now,now);c=db.prepare('SELECT * FROM conversations WHERE id=?').get(id);audit(user,'conversation.created',id);broadcast('conversation',id);}
+        return json(res,200,{conversation:c});
+      }
+      const messages=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/messages$/);
+      if(messages){const c=accessConversation(messages[1],user);
+        if(req.method==='GET'){const before=Number(url.searchParams.get('before'))||Number.MAX_SAFE_INTEGER;return json(res,200,{messages:messageList(c.id,before)});}
+        if(req.method==='POST'){
+          rate('send:'+user.id,45);const input=await body(req),text=clean(input.text),clientRef=clean(input.clientRef,100);
+          if(!/^[a-zA-Z0-9-]{16,100}$/.test(clientRef)||(!text&&!input.attachment))throw fail(400,'Escribe un mensaje o adjunta un archivo.');
+          const ref=user.id+':'+clientRef;const existing=db.prepare('SELECT id,conversation_id FROM messages WHERE client_ref=?').get(ref);
+          if(existing){if(existing.conversation_id!==c.id)throw fail(409,'Referencia ya utilizada.');return json(res,200,{id:existing.id,duplicate:true});}
+          if(c.status==='resolved')throw fail(409,'La conversación está cerrada. Abre una nueva para continuar la prueba.');
+          const isCustomer=c.customer_id===user.id&&!input.asAgent;
+          if(!isCustomer){requireStaff(user);if(c.assigned_to&&c.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor está atendiendo esta conversación.');}
+          const attachment=attachmentData(input.attachment);let attachmentId=null;
+          if(attachment){attachmentId=randomUUID();await writeFile(resolve(dataDir,'uploads',attachment.storageName),attachment.buffer,{flag:'wx'});}
+          let messageId,duplicate=false;try{transaction(db,()=>{
+            const saved=db.prepare('SELECT id,conversation_id FROM messages WHERE client_ref=?').get(ref);if(saved){if(saved.conversation_id!==c.id)throw fail(409,'Referencia ya utilizada.');messageId=saved.id;duplicate=true;return;}
+            const current=accessConversation(c.id,user);if(current.status==='resolved')throw fail(409,'La conversación se cerró mientras enviabas.');
+            if(!isCustomer&&current.assigned_to&&current.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor tomó la conversación.');
+            if(attachment)db.prepare('INSERT INTO attachments VALUES(?,?,?,?,?,?,?,?)').run(attachmentId,c.id,user.id,attachment.filename,attachment.storageName,attachment.mime,attachment.buffer.length,Date.now());
+            if(!isCustomer){db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);}
+            messageId=insertMessage(c,user,text,isCustomer?'customer':'agent',ref,attachmentId);
+            if(isCustomer&&current.bot_enabled&&!current.assigned_to)db.prepare('INSERT INTO jobs(id,conversation_id,message_id,due_at) VALUES(?,?,?,?)').run(randomUUID(),c.id,messageId,Date.now()+700);
+          });}catch(error){if(attachment)await unlink(resolve(dataDir,'uploads',attachment.storageName)).catch(()=>{});throw error;}
+          if(duplicate&&attachment)await unlink(resolve(dataDir,'uploads',attachment.storageName)).catch(()=>{});
+          broadcast('conversation',c.id);return json(res,duplicate?200:201,{id:messageId,duplicate});
+        }
+      }
+      const read=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/read$/);
+      if(read&&req.method==='POST'){const c=accessConversation(read[1],user);const input=await body(req);if(input.asAgent)requireStaff(user);const max=Number(input.upTo)||0;if(!Number.isSafeInteger(max)||max<0)throw fail(400,'Lectura no válida.');const kind=c.customer_id===user.id&&!input.asAgent?"sender_kind IN ('agent','automation')":"sender_kind='customer'";const changed=db.prepare(`UPDATE messages SET read_at=? WHERE conversation_id=? AND seq<=? AND read_at IS NULL AND ${kind}`).run(Date.now(),c.id,max);if(changed.changes)broadcast('read',c.id);return json(res,200,{ok:true});}
+      const action=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/action$/);
+      if(action&&req.method==='POST'){
+        requireStaff(user);const input=await body(req);transaction(db,()=>{const c=accessConversation(action[1],user);if(c.assigned_to&&c.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor está atendiendo esta conversación.');
+          if(c.status==='resolved'&&input.action!=='stage')throw fail(409,'La conversación está cerrada. El cliente puede iniciar otra prueba.');
+          if(input.action==='take')db.prepare("UPDATE conversations SET assigned_to=?,bot_enabled=0,status='open',updated_at=? WHERE id=?").run(user.id,Date.now(),c.id);
+          else if(input.action==='automate')db.prepare("UPDATE conversations SET assigned_to=NULL,bot_enabled=1,status='open',updated_at=? WHERE id=?").run(Date.now(),c.id);
+          else if(input.action==='resolve')db.prepare("UPDATE conversations SET bot_enabled=0,status='resolved',updated_at=? WHERE id=?").run(Date.now(),c.id);
+          else if(input.action==='stage'&&['nuevo','interesado','inscripcion','inscrito'].includes(input.stage))db.prepare('UPDATE conversations SET stage=?,updated_at=? WHERE id=?').run(input.stage,Date.now(),c.id);
+          else throw fail(400,'Acción no válida.');
+          if(input.action!=='stage')db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);
+          audit(user,'conversation.'+input.action,c.id);
+        });broadcast('conversation',action[1]);return json(res,200,{ok:true});
+      }
+      const template=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/template$/);
+      if(template&&req.method==='POST'){
+        requireStaff(user);const c=accessConversation(template[1],user),input=await body(req);if(c.status==='resolved')throw fail(409,'La conversación está cerrada.');if(c.assigned_to&&c.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor está atendiendo.');
+        const course=db.prepare('SELECT * FROM courses WHERE id=?').get(c.course_id);const text=input.kind==='syllabus'?'Temario:\n\n'+course.syllabus:input.kind==='price'?`Precio de ejemplo: $${(course.price_cents/100).toFixed(2)} MXN. Edición de prueba.`:'Te comparto el flyer de práctica de '+course.title+'.';
+        const clientRef=clean(input.clientRef,100);if(!/^[a-zA-Z0-9-]{16,100}$/.test(clientRef)||!['syllabus','price','flyer'].includes(input.kind))throw fail(400,'Plantilla o referencia no válida.');const ref=user.id+':'+clientRef;
+        const existing=db.prepare('SELECT conversation_id FROM messages WHERE client_ref=?').get(ref);if(existing&&existing.conversation_id!==c.id)throw fail(409,'Referencia ya utilizada.');
+        if(!db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref)){transaction(db,()=>{insertMessage(c,user,text,'agent',ref,null,input.kind==='flyer'?course.id:null);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);});broadcast('conversation',c.id);}return json(res,200,{ok:true});
+      }
+      const file=path.match(/^\/api\/files\/([a-f0-9-]+)$/);
+      if(file&&req.method==='GET'){const f=db.prepare('SELECT * FROM attachments WHERE id=?').get(file[1]);if(!f)throw fail(404,'Archivo no disponible.');accessConversation(f.conversation_id,user);const bytes=await readFile(resolve(dataDir,'uploads',f.storage_name));res.writeHead(200,{'Content-Type':f.mime,'Content-Disposition':`${f.mime==='application/pdf'?'attachment':'inline'}; filename*=UTF-8''${encodeURIComponent(f.filename)}`});return res.end(bytes);}
+      const snapshotImage=path.match(/^\/api\/messages\/([a-f0-9-]+)\/flyer$/);
+      if(snapshotImage&&req.method==='GET'){const message=db.prepare('SELECT * FROM messages WHERE id=?').get(snapshotImage[1]);if(!message?.flyer_snapshot)throw fail(404,'Flyer no disponible.');accessConversation(message.conversation_id,user);const snapshot=JSON.parse(message.flyer_snapshot);if(!snapshot)throw fail(404,'Flyer no disponible.');res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8'});return res.end(flyer(snapshot.course,snapshot.brand));}
+      const image=path.match(/^\/api\/courses\/([a-zA-Z0-9-]+)\/flyer$/);
+      if(image&&req.method==='GET'){const course=db.prepare('SELECT * FROM courses WHERE id=?').get(image[1]);if(!course)throw fail(404,'Curso no disponible.');const brand=db.prepare('SELECT * FROM brands WHERE id=?').get(course.brand_id);res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8'});return res.end(flyer(course,brand));}
+      if(path==='/api/catalog'&&req.method==='POST'){
+        requireAdmin(user);const input=await body(req),title=clean(input.title,100),brand=clean(input.brandId,60),price=Number(input.price);
+        if(!title||!Number.isFinite(price)||price<0||price>1000000||!clean(input.dateLabel)||!clean(input.syllabus)||!clean(input.welcome)||!db.prepare('SELECT id FROM brands WHERE id=?').get(brand))throw fail(400,'Completa el título, la marca, el precio, la fecha, el temario y la presentación.');
+        const id=input.id?clean(input.id,60):randomUUID();
+        if(input.id){if(!db.prepare('SELECT id FROM courses WHERE id=? AND brand_id=?').get(id,brand))throw fail(404,'Curso no disponible.');db.prepare('UPDATE courses SET title=?,price_cents=?,date_label=?,syllabus=?,welcome=?,version=version+1,updated_at=? WHERE id=?').run(title,Math.round(price*100),clean(input.dateLabel,180),clean(input.syllabus,5000),clean(input.welcome,2000),Date.now(),id);}
+        else db.prepare('INSERT INTO courses(id,brand_id,title,price_cents,date_label,syllabus,welcome,updated_at) VALUES(?,?,?,?,?,?,?,?)').run(id,brand,title,Math.round(price*100),clean(input.dateLabel,180),clean(input.syllabus,5000),clean(input.welcome,2000),Date.now());
+        audit(user,'course.saved',id);broadcast('catalog');return json(res,200,{ok:true,id});
+      }
+      if(path==='/api/brands'&&req.method==='POST'){requireAdmin(user);const input=await body(req),name=clean(input.name,60);if(name.length<2)throw fail(400,'Escribe el nombre de la marca.');const id=randomUUID();db.prepare('INSERT INTO brands VALUES(?,?,?,?)').run(id,name,clean(input.description,200)||'Marca de prueba',Date.now());audit(user,'brand.created',id);broadcast('catalog');return json(res,201,{id});}
+      if(path==='/api/metrics'&&req.method==='GET'){requireStaff(user);return json(res,200,{profiles:db.prepare('SELECT COUNT(*) n FROM users').get().n,conversations:db.prepare('SELECT COUNT(*) n FROM conversations').get().n,messages:db.prepare('SELECT COUNT(*) n FROM messages').get().n,waiting:db.prepare("SELECT COUNT(*) n FROM conversations WHERE status='waiting'").get().n,online:new Set([...sessions.values()].map(u=>u.id)).size,byChannel:db.prepare('SELECT channel,COUNT(*) count FROM conversations GROUP BY channel').all(),recent:db.prepare('SELECT a.action,a.created_at,u.name FROM audit a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 15').all()});}
+      throw fail(404,'Ruta no disponible.');
+    }
+    if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'Método no permitido.');
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
+    const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
+  }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.'});}
+});
+
+const wss=new WebSocketServer({noServer:true,maxPayload:2048,perMessageDeflate:false});
+server.on('upgrade',(req,socket,head)=>{
+  const user=readSession(req);if(req.url!=='/realtime'||!user||!originAllowed(req)){socket.end('HTTP/1.1 401 Unauthorized\r\n\r\n');return;}
+  if([...sessions.values()].filter(u=>u.id===user.id).length>=8){socket.end('HTTP/1.1 429 Too Many Requests\r\n\r\n');return;}
+  wss.handleUpgrade(req,socket,head,ws=>{sessions.set(ws,user);ws.isAlive=true;db.prepare('UPDATE users SET last_seen=? WHERE id=?').run(Date.now(),user.id);ws.send(JSON.stringify({type:'connected',user:safeUser(user)}));broadcast('presence');
+    ws.on('pong',()=>{ws.isAlive=true;});
+    ws.on('message',raw=>{try{rate('ws:'+user.id,90);if(user.expires_at<Date.now())return ws.close(1008,'Sesión vencida');const event=JSON.parse(raw.toString());if(event.type==='typing'){const c=accessConversation(clean(event.conversationId,60),user);broadcast('typing',c.id,{name:user.name,userId:user.id,expiresAt:Date.now()+3500});}}catch{/* Ignore invalid client events. */}});
+    ws.on('error',()=>{});ws.on('close',()=>{sessions.delete(ws);db.prepare('UPDATE users SET last_seen=? WHERE id=?').run(Date.now(),user.id);broadcast('presence');});
+  });
+});
+const jobsTimer=setInterval(processJobs,350);
+const heartbeat=setInterval(()=>{for(const [ws,user]of sessions){if(!ws.isAlive||user.expires_at<Date.now()||!db.prepare('SELECT token_hash FROM sessions WHERE token_hash=?').get(user.token_hash)){ws.terminate();continue;}ws.isAlive=false;ws.ping();}const now=Date.now();for(const [key,value]of limits)if(value.end<now)limits.delete(key);db.prepare('DELETE FROM sessions WHERE expires_at<?').run(now);},30000);
+server.listen(port,host,()=>console.log(`TEC Capital Laboratorio: http://${host}:${server.address().port}`));
+function stop(){clearInterval(jobsTimer);clearInterval(heartbeat);for(const ws of sessions.keys())ws.close(1001,'Servidor reiniciando');server.close(()=>{db.close();process.exit(0);});setTimeout(()=>process.exit(0),1500).unref();}
+process.on('SIGTERM',stop);process.on('SIGINT',stop);
