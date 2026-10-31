@@ -82,7 +82,7 @@ Usar perfiles/sesiones separados para un administrador, dos asesores de prueba y
 6. **Coordinación:** nota con mención, aviso privado, transferencia aceptada desde la otra sesión y responsable/tareas coherentes entre chats del mismo interés.
 7. **Macro:** crear y previsualizar; aplicar una vez, reintentar la misma referencia y verificar un solo mensaje/tarea/nota. Cambiar datos entre preview y ejecución para comprobar que se exige revisar.
 8. **SLA y formularios:** lectura/bot no satisfacen respuesta humana; devolver/transferir no reinician espera. Una actualización WS no borra cambios del formulario en edición.
-9. **Presentación:** escritorio y móvil de unos 390 px, modales completos, botones accesibles, sin desplazamiento lateral accidental ni errores de consola en el recorrido.
+9. **Presentación:** escritorio (incluida una ventana de más de 1800 px: el CRM debe llegar a ambos bordes) y móvil de unos 390 px, modales completos, botones accesibles, sin desplazamiento lateral accidental ni errores de consola en el recorrido.
 10. **Cierre de QA:** pausar la macro/receta de prueba, cerrar sus intereses/chats, completar/cancelar sus tareas y suspender asesores técnicos si ya no hacen falta. Conservar auditoría. No borrar registros del equipo para dejar las pantallas vacías.
 
 En producción evitar activar/cambiar políticas de marcas existentes para facilitar QA. Registrar la configuración inicial y comprobar que quedó intacta. Los ensayos destructivos, carga y restauración se hacen en entorno aislado.

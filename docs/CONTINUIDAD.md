@@ -98,6 +98,10 @@ Al terminar, se pausó la macro técnica, se cerraron oportunidad/chat/tareas y 
 
 Sin publicar ni desplegar; los cambios están en el árbol de trabajo, sin confirmar en Git. Añade el esquema v7 y el motor de pasos durables descrito en [PLAN_FASE_4.md](PLAN_FASE_4.md#4a-implementado-local-31-oct-2026). `package.json` sigue en `0.5.0`: sube la versión al publicar. Verificación local: `npm run check` y `npm test` con 79 pruebas aprobadas (dos ejecuciones completas seguidas tras añadir 4B; 69 con sólo 4A). En una ejecución anterior falló una vez la prueba de catálogo «vencimientos y material programado…» (espera fija de 1,2 s al trabajo de reglas, en paralelo con el resto de la suite) y no se reprodujo en 6 repeticiones; probable sensibilidad de tiempo bajo carga, no diagnosticada. 4B añade recetas de seguimiento por silencio (esquema v8, ver PLAN_FASE_4); sin interfaz todavía. Tres pruebas existentes se actualizaron de `user_version` 6 a 8. No hay cambios de interfaz, así que no se revisó navegador; tampoco se probó contra Railway.
 
+### Corrección visual: ancho completo en pantallas grandes (31 oct 2026)
+
+El usuario reportó franjas vacías a ambos lados del CRM en su monitor (~1890 px de ancho). Diagnóstico: `.workspace` tenía `max-width:1800px` centrado con bordes laterales, por lo que cualquier ventana mayor de 1800 px dejaba (ancho − 1800)/2 px libres por lado. Se quitó el límite y los bordes en `public/styles.css`. Verificado en navegador emulando 1900 px: el contenedor ocupa 1900 px, sin margen ni desplazamiento horizontal; las 79 pruebas siguen pasando. No se revisó de nuevo móvil ni tableta (el cambio sólo actúa por encima de 1800 px). **Sólo local:** el sitio publicado conserva las franjas hasta el próximo despliegue. Otros límites de ancho existentes (`.entry` 1320 px en el acceso y los de contenido de CRM/catálogo) no se tocaron.
+
 ## Pendientes reales
 
 1. **Fase 4:** 4A y primera entrega de 4B hechos localmente (motor durable y recetas por silencio, API sin interfaz, sin publicar); faltan interfaz y más disparadores de 4B, conocimiento aprobado, evaluación y copiloto. Ver [plan detallado](PLAN_FASE_4.md).
