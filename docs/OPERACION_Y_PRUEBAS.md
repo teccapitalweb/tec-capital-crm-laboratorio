@@ -54,7 +54,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con el bloque local 4A son **98** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con el bloque local 4A son **101** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -65,6 +65,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/catalogue.test.mjs` | Ediciones, fechas, centavos, promociones, variables, aprobación, permisos, vistas previas, archivo, snapshots/bytes históricos y reinicio |
 | `test/automation.test.mjs` | Motor 4A: migración v7, idempotencia, reintentos, reinicio, carreras de cancelación y pausas (sin servidor; base temporal) |
 | `test/automation-http.test.mjs` | Rutas `/api/automation`: sólo administración, revisiones, pausa global (servidor temporal) |
+| `test/consent.test.mjs` | Consentimiento y baja: detección, bloqueo en recetas, tope de frecuencia, API, fusión y exportación |
 | `test/analytics.test.mjs` | Analítica: embudo, resultados, tiempos de respuesta, privacidad por asesor, permisos y API |
 | `test/contacts.test.mjs` | Etiquetas, duplicados, fusión con vista previa y exportación CSV (servidor real) |
 | `test/backup.test.mjs` | Respaldo con manifiesto, rotación, programación, detección de adjuntos perdidos/base dañada, ensayo de restauración y rutas |

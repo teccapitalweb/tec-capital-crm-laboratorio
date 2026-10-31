@@ -10,6 +10,7 @@ import {migrateFollowup} from '../server/followup.mjs';
 import {migrateCatalogue} from '../server/catalogue-schema.mjs';
 import {migrateOperations} from '../server/operations-schema.mjs';
 import {migrateAutomation,migrateRecipes} from '../server/automation-schema.mjs';
+import {migrateContacts,migrateConsent} from '../server/contacts-schema.mjs';
 import {createAutomation,cancelConversationSteps} from '../server/automation.mjs';
 import {createRecipes} from '../server/recipes.mjs';
 
@@ -18,7 +19,7 @@ const quiet={error(){}};
 
 async function setup(t){
   const dir=await mkdtemp(join(tmpdir(),'crm-recipes-')),db=openDatabase(dir);
-  for(const m of [migrateCRM,migrateFollowup,migrateCatalogue,migrateOperations,migrateAutomation,migrateRecipes])m(db);
+  for(const m of [migrateCRM,migrateFollowup,migrateCatalogue,migrateOperations,migrateAutomation,migrateRecipes,migrateContacts,migrateConsent])m(db);
   t.after(async()=>{try{db.close();}catch{}await rm(dir,{recursive:true,force:true});});
   const c={t:Date.now(),now:()=>c.t},t0=c.t;
   db.prepare("INSERT INTO users(id,username,name,password_hash,role,test_number,created_at,last_seen) VALUES('u1','cliente','Cliente','x','customer',1,?,?),('adm','admin','Admin','x','admin',2,?,?),('ag','asesor','Asesor','x','agent',3,?,?)").run(t0,t0,t0,t0,t0,t0);
@@ -44,7 +45,7 @@ async function setup(t){
 
 test('migración v8 aditiva y repetible; las recetas validan alcance y acciones',async t=>{
   const {db,recipes,brand,template,definition}=await setup(t);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version,8);migrateRecipes(db);assert.equal(db.prepare('PRAGMA user_version').get().user_version,8);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version,10);migrateRecipes(db);assert.equal(db.prepare('PRAGMA user_version').get().user_version,10);
   const bad=(over,re)=>assert.throws(()=>recipes.create({brandId:brand,title:'x',definition:definition(over)},{id:'adm'}),re);
   bad({trigger:{type:'silence',minutes:1}},/Minutos/);bad({trigger:{type:'otro',minutes:30}},/Disparador/);bad({actions:[]},/acciones/);
   bad({actions:[{type:'task',title:'a',delayMinutes:5},{type:'task',title:'b',delayMinutes:5}]},/repetida/);bad({actions:[{type:'template',templateId:'inexistente'}]},/Plantilla/);

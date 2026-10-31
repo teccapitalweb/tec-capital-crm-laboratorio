@@ -6,7 +6,7 @@ const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
 const OPEN_STAGES=['nuevo','interesado','inscripcion'];
 const closed=s=>['ganada','perdida'].includes(s);
-const WEEK=7*24*60*60*1000;
+const WEEK=7*24*60*60*1000,DAY=24*60*60*1000,MAX_RECIPE_MESSAGES_PER_DAY=2;
 
 function integer(v,min,max,label){if(!Number.isInteger(v)||v<min||v>max)throw fail(400,label+' no válido.');return v;}
 
@@ -27,6 +27,7 @@ export function createRecipes({db,catalogue,automation,insertMessage,broadcast,b
     const c=input.conditions||{},conditions={};
     if(c.courseId){const k=db.prepare('SELECT brand_id FROM courses WHERE id=?').get(c.courseId);if(!k||k.brand_id!==brandId)throw fail(400,'Curso no válido para la marca.');conditions.courseId=c.courseId;}
     if(c.editionId){const e=db.prepare('SELECT brand_id,course_id FROM editions WHERE id=?').get(c.editionId);if(!e||e.brand_id!==brandId||(conditions.courseId&&e.course_id!==conditions.courseId))throw fail(400,'Edición no válida para la marca.');conditions.editionId=c.editionId;}
+    if(c.requireConsent!==undefined){if(typeof c.requireConsent!=='boolean')throw fail(400,'Consentimiento requerido no válido.');if(c.requireConsent)conditions.requireConsent=true;}
     if(c.stages!==undefined){if(!Array.isArray(c.stages)||!c.stages.length||c.stages.some(s=>!OPEN_STAGES.includes(s)))throw fail(400,'Etapas no válidas.');conditions.stages=[...new Set(c.stages)];}
     if(!Array.isArray(input.actions)||input.actions.length<1||input.actions.length>3)throw fail(400,'Define de una a tres acciones.');
     const seen=new Set(),actions=input.actions.map(a=>{
@@ -60,6 +61,10 @@ export function createRecipes({db,catalogue,automation,insertMessage,broadcast,b
     if(tpl){
       const human=Boolean(c.assigned_to)||!c.bot_enabled;
       add('no_human_control',!human,human?'Una persona del equipo controla la conversación; la receta no enviará mensajes.':'Nadie del equipo controla la conversación.','human_takeover');
+      const consent=o?db.prepare('SELECT status FROM contact_consent WHERE contact_id=?').get(o.contact_id)?.status||'unknown':'unknown';
+      add('consent',consent!=='opted_out'&&(!def.conditions.requireConsent||consent==='opted_in'),consent==='opted_out'?'El contacto pidió no recibir mensajes.':def.conditions.requireConsent&&consent!=='opted_in'?'La receta exige consentimiento registrado y este contacto no lo tiene.':def.conditions.requireConsent?'El contacto aceptó recibir mensajes.':'El contacto no pidió la baja.',consent==='opted_out'?'contact_opted_out':'no_consent');
+      const sent=o?db.prepare("SELECT count(*) n FROM messages m WHERE m.client_ref LIKE 'recipe:%' AND m.created_at>? AND m.conversation_id IN (SELECT co.conversation_id FROM conversation_opportunities co JOIN opportunities x ON x.id=co.opportunity_id WHERE x.contact_id=?)").get(now()-DAY,o.contact_id).n:0;
+      add('frequency',sent<MAX_RECIPE_MESSAGES_PER_DAY,sent<MAX_RECIPE_MESSAGES_PER_DAY?'No supera el máximo de '+MAX_RECIPE_MESSAGES_PER_DAY+' mensajes automáticos por contacto cada 24 h.':'Ya recibió '+sent+' mensajes automáticos en las últimas 24 h.','frequency_limit');
       let preview=null,why='';try{preview=catalogue.prepare(c,{templateId:tpl.templateId});}catch(e){why=e.message;}
       add('material_available',Boolean(preview),preview?'La plantilla se puede enviar con la oferta vigente.':why||'La plantilla no está disponible.','material_unavailable');
     }

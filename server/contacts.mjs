@@ -1,5 +1,6 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {transaction} from './database.mjs';
+import {cancelConversationSteps} from './automation.mjs';
 
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const norm=v=>String(v??'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
@@ -60,6 +61,38 @@ export function createContacts({db,crm,body,json,audit,broadcast,now=Date.now}){
     });
   }
 
+
+  // ---- consentimiento y baja
+  const STATUS=['unknown','opted_in','opted_out'];
+  const consentOf=id=>db.prepare('SELECT status,source,note,actor_id,updated_at FROM contact_consent WHERE contact_id=?').get(id)||{status:'unknown',source:null,note:'',actor_id:null,updated_at:null};
+  const conversationsOf=id=>db.prepare('SELECT co.conversation_id id FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id WHERE o.contact_id=?').all(id).map(r=>r.id);
+  function writeConsent(c,status,source,note,actor){
+    const t=now();
+    db.prepare('INSERT INTO contact_consent(contact_id,brand_id,status,source,note,actor_id,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET status=excluded.status,source=excluded.source,note=excluded.note,actor_id=excluded.actor_id,updated_at=excluded.updated_at').run(c.id,c.brand_id,status,source,note,actor,t);
+    db.prepare('INSERT INTO contact_consent_events(contact_id,brand_id,status,source,note,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(c.id,c.brand_id,status,source,note,actor,t);
+    if(status==='opted_out')for(const id of conversationsOf(c.id))cancelConversationSteps(db,id,'contact_opted_out',t);
+  }
+  function setConsent(user,contactId,input){
+    requireStaff(user);const c=contactOf(contactId,user),status=input.status,note=text(input.note,200);
+    if(!STATUS.includes(status))throw fail(400,'Estado de consentimiento no válido.');
+    return transaction(db,()=>{
+      const current=consentOf(c.id);
+      if(current.status===status)return {...current,unchanged:true};
+      if(current.status==='opted_out'){requireAdmin(user);if(note.length<5)throw fail(400,'Para reactivar a un contacto que pidió la baja, administración debe explicar el motivo (mínimo 5 caracteres).');}
+      writeConsent(c,status,'staff',note,user.id);return consentOf(c.id);
+    });
+  }
+  // Baja pedida por el propio cliente en un mensaje: frases claras y cortas, nunca fragmentos de textos largos.
+  const OPT_OUT=[/^(baja|stop|unsubscribe|no mas mensajes|no mas)$/,/\b(darme|darnos|dame) de baja\b/,/\bno (quiero|deseo|queremos) (recibir|mas)( mas)? (mensajes|informacion|promociones|publicidad|correos|notificaciones)\b/,/\b(deja|dejen|dejar|dejes) de (escribir|enviar|mandar)(me|nos)?\b/,/\bno me (escriban|envien|manden|contacten|llamen)( mas)?\b/];
+  const isOptOutText=t=>{const s=norm(t).replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();return s.length>0&&s.length<=120&&OPT_OUT.some(r=>r.test(s));};
+  function recordInbound(conversation,messageText){
+    if(!isOptOutText(messageText))return false;
+    const link=db.prepare('SELECT o.contact_id FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id WHERE co.conversation_id=?').get(conversation.id);if(!link)return false;
+    const c=db.prepare('SELECT * FROM contacts WHERE id=?').get(link.contact_id);if(!c||consentOf(c.id).status==='opted_out')return false;
+    writeConsent(c,'opted_out','customer_message','Mensaje del cliente: «'+text(messageText,60)+'»',null);changed(c.brand_id);return true;
+  }
+  const consentLabel={unknown:'sin_registro',opted_in:'acepta',opted_out:'no_desea'};
+
   // ---- duplicados
   const summary=c=>({id:c.id,name:c.name,phone:c.phone,email:c.email,linked:Boolean(c.source_user_id),created_at:c.created_at,
     opportunities:db.prepare('SELECT count(*) n FROM opportunities WHERE contact_id=?').get(c.id).n,notes:db.prepare('SELECT count(*) n FROM internal_notes WHERE contact_id=?').get(c.id).n});
@@ -101,6 +134,10 @@ export function createContacts({db,crm,body,json,audit,broadcast,now=Date.now}){
       db.prepare('UPDATE contacts SET phone=CASE WHEN phone=\'\' THEN ? ELSE phone END,email=CASE WHEN email=\'\' THEN ? ELSE email END,updated_at=? WHERE id=?').run(p.merge.phone,p.merge.email,t,p.keep.id);
       db.prepare('INSERT INTO contact_merges(id,brand_id,kept_id,merged_id,merged_snapshot,moved,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?)').run(randomUUID(),p.keep.brand_id,p.keep.id,p.merge.id,JSON.stringify(p.merge),JSON.stringify(moved),user.id,t);
       db.prepare('INSERT INTO internal_notes VALUES(?,?,?,?,?,?)').run(randomUUID(),p.keep.id,p.keep.brand_id,user.id,'Fusión de contactos: se unió «'+p.merge.name+'»'+(p.merge.phone?' · '+p.merge.phone:'')+(p.merge.email?' · '+p.merge.email:'')+'. Se movieron '+p.moves.opportunities+' interés(es), '+p.moves.notes+' nota(s) y '+p.moves.tags+' etiqueta(s).',t);
+      const ck=consentOf(p.keep.id),cm=consentOf(p.merge.id),rank={unknown:0,opted_in:1,opted_out:2};
+      if(rank[cm.status]>rank[ck.status])writeConsent(p.keep,cm.status,'merge','Heredado al fusionar con «'+p.merge.name+'»',user.id);
+      db.prepare('UPDATE contact_consent_events SET contact_id=? WHERE contact_id=?').run(p.keep.id,p.merge.id);
+      db.prepare('DELETE FROM contact_consent WHERE contact_id=?').run(p.merge.id);
       db.prepare('DELETE FROM contacts WHERE id=?').run(p.merge.id);
       return {keepId:p.keep.id,mergedId:p.merge.id,moved};
     });
@@ -115,8 +152,8 @@ export function createContacts({db,crm,body,json,audit,broadcast,now=Date.now}){
     if(kind==='contacts'){
       const tag=params.get('tag'),filter=tag?' AND c.id IN (SELECT contact_id FROM contact_tag_links WHERE tag_id=?)':'';
       if(tag&&!db.prepare(`SELECT 1 FROM contact_tags WHERE id=? AND brand_id IN (${q})`).get(tag,...ids))throw fail(404,'Etiqueta no disponible.');
-      const rows=db.prepare(`SELECT c.*,b.name brand_name,(SELECT group_concat(t.name,'; ') FROM contact_tag_links l JOIN contact_tags t ON t.id=l.tag_id WHERE l.contact_id=c.id) tags,(SELECT count(*) FROM opportunities o WHERE o.contact_id=c.id AND o.stage NOT IN ('ganada','perdida')) active FROM contacts c JOIN brands b ON b.id=c.brand_id WHERE c.brand_id IN (${q})${filter} ORDER BY b.name,c.name LIMIT ${MAX_EXPORT}`).all(...ids,...(tag?[tag]:[]));
-      count=rows.length;lines=[csvLine(['marca','nombre','telefono','correo','origen','etiquetas','intereses_activos','creado','actualizado']),...rows.map(r=>csvLine([r.brand_name,r.name,r.phone,r.email,r.source_user_id?'perfil':'manual',r.tags,r.active,new Date(r.created_at).toISOString(),new Date(r.updated_at).toISOString()]))];
+      const rows=db.prepare(`SELECT c.*,b.name brand_name,(SELECT group_concat(t.name,'; ') FROM contact_tag_links l JOIN contact_tags t ON t.id=l.tag_id WHERE l.contact_id=c.id) tags,(SELECT count(*) FROM opportunities o WHERE o.contact_id=c.id AND o.stage NOT IN ('ganada','perdida')) active,(SELECT status FROM contact_consent k WHERE k.contact_id=c.id) consent FROM contacts c JOIN brands b ON b.id=c.brand_id WHERE c.brand_id IN (${q})${filter} ORDER BY b.name,c.name LIMIT ${MAX_EXPORT}`).all(...ids,...(tag?[tag]:[]));
+      count=rows.length;lines=[csvLine(['marca','nombre','telefono','correo','origen','etiquetas','intereses_activos','creado','actualizado','consentimiento']),...rows.map(r=>csvLine([r.brand_name,r.name,r.phone,r.email,r.source_user_id?'perfil':'manual',r.tags,r.active,new Date(r.created_at).toISOString(),new Date(r.updated_at).toISOString(),consentLabel[r.consent||'unknown']]))];
     }else{
       const rows=db.prepare(`SELECT o.*,b.name brand_name,c.name contact_name,k.title course_title,e.name edition_name,e.price_cents,e.currency,u.name owner_name FROM opportunities o JOIN contacts c ON c.id=o.contact_id JOIN brands b ON b.id=o.brand_id JOIN courses k ON k.id=o.course_id LEFT JOIN editions e ON e.id=o.edition_id LEFT JOIN users u ON u.id=o.owner_id WHERE o.brand_id IN (${q}) ORDER BY b.name,o.updated_at DESC LIMIT ${MAX_EXPORT}`).all(...ids);
       count=rows.length;lines=[csvLine(['marca','contacto','curso','edicion','etapa','responsable','precio','moneda','motivo_perdida','creada','actualizada']),...rows.map(r=>csvLine([r.brand_name,r.contact_name,r.course_title,r.edition_name,r.stage,r.owner_name,r.price_cents===null||r.price_cents===undefined?'':(r.price_cents/100).toFixed(2),r.currency,r.lost_reason,new Date(r.created_at).toISOString(),new Date(r.updated_at).toISOString()]))];
@@ -138,6 +175,10 @@ export function createContacts({db,crm,body,json,audit,broadcast,now=Date.now}){
     if((m=path.match(/^\/api\/crm\/contacts\/([a-f0-9-]{36})\/tags$/))&&req.method==='PUT'){
       const c=contactOf(m[1],user),ids=setContactTags(user,m[1],await body(req));audit(user,'contact.tags',c.id);changed(c.brand_id);json(res,200,{tagIds:ids});return true;
     }
+    if((m=path.match(/^\/api\/crm\/contacts\/([a-f0-9-]{36})\/consent$/))){
+      if(req.method==='GET'){requireStaff(user);const c=contactOf(m[1],user);json(res,200,{consent:consentOf(c.id),history:db.prepare('SELECT e.status,e.source,e.note,e.created_at,u.name actor_name FROM contact_consent_events e LEFT JOIN users u ON u.id=e.actor_id WHERE e.contact_id=? ORDER BY e.seq DESC LIMIT 20').all(c.id)});return true;}
+      if(req.method==='PUT'){requireStaff(user);const c=contactOf(m[1],user),r=setConsent(user,m[1],await body(req));audit(user,'contact.consent',c.id);changed(c.brand_id);json(res,200,{consent:r});return true;}
+    }
     if(path==='/api/crm/duplicates'&&req.method==='GET'){json(res,200,{groups:duplicates(user,url.searchParams.get('brand'))});return true;}
     if(path==='/api/crm/contacts/merge-preview'&&req.method==='POST'){const i=await body(req);json(res,200,{plan:publicPlan(plan(i.keepId,i.mergeId,user))});return true;}
     if(path==='/api/crm/contacts/merge'&&req.method==='POST'){const r=applyMerge(user,await body(req));audit(user,'contact.merged',r.keepId);changed(db.prepare('SELECT brand_id FROM contacts WHERE id=?').get(r.keepId).brand_id);json(res,200,r);return true;}
@@ -147,5 +188,5 @@ export function createContacts({db,crm,body,json,audit,broadcast,now=Date.now}){
     }
     return false;
   }
-  return {handle,listTags,createTag,updateTag,deleteTag,setContactTags,duplicates,plan,applyMerge,exportCsv};
+  return {handle,isOptOutText,recordInbound,consentOf,setConsent,listTags,createTag,updateTag,deleteTag,setContactTags,duplicates,plan,applyMerge,exportCsv};
 }

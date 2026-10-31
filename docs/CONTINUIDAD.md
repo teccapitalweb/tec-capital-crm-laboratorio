@@ -169,8 +169,24 @@ Publicado por instrucción expresa del usuario: `main`, commit funcional `1e811a
 
 Comprobado en la web publicada sin iniciar sesión: versión 0.9.0; `/analytics.js`, `/analytics.css` y `/app.js` responden 200; `/api/analytics` responde 401 sin sesión. **No comprobado:** la pantalla Analítica con datos reales de producción y con sesión de administración y de asesor (privacidad por persona), ni los puntos pendientes de v0.8.0 (migración v9, respaldos `auto-*`, flujos autenticados de contactos, importación y Seguimientos).
 
+## Consentimiento, baja y tope de frecuencia (rama `feat/consentimiento-y-baja`, local, 31 oct 2026)
+
+Esquema **v10**, aditivo (`contact_consent`, `contact_consent_events` en `server/contacts-schema.mjs`; lógica en `server/contacts.mjs`). **Sin publicar.** Es el requisito previo que `PLAN_FASE_4.md` pedía antes de cualquier seguimiento proactivo.
+
+- **Estados por contacto:** `unknown` (sin registro, el valor por omisión), `opted_in` (aceptó recibir mensajes) y `opted_out` (pidió la baja), con historial (quién, cuándo, fuente y nota). Fuentes: `staff`, `customer_message` y `merge`.
+- **API:** `GET/PUT /api/crm/contacts/:id/consent`. El equipo con acceso a la marca registra consentimiento o baja. **Una baja no la revierte un asesor:** sólo administración, con un motivo de al menos 5 caracteres.
+- **Baja pedida por el cliente:** un mensaje corto y claro («BAJA», «STOP», «quiero darme de baja», «no quiero recibir más mensajes», «deja de escribirme», «no me escriban más»…) registra la baja automáticamente, el sistema confirma una vez al cliente que no volverá a enviarle seguimientos y se cancelan los pasos automáticos pendientes de ese contacto (`contact_opted_out`). La detección se limita a mensajes de hasta 120 caracteres y evita frases ambiguas («dar de baja un curso», «cancelar»): puede no reconocer pedidos redactados de otra forma, por lo que el equipo debe seguir registrando bajas a mano. Es una heurística, no una garantía legal.
+- **Recetas:** la acción de enviar plantilla se bloquea si el contacto pidió la baja (`contact_opted_out`); la condición opcional «sólo con consentimiento registrado» (`requireConsent`) además exige `opted_in` (`no_consent`). Tarea y aviso interno no se bloquean, porque no escriben al cliente. Se evalúa al programar, en la simulación y justo antes del efecto.
+- **Tope de frecuencia:** máximo 2 mensajes automáticos de recetas por contacto en 24 h entre todas sus conversaciones (`frequency_limit`; constante en `recipes.mjs`, todavía no configurable por marca).
+- **Fusión de contactos:** la ficha principal hereda el estado más restrictivo y el historial; no se pierde una baja al fusionar.
+- **Exportación:** nueva columna `consentimiento` (`sin_registro`, `acepta`, `no_desea`).
+- **Interfaz:** bloque «Comunicaciones» en la ficha (estado, nota, historial, registrar consentimiento o baja; reactivación sólo administración) y casilla en el formulario de recetas.
+- **Pruebas:** `test/consent.test.mjs` (3): detección de bajas con casos positivos y negativos, recetas (baja, consentimiento exigido, frecuencia, cancelación de pasos pendientes) y API completa con baja por mensaje del cliente, fusión y exportación. Las pruebas de esquema esperan `user_version` 10.
+- **Pendiente:** consentimiento por canal (WhatsApp/Instagram/Facebook), caducidad y evidencia (texto del aviso aceptado), reglas de ventana de mensajería de Meta (se verificarán al integrar), envío de difusiones, configuración del tope por marca, y revisar con asesoría legal las políticas de consentimiento y retención antes de clientes reales.
+
 ## Pendientes reales
 
+0b. **Disparadores nuevos de recetas** (tarea vencida, oportunidad estancada, petición de asesor) y esperas entre acciones.
 0. **Verificación autenticada de v0.6.0 en producción** (migración v8, respaldo `before-crm-v8-*`, pestaña Seguimientos) con registros de prueba identificados; requiere que el usuario inicie sesión en el navegador.
 1. **Fase 4:** 4A y primera entrega de 4B hechos localmente (motor durable y recetas por silencio, API sin interfaz, sin publicar); faltan interfaz y más disparadores de 4B, conocimiento aprobado, evaluación y copiloto. Ver [plan detallado](PLAN_FASE_4.md).
 2. **Canales oficiales:** activos de Meta, permisos, webhooks, estados del proveedor y políticas/ventanas vigentes, a verificar al implementar.

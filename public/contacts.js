@@ -18,11 +18,24 @@ window.createContactsUI=function({state,api,esc,icon,showModal,toast,getData,rer
 
   function tagBlock(c){
     const all=info().tags.filter(t=>t.brand_id===c.brand_id),mine=new Set(info().links[c.id]||[]);
+    setTimeout(()=>loadConsent(c.id),60);
     return `<div class="ctc-block"><h3 class="modal-section-title">Etiquetas</h3>
       <form id="ctc-tags-form" class="ctc-tags-form"><input type="hidden" name="contactId" value="${esc(c.id)}">${all.length?`<div class="ctc-pick">${all.map(t=>`<label class="ctc-pick-item"><input type="checkbox" name="tag" value="${t.id}" ${mine.has(t.id)?'checked':''}><span class="ctc-tag ${esc(t.color)}">${esc(t.name)}</span></label>`).join('')}</div><button class="btn" type="submit">Guardar etiquetas</button>`:'<p class="crm-hint">Esta marca todavía no tiene etiquetas. Crea la primera aquí.</p>'}</form>
-      <form id="ctc-tag-form" class="ctc-newtag"><input type="hidden" name="brandId" value="${esc(c.brand_id)}"><input type="hidden" name="contactId" value="${esc(c.id)}"><input name="name" maxlength="30" required placeholder="Nueva etiqueta" aria-label="Nombre de la etiqueta"><select name="color" aria-label="Color">${Object.entries(COLORS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><button class="btn" type="submit">Crear</button></form></div>`;
+      <form id="ctc-tag-form" class="ctc-newtag"><input type="hidden" name="brandId" value="${esc(c.brand_id)}"><input type="hidden" name="contactId" value="${esc(c.id)}"><input name="name" maxlength="30" required placeholder="Nueva etiqueta" aria-label="Nombre de la etiqueta"><select name="color" aria-label="Color">${Object.entries(COLORS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><button class="btn" type="submit">Crear</button></form></div><div class="ctc-block" id="ctc-consent" data-contact="${esc(c.id)}"><h3 class="modal-section-title">Comunicaciones</h3><p class="crm-hint">Cargando…</p></div>`;
   }
 
+  const CONSENT={unknown:['Sin registro',''],opted_in:['Acepta mensajes','green'],opted_out:['No desea mensajes','red']};
+  const SOURCE={staff:'Registrado por el equipo',customer_message:'Lo pidió el cliente por mensaje',merge:'Heredado de una fusión'};
+  async function loadConsent(id){
+    const box=$('#ctc-consent');if(!box||box.dataset.contact!==id)return;
+    try{
+      const r=await api('/api/crm/contacts/'+id+'/consent'),s=r.consent,[label,kind]=CONSENT[s.status];
+      const locked=s.status==='opted_out'&&!admin();
+      box.innerHTML=`<h3 class="modal-section-title">Comunicaciones</h3><div class="ctc-consent-top"><span class="ctc-tag ${kind}">${esc(label)}</span>${s.source?`<small>${esc(SOURCE[s.source]||s.source)}${s.updated_at?' · '+new Intl.DateTimeFormat('es-MX',{dateStyle:'medium',timeStyle:'short'}).format(s.updated_at):''}</small>`:''}</div>${s.note?`<p class="crm-hint">${esc(s.note)}</p>`:''}
+        ${locked?'<p class="crm-hint">Este contacto pidió no recibir mensajes. Sólo administración puede reactivarlo, explicando el motivo.</p>':`<div class="ctc-consent-form"><input id="ctc-consent-note" maxlength="200" placeholder="${s.status==='opted_out'?'Motivo para reactivar (obligatorio)':'Nota (opcional)'}" aria-label="Nota del consentimiento"><div class="actions">${s.status!=='opted_out'?`<button type="button" class="btn" data-action="ctc-consent" data-status="opted_in" data-contact="${esc(id)}">Registrar consentimiento</button><button type="button" class="btn" data-action="ctc-consent" data-status="opted_out" data-contact="${esc(id)}">Marcar baja</button>`:`<button type="button" class="btn" data-action="ctc-consent" data-status="opted_in" data-contact="${esc(id)}">Reactivar</button>`}</div></div>`}
+        ${r.history.length>1?`<details class="ctc-history"><summary>Historial (${r.history.length})</summary>${r.history.slice(0,8).map(h=>`<div><b>${esc(CONSENT[h.status][0])}</b><small>${esc(SOURCE[h.source]||h.source)}${h.actor_name?' · '+esc(h.actor_name):''} · ${new Intl.DateTimeFormat('es-MX',{dateStyle:'short',timeStyle:'short'}).format(h.created_at)}${h.note?' · '+esc(h.note):''}</small></div>`).join('')}</details>`:''}`;
+    }catch(e){box.innerHTML=`<p class="crm-hint">${esc(e.message)}</p>`;}
+  }
   async function duplicates(){
     const brandId=state.brand!=='all'?state.brand:(dupBrand||state.brands[0]?.id);dupBrand=brandId;
     const r=await api('/api/crm/duplicates?brand='+encodeURIComponent(brandId));
@@ -47,6 +60,7 @@ window.createContactsUI=function({state,api,esc,icon,showModal,toast,getData,rer
   async function action(name,el){
     try{
       if(name==='ctc-duplicates'){await duplicates();return true;}
+      if(name==='ctc-consent'){const id=el.dataset.contact,note=$('#ctc-consent-note')?.value||'';await api('/api/crm/contacts/'+id+'/consent',{method:'PUT',body:{status:el.dataset.status,note}});toast('Consentimiento actualizado');await loadConsent(id);return true;}
       if(name==='ctc-export'){exportDialog();return true;}
       if(name==='ctc-merge-preview'){await mergePreview(el.dataset.keep,el.dataset.merge);return true;}
       if(name==='ctc-merge'){await api('/api/crm/contacts/merge',{method:'POST',body:{keepId:el.dataset.keep,mergeId:el.dataset.merge,previewToken:el.dataset.token}});toast('Fichas fusionadas');await rerender();await duplicates();return true;}

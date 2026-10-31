@@ -16,7 +16,7 @@ import { createCatalogue } from './catalogue.mjs';
 import {migrateOperations} from './operations-schema.mjs';
 import {createOperations} from './operations.mjs';
 import {migrateAutomation,migrateRecipes} from './automation-schema.mjs';
-import {migrateContacts} from './contacts-schema.mjs';
+import {migrateContacts,migrateConsent} from './contacts-schema.mjs';
 import {createContacts} from './contacts.mjs';
 import {createAnalytics} from './analytics.mjs';
 import {createRecipes} from './recipes.mjs';
@@ -28,7 +28,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<9&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v9-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<10&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v10-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -36,6 +36,7 @@ migrateOperations(db);
 migrateAutomation(db);
 migrateRecipes(db);
 migrateContacts(db);
+migrateConsent(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -118,13 +119,15 @@ function insertMessage(c,user,text,kind,ref,attachmentId=null,flyer=null,prepare
   if(prepared){const link=db.prepare('SELECT opportunity_id FROM conversation_opportunities WHERE conversation_id=?').get(c.id);if(link){const value={...prepared.commercial,sentAt:now,messageId:id};db.prepare('UPDATE opportunities SET offer_snapshot=? WHERE id=?').run(JSON.stringify(value),link.opportunity_id);db.prepare("INSERT INTO crm_events(opportunity_id,actor_id,kind,details,created_at) VALUES(?,?,'offer',?,?)").run(link.opportunity_id,user?.id||null,JSON.stringify(value),now);}}
   db.prepare('UPDATE conversations SET updated_at=? WHERE id=?').run(now,c.id);
   operations.message(c,kind,user);
+  if(kind==='customer')contacts.recordInbound(c,text);
   return id;
 }
 function botReply(c,trigger){
   const user=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id),context=catalogue.info(c.course_id,c.edition_id),course=context.course;
   const count=db.prepare("SELECT count(*) n FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id).n;
   const text=normalized(trigger.text);let reply='',stage=null,handoff=false,prepared=null;
-  if(/asesor|humano|persona|atencion|reembolso|devolucion/.test(text)){reply='Ya avisé al equipo. Un asesor puede tomar esta conversación para continuar contigo.';handoff=true;}
+  if(contacts.isOptOutText(trigger.text)){reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';}
+  else if(/asesor|humano|persona|atencion|reembolso|devolucion/.test(text)){reply='Ya avisé al equipo. Un asesor puede tomar esta conversación para continuar contigo.';handoff=true;}
   else if(context.reason){reply=context.reason+'. Un asesor puede ayudarte a revisar otra edición disponible.';handoff=true;}
   else if(/inscrib|registr|apuntar/.test(text)){reply='Anoté tu interés en '+course.title+' · '+context.edition.name+'. Un asesor continuará con tu inscripción de práctica. En este laboratorio no se realizan cobros ni inscripciones reales.';stage='inscripcion';handoff=true;}
   else if(/comprobante|pague|pago|transferencia/.test(text)){reply='Gracias. El equipo revisará tu consulta de pago. No confirmamos pagos automáticamente y aquí no se realizan cobros reales.';handoff=true;}
