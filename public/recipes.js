@@ -4,16 +4,18 @@ window.createRecipesUI=function({state,api,esc,icon,showModal,toast}){
   const brandName=id=>state.brands.find(b=>b.id===id)?.name||'';
   const STATUS={draft:['Borrador',''],published:['Publicada','ok'],paused:['Pausada','warn']};
   const STEP={pending:'Programada',reserved:'En curso',completed:'Completada',cancelled:'Cancelada',failed:'Fallida'};
-  const REASON={customer_replied:'El cliente respondió',conversation_changed:'Hubo un mensaje nuevo',conversation_closed:'La conversación se cerró',opportunity_closed:'La oportunidad se cerró',stage_changed:'Cambió la etapa',scope_changed:'Cambió el curso o la edición',recipe_paused:'Receta pausada',recipe_edited:'Receta editada',human_takeover:'Una persona tomó el control',material_unavailable:'La plantilla ya no está disponible',conversation_missing:'La conversación ya no existe',contact_opted_out:'El contacto pidió no recibir mensajes',no_consent:'Falta consentimiento registrado',frequency_limit:'Se alcanzó el máximo de mensajes automáticos',manual:'Cancelada manualmente',conversation_action:'Acción en la conversación',owner_changed:'Cambió el responsable'};
+  const REASON={customer_replied:'El cliente respondió',conversation_changed:'Hubo un mensaje nuevo',conversation_closed:'La conversación se cerró',opportunity_closed:'La oportunidad se cerró',stage_changed:'Cambió la etapa',scope_changed:'Cambió el curso o la edición',recipe_paused:'Receta pausada',recipe_edited:'Receta editada',human_takeover:'Una persona tomó el control',material_unavailable:'La plantilla ya no está disponible',conversation_missing:'La conversación ya no existe',task_closed:'La tarea se cerró',task_rescheduled:'La tarea se reprogramó',attended:'Ya lo atendió una persona',contact_opted_out:'El contacto pidió no recibir mensajes',no_consent:'Falta consentimiento registrado',frequency_limit:'Se alcanzó el máximo de mensajes automáticos',manual:'Cancelada manualmente',conversation_action:'Acción en la conversación',owner_changed:'Cambió el responsable'};
   const STAGES={nuevo:'Nuevo interés',interesado:'Interesado',inscripcion:'Inscripción solicitada'};
-  const CHECKS={conversation_open:'Conversación abierta',opportunity_open:'Oportunidad abierta',stage:'Etapa',scope:'Curso y edición',silence:'Cliente sin responder',recipe_published:'Receta publicada',no_human_control:'Sin control humano',consent:'Consentimiento del contacto',frequency:'Frecuencia de mensajes',material_available:'Plantilla disponible'};
+  const CHECKS={conversation_open:'Conversación abierta',opportunity_open:'Oportunidad abierta',stage:'Etapa',scope:'Curso y edición',silence:'Cliente sin responder',recipe_published:'Receta publicada',no_human_control:'Sin control humano',task_open:'Tarea abierta',task_due:'Plazo de la tarea',waiting_human:'Esperando atención humana',consent:'Consentimiento del contacto',frequency:'Frecuencia de mensajes',material_available:'Plantilla disponible'};
   let overview=null,recipes=[],templates=[],draft=null;
   const chip=(label,kind='')=>`<span class="ops-chip ${kind}">${esc(label)}</span>`;
   const btn=(action,label,id='',extra='')=>`<button type="button" class="btn" data-action="rcp-${action}" data-id="${esc(id)}" ${extra}>${label}</button>`;
   const note=copy=>`<p class="crm-hint">${copy}</p>`;
   const brandId=()=>state.brand==='all'?'':state.brand;
   const minutesText=m=>m>=1440&&m%1440===0?m/1440+(m===1440?' día':' días'):m>=60&&m%60===0?m/60+(m===60?' hora':' horas'):m+' min';
-  const summary=d=>`Si el cliente no responde en ${minutesText(d.trigger.minutes)}: ${d.actions.map(a=>({template:'enviar plantilla',task:'crear tarea',notify:'avisar al equipo'}[a.type])).join(', ')}`;
+  const TRIGGERS={silence:['El cliente no responde','Minutos sin respuesta del cliente'],task_overdue:['Una tarea lleva vencida','Minutos de retraso de la tarea'],waiting_human:['Un chat espera a una persona','Minutos esperando atención humana']};
+  const when=d=>d.trigger.type==='task_overdue'?`una tarea lleva ${minutesText(d.trigger.minutes)} vencida`:d.trigger.type==='waiting_human'?`un chat lleva ${minutesText(d.trigger.minutes)} esperando a una persona`:`el cliente no responde en ${minutesText(d.trigger.minutes)}`;
+  const summary=d=>`Si ${when(d)}: ${d.actions.map(a=>({template:'enviar plantilla',task:'crear tarea',notify:'avisar al equipo'}[a.type])).join(', ')}`;
 
   async function load(){
     const [o,r,c]=await Promise.all([api('/api/automation'),api('/api/automation/recipes'+(brandId()?'?brand='+encodeURIComponent(brandId()):'')),api('/api/catalogue')]);
@@ -40,23 +42,26 @@ window.createRecipesUI=function({state,api,esc,icon,showModal,toast}){
     showModal(r?'Editar receta':'Nueva receta',`<form id="rcp-form" class="form-grid rcp-form"><input type="hidden" name="id" value="${esc(r?.id||'')}"><input type="hidden" name="expectedRevision" value="${r?.revision||''}">
       ${r?`<p class="crm-hint">${esc(brandName(b))}. Guardar la deja en borrador: vuelve a publicarla para aplicar los cambios.</p>`:`<label class="field">Marca<select name="brandId" id="rcp-brand">${state.brands.map(x=>`<option value="${x.id}" ${x.id===b?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label>`}
       <label class="field">Nombre<input name="title" required maxlength="120" value="${esc(r?.title||'')}" placeholder="Seguimiento tras 1 día sin respuesta"></label>
-      <label class="field">Minutos sin respuesta del cliente<input name="minutes" type="number" min="5" max="43200" required value="${d?.trigger.minutes||60}"></label>
-      <fieldset class="rcp-fieldset"><legend>Condiciones</legend><label class="field">Curso<select name="courseId"><option value="">Cualquier curso</option>${courses.map(c=>`<option value="${c.id}" ${d?.conditions.courseId===c.id?'selected':''}>${esc(c.title)}</option>`).join('')}</select></label><label class="rcp-consent"><input type="checkbox" name="requireConsent" ${d?.conditions.requireConsent?'checked':''}> Enviar sólo a contactos con consentimiento registrado</label><div class="rcp-checks">${Object.entries(STAGES).map(([k,v])=>`<label><input type="checkbox" name="stage" value="${k}" ${stages.includes(k)?'checked':''}> ${v}</label>`).join('')}</div></fieldset>
+      <label class="field">Cuándo se activa<select name="trigger" id="rcp-trigger">${Object.entries(TRIGGERS).map(([k,[label]])=>`<option value="${k}" ${(d?.trigger.type||'silence')===k?'selected':''}>${label}</option>`).join('')}</select></label>
+      <label class="field"><span id="rcp-minutes-label">${TRIGGERS[d?.trigger.type||'silence'][1]}</span><input name="minutes" type="number" min="5" max="43200" required value="${d?.trigger.minutes||60}"></label>
+      <fieldset class="rcp-fieldset"><legend>Condiciones</legend><label class="field">Curso<select name="courseId"><option value="">Cualquier curso</option>${courses.map(c=>`<option value="${c.id}" ${d?.conditions.courseId===c.id?'selected':''}>${esc(c.title)}</option>`).join('')}</select></label><label class="rcp-consent rcp-silence-only"><input type="checkbox" name="requireConsent" ${d?.conditions.requireConsent?'checked':''}> Enviar sólo a contactos con consentimiento registrado</label><div class="rcp-checks">${Object.entries(STAGES).map(([k,v])=>`<label><input type="checkbox" name="stage" value="${k}" ${stages.includes(k)?'checked':''}> ${v}</label>`).join('')}</div></fieldset>
       <fieldset class="rcp-fieldset"><legend>Acciones</legend>
-        <label class="rcp-action"><input type="checkbox" name="useTemplate" ${a('template')?'checked':''}> Enviar plantilla aprobada<select name="templateId" id="rcp-template">${tpls.map(t=>`<option value="${t.id}" ${a('template')?.templateId===t.id?'selected':''}>${esc(t.title)}</option>`).join('')||'<option value="">Sin plantillas aprobadas</option>'}</select></label>
+        <label class="rcp-action rcp-silence-only"><input type="checkbox" name="useTemplate" ${a('template')?'checked':''}> Enviar plantilla aprobada<select name="templateId" id="rcp-template">${tpls.map(t=>`<option value="${t.id}" ${a('template')?.templateId===t.id?'selected':''}>${esc(t.title)}</option>`).join('')||'<option value="">Sin plantillas aprobadas</option>'}</select></label>
         <label class="rcp-action"><input type="checkbox" name="useTask" ${a('task')?'checked':''}> Crear tarea<input name="taskTitle" maxlength="180" value="${esc(a('task')?.title||'')}" placeholder="Llamar al interesado"><input name="taskDelay" type="number" min="1" max="525600" value="${a('task')?.delayMinutes||60}" aria-label="Plazo en minutos"></label>
         <label class="rcp-action"><input type="checkbox" name="useNotify" ${a('notify')?'checked':''}> Avisar al equipo<input name="notifyTitle" maxlength="120" value="${esc(a('notify')?.title||'')}" placeholder="Cliente sin respuesta"></label>
       </fieldset>
       ${note('La plantilla sólo se envía si nadie del equipo controla la conversación. La tarea y el aviso no cambian etapas ni confirman ventas.')}
       <div class="actions"><button class="btn primary" type="submit">Guardar borrador</button></div><div class="ops-feedback" role="status"></div></form>`);
+    applyTrigger();
   }
   function definition(input,form){
     const f=new FormData(form),actions=[];
-    if(f.has('useTemplate'))actions.push({type:'template',templateId:input.templateId});
+    const type=input.trigger||'silence';
+    if(type==='silence'&&f.has('useTemplate'))actions.push({type:'template',templateId:input.templateId});
     if(f.has('useTask'))actions.push({type:'task',title:input.taskTitle,delayMinutes:Number(input.taskDelay)});
     if(f.has('useNotify'))actions.push({type:'notify',title:input.notifyTitle});
-    const conditions={};if(f.has('requireConsent'))conditions.requireConsent=true;if(input.courseId)conditions.courseId=input.courseId;const stages=f.getAll('stage');if(stages.length&&stages.length<3)conditions.stages=stages;
-    return {trigger:{type:'silence',minutes:Number(input.minutes)},conditions,actions};
+    const conditions={};if(type==='silence'&&f.has('requireConsent'))conditions.requireConsent=true;if(input.courseId)conditions.courseId=input.courseId;const stages=f.getAll('stage');if(stages.length&&stages.length<3)conditions.stages=stages;
+    return {trigger:{type,minutes:Number(input.minutes)},conditions,actions};
   }
 
   async function simulateForm(id){
@@ -90,7 +95,13 @@ window.createRecipesUI=function({state,api,esc,icon,showModal,toast}){
     if(name==='rcp-global-toggle'){await api('/api/automation/global',{method:'PATCH',body:{paused:el.dataset.paused==='1',expectedRevision:Number(id)}});toast(el.dataset.paused==='1'?'Automatización pausada en toda la empresa':'Automatización reanudada');return 'reload';}
     return false;
   }
+  function applyTrigger(){
+    const sel=$('#rcp-trigger');if(!sel)return;
+    document.querySelectorAll('#rcp-form .rcp-silence-only').forEach(e=>{e.hidden=sel.value!=='silence';});
+    const label=$('#rcp-minutes-label');if(label)label.textContent=TRIGGERS[sel.value][1];
+  }
   async function change(el){
+    if(el.id==='rcp-trigger'){applyTrigger();return true;}
     if(el.id!=='rcp-brand')return false;
     const b=el.value,courses=state.courses.filter(c=>c.brand_id===b);
     $('#rcp-template').innerHTML=templates.filter(t=>t.brand_id===b).map(t=>`<option value="${t.id}">${esc(t.title)}</option>`).join('')||'<option value="">Sin plantillas aprobadas</option>';

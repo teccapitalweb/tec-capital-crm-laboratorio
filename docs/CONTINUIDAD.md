@@ -190,9 +190,22 @@ Publicado por instrucción expresa del usuario: `main`, commit funcional `1c3f17
 
 Comprobado en la web publicada sin iniciar sesión: versión 0.10.0; `/contacts.js`, `/recipes.js` y `/crm.css` responden 200; `/api/crm/contacts/:id/consent` responde 401 sin sesión. **No comprobado:** que la migración v10 se aplicara y dejara su copia `before-crm-v10-*`, el bloque «Comunicaciones» y la baja por mensaje con sesión real, ni los pendientes acumulados desde v0.8.0 (respaldos `auto-*`, flujos autenticados de contactos, importación, Seguimientos y Analítica). **Cinco versiones publicadas (0.6 a 0.10) sin verificación autenticada en producción.**
 
+## Disparadores nuevos de recetas (rama `feat/disparadores-recetas`, local, 31 oct 2026)
+
+Sin cambios de esquema (sigue en 10): la definición de la receta ya era JSON. Cambios en `server/recipes.mjs` y en la pestaña Seguimientos. **Sin publicar.**
+
+- **Tres disparadores:** `silence` (sin cambios), `task_overdue` («una tarea lleva N minutos vencida») y `waiting_human` («un chat lleva N minutos esperando a una persona»). Minutos de 5 a 43 200.
+- **Los dos nuevos son escaladas internas:** sólo admiten acciones de **tarea** y **aviso**; la plantilla (mensaje al cliente) se rechaza al crear la receta, y la condición de consentimiento no aplica. Los avisos de una escalada llegan al responsable de la oportunidad o del chat **y** a administración.
+- **`task_overdue`:** candidata cada tarea abierta cuyo vencimiento + N minutos cae después de la publicación (no retroactivo) y dentro de la última semana. Se vincula al chat más reciente de la oportunidad (si no tiene chat, no se programa). Se cancela si la tarea se cierra (`task_closed`) o se reprograma (`task_rescheduled`; la nueva fecha genera una ejecución nueva). **Las tareas creadas por recetas no vuelven a escalar** (evita cadenas infinitas; se detectó con la prueba).
+- **`waiting_human`:** usa `service_state.waiting_since` de operación. Se cancela si una persona ya lo atendió (`attended`) o se cierra la conversación; una espera nueva en el mismo chat genera su propia escalada.
+- **Simulación:** funciona con una conversación elegida: para `task_overdue` evalúa la primera tarea abierta de su oportunidad; para `waiting_human` el estado de espera del chat. Muestra la hora prevista y las condiciones; no escribe nada.
+- **Interfaz:** selector «Cuándo se activa» en el formulario; para las escaladas se ocultan la plantilla y el consentimiento y cambia la etiqueta de minutos. Revisada en navegador (escritorio y 390 px, sin desbordamiento).
+- **Pruebas:** `test/triggers.test.mjs` (4): validación, no retroactividad, cancelaciones, reprogramación, espera atendida y simulación sin escribir. Las recetas de silencio no cambiaron y siguen pasando sus pruebas.
+- **Pendiente:** esperas entre acciones (secuencias de varios pasos con espera, que exigen un modelo de ejecución con varios pasos por corrida), disparadores de inscripción solicitada y de información, tope de frecuencia configurable por marca, y revalidar que el responsable sigue autorizado en la marca.
+
 ## Pendientes reales
 
-0b. **Disparadores nuevos de recetas** (tarea vencida, oportunidad estancada, petición de asesor) y esperas entre acciones.
+0b. **Recetas:** esperas entre acciones (secuencias), disparadores de inscripción/información y oportunidad estancada.
 0. **Verificación autenticada de v0.6.0 en producción** (migración v8, respaldo `before-crm-v8-*`, pestaña Seguimientos) con registros de prueba identificados; requiere que el usuario inicie sesión en el navegador.
 1. **Fase 4:** 4A y primera entrega de 4B hechos localmente (motor durable y recetas por silencio, API sin interfaz, sin publicar); faltan interfaz y más disparadores de 4B, conocimiento aprobado, evaluación y copiloto. Ver [plan detallado](PLAN_FASE_4.md).
 2. **Canales oficiales:** activos de Meta, permisos, webhooks, estados del proveedor y políticas/ventanas vigentes, a verificar al implementar.

@@ -9,3 +9,4 @@
 .rcp-action-preview{border:1px solid #e8eaf0;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:13px}.rcp-action-preview p{margin:4px 0 0}.rcp-result{margin-top:14px}.rcp-sim h3{font-size:13px;margin:16px 0 4px}
 @media(max-width:650px){.rcp-grid{grid-template-columns:1fr}.rcp-brands{grid-template-columns:1fr}.rcp-card .actions .btn{flex:1 1 auto}}
 .rcp-consent{display:flex;gap:8px;align-items:center;font-size:13px;margin:2px 0}
+.rcp-silence-only[hidden]{display:none!important}
