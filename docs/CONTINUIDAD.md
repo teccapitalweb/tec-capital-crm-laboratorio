@@ -203,6 +203,12 @@ Sin cambios de esquema (sigue en 10): la definición de la receta ya era JSON. C
 - **Pruebas:** `test/triggers.test.mjs` (4): validación, no retroactividad, cancelaciones, reprogramación, espera atendida y simulación sin escribir. Las recetas de silencio no cambiaron y siguen pasando sus pruebas.
 - **Pendiente:** esperas entre acciones (secuencias de varios pasos con espera, que exigen un modelo de ejecución con varios pasos por corrida), disparadores de inscripción solicitada y de información, tope de frecuencia configurable por marca, y revalidar que el responsable sigue autorizado en la marca.
 
+## Publicación v0.11.0 (31 oct 2026)
+
+Publicado por instrucción expresa del usuario: `main`, commit funcional `0971463` (disparadores de recetas `task_overdue` y `waiting_human`; esquema sin cambios, **10**). CI [41229339574](https://github.com/teccapitalweb/tec-capital-crm-laboratorio/actions/runs/41229339574): correcto, 105 pruebas. `/api/health` devuelve `0.11.0`.
+
+Comprobado en la web publicada sin iniciar sesión: versión 0.11.0; `/recipes.js`, `/recipes.css` y `/operations.js` responden 200; `/api/automation/recipes` responde 401 sin sesión. **No comprobado:** el formulario de recetas con los disparadores nuevos en producción, ni lo pendiente desde v0.8.0 (migraciones v9 y v10 con sus copias `before-crm-v*`, respaldos `auto-*`, contactos, importación, Seguimientos, Analítica y consentimiento con sesión real). **Seis versiones publicadas (0.6 a 0.11) sin verificación autenticada en producción.** Todo sigue desactivado por defecto: ninguna marca tiene la automatización habilitada.
+
 ## Pendientes reales
 
 0b. **Recetas:** esperas entre acciones (secuencias), disparadores de inscripción/información y oportunidad estancada.
