@@ -184,6 +184,12 @@ Esquema **v10**, aditivo (`contact_consent`, `contact_consent_events` en `server
 - **Pruebas:** `test/consent.test.mjs` (3): detección de bajas con casos positivos y negativos, recetas (baja, consentimiento exigido, frecuencia, cancelación de pasos pendientes) y API completa con baja por mensaje del cliente, fusión y exportación. Las pruebas de esquema esperan `user_version` 10.
 - **Pendiente:** consentimiento por canal (WhatsApp/Instagram/Facebook), caducidad y evidencia (texto del aviso aceptado), reglas de ventana de mensajería de Meta (se verificarán al integrar), envío de difusiones, configuración del tope por marca, y revisar con asesoría legal las políticas de consentimiento y retención antes de clientes reales.
 
+## Publicación v0.10.0 (31 oct 2026)
+
+Publicado por instrucción expresa del usuario: `main`, commit funcional `1c3f17c` (consentimiento, baja y tope de frecuencia; esquema **10**). CI [41228622286](https://github.com/teccapitalweb/tec-capital-crm-laboratorio/actions/runs/41228622286): correcto, 101 pruebas. `/api/health` devuelve `0.10.0`.
+
+Comprobado en la web publicada sin iniciar sesión: versión 0.10.0; `/contacts.js`, `/recipes.js` y `/crm.css` responden 200; `/api/crm/contacts/:id/consent` responde 401 sin sesión. **No comprobado:** que la migración v10 se aplicara y dejara su copia `before-crm-v10-*`, el bloque «Comunicaciones» y la baja por mensaje con sesión real, ni los pendientes acumulados desde v0.8.0 (respaldos `auto-*`, flujos autenticados de contactos, importación, Seguimientos y Analítica). **Cinco versiones publicadas (0.6 a 0.10) sin verificación autenticada en producción.**
+
 ## Pendientes reales
 
 0b. **Disparadores nuevos de recetas** (tarea vencida, oportunidad estancada, petición de asesor) y esperas entre acciones.
