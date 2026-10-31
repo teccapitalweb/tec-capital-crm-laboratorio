@@ -1,7 +1,7 @@
 import {cancelConversationSteps} from './automation.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {transaction} from './database.mjs';
-import {defaultHours,validateHours,isOpen,serviceDeadline} from './service-hours.mjs';
+import {defaultHours,validateHours,validateHolidays,isOpen,serviceDeadline} from './service-hours.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,n=500)=>typeof v==='string'?v.trim().slice(0,n):'';
 const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -14,7 +14,7 @@ export function createOperations({db,crm,catalogue,body,json,audit,broadcast,onl
   const admin=u=>{const current=userBy(u.id);if(!current||current.disabled||current.role!=='admin')throw fail(403,'Sólo administración configura la operación.');};
   const scoped=(table,id,u)=>{if(typeof id!=='string')throw fail(404,'Registro no disponible.');const r=db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);if(!r)throw fail(404,'Registro no disponible.');crm.requireBrand(u,r.brand_id);return r;};
   function requireBrand(user,id){if(typeof id!=='string'||!db.prepare('SELECT 1 FROM brands WHERE id=?').get(id))throw fail(404,'Marca no disponible.');crm.requireBrand(user,id);}
-  function settings(brand){const r=db.prepare('SELECT * FROM operation_settings WHERE brand_id=?').get(brand);return r?{...r,hours:JSON.parse(r.hours),member_ids:JSON.parse(r.member_ids)}:{brand_id:brand,routing_enabled:0,sla_enabled:0,timezone:'America/Mexico_City',hours:defaultHours(),member_ids:[],first_minutes:30,next_minutes:60,revision:0};}
+  function settings(brand){const r=db.prepare('SELECT * FROM operation_settings WHERE brand_id=?').get(brand);return r?{...r,hours:JSON.parse(r.hours),member_ids:JSON.parse(r.member_ids),holidays:JSON.parse(r.holidays||'[]')}:{brand_id:brand,routing_enabled:0,sla_enabled:0,timezone:'America/Mexico_City',hours:defaultHours(),member_ids:[],holidays:[],first_minutes:30,next_minutes:60,revision:0};}
   function state(c){db.prepare("INSERT OR IGNORE INTO service_state(conversation_id,last_owner,first_human_at) VALUES(?,?,(SELECT MIN(created_at) FROM messages WHERE conversation_id=? AND sender_kind='agent'))").run(c.id,c.assigned_to,c.id);return db.prepare('SELECT * FROM service_state WHERE conversation_id=?').get(c.id);}
   function opportunity(c){return db.prepare('SELECT o.* FROM opportunities o JOIN conversation_opportunities co ON co.opportunity_id=o.id WHERE co.conversation_id=?').get(c.id);}
   function group(c){const o=opportunity(c);return o?db.prepare("SELECT c.* FROM conversations c JOIN conversation_opportunities co ON co.conversation_id=c.id WHERE co.opportunity_id=? AND c.status!='resolved'").all(o.id):[c];}
@@ -119,8 +119,9 @@ export function createOperations({db,crm,catalogue,body,json,audit,broadcast,onl
       if(req.method==='PATCH'){const input=await body(req);admin(user);const p=settings(config[1]);check(p,input);let hours;try{hours=validateHours(input.hours,text(input.timezone,80));}catch(e){throw fail(400,e.message);}
         if(hours.reduce((n,h)=>n+(h?h[1]-h[0]:0),0)<60)throw fail(400,'Configura al menos una hora de atención a la semana.');
         const ids=[...new Set(Array.isArray(input.memberIds)?input.memberIds:[])];for(const id of ids)if(!crm.canBrand(userBy(id),config[1]))throw fail(400,'Un asesor elegido no tiene acceso a la marca.');if(input.routingEnabled===true&&!ids.length)throw fail(400,'Elige al menos un asesor para activar el reparto.');
+        let holidays;try{holidays=validateHolidays(input.holidays,now())??p.holidays;}catch(e){throw fail(400,e.message);}
         const first=integer(input.firstMinutes,1,480,'Primera respuesta'),next=integer(input.nextMinutes,1,480,'Siguiente respuesta');
-        transaction(db,()=>{db.prepare('INSERT INTO operation_settings VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(brand_id) DO UPDATE SET routing_enabled=excluded.routing_enabled,sla_enabled=excluded.sla_enabled,timezone=excluded.timezone,hours=excluded.hours,member_ids=excluded.member_ids,first_minutes=excluded.first_minutes,next_minutes=excluded.next_minutes,revision=excluded.revision,updated_at=excluded.updated_at').run(config[1],input.routingEnabled===true?1:0,input.slaEnabled===true?1:0,input.timezone,JSON.stringify(hours),JSON.stringify(ids),first,next,p.revision+1,now());event({brand_id:config[1]},user,'settings',{previous:p,next:settings(config[1])});});change({brand_id:config[1]});json(res,200,{settings:settings(config[1])});return true;
+        transaction(db,()=>{db.prepare('INSERT INTO operation_settings(brand_id,routing_enabled,sla_enabled,timezone,hours,member_ids,first_minutes,next_minutes,revision,updated_at,holidays) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(brand_id) DO UPDATE SET holidays=excluded.holidays,routing_enabled=excluded.routing_enabled,sla_enabled=excluded.sla_enabled,timezone=excluded.timezone,hours=excluded.hours,member_ids=excluded.member_ids,first_minutes=excluded.first_minutes,next_minutes=excluded.next_minutes,revision=excluded.revision,updated_at=excluded.updated_at').run(config[1],input.routingEnabled===true?1:0,input.slaEnabled===true?1:0,input.timezone,JSON.stringify(hours),JSON.stringify(ids),first,next,p.revision+1,now(),JSON.stringify(holidays));event({brand_id:config[1]},user,'settings',{previous:p,next:settings(config[1])});});change({brand_id:config[1]});json(res,200,{settings:settings(config[1])});return true;
       }
     }
     const limit=path.match(/^\/api\/operations\/members\/([a-f0-9-]+)\/limit$/);

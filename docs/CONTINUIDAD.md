@@ -209,11 +209,23 @@ Publicado por instrucción expresa del usuario: `main`, commit funcional `097146
 
 Comprobado en la web publicada sin iniciar sesión: versión 0.11.0; `/recipes.js`, `/recipes.css` y `/operations.js` responden 200; `/api/automation/recipes` responde 401 sin sesión. **No comprobado:** el formulario de recetas con los disparadores nuevos en producción, ni lo pendiente desde v0.8.0 (migraciones v9 y v10 con sus copias `before-crm-v*`, respaldos `auto-*`, contactos, importación, Seguimientos, Analítica y consentimiento con sesión real). **Seis versiones publicadas (0.6 a 0.11) sin verificación autenticada en producción.** Todo sigue desactivado por defecto: ninguna marca tiene la automatización habilitada.
 
+## Festivos por marca (rama `feat/festivos`, local, 31 oct 2026)
+
+Esquema **v11**, aditivo: columna `operation_settings.holidays` (JSON, por defecto `[]`; `migrateHolidays` en `server/operations-schema.mjs`). **Sin publicar.** Cierra una limitación documentada desde v0.5 («no se incluyen festivos»).
+
+- **Qué hace:** un festivo es una fecha local `AAAA-MM-DD` (con nombre opcional) en la zona IANA de la marca; ese día completo se trata como cerrado para `isOpen` y `serviceDeadline`. Por eso no corren los objetivos de respuesta, no se reparte automáticamente y la cola marca el chat «fuera de horario». La fecha se interpreta en la zona de la marca (el 25 de diciembre a las 00:30 en Ciudad de México es festivo aunque en UTC aún sea el 24), no en la del dispositivo.
+- **Validación (servidor):** hasta 150 fechas reales (sin 30 de febrero), sin repetidas, de tres años atrás a cinco adelante; nombre de hasta 60 caracteres. Se guardan ordenadas. Si una petición no envía `holidays`, se conserva la lista; enviar `[]` la vacía. Sólo administración (misma revisión `expectedRevision` y mismo historial de configuración que el resto de la política; el historial ya incluye la lista).
+- **Esperas ya iniciadas:** conservan la política con que se crearon (incluida la lista de festivos de ese momento); los festivos nuevos sólo afectan las esperas siguientes, igual que los horarios.
+- **Interfaz:** en «Horarios y reparto», cuadro de texto «Festivos y días sin atención» (una fecha por línea) y botón **Sugerir festivos de México**, que añade los de ley (1 ene, primer lunes de febrero, tercer lunes de marzo, 1 may, 16 sep, tercer lunes de noviembre, 25 dic y, cada seis años, 1 oct) del año actual y el siguiente **sin guardar**: hay que revisarlos y guardar. Las líneas mal escritas se rechazan con un mensaje claro. Revisada en navegador (escritorio y 390 px, sin desbordamiento).
+- **Pruebas:** `test/holidays.test.mjs` (3): cálculo con zonas horarias y plazos que saltan festivo y fin de semana, validación, y API completa (permisos, revisión, historial, aislamiento entre marcas y efecto en la cola). Las pruebas de esquema esperan `user_version` 11.
+- **Límites:** son festivos de marca completa, no de persona; no hay calendarios por país con actualización automática (la sugerencia de México es un punto de partida: confirma las fechas, algunos años hay puentes o días no laborables adicionales); tampoco hay turnos personales ni vacaciones por asesor.
+
 ## Pendientes reales
 
 0b. **Recetas:** esperas entre acciones (secuencias), disparadores de inscripción/información y oportunidad estancada.
 0. **Verificación autenticada de v0.6.0 en producción** (migración v8, respaldo `before-crm-v8-*`, pestaña Seguimientos) con registros de prueba identificados; requiere que el usuario inicie sesión en el navegador.
-1. **Fase 4:** 4A y primera entrega de 4B hechos localmente (motor durable y recetas por silencio, API sin interfaz, sin publicar); faltan interfaz y más disparadores de 4B, conocimiento aprobado, evaluación y copiloto. Ver [plan detallado](PLAN_FASE_4.md).
+1. **Operación ampliada:** turnos personales y vacaciones por asesor, etiquetas en la bandeja, y un rol de supervisor (exige reconstruir la restricción de roles de `users`; planificar con migración y respaldo).
+1b. **Fase 4:** 4A y primera entrega de 4B hechos localmente (motor durable y recetas por silencio, API sin interfaz, sin publicar); faltan interfaz y más disparadores de 4B, conocimiento aprobado, evaluación y copiloto. Ver [plan detallado](PLAN_FASE_4.md).
 2. **Canales oficiales:** activos de Meta, permisos, webhooks, estados del proveedor y políticas/ventanas vigentes, a verificar al implementar.
 3. **Venta real:** pedido, pago, conciliación, matrícula y acceso conectados con los sistemas autorizados.
 4. **Catálogo comercial:** las marcas/cursos/fechas reales, sus responsables y piezas aprobadas todavía deben cargarse y validarse.

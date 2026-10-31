@@ -17,3 +17,11 @@ export function migrateOperations(db){
     PRAGMA user_version=6;
   `));
 }
+
+export function migrateHolidays(db){
+  if(db.prepare('PRAGMA user_version').get().user_version>=11)return;
+  transaction(db,()=>db.exec(`
+    ALTER TABLE operation_settings ADD COLUMN holidays TEXT NOT NULL DEFAULT '[]';
+    PRAGMA user_version=11;
+  `));
+}

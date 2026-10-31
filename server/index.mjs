@@ -13,7 +13,7 @@ import { migrateFollowup } from './followup.mjs';
 import { conversationPage } from './conversations.mjs';
 import { migrateCatalogue, defaultEditionId, seedBrandTemplates } from './catalogue-schema.mjs';
 import { createCatalogue } from './catalogue.mjs';
-import {migrateOperations} from './operations-schema.mjs';
+import {migrateOperations,migrateHolidays} from './operations-schema.mjs';
 import {createOperations} from './operations.mjs';
 import {migrateAutomation,migrateRecipes} from './automation-schema.mjs';
 import {migrateContacts,migrateConsent} from './contacts-schema.mjs';
@@ -28,7 +28,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<10&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v10-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<11&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v11-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -37,6 +37,7 @@ migrateAutomation(db);
 migrateRecipes(db);
 migrateContacts(db);
 migrateConsent(db);
+migrateHolidays(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
