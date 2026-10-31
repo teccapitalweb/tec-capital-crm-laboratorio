@@ -43,6 +43,8 @@ Para una prueba nueva usa un directorio de datos vacío e independiente. No cone
 | `DATA_DIR` | Carpeta local aislada; por defecto `./data` | `/data`, volumen persistente |
 | `APP_ORIGIN` | Origen exacto del navegador; si vacío se valida contra el host | URL HTTPS pública exacta, sin barra final |
 | `NODE_ENV` | `development` | `production`; activa cookies Secure y HSTS |
+| `BACKUP_INTERVAL_HOURS` | `24` por defecto (desactivado en `NODE_ENV=test`) | Horas entre respaldos automáticos; `0` los desactiva |
+| `BACKUP_KEEP` | `7` | Respaldos automáticos que se conservan |
 | `ADMIN_INVITE_CODE` | Secreto aleatorio privado para inicializar una instalación vacía | Sólo permite crear el primer administrador |
 | `STAFF_INVITE_CODE` | No usar | Variable heredada, sin efecto desde v0.2 |
 
@@ -52,7 +54,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con el bloque local 4A son **79** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con el bloque local 4A son **87** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -63,6 +65,8 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/catalogue.test.mjs` | Ediciones, fechas, centavos, promociones, variables, aprobación, permisos, vistas previas, archivo, snapshots/bytes históricos y reinicio |
 | `test/automation.test.mjs` | Motor 4A: migración v7, idempotencia, reintentos, reinicio, carreras de cancelación y pausas (sin servidor; base temporal) |
 | `test/automation-http.test.mjs` | Rutas `/api/automation`: sólo administración, revisiones, pausa global (servidor temporal) |
+| `test/backup.test.mjs` | Respaldo con manifiesto, rotación, programación, detección de adjuntos perdidos/base dañada, ensayo de restauración y rutas |
+| `test/catalogue-import.test.mjs` | CSV (comillas, saltos, BOM), fechas por zona IANA, vista previa sin escritura, aplicación idempotente y errores por fila |
 | `test/recipes.test.mjs`, `test/recipes-http.test.mjs` | Recetas 4B: validación, simulación sin efectos, no retroactividad, cancelaciones, versiones, ejecución real por API |
 | `test/operations.test.mjs` | Minutos hábiles/DST, reparto, presencia, carga, transferencia conjunta, menciones, SLA, macros atómicas, paginación, revocación y reinicio |
 
@@ -133,6 +137,16 @@ El health esperado de referencia:
 ```
 
 ## Respaldos y recuperación
+
+**Automático (desde la rama de respaldos):** cada 24 h el servidor guarda `backups/auto-*` (SQLite + `manifest.json`) y conserva las últimas 7. Administración puede lanzar uno manual (`POST /api/backups/run`) y listarlos (`GET /api/backups`). **Siguen en el mismo volumen**: copiar `backups/`, `uploads/` y `library/` fuera de Railway es una tarea pendiente.
+
+**Verificar un respaldo:** `node server/verify-backup.mjs <ruta>/backups/auto-… [<ruta>/data]` comprueba integridad, claves foráneas, conteos y que cada adjunto del manifiesto exista con su tamaño.
+
+**Ensayo de restauración (en un entorno aislado):** crear un directorio nuevo, copiar ahí `laboratorio.sqlite` del respaldo más `uploads/` y `library/`, arrancar con `DATA_DIR` apuntando a él y un puerto libre (las migraciones se aplican solas), comprobar acceso, historial y descarga de archivos. Nunca restaurar sobre producción sin decidir qué hacer con los datos posteriores al respaldo.
+
+**Puerta de CI en Railway:** activar «Wait for CI» en el servicio (no se puede fijar desde el repositorio).
+
+Material anterior del runbook:
 
 La copia previa a migración protege SQLite de ese momento. **No existe en esta entrega un respaldo periódico completo ni un ensayo certificado de restauración de producción.** Para recuperar mensajes con archivos hacen falta DB y medios coherentes.
 

@@ -17,6 +17,8 @@ import {migrateOperations} from './operations-schema.mjs';
 import {createOperations} from './operations.mjs';
 import {migrateAutomation,migrateRecipes} from './automation-schema.mjs';
 import {createRecipes} from './recipes.mjs';
+import {createBackups,backupRoutes} from './backup.mjs';
+import {createCatalogueImport} from './catalogue-import.mjs';
 import {createAutomation,cancelConversationSteps} from './automation.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -77,8 +79,12 @@ function canSee(c,user){return !user.disabled&&(c.customer_id===user.id||crm.can
 function disconnect(userId){for(const [socket,user]of sessions)if(user.id===userId)socket.close(1008,'Actualiza tu acceso');}
 const crm=createCRM({db,body,json,audit,passwordHash,checkPassword,rate,disconnect,broadcast});
 const catalogue=createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer});
+const catalogueImport=createCatalogueImport({db,catalogue,crm,body,json,audit});
 const operations=createOperations({db,crm,catalogue,body,json,audit,broadcast,online,insertMessage});
 const automation=createAutomation({db,onChange:step=>{if(step.conversation_id)broadcast('conversation',step.conversation_id);broadcast('crm',null,{brandId:step.brand_id});}});
+const backupHours=process.env.BACKUP_INTERVAL_HOURS===undefined?(process.env.NODE_ENV==='test'?0:24):Number(process.env.BACKUP_INTERVAL_HOURS);
+const backups=createBackups({db,dataDir,version:'0.6.0',intervalMs:Number.isFinite(backupHours)&&backupHours>0?backupHours*3600000:0,keep:Math.max(1,Number(process.env.BACKUP_KEEP)||7)});
+const backupHandle=backupRoutes(backups);
 const recipes=createRecipes({db,catalogue,automation,insertMessage,broadcast,body,json,audit});
 async function body(req){
   let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>5_800_000)throw fail(413,'El archivo es demasiado grande. Máximo 4 MB.');chunks.push(chunk);}
@@ -189,8 +195,10 @@ const server=http.createServer(async(req,res)=>{
     if(path.startsWith('/api/')){
       const user=requireUser(req);
       if(await operations.handle(req,res,path,user))return;
+      if(await backupHandle(req,res,path,user,{json,audit}))return;
       if(await recipes.handle(req,res,path,user))return;
       if(await automation.handle(req,res,path,user,{body,json,audit}))return;
+      if(await catalogueImport.handle(req,res,path,user))return;
       if(await catalogue.handle(req,res,path,user))return;
       if(await crm.handle(req,res,path,user))return;
       if(req.method==='POST'&&path==='/api/auth/logout'){db.prepare('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash);for(const [ws,u]of sessions)if(u.token_hash===user.token_hash)ws.close(1000,'Sesión cerrada');res.setHeader('Set-Cookie','tc_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'+(production?'; Secure':''));return json(res,200,{ok:true});}
@@ -289,7 +297,7 @@ const server=http.createServer(async(req,res)=>{
       throw fail(404,'Ruta no disponible.');
     }
     if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'Método no permitido.');
-    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
     const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.',...(error.status&&error.code?{code:error.code}:{}),...(error.status&&error.activeOpportunityId?{activeOpportunityId:error.activeOpportunityId}:{})});}
 });
@@ -307,7 +315,8 @@ server.on('upgrade',(req,socket,head)=>{
 const jobsTimer=setInterval(processJobs,350);
 const operationsTimer=setInterval(()=>{try{operations.reconcile();}catch(e){console.error('Operations tick failed:',e.name,e.message);}},1000);
 const automationTimer=setInterval(()=>{try{recipes.scan();}catch(e){console.error('Recipe scan failed:',e.name);}automation.tick().catch(e=>console.error('Automation tick failed:',e.name));},1000);
+const backupTimer=setInterval(()=>backups.tick(),10*60*1000);setTimeout(()=>backups.tick(),5000).unref();
 const heartbeat=setInterval(()=>{for(const [ws,user]of sessions){if(!ws.isAlive||user.expires_at<Date.now()||!db.prepare('SELECT token_hash FROM sessions WHERE token_hash=?').get(user.token_hash)){ws.terminate();continue;}ws.isAlive=false;ws.ping();}const now=Date.now();for(const [key,value]of limits)if(value.end<now)limits.delete(key);db.prepare('DELETE FROM sessions WHERE expires_at<?').run(now);},30000);
 server.listen(port,host,()=>console.log(`TEC Capital Laboratorio: http://${host}:${server.address().port}`));
-function stop(){clearInterval(jobsTimer);clearInterval(operationsTimer);clearInterval(automationTimer);clearInterval(heartbeat);for(const ws of sessions.keys())ws.close(1001,'Servidor reiniciando');server.close(()=>{db.close();process.exit(0);});setTimeout(()=>process.exit(0),1500).unref();}
+function stop(){clearInterval(jobsTimer);clearInterval(operationsTimer);clearInterval(automationTimer);clearInterval(backupTimer);clearInterval(heartbeat);for(const ws of sessions.keys())ws.close(1001,'Servidor reiniciando');server.close(()=>{db.close();process.exit(0);});setTimeout(()=>process.exit(0),1500).unref();}
 process.on('SIGTERM',stop);process.on('SIGINT',stop);

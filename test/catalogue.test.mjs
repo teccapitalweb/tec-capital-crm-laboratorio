@@ -104,7 +104,8 @@ test('catálogo v0.4: ediciones, vigencia, biblioteca aprobada y mensajes inmuta
    await call('/api/conversations/'+conversation.id+'/materials/preview',agent.cookie,{kind:'flyer',flyerId:flyer.id},'POST',409);
    await call('/api/conversations/'+conversation.id+'/action',agent.cookie,{action:'automate'});
    await call('/api/conversations/'+conversation.id+'/messages',client.cookie,{text:'Precio actual',clientRef:randomUUID()},'POST',201);
-   await new Promise(r=>setTimeout(r,1200));const messages=await call('/api/conversations/'+conversation.id+'/messages',client.cookie);assert.ok(messages.messages.some(m=>m.sender_kind==='automation'&&m.text.includes('649.50')));
+   let messages;for(let i=0;i<40;i++){await new Promise(r=>setTimeout(r,250));messages=await call('/api/conversations/'+conversation.id+'/messages',client.cookie);if(messages.messages.some(m=>m.sender_kind==='automation'&&m.text.includes('649.50')))break;}
+   assert.ok(messages.messages.some(m=>m.sender_kind==='automation'&&m.text.includes('649.50')));
    const future=(await call('/api/catalogue/promotions',admin.cookie,{editionId:edition.id,name:'Futura',price:399,startsAt:Date.now()+day,endsAt:Date.now()+2*day,status:'published'},'POST',201)).item;
    assert.equal((await item('promotions',future.id)).availability,'Programada');assert.equal((await item('editions',edition.id)).effectivePriceCents,64950);
  });

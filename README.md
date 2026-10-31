@@ -25,6 +25,10 @@ Para probar: configurar una marca y sus integrantes; abrir dos sesiones de aseso
 
 La migración v6 añade tablas de operación sin reescribir catálogo, usuarios, mensajes ni adjuntos. Antes de migrar una base con usuarios se genera `/data/backups/before-crm-v6-*.sqlite`. Esta copia no sustituye el respaldo periódico y la restauración conjunta de SQLite, `uploads/` y `library/`. El trabajador de operación se ejecuta en la misma instancia; la cola no depende de tener abierta una página, pero el reparto requiere una sesión conectada del asesor.
 
+## Importación del catálogo por CSV
+
+En **Catálogo y biblioteca** (administración) usa **Importar CSV**. Descarga la plantilla, llénala (una fila por edición) y pégala o cárgala. Columnas: `marca, curso, temario, edicion, inicio, fin, zona_horaria, docente, modalidad, lugar, enlace, cupo, cupo_disponible, precio, moneda, estado, promo_nombre, promo_precio, promo_inicio, promo_fin, promo_estado`. Obligatorias: `marca`, `curso` y `precio` (y `temario` si el curso es nuevo). Fechas como `2026-11-20 18:00` en la hora de `zona_horaria`; modalidad `online`, `presencial` o `hibrida`; estado `borrador` o `publicada`. La vista previa no guarda nada; al aplicar, lo que ya existe se respeta y cada fila informa su resultado. Las marcas deben existir antes.
+
 ## Catálogo y biblioteca · v0.4
 
 Entrar en **Catálogo y biblioteca** desde el CRM. Administración gestiona el contenido y los asesores consultan y envían el material aprobado de sus marcas.

@@ -39,7 +39,10 @@ Un proceso Node.js 24 atiende HTTP, WebSocket, reglas y reconciliación operativ
 | `server/operations.mjs` | Cola, elegibilidad, capacidad, reparto, transferencias, SLA, notas/menciones y macros atómicas |
 | `server/automation-schema.mjs` | Esquema v7: ajustes por marca, pausa global, pasos durables, trazas y columnas de reintento en `jobs` |
 | `server/automation.mjs` | Motor de pasos diferidos (arrendamientos, reintentos, cancelación, idempotencia, pausas) y rutas `/api/automation` |
+| `server/backup.mjs`, `server/verify-backup.mjs` | Respaldos automáticos verificados con manifiesto, rotación, verificación de respaldos y rutas `/api/backups` |
+| `server/catalogue-import.mjs` | Importación CSV de cursos, ediciones y promociones: análisis sin escritura y aplicación por las rutas del catálogo |
 | `server/recipes.mjs` | Recetas de seguimiento (4B): definición validada, versiones, barrido de disparadores, manejador `recipe.run`, simulación y rutas `/api/automation/recipes` |
+| `public/catalogue-import.js` | Modal «Importar CSV» del catálogo: plantilla, vista previa y resultado por fila |
 | `public/recipes.js`, `public/recipes.css` | Pestaña Seguimientos (administración): recetas, simulación, ejecuciones y activación por marca; la monta `operations.js` |
 | `public/index.html` | Entrada compartida; carga iconos, módulos CRM/catálogo/operación y finalmente `app.js` |
 | `public/app.js`, `public/styles.css` | Estado general, autenticación, navegación, bandeja, chat, WS, adjuntos y estilo Niebla |
@@ -162,6 +165,8 @@ Todas las rutas `/api` salvo health y autenticación inicial requieren sesión. 
 | Transferencias | `POST /api/operations/transfers/:id/{accept,decline,cancel}` |
 | Macros | `GET/POST /api/operations/macros`; `PATCH /api/operations/macros/:id`; `GET /api/operations/macros/:id/history` |
 | Automatización (admin) | `GET /api/automation`, `/steps`, `/steps/:id/events`; `POST /steps/:id/retry|cancel`; `PATCH /brands/:id`, `/global` |
+| Respaldos (admin) | `GET /api/backups`; `POST /api/backups/run` |
+| Importación (admin) | `GET /api/catalogue/import/template`; `POST /api/catalogue/import/preview`, `/apply` |
 | Recetas (admin) | `GET/POST /api/automation/recipes`; `GET/PATCH /recipes/:id`; `POST /recipes/:id/publish|pause|simulate`; `GET /recipes/:id/history|runs` |
 | Compatibilidad y métricas | `POST /api/brands`, `/api/catalog`; `GET /api/metrics` |
 | Disponibilidad | `GET /api/health`, público; consulta básica de DB, no diagnóstico completo |
