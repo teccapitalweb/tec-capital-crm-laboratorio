@@ -240,6 +240,12 @@ Esquema **v12**, aditivo (`user_mfa`; `server/mfa-schema.mjs`, `server/mfa.mjs`,
 - **Pruebas:** `test/mfa.test.mjs` (3): vectores RFC 6238, ventana y reutilización, y flujo completo contra un servidor real (permisos, activación, secreto cifrado y `mfa.key`, desafío, reutilización de desafío y de código, recuperación de un solo uso, regeneración, desactivación, restablecimiento por administración, límite de intentos del desafío y reinicio de emergencia). Revisado en navegador (activación con código calculado como una app, cierre de sesión, acceso con error y acierto, Equipo; escritorio y 390 px sin desbordamiento). Encontró y se corrigió un defecto de pantalla (el área de errores se borraba en el segundo paso).
 - **Límites y pendientes:** no es obligatorio (falta una opción para exigirlo a administración o a todo el equipo, con inscripción forzada tras el primer acceso); sin código QR; sin llaves físicas/WebAuthn; los desafíos viven en memoria (un reinicio obliga a repetir la contraseña); la verificación en dos pasos no protege cuentas de clientes ni el flujo de recuperación asistida (que sigue siendo por administración).
 
+## Publicación v0.13.0 (31 oct 2026)
+
+Publicado por instrucción expresa del usuario: `main`, commit funcional `8c8c172` (verificación en dos pasos opcional para el equipo; esquema **12**). CI [41232117874](https://github.com/teccapitalweb/tec-capital-crm-laboratorio/actions/runs/41232117874): correcto, 111 pruebas. `/api/health` devuelve `0.13.0`.
+
+Comprobado en la web publicada sin iniciar sesión: versión 0.13.0; los 15+ archivos de la interfaz publicados son idénticos a los de Git; `/api/mfa` responde 401 sin sesión; el segundo paso del acceso rechaza un origen ajeno (403) y un desafío inventado (401); el inicio de sesión con credenciales falsas sigue dando 401 con el mensaje habitual. **No comprobado:** que el inicio de sesión de las cuentas reales siga funcionando tras este cambio en el flujo de acceso (hay pruebas automáticas y la simulación v0.5→v0.11, pero no con tus cuentas), la migración v12 en producción, ni lo pendiente acumulado (respaldos `auto-*`, datos reales, flujos autenticados). **Ocho versiones publicadas (0.6 a 0.13) sin verificación autenticada en producción.** El 2FA es opcional y nadie lo tiene activado todavía. Si lo activas, guarda `mfa.key`/`MFA_KEY` aparte (no va en los respaldos).
+
 ## Pendientes reales
 
 0b. **Recetas:** esperas entre acciones (secuencias), disparadores de inscripción/información y oportunidad estancada.
