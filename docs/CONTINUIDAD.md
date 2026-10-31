@@ -163,6 +163,12 @@ Sin cambios de esquema (sigue en 9). `server/analytics.mjs`, `public/analytics.j
 - **Pruebas:** `test/analytics.test.mjs` (4): embudo y resultados con datos controlados, tiempos y objetivo, privacidad por asesor, permisos por marca, validación de parámetros y rutas.
 - **Límites:** los cálculos se hacen en el momento sobre SQLite (suficiente para el laboratorio; con grandes volúmenes habrá que precalcular o indexar). Sin comparación contra el periodo anterior, sin exportación de reportes, sin horario laboral en los tiempos, y sin valor monetario de pipeline.
 
+## Publicación v0.9.0 (31 oct 2026)
+
+Publicado por instrucción expresa del usuario: `main`, commit funcional `1e811a7` (analítica comercial; esquema sin cambios, **9**). CI [41227579873](https://github.com/teccapitalweb/tec-capital-crm-laboratorio/actions/runs/41227579873): correcto, 98 pruebas. `/api/health` devuelve `0.9.0`.
+
+Comprobado en la web publicada sin iniciar sesión: versión 0.9.0; `/analytics.js`, `/analytics.css` y `/app.js` responden 200; `/api/analytics` responde 401 sin sesión. **No comprobado:** la pantalla Analítica con datos reales de producción y con sesión de administración y de asesor (privacidad por persona), ni los puntos pendientes de v0.8.0 (migración v9, respaldos `auto-*`, flujos autenticados de contactos, importación y Seguimientos).
+
 ## Pendientes reales
 
 0. **Verificación autenticada de v0.6.0 en producción** (migración v8, respaldo `before-crm-v8-*`, pestaña Seguimientos) con registros de prueba identificados; requiere que el usuario inicie sesión en el navegador.
