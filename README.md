@@ -4,6 +4,10 @@ Aplicación de pruebas multicanal: los participantes crean perfiles y envían me
 
 **[Abrir laboratorio](https://crm-laboratorio-production.up.railway.app)** · [Repositorio público](https://github.com/teccapitalweb/tec-capital-crm-laboratorio)
 
+## Continuar el desarrollo
+
+Empieza por [CLAUDE.md](CLAUDE.md). La guía incluye [estado y decisiones](docs/CONTINUIDAD.md), [arquitectura y contratos](docs/ARQUITECTURA.md), [operación y pruebas](docs/OPERACION_Y_PRUEBAS.md) y [plan detallado de la fase 4](docs/PLAN_FASE_4.md). Distingue la versión funcional publicada v0.5 de las funciones todavía propuestas y no contiene credenciales.
+
 ## Operación del equipo · v0.5
 
 Entrar al CRM y abrir **Operación**: Cola de atención, Mis avisos, Horarios y reparto y Macros. En una conversación, **Equipo** abre el contexto privado, notas, transferencias y el historial operativo.

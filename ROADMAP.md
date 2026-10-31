@@ -20,6 +20,8 @@ Por configurar por el equipo: horarios oficiales, responsables, límites de carg
 
 ## 4. Automatización e IA supervisada
 
+Plan de implementación, dependencias y criterios de aceptación: [docs/PLAN_FASE_4.md](docs/PLAN_FASE_4.md). Esta fase sigue pendiente; el traspaso documental no la activa.
+
 Siguiente entrega del plan: recetas de seguimiento versionadas y simulables, activadores, condiciones, cancelación por respuesta/intervención/cierre/baja, reintentos y trazas de ejecución. Reutilizar las reglas de reparto y acciones manuales ya probadas. Las macros de v0.5 se aplican por decisión del asesor; no son campañas ni secuencias automáticas.
 
 Precios, fechas, cupos y promociones se consultan en la base estructurada en cada respuesta: no se confían a la memoria del modelo. RAG recupera temarios, políticas y preguntas frecuentes de documentos aprobados, siempre filtrados por marca, curso, edición y vigencia. Versionar documentos e índice; invalidar contenido obsoleto al publicar cambios.
