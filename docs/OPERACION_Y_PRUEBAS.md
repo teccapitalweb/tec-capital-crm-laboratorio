@@ -45,6 +45,8 @@ Para una prueba nueva usa un directorio de datos vacío e independiente. No cone
 | `NODE_ENV` | `development` | `production`; activa cookies Secure y HSTS |
 | `BACKUP_INTERVAL_HOURS` | `24` por defecto (desactivado en `NODE_ENV=test`) | Horas entre respaldos automáticos; `0` los desactiva |
 | `BACKUP_KEEP` | `7` | Respaldos automáticos que se conservan |
+| `MFA_KEY` | Opcional | Clave para cifrar los secretos de la verificación en dos pasos; si falta se usa `DATA_DIR/mfa.key`. Guárdala aparte; sin ella, los 2FA no se pueden verificar tras una restauración |
+| `MFA_RESET_USER` | Sólo emergencia | Usuario cuya verificación en dos pasos se restablece al arrancar; retirarla después |
 | `ADMIN_INVITE_CODE` | Secreto aleatorio privado para inicializar una instalación vacía | Sólo permite crear el primer administrador |
 | `STAFF_INVITE_CODE` | No usar | Variable heredada, sin efecto desde v0.2 |
 
@@ -54,7 +56,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con el bloque local 4A son **108** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con el bloque local 4A son **111** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -65,6 +67,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/catalogue.test.mjs` | Ediciones, fechas, centavos, promociones, variables, aprobación, permisos, vistas previas, archivo, snapshots/bytes históricos y reinicio |
 | `test/automation.test.mjs` | Motor 4A: migración v7, idempotencia, reintentos, reinicio, carreras de cancelación y pausas (sin servidor; base temporal) |
 | `test/automation-http.test.mjs` | Rutas `/api/automation`: sólo administración, revisiones, pausa global (servidor temporal) |
+| `test/mfa.test.mjs` | TOTP (vectores RFC 6238), ventana/reutilización y el flujo completo de 2 pasos |
 | `test/holidays.test.mjs` | Festivos: cálculo por zona horaria, validación y API (política, historial, cola) |
 | `test/triggers.test.mjs` | Disparadores de recetas `task_overdue` y `waiting_human`: validación, cancelaciones y simulación |
 | `test/consent.test.mjs` | Consentimiento y baja: detección, bloqueo en recetas, tope de frecuencia, API, fusión y exportación |
@@ -155,7 +158,7 @@ Material anterior del runbook:
 
 La copia previa a migración protege SQLite de ese momento. **No existe en esta entrega un respaldo periódico completo ni un ensayo certificado de restauración de producción.** Para recuperar mensajes con archivos hacen falta DB y medios coherentes.
 
-Contenido necesario: SQLite consistente, `uploads/`, `library/` y referencia exacta del código/versión. Los flyers demo proceden del código. La configuración/secrets se custodian por separado, fuera de Git y del paquete público.
+Contenido necesario: SQLite consistente, `uploads/`, `library/` y referencia exacta del código/versión. **Aparte y con otro acceso:** `mfa.key` (o `MFA_KEY`); no va en los respaldos automáticos. Los flyers demo proceden del código. La configuración/secrets se custodian por separado, fuera de Git y del paquete público.
 
 Procedimiento a diseñar y ensayar en entorno aislado:
 
@@ -168,6 +171,13 @@ Procedimiento a diseñar y ensayar en entorno aislado:
 7. Documentar resultado y tiempos. Sólo después preparar la recuperación real y su manejo de datos posteriores.
 
 Con v7 el arranque guarda `backups/before-crm-v7-<timestamp>.sqlite` antes de migrar una base con usuarios y esquema < 8 (el v7 no llegó a publicarse por separado). Revertir código no revierte esquema. No ejecutar una versión antigua contra v6 o posteriores sin comprobar compatibilidad. No borrar WAL/SHM manualmente para intentar arreglar una base.
+
+## Verificación en dos pasos: bloqueos y emergencias
+
+- **Una persona perdió su teléfono:** usa uno de sus 10 códigos de recuperación; si no los tiene, otra persona con rol de administración abre **Equipo → Restablecer 2 pasos** y esa persona la configura de nuevo.
+- **La única persona administradora quedó bloqueada:** con acceso al entorno del servidor (Railway), añade la variable `MFA_RESET_USER=<usuario>`, redespliega o reinicia, comprueba en el registro de arranque el mensaje «MFA restablecido para @usuario», **retira la variable** y vuelve a activar el 2FA.
+- **Tras restaurar un respaldo:** el archivo `DATA_DIR/mfa.key` (o `MFA_KEY`) debe ser el mismo que cuando se activó el 2FA; si no, los 2FA activos fallan y se restablecen como arriba. Esa clave no está en los respaldos automáticos.
+- No hay forma de recuperar un secreto olvidado: se restablece y se vuelve a configurar.
 
 ## Diagnóstico rápido
 

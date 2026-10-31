@@ -19,6 +19,8 @@ import {migrateAutomation,migrateRecipes} from './automation-schema.mjs';
 import {migrateContacts,migrateConsent} from './contacts-schema.mjs';
 import {createContacts} from './contacts.mjs';
 import {createAnalytics} from './analytics.mjs';
+import {migrateMfa} from './mfa-schema.mjs';
+import {createMfa} from './mfa.mjs';
 import {createRecipes} from './recipes.mjs';
 import {createBackups,backupRoutes} from './backup.mjs';
 import {createCatalogueImport} from './catalogue-import.mjs';
@@ -28,7 +30,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<11&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v11-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<12&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v12-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -38,6 +40,7 @@ migrateRecipes(db);
 migrateContacts(db);
 migrateConsent(db);
 migrateHolidays(db);
+migrateMfa(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -85,6 +88,8 @@ function canSee(c,user){return !user.disabled&&(c.customer_id===user.id||crm.can
 function disconnect(userId){for(const [socket,user]of sessions)if(user.id===userId)socket.close(1008,'Actualiza tu acceso');}
 const crm=createCRM({db,body,json,audit,passwordHash,checkPassword,rate,disconnect,broadcast});
 const catalogue=createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer});
+const mfa=createMfa({db,dataDir,json,body,audit,rate,checkPassword});
+if(process.env.MFA_RESET_USER){const had=mfa.resetByUsername(process.env.MFA_RESET_USER);console.log(had?'MFA restablecido para @'+String(process.env.MFA_RESET_USER).trim().toLowerCase()+'. Retira MFA_RESET_USER del entorno.':'MFA_RESET_USER: ese usuario no tenía verificación en dos pasos o no existe.');}
 const analytics=createAnalytics({db,crm,json});
 const contacts=createContacts({db,crm,body,json,audit,broadcast});
 const catalogueImport=createCatalogueImport({db,catalogue,crm,body,json,audit});
@@ -183,6 +188,10 @@ const server=http.createServer(async(req,res)=>{
     if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!originAllowed(req))throw fail(403,'Origen no permitido.');
     const ip=req.socket.remoteAddress||'unknown';
     if(req.method==='POST'&&path==='/api/auth/recover'){rate('recovery:'+ip,12,900000);await crm.recover(await body(req));return json(res,200,{ok:true});}
+    if(req.method==='POST'&&path==='/api/auth/mfa'){
+      rate('auth:'+ip,240,3600000);const done=mfa.complete(await body(req));setSession(res,done.user);audit(done.user,done.used==='recovery'?'mfa.login.recovery':'mfa.login',done.user.id);
+      return json(res,200,{user:safeUser(done.user),usedRecovery:done.used==='recovery',recoveryLeft:done.recoveryLeft});
+    }
     if(req.method==='POST'&&['/api/auth/register','/api/auth/login'].includes(path)){
       rate('auth:'+ip,240,3600000);const input=await body(req),username=clean(input.username,40).toLowerCase(),password=typeof input.password==='string'?input.password:'';
       rate('auth-user:'+username,20,900000);
@@ -200,6 +209,7 @@ const server=http.createServer(async(req,res)=>{
         user=db.prepare('SELECT * FROM users WHERE username=?').get(username);
         if(!user||user.disabled||!await checkPassword(password,user.password_hash))throw fail(401,'Usuario o contraseña incorrectos.');
       }
+      if(!path.endsWith('register')&&mfa.isEnabled(user.id))return json(res,200,{mfaRequired:true,challenge:mfa.challenge(user.id)});
       setSession(res,user);return json(res,200,{user:safeUser(user)});
     }
     if(path.startsWith('/api/')){
@@ -210,6 +220,7 @@ const server=http.createServer(async(req,res)=>{
       if(await automation.handle(req,res,path,user,{body,json,audit}))return;
       if(await catalogueImport.handle(req,res,path,user))return;
       if(await catalogue.handle(req,res,path,user))return;
+      if(await mfa.handle(req,res,path,user))return;
       if(await analytics.handle(req,res,path,user))return;
       if(await contacts.handle(req,res,path,user))return;
       if(await crm.handle(req,res,path,user))return;
@@ -309,7 +320,7 @@ const server=http.createServer(async(req,res)=>{
       throw fail(404,'Ruta no disponible.');
     }
     if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'Método no permitido.');
-    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/analytics.js':['public/analytics.js','text/javascript; charset=utf-8'],'/analytics.css':['public/analytics.css','text/css; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/security.js':['public/security.js','text/javascript; charset=utf-8'],'/analytics.js':['public/analytics.js','text/javascript; charset=utf-8'],'/analytics.css':['public/analytics.css','text/css; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
     const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.',...(error.status&&error.code?{code:error.code}:{}),...(error.status&&error.activeOpportunityId?{activeOpportunityId:error.activeOpportunityId}:{})});}
 });
