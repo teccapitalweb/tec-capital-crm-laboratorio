@@ -220,6 +220,12 @@ Esquema **v11**, aditivo: columna `operation_settings.holidays` (JSON, por defec
 - **Pruebas:** `test/holidays.test.mjs` (3): cálculo con zonas horarias y plazos que saltan festivo y fin de semana, validación, y API completa (permisos, revisión, historial, aislamiento entre marcas y efecto en la cola). Las pruebas de esquema esperan `user_version` 11.
 - **Límites:** son festivos de marca completa, no de persona; no hay calendarios por país con actualización automática (la sugerencia de México es un punto de partida: confirma las fechas, algunos años hay puentes o días no laborables adicionales); tampoco hay turnos personales ni vacaciones por asesor.
 
+## Publicación v0.12.0 (31 oct 2026)
+
+Publicado por instrucción expresa del usuario: `main`, commit funcional `c713c57` (festivos por marca; esquema **11**). CI [41231154874](https://github.com/teccapitalweb/tec-capital-crm-laboratorio/actions/runs/41231154874): correcto, 108 pruebas. `/api/health` devuelve `0.12.0`.
+
+Comprobado en la web publicada sin iniciar sesión: versión 0.12.0; los 15 archivos de la interfaz publicados son idénticos a los de Git (HEAD); `/api/operations/brands/:id` responde 401 sin sesión. Antes de esta versión se simuló la actualización de una base real de la v0.5.0 al código v0.11.0 (47 comprobaciones sin fallos: migraciones, copia previa, respaldo automático, datos y permisos intactos). **No comprobado:** la migración v11 sobre la base de producción, el cuadro de festivos con sesión real, ni los pendientes acumulados (respaldos `auto-*` en el volumen, datos reales tras las migraciones, flujos autenticados). **Siete versiones publicadas (0.6 a 0.12) sin verificación autenticada en producción.** Todo sigue desactivado por defecto.
+
 ## Pendientes reales
 
 0b. **Recetas:** esperas entre acciones (secuencias), disparadores de inscripción/información y oportunidad estancada.
