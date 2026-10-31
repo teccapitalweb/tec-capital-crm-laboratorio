@@ -16,6 +16,8 @@ import { createCatalogue } from './catalogue.mjs';
 import {migrateOperations} from './operations-schema.mjs';
 import {createOperations} from './operations.mjs';
 import {migrateAutomation,migrateRecipes} from './automation-schema.mjs';
+import {migrateContacts} from './contacts-schema.mjs';
+import {createContacts} from './contacts.mjs';
 import {createRecipes} from './recipes.mjs';
 import {createBackups,backupRoutes} from './backup.mjs';
 import {createCatalogueImport} from './catalogue-import.mjs';
@@ -25,13 +27,14 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<8&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v8-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<9&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v9-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
 migrateOperations(db);
 migrateAutomation(db);
 migrateRecipes(db);
+migrateContacts(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -79,6 +82,7 @@ function canSee(c,user){return !user.disabled&&(c.customer_id===user.id||crm.can
 function disconnect(userId){for(const [socket,user]of sessions)if(user.id===userId)socket.close(1008,'Actualiza tu acceso');}
 const crm=createCRM({db,body,json,audit,passwordHash,checkPassword,rate,disconnect,broadcast});
 const catalogue=createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer});
+const contacts=createContacts({db,crm,body,json,audit,broadcast});
 const catalogueImport=createCatalogueImport({db,catalogue,crm,body,json,audit});
 const operations=createOperations({db,crm,catalogue,body,json,audit,broadcast,online,insertMessage});
 const automation=createAutomation({db,onChange:step=>{if(step.conversation_id)broadcast('conversation',step.conversation_id);broadcast('crm',null,{brandId:step.brand_id});}});
@@ -200,6 +204,7 @@ const server=http.createServer(async(req,res)=>{
       if(await automation.handle(req,res,path,user,{body,json,audit}))return;
       if(await catalogueImport.handle(req,res,path,user))return;
       if(await catalogue.handle(req,res,path,user))return;
+      if(await contacts.handle(req,res,path,user))return;
       if(await crm.handle(req,res,path,user))return;
       if(req.method==='POST'&&path==='/api/auth/logout'){db.prepare('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash);for(const [ws,u]of sessions)if(u.token_hash===user.token_hash)ws.close(1000,'Sesión cerrada');res.setHeader('Set-Cookie','tc_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'+(production?'; Secure':''));return json(res,200,{ok:true});}
       if(req.method==='GET'&&path==='/api/bootstrap')return json(res,200,{user:safeUser(user),brands:crm.brandsFor(user),courses:db.prepare('SELECT * FROM courses WHERE active=1 ORDER BY title').all().filter(c=>user.role==='customer'||crm.canBrand(user,c.brand_id)).map(publicCourse),editions:db.prepare("SELECT * FROM editions WHERE status='published' ORDER BY starts_at").all().filter(e=>(user.role==='customer'||crm.canBrand(user,e.brand_id))&&!catalogue.editionState(e)).map(e=>({...e,priceCents:catalogue.info(e.course_id,e.id).priceCents,dateLabel:catalogue.info(e.course_id,e.id).dateLabel})),conversations:conversationList(user),onlineAgents:[...new Set([...sessions.values()].filter(staff).map(x=>x.id))].length});
@@ -297,7 +302,7 @@ const server=http.createServer(async(req,res)=>{
       throw fail(404,'Ruta no disponible.');
     }
     if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'Método no permitido.');
-    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
     const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.',...(error.status&&error.code?{code:error.code}:{}),...(error.status&&error.activeOpportunityId?{activeOpportunityId:error.activeOpportunityId}:{})});}
 });
