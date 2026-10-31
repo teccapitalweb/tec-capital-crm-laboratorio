@@ -18,6 +18,7 @@ import {createOperations} from './operations.mjs';
 import {migrateAutomation,migrateRecipes} from './automation-schema.mjs';
 import {migrateContacts} from './contacts-schema.mjs';
 import {createContacts} from './contacts.mjs';
+import {createAnalytics} from './analytics.mjs';
 import {createRecipes} from './recipes.mjs';
 import {createBackups,backupRoutes} from './backup.mjs';
 import {createCatalogueImport} from './catalogue-import.mjs';
@@ -82,6 +83,7 @@ function canSee(c,user){return !user.disabled&&(c.customer_id===user.id||crm.can
 function disconnect(userId){for(const [socket,user]of sessions)if(user.id===userId)socket.close(1008,'Actualiza tu acceso');}
 const crm=createCRM({db,body,json,audit,passwordHash,checkPassword,rate,disconnect,broadcast});
 const catalogue=createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer});
+const analytics=createAnalytics({db,crm,json});
 const contacts=createContacts({db,crm,body,json,audit,broadcast});
 const catalogueImport=createCatalogueImport({db,catalogue,crm,body,json,audit});
 const operations=createOperations({db,crm,catalogue,body,json,audit,broadcast,online,insertMessage});
@@ -204,6 +206,7 @@ const server=http.createServer(async(req,res)=>{
       if(await automation.handle(req,res,path,user,{body,json,audit}))return;
       if(await catalogueImport.handle(req,res,path,user))return;
       if(await catalogue.handle(req,res,path,user))return;
+      if(await analytics.handle(req,res,path,user))return;
       if(await contacts.handle(req,res,path,user))return;
       if(await crm.handle(req,res,path,user))return;
       if(req.method==='POST'&&path==='/api/auth/logout'){db.prepare('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash);for(const [ws,u]of sessions)if(u.token_hash===user.token_hash)ws.close(1000,'Sesión cerrada');res.setHeader('Set-Cookie','tc_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'+(production?'; Secure':''));return json(res,200,{ok:true});}
@@ -302,7 +305,7 @@ const server=http.createServer(async(req,res)=>{
       throw fail(404,'Ruta no disponible.');
     }
     if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'Método no permitido.');
-    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/analytics.js':['public/analytics.js','text/javascript; charset=utf-8'],'/analytics.css':['public/analytics.css','text/css; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
     const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.',...(error.status&&error.code?{code:error.code}:{}),...(error.status&&error.activeOpportunityId?{activeOpportunityId:error.activeOpportunityId}:{})});}
 });

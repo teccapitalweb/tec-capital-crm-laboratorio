@@ -146,6 +146,23 @@ Publicado por instrucción expresa del usuario: `main`, commit funcional `3a6899
 
 Comprobado en la web publicada sin iniciar sesión: versión 0.8.0; `/contacts.js`, `/crm.js` y `/crm.css` responden 200; `/api/crm/tags` y `/api/crm/export/contacts.csv` responden 401 sin sesión. **No comprobado:** que la migración v9 se aplicara y dejara su copia `before-crm-v9-*`, que existan respaldos automáticos `auto-*` en `/data/backups/`, y el flujo autenticado (etiquetas, fusión, exportación, importación de catálogo, Seguimientos) en producción. Sigue pendiente la verificación autenticada con registros de prueba identificados, la puerta «Wait for CI» de Railway y una copia de respaldos fuera del volumen.
 
+## Analítica comercial (rama `feat/analitica-comercial`, local, 31 oct 2026)
+
+Sin cambios de esquema (sigue en 9). `server/analytics.mjs`, `public/analytics.js`, `public/analytics.css`; nueva entrada **Analítica** en el menú del equipo. **Sin publicar.**
+
+- **API:** `GET /api/analytics?days=7|30|90|365&brand=&tz=` (equipo de atención; `days` 1–366, `tz` IANA, por defecto America/Mexico_City). Todo se calcula sólo sobre las marcas autorizadas de quien consulta; una marca no autorizada devuelve 404.
+- **Definiciones (importantes para interpretar los números):**
+  - *Embudo* = **cohorte**: oportunidades **creadas** en el periodo y hasta dónde llegaron (por su etapa actual o por cualquier cambio de etapa registrado en `crm_events`). Conversión = ganadas / creadas de esa cohorte. «Perdidas» y «abiertas» salen de la etapa actual.
+  - *Ventas y no continuaron del periodo* (KPI «Ventas de práctica» y tendencia) = cambios de etapa **ocurridos** en el periodo, aunque la oportunidad sea de una cohorte anterior; por eso pueden diferir del embudo. Las ventas son de práctica: no confirman dinero ni matrícula.
+  - *Atención humana*: de los eventos `response` de operación (espera desde que el cliente quedó esperando hasta la respuesta humana): mediana y p90 de primera respuesta y de siguientes, y % dentro del objetivo (sólo cuenta los que tenían objetivo activo). Son tiempos de **reloj**, no descuentan horario laboral.
+  - *Canales*: conversaciones creadas en el periodo por canal y cuántas están vinculadas a una oportunidad ganada.
+  - *Tendencia*: conversaciones, oportunidades y ventas por día en la zona indicada (se agrupa por semana si el periodo supera 90 días).
+  - *Desempeño por persona*: oportunidades creadas/ganadas/perdidas según su responsable **actual**, tareas, respuestas humanas. **Administración ve a todo el equipo; cada asesor ve únicamente su propia fila** (`agentsScope: propio`), aunque los agregados de marca sí los ve.
+  - *Seguimientos automáticos*: ejecuciones de recetas del periodo por estado.
+- **Interfaz:** KPIs, embudo con barras, gráfica de actividad diaria (SVG propio, sin librerías), atención humana, tareas, por marca y por curso (15 cursos principales), canales, motivos de pérdida, equipo y seguimientos automáticos. Selector de periodo; sigue el selector de marca del CRM. Revisada en navegador en escritorio y 390 px sin desbordamiento ni errores de consola nuevos.
+- **Pruebas:** `test/analytics.test.mjs` (4): embudo y resultados con datos controlados, tiempos y objetivo, privacidad por asesor, permisos por marca, validación de parámetros y rutas.
+- **Límites:** los cálculos se hacen en el momento sobre SQLite (suficiente para el laboratorio; con grandes volúmenes habrá que precalcular o indexar). Sin comparación contra el periodo anterior, sin exportación de reportes, sin horario laboral en los tiempos, y sin valor monetario de pipeline.
+
 ## Pendientes reales
 
 0. **Verificación autenticada de v0.6.0 en producción** (migración v8, respaldo `before-crm-v8-*`, pestaña Seguimientos) con registros de prueba identificados; requiere que el usuario inicie sesión en el navegador.

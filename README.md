@@ -25,6 +25,10 @@ Para probar: configurar una marca y sus integrantes; abrir dos sesiones de aseso
 
 La migración v6 añade tablas de operación sin reescribir catálogo, usuarios, mensajes ni adjuntos. Antes de migrar una base con usuarios se genera `/data/backups/before-crm-v6-*.sqlite`. Esta copia no sustituye el respaldo periódico y la restauración conjunta de SQLite, `uploads/` y `library/`. El trabajador de operación se ejecuta en la misma instancia; la cola no depende de tener abierta una página, pero el reparto requiere una sesión conectada del asesor.
 
+## Analítica comercial
+
+En **Analítica** (equipo): elige periodo y marca y revisa el embudo de las oportunidades creadas, las ventas de práctica, la actividad diaria, los tiempos de atención humana y el desempeño del equipo (administración ve a todos; cada asesor, solo lo suyo). Los números son de práctica y los tiempos son de reloj.
+
 ## Contactos: etiquetas, duplicados y exportación
 
 En **Contactos**: filtra por etiqueta, crea y asigna etiquetas desde la ficha, usa **Duplicados** para ver fichas repetidas (mismo teléfono, correo o nombre) y, como administración, fusiónalas tras revisar qué se mueve. **Exportar** descarga contactos y oportunidades en CSV (sólo administración; contiene datos personales).

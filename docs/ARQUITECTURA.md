@@ -39,10 +39,12 @@ Un proceso Node.js 24 atiende HTTP, WebSocket, reglas y reconciliación operativ
 | `server/operations.mjs` | Cola, elegibilidad, capacidad, reparto, transferencias, SLA, notas/menciones y macros atómicas |
 | `server/automation-schema.mjs` | Esquema v7: ajustes por marca, pausa global, pasos durables, trazas y columnas de reintento en `jobs` |
 | `server/automation.mjs` | Motor de pasos diferidos (arrendamientos, reintentos, cancelación, idempotencia, pausas) y rutas `/api/automation` |
+| `server/analytics.mjs` | Métricas comerciales agregadas por marca autorizada: embudo por cohorte, resultados, atención humana, tendencia, equipo (privacidad por asesor) |
 | `server/contacts-schema.mjs`, `server/contacts.mjs` | Esquema v9 y lógica de etiquetas, duplicados, fusión con vista previa y exportación CSV; rutas bajo `/api/crm` (se atienden antes que `crm.mjs`) |
 | `server/backup.mjs`, `server/verify-backup.mjs` | Respaldos automáticos verificados con manifiesto, rotación, verificación de respaldos y rutas `/api/backups` |
 | `server/catalogue-import.mjs` | Importación CSV de cursos, ediciones y promociones: análisis sin escritura y aplicación por las rutas del catálogo |
 | `server/recipes.mjs` | Recetas de seguimiento (4B): definición validada, versiones, barrido de disparadores, manejador `recipe.run`, simulación y rutas `/api/automation/recipes` |
+| `public/analytics.js`, `public/analytics.css` | Pantalla Analítica (KPIs, embudo, gráfica SVG, tablas) |
 | `public/contacts.js` | Etiquetas, filtro, duplicados, fusión y exportación dentro de Contactos |
 | `public/catalogue-import.js` | Modal «Importar CSV» del catálogo: plantilla, vista previa y resultado por fila |
 | `public/recipes.js`, `public/recipes.css` | Pestaña Seguimientos (administración): recetas, simulación, ejecuciones y activación por marca; la monta `operations.js` |
@@ -168,6 +170,7 @@ Todas las rutas `/api` salvo health y autenticación inicial requieren sesión. 
 | Transferencias | `POST /api/operations/transfers/:id/{accept,decline,cancel}` |
 | Macros | `GET/POST /api/operations/macros`; `PATCH /api/operations/macros/:id`; `GET /api/operations/macros/:id/history` |
 | Automatización (admin) | `GET /api/automation`, `/steps`, `/steps/:id/events`; `POST /steps/:id/retry|cancel`; `PATCH /brands/:id`, `/global` |
+| Analítica | `GET /api/analytics?days=&brand=&tz=` |
 | Etiquetas y contactos | `GET/POST /api/crm/tags`; `PATCH/DELETE /api/crm/tags/:id` (admin); `PUT /api/crm/contacts/:id/tags`; `GET /api/crm/duplicates?brand=`; `POST /api/crm/contacts/merge-preview`, `/merge` (admin); `GET /api/crm/export/contacts.csv`, `/opportunities.csv` (admin) |
 | Respaldos (admin) | `GET /api/backups`; `POST /api/backups/run` |
 | Importación (admin) | `GET /api/catalogue/import/template`; `POST /api/catalogue/import/preview`, `/apply` |
