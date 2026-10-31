@@ -121,6 +121,12 @@ Segundo bloque de mejoras tras v0.6.0. **Sin publicar.** Pruebas locales: 87 apr
 - **Prueba estabilizada:** la de catálogo «vencimientos y material programado…» ahora espera por sondeo (hasta 10 s) en vez de 1,2 s fijos.
 - **Puerta de CI antes de desplegar: no configurable desde el repositorio.** En Railway, servicio `crm-laboratorio` → Settings → Deploy, activar «Wait for CI» (checkSuites) para que un push con pruebas fallidas no se despliegue. Pendiente de que el usuario o alguien con acceso a Railway lo active; mientras tanto, ejecutar las pruebas antes de cada push.
 
+## Publicación v0.7.0 (31 oct 2026)
+
+Publicado por instrucción expresa del usuario: `main`, commit funcional `0be723a` (respaldos automáticos verificados, importación CSV del catálogo y prueba estabilizada). Esquema sin cambios (8). CI [41225391778](https://github.com/teccapitalweb/tec-capital-crm-laboratorio/actions/runs/41225391778): correcto, 87 pruebas. `/api/health` devuelve `0.7.0`.
+
+Comprobado en la web publicada sin iniciar sesión: versión 0.7.0; `/catalogue-import.js`, `/catalogue.css` y `/recipes.js` responden 200; `/api/backups` y `/api/catalogue/import/template` responden 401 sin sesión. **No comprobado:** que el primer respaldo automático se creara en `/data/backups/auto-*` (se programa 5 s después del arranque), ni la importación y Seguimientos con sesión de administración. Los respaldos siguen en el mismo volumen.
+
 ## Pendientes reales
 
 0. **Verificación autenticada de v0.6.0 en producción** (migración v8, respaldo `before-crm-v8-*`, pestaña Seguimientos) con registros de prueba identificados; requiere que el usuario inicie sesión en el navegador.
