@@ -163,7 +163,7 @@ function flyer(course,brand){
 const server=http.createServer(async(req,res)=>{
   security(res);const url=new URL(req.url,'http://localhost'),path=url.pathname;
   try{
-    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.5.0',transport:'websocket',mode:'laboratorio'});}
+    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.6.0',transport:'websocket',mode:'laboratorio'});}
     if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!originAllowed(req))throw fail(403,'Origen no permitido.');
     const ip=req.socket.remoteAddress||'unknown';
     if(req.method==='POST'&&path==='/api/auth/recover'){rate('recovery:'+ip,12,900000);await crm.recover(await body(req));return json(res,200,{ok:true});}

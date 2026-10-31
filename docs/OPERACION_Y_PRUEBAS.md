@@ -129,7 +129,7 @@ Publicar sólo dentro del alcance autorizado por el usuario. Para el traspaso do
 El health esperado de referencia:
 
 ```json
-{"ok":true,"version":"0.5.0","transport":"websocket","mode":"laboratorio"}
+{"ok":true,"version":"0.6.0","transport":"websocket","mode":"laboratorio"}
 ```
 
 ## Respaldos y recuperación
