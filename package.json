@@ -1,6 +1,6 @@
 {
   "name": "tec-capital-crm-laboratorio",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "description": "Laboratorio multicanal de TEC Capital con perfiles, conversaciones persistentes y WebSocket.",
