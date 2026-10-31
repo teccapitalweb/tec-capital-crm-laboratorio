@@ -140,6 +140,12 @@ Esquema **v9**, aditivo (`server/contacts-schema.mjs`, `server/contacts.mjs`, `p
 - **Verificación:** 94 pruebas aprobadas. Una ejecución completa aislada falló en la prueba de operación «avisos con la misma fecha…» (y su suite contenedora) y no se reprodujo en 14 ejecuciones completas posteriores, 6 de ellas con carga doble; no se capturó el detalle del fallo, así que es una **intermitencia sin diagnosticar** (la de catálogo ya se estabilizó). Si reaparece, guardar la salida completa de `npm test`.
 - **Pendiente:** fusión de más de dos fichas en un paso, importación de contactos, etiquetas en la bandeja de conversaciones y en filtros de oportunidades, deshacer fusión, exportación programada, límites de frecuencia de exportación.
 
+## Publicación v0.8.0 (31 oct 2026)
+
+Publicado por instrucción expresa del usuario: `main`, commit funcional `3a6899c` (contactos: etiquetas, duplicados, fusión y exportación; esquema **9**). CI [41226787988](https://github.com/teccapitalweb/tec-capital-crm-laboratorio/actions/runs/41226787988): correcto, 94 pruebas. `/api/health` devuelve `0.8.0`.
+
+Comprobado en la web publicada sin iniciar sesión: versión 0.8.0; `/contacts.js`, `/crm.js` y `/crm.css` responden 200; `/api/crm/tags` y `/api/crm/export/contacts.csv` responden 401 sin sesión. **No comprobado:** que la migración v9 se aplicara y dejara su copia `before-crm-v9-*`, que existan respaldos automáticos `auto-*` en `/data/backups/`, y el flujo autenticado (etiquetas, fusión, exportación, importación de catálogo, Seguimientos) en producción. Sigue pendiente la verificación autenticada con registros de prueba identificados, la puerta «Wait for CI» de Railway y una copia de respaldos fuera del volumen.
+
 ## Pendientes reales
 
 0. **Verificación autenticada de v0.6.0 en producción** (migración v8, respaldo `before-crm-v8-*`, pestaña Seguimientos) con registros de prueba identificados; requiere que el usuario inicie sesión en el navegador.
