@@ -257,6 +257,12 @@ Sin cambios de datos ni de esquema (sigue en 12). Se mantiene la identidad **Nie
 - **Proceso:** la capa de pulido no se aplicó la primera vez porque el servidor de pruebas arrancó antes de registrar el archivo nuevo; se detectó midiendo (el archivo respondía 404) y se repitió la auditoría con la capa activa. La prueba de rutas estáticas ahora incluye `/polish.css`.
 - **Fuera de alcance a propósito:** modo oscuro y rediseño de componentes (ver el documento de diseño).
 
+## Publicación v0.14.0 (31 oct 2026)
+
+Publicado por instrucción expresa del usuario: `main`, commit funcional `c9cb22c` (refinamiento visual Niebla; esquema sin cambios, **12**). CI [41233315622](https://github.com/teccapitalweb/tec-capital-crm-laboratorio/actions/runs/41233315622): correcto, 111 pruebas. `/api/health` devuelve `0.14.0`.
+
+Comprobado en la web publicada sin iniciar sesión: versión 0.14.0; los 17 archivos de la interfaz publicados son idénticos a los de Git; `/polish.css` se sirve como `text/css`; en la pantalla pública de acceso de producción, `polish.css` está cargado y la auditoría de diseño da 0 textos bajo 4,5:1 y 0 bajo 11 px, sin desbordamiento horizontal. **No comprobado:** el aspecto de las pantallas internas (Mi día, Oportunidades, Analítica, etc.) en producción con sesión real (se auditaron en local con datos de práctica), la migración v12 en producción y lo pendiente acumulado (respaldos `auto-*`, datos reales, flujos autenticados). **Nueve versiones publicadas (0.6 a 0.14) sin verificación autenticada en producción.**
+
 ## Pendientes reales
 
 0b. **Recetas:** esperas entre acciones (secuencias), disparadores de inscripción/información y oportunidad estancada.
