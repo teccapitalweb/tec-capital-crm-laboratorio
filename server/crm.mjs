@@ -40,7 +40,8 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
   const validOwner=(id,brand)=>{if(!id)return null;const u=db.prepare('SELECT * FROM users WHERE id=?').get(id);if(!canBrand(u,brand))throw fail(400,'El responsable no tiene acceso a esta marca.');return id;};
   const scoped=(table,id,user)=>{const r=db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);if(!r)throw fail(404,'Registro no disponible.');requireBrand(user,r.brand_id);return r;};
   const sendChange=brand=>broadcast('crm',null,{brandId:brand});
-  const followup=createFollowup({db,scoped,validOwner,body,json,sendChange,audit,broadcast});
+  let assignmentGuard=()=>{};
+  const followup=createFollowup({db,scoped,validOwner,body,json,sendChange,audit,broadcast,beforeAssign:(id,owner)=>assignmentGuard(id,owner)});
   const inviteFor=(token,username)=>{
     const row=db.prepare('SELECT * FROM team_invites WHERE token_hash=? AND username=? AND used_by IS NULL AND revoked_at IS NULL AND expires_at>?').get(tokenHash(text(token,200)),username,Date.now());
     if(!row)throw fail(400,'La invitación no es válida para este usuario, venció o ya fue utilizada.');
@@ -77,8 +78,8 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
   // Idempotent backfill. Never rewrites accounts, messages, flyers or existing CRM edits.
   transaction(db,()=>{for(const c of db.prepare('SELECT * FROM conversations ORDER BY created_at').all())syncConversation(c);});
 
-  function assignConversation(c,userId){
-    followup.assign(syncConversation(c),userId,userId?{id:userId}:null);
+  function assignConversation(c,userId,actor=userId?{id:userId}:null){
+    followup.assign(syncConversation(c),userId,actor);
   }
   function setStage(c,stage,actor=null,input={}){
     const id=syncConversation(c),o=db.prepare('SELECT * FROM opportunities WHERE id=?').get(id);
@@ -106,7 +107,7 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
       if(!['available','away'].includes(input.availability))throw fail(400,'Disponibilidad no válida.');
       db.prepare('UPDATE users SET name=? WHERE id=?').run(name,user.id);
       db.prepare('INSERT INTO preferences VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET signature=excluded.signature,availability=excluded.availability').run(user.id,text(input.signature,180),input.availability);
-      audit(user,'profile.updated',user.id);json(res,200,{ok:true});return true;
+      audit(user,'profile.updated',user.id);if(isStaff(user))broadcast('crm');json(res,200,{ok:true});return true;
     }
     if(path==='/api/password'&&req.method==='POST'){
       rate('password:'+user.id,8,900000);const input=await body(req);
@@ -183,5 +184,5 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
     let id;
     transaction(db,()=>{const row=db.prepare('SELECT r.*,u.disabled FROM recovery_tokens r JOIN users u ON u.id=r.user_id WHERE r.token_hash=? AND r.used_at IS NULL AND r.expires_at>? AND u.username=?').get(tokenHash(token),Date.now(),username);if(!row||row.disabled)throw fail(400,'El código no es válido, venció o ya fue utilizado.');id=row.user_id;db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(value,id);db.prepare('UPDATE recovery_tokens SET used_at=? WHERE id=?').run(Date.now(),row.id);db.prepare('DELETE FROM sessions WHERE user_id=?').run(id);audit(null,'recovery.completed',id);});disconnect(id);
   }
-  return {handle,canBrand,requireBrand,brandsFor,syncConversation,assignConversation,setStage,inviteFor,acceptInvite,recover};
+  return {handle,canBrand,requireBrand,brandsFor,syncConversation,assignConversation,setStage,inviteFor,acceptInvite,recover,setAssignmentGuard:guard=>{assignmentGuard=guard;}};
 }

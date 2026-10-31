@@ -19,7 +19,7 @@ export function migrateFollowup(db){
   });
 }
 
-export function createFollowup({db,scoped,validOwner,body,json,sendChange,audit,broadcast}){
+export function createFollowup({db,scoped,validOwner,body,json,sendChange,audit,broadcast,beforeAssign}){
   function record(id,actor,kind,details){
     db.prepare('INSERT INTO crm_events(opportunity_id,actor_id,kind,details,created_at) VALUES(?,?,?,?,?)').run(id,actor?.id||null,kind,JSON.stringify(details),Date.now());
   }
@@ -59,6 +59,7 @@ export function createFollowup({db,scoped,validOwner,body,json,sendChange,audit,
     return true;
   }
   function assign(id,owner,actor=null){
+    if(owner)beforeAssign?.(id,owner);
     const o=db.prepare('SELECT * FROM opportunities WHERE id=?').get(id);
     if(o.owner_id!==owner){
       const name=userId=>userId?db.prepare('SELECT name FROM users WHERE id=?').get(userId)?.name:null;

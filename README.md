@@ -4,6 +4,23 @@ Aplicación de pruebas multicanal: los participantes crean perfiles y envían me
 
 **[Abrir laboratorio](https://crm-laboratorio-production.up.railway.app)** · [Repositorio público](https://github.com/teccapitalweb/tec-capital-crm-laboratorio)
 
+## Operación del equipo · v0.5
+
+Entrar al CRM y abrir **Operación**: Cola de atención, Mis avisos, Horarios y reparto y Macros. En una conversación, **Equipo** abre el contexto privado, notas, transferencias y el historial operativo.
+
+- **Cola de atención humana:** filtros por marca, persona/curso, sin asignar, a mi cargo y fuera de objetivo; prioridad normal, alta o urgente; páginas de 50. Los chats atendidos por reglas no se reparten hasta pedir un asesor o pasar a atención humana. Cerrar la oportunidad o el chat los retira de la cola.
+- **Reparto configurable:** por marca, menor carga, presencia conectada y disponibilidad personal. Administración selecciona los integrantes y su límite global de chats abiertos (inicialmente ocho). Si nadie es elegible, el chat permanece en cola. El reparto y los objetivos de atención empiezan desactivados para conservar la operación existente.
+- **Horarios:** zona IANA y un intervalo por día, sin cruzar medianoche (se admite 24:00 como final). Los plazos de primera/siguiente respuesta cuentan minutos dentro del horario; los cambios de horario estacional se calculan sobre instantes reales. No se incluyen calendarios de vacaciones, festivos o turnos personales. Los objetivos ya iniciados conservan la política original; las nuevas esperas usan la configuración actual.
+- **Transferencias:** solicitud con contexto, aceptación/rechazo/cancelación y vencimiento a las 24 horas. El dueño actual conserva la atención hasta la aceptación. Los chats abiertos y tareas de una misma oportunidad se trasladan juntos. Se revalidan acceso, capacidad, cierre y responsable antes de aceptar. Quitar permisos cancela solicitudes pendientes.
+- **Notas y menciones:** privadas por marca, guardadas en la ficha del contacto; se puede avisar a varios integrantes. Notas y avisos no se envían al cliente. Los avisos se guardan, se paginan y se marcan como leídos individualmente.
+- **Objetivos de respuesta (SLA):** primera y siguientes respuestas humanas, con alertas por vencimiento al responsable y a administración. Leer el chat o responder automáticamente no satisface el objetivo; una respuesta humana sí. Devolver o transferir no reinicia la espera. Los avisos son internos, no push ni mensajes externos.
+- **Macros manuales versionadas:** combinar una plantilla aprobada, avance de etapa, tarea con plazo y nota interna. Se previsualizan todas las acciones, se revalidan datos comerciales y carga al aplicar, y se guardan juntas en una transacción. Los reintentos usan la misma referencia y no duplican efectos. No retroceden etapas, cierran ventas ni ejecutan cobros. Las recetas automáticas y la IA quedan para la siguiente fase.
+- **Historial:** asignaciones, transferencias, notas, prioridades, respuestas y ejecución de macros; configuración de horarios/reparto y versiones de macros con autor y fecha. Los formularios conservan el borrador ante conflictos y la configuración en edición no se reemplaza por actualizaciones en vivo.
+
+Para probar: configurar una marca y sus integrantes; abrir dos sesiones de asesores y marcar Disponible/Ausente; pedir «asesor» desde un cliente; tomar o repartir el chat; añadir una nota con mención; transferir y aceptar desde la segunda sesión; crear una macro y aplicarla desde Equipo. La vista previa de una macro no modifica datos ni envía mensajes.
+
+La migración v6 añade tablas de operación sin reescribir catálogo, usuarios, mensajes ni adjuntos. Antes de migrar una base con usuarios se genera `/data/backups/before-crm-v6-*.sqlite`. Esta copia no sustituye el respaldo periódico y la restauración conjunta de SQLite, `uploads/` y `library/`. El trabajador de operación se ejecuta en la misma instancia; la cola no depende de tener abierta una página, pero el reparto requiere una sesión conectada del asesor.
+
 ## Catálogo y biblioteca · v0.4
 
 Entrar en **Catálogo y biblioteca** desde el CRM. Administración gestiona el contenido y los asesores consultan y envían el material aprobado de sus marcas.
@@ -53,7 +70,7 @@ La migración v3 conserva perfiles, mensajes y flyers. Los asesores existentes c
 
 El código administrador de entorno sólo permite crear el primer administrador cuando todavía no existe ninguno. Los antiguos códigos compartidos de asesor dejan de conceder acceso. Para incorporar personas nuevas, un administrador debe iniciar sesión y crear invitaciones. No se cambian contraseñas ni se elevan cuentas existentes automáticamente.
 
-Esta entrega implementó el primer bloque de F0/F1. Siguen pendientes, entre otros: MFA, notificaciones fuera de la aplicación, horarios/turnos, paginación del resumen de CRM, supervisores con roles específicos, automatizaciones editables, integración real de Meta, IA y pagos. Los procesos comerciales continúan simulados.
+Esta entrega implementó el primer bloque de F0/F1. Siguen pendientes, entre otros: MFA, notificaciones fuera de la aplicación, festivos y turnos personales, paginación del resumen de CRM, supervisores con roles específicos, recetas automáticas editables, integración real de Meta, IA y pagos. Los procesos comerciales continúan simulados.
 
 ## Qué puedes probar
 
@@ -129,7 +146,7 @@ npm run check
 npm test
 ```
 
-Las pruebas levantan un servidor y una base temporal, conectan siete clientes y comprueban entrega, permisos, archivos, versiones de flyer, idempotencia, lectura, atención humana y persistencia tras reinicio. También cubren las tres regresiones comerciales, versiones concurrentes, tareas editables, migraciones hasta v5, permisos del historial y búsqueda con más de 300 conversaciones. El catálogo prueba fechas, monedas, cupos, promociones solapadas/vencidas/programadas, variables, aprobaciones, acceso por marca, vistas previas obsoletas y conservación del precio y los bytes originales tras editar o archivar. No usan Meta ni servicios de IA.
+Las pruebas levantan un servidor y una base temporal, conectan siete clientes y comprueban entrega, permisos, archivos, versiones de flyer, idempotencia, lectura, atención humana y persistencia tras reinicio. También cubren las tres regresiones comerciales, versiones concurrentes, tareas editables, migraciones hasta v6, permisos del historial y búsqueda con más de 300 conversaciones. El catálogo prueba fechas, monedas, cupos, promociones solapadas/vencidas/programadas, variables, aprobaciones, acceso por marca, vistas previas obsoletas y conservación del precio y los bytes originales tras editar o archivar. Operación comprueba horarios y cambios estacionales, capacidad global, presencia, reparto, transferencia conjunta, permisos de menciones, SLA, paginación con fechas iguales, toma concurrente y macros idempotentes. No usan Meta ni servicios de IA.
 
 ## Arquitectura y límites del piloto
 

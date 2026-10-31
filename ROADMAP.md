@@ -14,9 +14,13 @@ Pendiente de operación: cargar los nombres oficiales y los aproximadamente 120 
 
 ## 3. Operación del equipo
 
-Usuarios y permisos por marca, invitaciones individuales caducables, restablecimiento de contraseña, asignación por disponibilidad, notas internas, colas, SLA, deduplicación de contactos, historial buscable, etiquetas, auditoría y exportación. Medir primero volumen real para decidir cuándo migrar a PostgreSQL y una cola externa.
+Implementado en v0.5 siguiendo la tercera entrega de la revisión competitiva: cola priorizada y paginada, reparto por marca/carga/disponibilidad/presencia/horarios, límites globales, transferencias con contexto y aceptación, notas con menciones privadas, avisos persistentes y objetivos de primera/siguiente respuesta humana. Macros manuales versionadas con vista previa, acciones atómicas e historial. Conserva usuarios, permisos, invitaciones, recuperación y tareas de entregas anteriores.
 
-## 4. IA con información vigente
+Por configurar por el equipo: horarios oficiales, responsables, límites de carga, integrantes de reparto y plazos de atención de cada marca. El reparto y los objetivos se publican desactivados. Festivos, turnos personales, etiquetas, fusión de contactos, exportación operativa y roles especializados siguen en el backlog; no forman parte del bloque de coordinación de v0.5. Medir el volumen real antes de cambiar a PostgreSQL y una cola externa.
+
+## 4. Automatización e IA supervisada
+
+Siguiente entrega del plan: recetas de seguimiento versionadas y simulables, activadores, condiciones, cancelación por respuesta/intervención/cierre/baja, reintentos y trazas de ejecución. Reutilizar las reglas de reparto y acciones manuales ya probadas. Las macros de v0.5 se aplican por decisión del asesor; no son campañas ni secuencias automáticas.
 
 Precios, fechas, cupos y promociones se consultan en la base estructurada en cada respuesta: no se confían a la memoria del modelo. RAG recupera temarios, políticas y preguntas frecuentes de documentos aprobados, siempre filtrados por marca, curso, edición y vigencia. Versionar documentos e índice; invalidar contenido obsoleto al publicar cambios.
 
