@@ -102,6 +102,12 @@ Sin publicar ni desplegar; los cambios están en el árbol de trabajo, sin confi
 
 El usuario reportó franjas vacías a ambos lados del CRM en su monitor (~1890 px de ancho). Diagnóstico: `.workspace` tenía `max-width:1800px` centrado con bordes laterales, por lo que cualquier ventana mayor de 1800 px dejaba (ancho − 1800)/2 px libres por lado. Se quitó el límite y los bordes en `public/styles.css`. Verificado en navegador emulando 1900 px: el contenedor ocupa 1900 px, sin margen ni desplazamiento horizontal; las 79 pruebas siguen pasando. No se revisó de nuevo móvil ni tableta (el cambio sólo actúa por encima de 1800 px). **Sólo local:** el sitio publicado conserva las franjas hasta el próximo despliegue. Otros límites de ancho existentes (`.entry` 1320 px en el acceso y los de contenido de CRM/catálogo) no se tocaron.
 
+## Publicación v0.6.0 (31 oct 2026)
+
+Publicado por instrucción expresa del usuario: rama `main`, commit funcional `3348ab3` (incluye los commits de 4A/4B, el ajuste de ancho completo y la subida de versión; también el commit documental `9baf1ff`, que hasta entonces sólo existía en local). Esquema esperado: **8**. CI [41222480776](https://github.com/teccapitalweb/tec-capital-crm-laboratorio/actions/runs/41222480776): correcto, 79 pruebas. Railway desplegó automáticamente; `/api/health` devuelve `version: 0.6.0`.
+
+Comprobado en la web publicada, sin iniciar sesión: health 0.6.0; `/recipes.js`, `/recipes.css` y `/operations.js` se sirven con su tipo correcto; `/api/automation` responde 401 sin sesión; el CSS publicado ya no contiene el límite de 1800 px. **No comprobado:** el arranque de la migración v8 sobre la base real (el health sólo prueba que el proceso responde; el respaldo `before-crm-v8-*` debería existir en `/data/backups/`), ni el flujo autenticado de Seguimientos en producción, ni los datos existentes tras migrar. Todo queda desactivado por defecto (ninguna marca tiene la automatización habilitada). Pendiente al retomar: una verificación autenticada con registros de prueba identificados y limpieza al terminar.
+
 ## Pendientes reales
 
 1. **Fase 4:** 4A y primera entrega de 4B hechos localmente (motor durable y recetas por silencio, API sin interfaz, sin publicar); faltan interfaz y más disparadores de 4B, conocimiento aprobado, evaluación y copiloto. Ver [plan detallado](PLAN_FASE_4.md).
