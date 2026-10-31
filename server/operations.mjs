@@ -1,3 +1,4 @@
+import {cancelConversationSteps} from './automation.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {transaction} from './database.mjs';
 import {defaultHours,validateHours,isOpen,serviceDeadline} from './service-hours.mjs';
@@ -32,7 +33,7 @@ export function createOperations({db,crm,catalogue,body,json,audit,broadcast,onl
     if(target){const person=userBy(target);if(!crm.canBrand(person,c.brand_id))throw fail(400,'El destinatario no tiene acceso a la marca.');if(!capacity(c,target))throw fail(409,'El asesor alcanzó su límite de conversaciones abiertas.');}
     const rows=group(c);for(const row of rows){if(row.assigned_to&&row.assigned_to!==c.assigned_to&&row.assigned_to!==target&&u?.role!=='admin')throw fail(409,'Otro chat de esta oportunidad tiene un responsable distinto. Pide revisión a administración.');}
     crm.assignConversation(c,target,u||null);
-    for(const row of rows){state(row);db.prepare("UPDATE conversations SET assigned_to=?,bot_enabled=0,status=?,updated_at=? WHERE id=?").run(target,target?'open':'waiting',now(),row.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(row.id);db.prepare('UPDATE service_state SET revision=revision+1,last_owner=?,queued_since=? WHERE conversation_id=?').run(target,target?null:now(),row.id);cancelTransfers(row,reason,transferId);event(row,u,'assignment',{from:row.assigned_to,to:target,reason});if(target)notify(target,row,'assignment','Conversación asignada: '+reason,'assign:'+row.id+':'+state(row).revision);}
+    for(const row of rows){state(row);db.prepare("UPDATE conversations SET assigned_to=?,bot_enabled=0,status=?,updated_at=? WHERE id=?").run(target,target?'open':'waiting',now(),row.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(row.id);cancelConversationSteps(db,row.id,'human_takeover');db.prepare('UPDATE service_state SET revision=revision+1,last_owner=?,queued_since=? WHERE conversation_id=?').run(target,target?null:now(),row.id);cancelTransfers(row,reason,transferId);event(row,u,'assignment',{from:row.assigned_to,to:target,reason});if(target)notify(target,row,'assignment','Conversación asignada: '+reason,'assign:'+row.id+':'+state(row).revision);}
   }
   function requestHuman(c,since=now()){
     const s=state(c);if(s.waiting_since!==null)return;

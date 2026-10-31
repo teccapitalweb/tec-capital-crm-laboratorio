@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
+import { cancelConversationSteps } from './automation.mjs';
 
 const fail=(status,message,extra={})=>Object.assign(new Error(message),{status,...extra});
 const text=(value,max)=>typeof value==='string'?value.trim().slice(0,max):'';
@@ -96,6 +97,7 @@ export function createFollowup({db,scoped,validOwner,body,json,sendChange,audit,
           assign(o.id,owner,user);
           db.prepare("UPDATE conversations SET assigned_to=?,bot_enabled=0,updated_at=? WHERE id IN (SELECT conversation_id FROM conversation_opportunities WHERE opportunity_id=?) AND status!='resolved'").run(owner,Date.now(),o.id);
           db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id IN (SELECT conversation_id FROM conversation_opportunities WHERE opportunity_id=?) AND state='pending'").run(o.id);
+          for(const link of db.prepare('SELECT conversation_id FROM conversation_opportunities WHERE opportunity_id=?').all(o.id))cancelConversationSteps(db,link.conversation_id,'owner_changed');
         }
       });
       audit(user,'opportunity.updated',opportunity[1]);

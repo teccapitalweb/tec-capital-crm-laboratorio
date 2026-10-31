@@ -51,8 +51,8 @@ npm start
 
 `npm start` usa `.env` si existe. Prepara `.env` desde `.env.example` para una instalación local; consulta el runbook antes de usar datos o accesos existentes.
 
-La referencia de v0.5 es **57 pruebas aprobadas**, revisión visual en computadora/celular y un flujo autenticado publicado con dos asesores y un cliente. Es evidencia de ese commit, no garantía de cambios posteriores.
+La referencia de v0.5 es **57 pruebas aprobadas** (79 con los bloques locales 4A y 4B), revisión visual en computadora/celular y un flujo autenticado publicado con dos asesores y un cliente. Es evidencia de ese commit, no garantía de cambios posteriores.
 
 ## Lo siguiente
 
-La tercera fase del plan competitivo fue **operación del equipo**, ya entregada. La siguiente es **automatización editable e IA supervisada**. Empieza por trabajos durables, cancelaciones, reintentos y trazas; después añade conocimiento aprobado y copiloto. Los detalles y criterios de salida están en [PLAN_FASE_4.md](docs/PLAN_FASE_4.md).
+La tercera fase del plan competitivo fue **operación del equipo**, ya entregada. La siguiente es **automatización editable e IA supervisada**. Los bloques 4A (motor durable, esquema v7) y una primera entrega de 4B (recetas por silencio, esquema v8, API sin interfaz) están implementados localmente sin publicar; sigue completar 4B (interfaz, más disparadores) y después añade conocimiento aprobado y copiloto. Los detalles y criterios de salida están en [PLAN_FASE_4.md](docs/PLAN_FASE_4.md).

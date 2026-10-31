@@ -94,9 +94,13 @@ En la web publicada se comprobó:
 
 Al terminar, se pausó la macro técnica, se cerraron oportunidad/chat/tareas y se suspendieron las dos cuentas técnicas de asesor retirando sus marcas. Los registros históricos de QA permanecen deliberadamente; no son ventas ni actividad de clientes reales. Las pruebas no certifican carga comercial, seguridad completa o recuperación de producción.
 
+## Avance local posterior a v0.5: bloques 4A y 4B (31 oct 2026)
+
+Sin publicar ni desplegar; los cambios están en el árbol de trabajo, sin confirmar en Git. Añade el esquema v7 y el motor de pasos durables descrito en [PLAN_FASE_4.md](PLAN_FASE_4.md#4a-implementado-local-31-oct-2026). `package.json` sigue en `0.5.0`: sube la versión al publicar. Verificación local: `npm run check` y `npm test` con 79 pruebas aprobadas (dos ejecuciones completas seguidas tras añadir 4B; 69 con sólo 4A). En una ejecución anterior falló una vez la prueba de catálogo «vencimientos y material programado…» (espera fija de 1,2 s al trabajo de reglas, en paralelo con el resto de la suite) y no se reprodujo en 6 repeticiones; probable sensibilidad de tiempo bajo carga, no diagnosticada. 4B añade recetas de seguimiento por silencio (esquema v8, ver PLAN_FASE_4); sin interfaz todavía. Tres pruebas existentes se actualizaron de `user_version` 6 a 8. No hay cambios de interfaz, así que no se revisó navegador; tampoco se probó contra Railway.
+
 ## Pendientes reales
 
-1. **Fase 4:** recetas automáticas, cola de ejecución con reintentos/cancelaciones, trazas, conocimiento aprobado, evaluación y copiloto. Ver [plan detallado](PLAN_FASE_4.md).
+1. **Fase 4:** 4A y primera entrega de 4B hechos localmente (motor durable y recetas por silencio, API sin interfaz, sin publicar); faltan interfaz y más disparadores de 4B, conocimiento aprobado, evaluación y copiloto. Ver [plan detallado](PLAN_FASE_4.md).
 2. **Canales oficiales:** activos de Meta, permisos, webhooks, estados del proveedor y políticas/ventanas vigentes, a verificar al implementar.
 3. **Venta real:** pedido, pago, conciliación, matrícula y acceso conectados con los sistemas autorizados.
 4. **Catálogo comercial:** las marcas/cursos/fechas reales, sus responsables y piezas aprobadas todavía deben cargarse y validarse.

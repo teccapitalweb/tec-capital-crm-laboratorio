@@ -52,7 +52,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**. Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con el bloque local 4A son **79** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -61,6 +61,9 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/crm.test.mjs` | Invitaciones, alcance por marca, intereses/tareas, revocación, recuperación y migración |
 | `test/followup.test.mjs` | Tres regresiones comerciales, revisiones concurrentes, edición/historial de tareas, búsqueda fuera de 300 chats y migración |
 | `test/catalogue.test.mjs` | Ediciones, fechas, centavos, promociones, variables, aprobación, permisos, vistas previas, archivo, snapshots/bytes históricos y reinicio |
+| `test/automation.test.mjs` | Motor 4A: migración v7, idempotencia, reintentos, reinicio, carreras de cancelación y pausas (sin servidor; base temporal) |
+| `test/automation-http.test.mjs` | Rutas `/api/automation`: sólo administración, revisiones, pausa global (servidor temporal) |
+| `test/recipes.test.mjs`, `test/recipes-http.test.mjs` | Recetas 4B: validación, simulación sin efectos, no retroactividad, cancelaciones, versiones, ejecución real por API |
 | `test/operations.test.mjs` | Minutos hábiles/DST, reparto, presencia, carga, transferencia conjunta, menciones, SLA, macros atómicas, paginación, revocación y reinicio |
 
 Para iterar en un módulo puede ejecutarse, por ejemplo, `node --test test/operations.test.mjs`. Antes de una entrega funcional, ejecutar la suite pertinente y la regresión completa; no ampliar repetidamente las pruebas sin cambios o dudas nuevas.
@@ -145,7 +148,7 @@ Procedimiento a diseñar y ensayar en entorno aislado:
 6. Arrancar con el código compatible y origen/puerto de prueba. Verificar login, historial, descarga de adjuntos/flyers y ausencia de ejecución accidental de campañas/trabajos futuros.
 7. Documentar resultado y tiempos. Sólo después preparar la recuperación real y su manejo de datos posteriores.
 
-Revertir código no revierte esquema. No ejecutar una versión antigua contra v6 o posteriores sin comprobar compatibilidad. No borrar WAL/SHM manualmente para intentar arreglar una base.
+Con v7 el arranque guarda `backups/before-crm-v7-<timestamp>.sqlite` antes de migrar una base con usuarios y esquema < 8 (el v7 no llegó a publicarse por separado). Revertir código no revierte esquema. No ejecutar una versión antigua contra v6 o posteriores sin comprobar compatibilidad. No borrar WAL/SHM manualmente para intentar arreglar una base.
 
 ## Diagnóstico rápido
 

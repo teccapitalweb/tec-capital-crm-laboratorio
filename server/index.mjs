@@ -15,16 +15,21 @@ import { migrateCatalogue, defaultEditionId, seedBrandTemplates } from './catalo
 import { createCatalogue } from './catalogue.mjs';
 import {migrateOperations} from './operations-schema.mjs';
 import {createOperations} from './operations.mjs';
+import {migrateAutomation,migrateRecipes} from './automation-schema.mjs';
+import {createRecipes} from './recipes.mjs';
+import {createAutomation,cancelConversationSteps} from './automation.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<6&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v6-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<8&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v8-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
 migrateOperations(db);
+migrateAutomation(db);
+migrateRecipes(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -73,6 +78,8 @@ function disconnect(userId){for(const [socket,user]of sessions)if(user.id===user
 const crm=createCRM({db,body,json,audit,passwordHash,checkPassword,rate,disconnect,broadcast});
 const catalogue=createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer});
 const operations=createOperations({db,crm,catalogue,body,json,audit,broadcast,online,insertMessage});
+const automation=createAutomation({db,onChange:step=>{if(step.conversation_id)broadcast('conversation',step.conversation_id);broadcast('crm',null,{brandId:step.brand_id});}});
+const recipes=createRecipes({db,catalogue,automation,insertMessage,broadcast,body,json,audit});
 async function body(req){
   let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>5_800_000)throw fail(413,'El archivo es demasiado grande. Máximo 4 MB.');chunks.push(chunk);}
   try{const data=JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}');if(!data||typeof data!=='object'||Array.isArray(data))throw Error();return data;}catch{throw fail(400,'Solicitud no válida.');}
@@ -118,9 +125,20 @@ function botReply(c,trigger){
   insertMessage(c,null,reply,'automation',ref,null,prepared?.flyerSnapshot?course.id:null,prepared);
   if(stage)crm.setStage(c,stage);if(handoff){db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);}
 }
+const JOB_MAX_ATTEMPTS=5,JOB_BASE_DELAY=2000,JOB_CAP_DELAY=5*60_000;
+function jobFailed(job,error){
+  const attempts=job.attempts+1,message=String(error?.message||error).replace(/[ -]+/g,' ').slice(0,200),t=Date.now();
+  try{transaction(db,()=>{
+    if(attempts>=JOB_MAX_ATTEMPTS){
+      db.prepare("UPDATE jobs SET state='cancelled',attempts=?,last_error=? WHERE id=? AND state='pending'").run(attempts,message,job.id);
+      const brand=db.prepare('SELECT brand_id FROM conversations WHERE id=?').get(job.conversation_id);
+      if(brand)db.prepare("INSERT INTO automation_events(step_id,brand_id,kind,details,created_at) VALUES(NULL,?,?,?,?)").run(brand.brand_id,'legacy_job_abandoned',JSON.stringify({jobId:job.id,attempts,error:message}),t);
+    }else db.prepare("UPDATE jobs SET attempts=?,last_error=?,next_attempt_at=? WHERE id=? AND state='pending'").run(attempts,message,t+Math.min(JOB_CAP_DELAY,JOB_BASE_DELAY*2**(attempts-1)),job.id);
+  });}catch(e){console.error('Automation job bookkeeping failed',e.name);}
+}
 function processJobs(){
-  const jobs=db.prepare("SELECT * FROM jobs WHERE state='pending' AND due_at<=? LIMIT 15").all(Date.now());
-  for(const job of jobs){try{transaction(db,()=>{const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(job.conversation_id);if(!c.bot_enabled||c.assigned_to||c.status!=='open'){db.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").run(job.id);return;}const trigger=db.prepare('SELECT * FROM messages WHERE id=?').get(job.message_id);botReply(c,trigger);db.prepare("UPDATE jobs SET state='done' WHERE id=?").run(job.id);});broadcast('conversation',job.conversation_id);}catch(error){console.error('Automation job failed',error.name);}}
+  const jobs=db.prepare("SELECT * FROM jobs WHERE state='pending' AND due_at<=? AND (next_attempt_at IS NULL OR next_attempt_at<=?) LIMIT 15").all(Date.now(),Date.now());
+  for(const job of jobs){try{transaction(db,()=>{const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(job.conversation_id);if(!c.bot_enabled||c.assigned_to||c.status!=='open'){db.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").run(job.id);return;}const trigger=db.prepare('SELECT * FROM messages WHERE id=?').get(job.message_id);botReply(c,trigger);db.prepare("UPDATE jobs SET state='done' WHERE id=?").run(job.id);});broadcast('conversation',job.conversation_id);}catch(error){console.error('Automation job failed',error.name);jobFailed(job,error);}}
 }
 function attachmentData(input){
   if(!input)return null;const filename=clean(input.name,120).replace(/[\r\n\x00-\x1f]/g,'');const mime=input.type;
@@ -171,6 +189,8 @@ const server=http.createServer(async(req,res)=>{
     if(path.startsWith('/api/')){
       const user=requireUser(req);
       if(await operations.handle(req,res,path,user))return;
+      if(await recipes.handle(req,res,path,user))return;
+      if(await automation.handle(req,res,path,user,{body,json,audit}))return;
       if(await catalogue.handle(req,res,path,user))return;
       if(await crm.handle(req,res,path,user))return;
       if(req.method==='POST'&&path==='/api/auth/logout'){db.prepare('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash);for(const [ws,u]of sessions)if(u.token_hash===user.token_hash)ws.close(1000,'Sesión cerrada');res.setHeader('Set-Cookie','tc_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'+(production?'; Secure':''));return json(res,200,{ok:true});}
@@ -212,7 +232,7 @@ const server=http.createServer(async(req,res)=>{
             const current=accessConversation(c.id,user);if(current.status==='resolved')throw fail(409,'La conversación se cerró mientras enviabas.');
             if(!isCustomer&&current.assigned_to&&current.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor tomó la conversación.');
             if(attachment)db.prepare('INSERT INTO attachments VALUES(?,?,?,?,?,?,?,?)').run(attachmentId,c.id,user.id,attachment.filename,attachment.storageName,attachment.mime,attachment.buffer.length,Date.now());
-            if(!isCustomer){crm.assignConversation(c,user.id);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);}
+            if(!isCustomer){crm.assignConversation(c,user.id);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);cancelConversationSteps(db,c.id,'human_takeover');}
             messageId=insertMessage(c,user,text,isCustomer?'customer':'agent',ref,attachmentId);
             if(isCustomer&&current.bot_enabled&&!current.assigned_to)db.prepare('INSERT INTO jobs(id,conversation_id,message_id,due_at) VALUES(?,?,?,?)').run(randomUUID(),c.id,messageId,Date.now()+700);
           });}catch(error){if(attachment)await unlink(resolve(dataDir,'uploads',attachment.storageName)).catch(()=>{});throw error;}
@@ -232,7 +252,7 @@ const server=http.createServer(async(req,res)=>{
           else if(input.action==='stage'&&['nuevo','interesado','inscripcion','inscrito','ganada','perdida'].includes(input.stage)){crm.setStage(c,input.stage,user,input);}
           else throw fail(400,'Acción no válida.');
           if(['resolve','automate'].includes(input.action))operations.reset(c,input.action==='resolve'?'resolved':'automation.resumed',user);
-          if(input.action!=='stage')db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);
+          if(input.action!=='stage'){db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);cancelConversationSteps(db,c.id,'conversation_action');}
           audit(user,'conversation.'+input.action,c.id);
         });broadcast('conversation',action[1]);return json(res,200,{ok:true});
       }
@@ -242,7 +262,7 @@ const server=http.createServer(async(req,res)=>{
         const prepared=catalogue.prepare(c,input),text=prepared.text;
         const clientRef=clean(input.clientRef,100);if(!/^[a-zA-Z0-9-]{16,100}$/.test(clientRef)||!['syllabus','price','flyer'].includes(input.kind))throw fail(400,'Plantilla o referencia no válida.');const ref=user.id+':'+clientRef;
         const existing=db.prepare('SELECT conversation_id FROM messages WHERE client_ref=?').get(ref);if(existing&&existing.conversation_id!==c.id)throw fail(409,'Referencia ya utilizada.');
-        if(!db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref)){transaction(db,()=>{crm.assignConversation(c,user.id);insertMessage(c,user,text,'agent',ref,null,prepared.flyerSnapshot?c.course_id:null,prepared);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);});broadcast('conversation',c.id);}return json(res,200,{ok:true});
+        if(!db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref)){transaction(db,()=>{crm.assignConversation(c,user.id);insertMessage(c,user,text,'agent',ref,null,prepared.flyerSnapshot?c.course_id:null,prepared);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);cancelConversationSteps(db,c.id,'human_takeover');});broadcast('conversation',c.id);}return json(res,200,{ok:true});
       }
       const file=path.match(/^\/api\/files\/([a-f0-9-]+)$/);
       if(file&&req.method==='GET'){const f=db.prepare('SELECT * FROM attachments WHERE id=?').get(file[1]);if(!f)throw fail(404,'Archivo no disponible.');accessConversation(f.conversation_id,user);const bytes=await readFile(resolve(dataDir,'uploads',f.storage_name));res.writeHead(200,{'Content-Type':f.mime,'Content-Disposition':`${f.mime==='application/pdf'?'attachment':'inline'}; filename*=UTF-8''${encodeURIComponent(f.filename)}`});return res.end(bytes);}
@@ -269,7 +289,7 @@ const server=http.createServer(async(req,res)=>{
       throw fail(404,'Ruta no disponible.');
     }
     if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'Método no permitido.');
-    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
     const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.',...(error.status&&error.code?{code:error.code}:{}),...(error.status&&error.activeOpportunityId?{activeOpportunityId:error.activeOpportunityId}:{})});}
 });
@@ -286,7 +306,8 @@ server.on('upgrade',(req,socket,head)=>{
 });
 const jobsTimer=setInterval(processJobs,350);
 const operationsTimer=setInterval(()=>{try{operations.reconcile();}catch(e){console.error('Operations tick failed:',e.name,e.message);}},1000);
+const automationTimer=setInterval(()=>{try{recipes.scan();}catch(e){console.error('Recipe scan failed:',e.name);}automation.tick().catch(e=>console.error('Automation tick failed:',e.name));},1000);
 const heartbeat=setInterval(()=>{for(const [ws,user]of sessions){if(!ws.isAlive||user.expires_at<Date.now()||!db.prepare('SELECT token_hash FROM sessions WHERE token_hash=?').get(user.token_hash)){ws.terminate();continue;}ws.isAlive=false;ws.ping();}const now=Date.now();for(const [key,value]of limits)if(value.end<now)limits.delete(key);db.prepare('DELETE FROM sessions WHERE expires_at<?').run(now);},30000);
 server.listen(port,host,()=>console.log(`TEC Capital Laboratorio: http://${host}:${server.address().port}`));
-function stop(){clearInterval(jobsTimer);clearInterval(operationsTimer);clearInterval(heartbeat);for(const ws of sessions.keys())ws.close(1001,'Servidor reiniciando');server.close(()=>{db.close();process.exit(0);});setTimeout(()=>process.exit(0),1500).unref();}
+function stop(){clearInterval(jobsTimer);clearInterval(operationsTimer);clearInterval(automationTimer);clearInterval(heartbeat);for(const ws of sessions.keys())ws.close(1001,'Servidor reiniciando');server.close(()=>{db.close();process.exit(0);});setTimeout(()=>process.exit(0),1500).unref();}
 process.on('SIGTERM',stop);process.on('SIGINT',stop);

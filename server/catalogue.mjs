@@ -2,6 +2,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {readFile,writeFile,unlink,mkdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {transaction} from './database.mjs';
+import {cancelConversationSteps} from './automation.mjs';
 import {defaultEditionId,ensureDefaultEdition} from './catalogue-schema.mjs';
 import {artworkAsset} from './demo-catalog.mjs';
 
@@ -134,7 +135,7 @@ export function createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,a
             if(current.status==='resolved')throw fail(409,'La conversación está cerrada.');if(current.assigned_to&&current.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor está atendiendo.');
             const prepared=prepare(current,input);if(input.previewToken!==prepared.previewToken)throw fail(409,'La información cambió o venció. Vuelve a previsualizar antes de enviar.');
             crm.assignConversation(current,user.id);const id=insertMessage(current,user,prepared.text,'agent',ref,null,prepared.flyerSnapshot?current.course_id:null,prepared);
-            db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,current.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(current.id);
+            db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,current.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(current.id);cancelConversationSteps(db,current.id,'human_takeover');
             result={id,duplicate:false};
           }else result=prepare(current,input);
         });

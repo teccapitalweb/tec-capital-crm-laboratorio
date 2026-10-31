@@ -1,6 +1,6 @@
 # Fase 4 propuesta: automatización e IA supervisada
 
-**Estado: pendiente, no implementada.** Este documento convierte el siguiente bloque del [ROADMAP](../ROADMAP.md) en trabajo ejecutable. Documentar este plan no activa campañas, conecta APIs ni autoriza gastos. El usuario pidió el traspaso para que Claude continúe en esta misma computadora.
+**Estado: 4A y una primera entrega de 4B implementados localmente (esquema v7–v8, sin publicar); 4C–4E pendientes.** Ver [“4A implementado”](#4a-implementado-local-31-oct-2026) más abajo. Este documento convierte el siguiente bloque del [ROADMAP](../ROADMAP.md) en trabajo ejecutable. Documentar este plan no activa campañas, conecta APIs ni autoriza gastos. El usuario pidió el traspaso para que Claude continúe en esta misma computadora.
 
 ## Resultado buscado
 
@@ -52,7 +52,40 @@ La baja/consentimiento aún no existe: si se implementan seguimientos proactivos
 
 Una cancelación que compite con el envío debe resolverse con estado/revisión e idempotencia en el servidor. Una marca de “cancelado” en la UI no detiene por sí sola un worker.
 
+### 4A implementado (local, 31 oct 2026)
+
+Esquema **v7**, aditivo (`server/automation-schema.mjs`) y motor `server/automation.mjs`. Todo queda **desactivado por defecto**: sin fila en `automation_settings` la marca no encola; `automation_global.paused` detiene todo.
+
+- `automation_steps`: estados `pending`/`reserved`/`completed`/`cancelled`/`failed`; `dedupe_key` único (encolar dos veces devuelve el mismo paso; reutilizarla para otro tipo/marca/conversación es 409); `attempts`/`max_attempts` (4 por defecto, máx. 10); `next_attempt_at`; arrendamiento (`lease_owner`, `lease_until`); error saneado (200 caracteres) y `cancel_reason`.
+- `automation_events`: traza por paso (`created`, `reserved`, `retry_scheduled`, `lease_expired`, `paused`, `cancelled`, `completed`, `failed`, `manual_retry`) con autor cuando es manual.
+- Manejadores por tipo de paso: `check` (síncrono; antes de la llamada **y** dentro de la transacción del efecto), `call` (opcional, asíncrono, **fuera** de la transacción, con tiempo límite de 30 s) y `commit` (síncrono; efecto y estado `completed` en la misma transacción).
+- Reintentos con espera exponencial (5 s, tope 15 min); errores con `permanent=true` o `status` 4xx fallan sin reintentar; agotar intentos deja el paso `failed`, visible y reanudable por administración.
+- Reinicio: un paso `reserved` con arrendamiento vencido vuelve a `pending` (o `failed` si agotó intentos) sin haber producido efecto, porque el efecto sólo se confirma en la transacción que lo marca completado.
+- Cancelación: `cancelConversationSteps()` se invoca donde ya se cancelaban los `jobs` (toma humana, material/plantilla del asesor, reparto, acciones de chat distintas de etapa y cambio de responsable de la oportunidad). Un resultado tardío de un intento anterior o de un paso cancelado se descarta (estado + propietario + número de intento).
+- Pausa: por marca (`enabled`, con `expectedRevision`) y global; un paso de una marca pausada queda `pending` sin consumir intentos.
+- `jobs` heredado (respuestas por reglas): ahora cuenta intentos con espera creciente y, tras 5 fallos, se cancela con `last_error` y un evento `legacy_job_abandoned`. Su comportamiento normal no cambia.
+- API (sólo administración): `GET /api/automation`, `GET /api/automation/steps?state=&brand=`, `GET /api/automation/steps/:id/events`, `POST /api/automation/steps/:id/retry|cancel`, `PATCH /api/automation/brands/:id`, `PATCH /api/automation/global`. Aún **no hay interfaz** ni ningún tipo de paso registrado en producción: los manejadores reales llegan con 4B.
+- Pruebas: `test/automation.test.mjs` (migración, desactivado por defecto, idempotencia, atomicidad, reintentos y fallo, permanentes/tiempo límite, reinicio, arrendamientos repetidos, carreras de cancelación, intento tardío, pausas). `test/automation-http.test.mjs` cubre permisos, revisiones, pausa global y errores de las rutas (no el flujo con pasos reales, que aún no existen).
+- Pendiente de 4A: cancelación por respuesta del cliente (la implementa el `check` de cada receta), baja/consentimiento (aún no existe), cancelar al suspender usuarios o retirar marcas (cada `check` debe revalidar permisos) y panel visual.
+
 ## 4B. Recetas editables y explicables
+
+### 4B implementado (primera entrega local, 31 oct 2026)
+
+Esquema **v8** (`automation_recipes`, `automation_recipe_versions`, `automation_runs`) y `server/recipes.mjs`. Reutiliza el motor 4A: cada ejecución es **un solo paso `recipe.run`** cuyo efecto completo (mensaje + tarea + aviso) se confirma en una transacción. Depende de que la marca tenga la automatización habilitada (4A); sigue todo desactivado por defecto.
+
+- **Disparador único: `silence`.** El último mensaje de la conversación es del equipo o de las reglas, el cliente no responde en N minutos (5 a 43 200) y la conversación está abierta. Sólo cuenta mensajes posteriores a la publicación y de la última semana (no es retroactivo). Un barrido cada 5 s programa el paso en `mensaje + N minutos`.
+- **Condiciones:** curso, edición y etapas abiertas (`nuevo`, `interesado`, `inscripcion`).
+- **Acciones (1 a 3, sin repetir tipo):** `template` (plantilla aprobada de la marca, enviada como mensaje de automatización con la oferta vigente al momento del envío), `task` (tarea con plazo, a nombre del responsable de la oportunidad o del chat; si no hay, sin responsable) y `notify` (aviso interno al responsable, o a administración si no lo hay). No cambian etapas ni confirman ventas.
+- **Estados y versiones:** borrador, publicada, pausada; cada cambio sube la revisión (`expectedRevision` obligatorio) y guarda una versión. Editar o pausar cancela los pasos pendientes (`recipe_edited`, `recipe_paused`). Publicar exige plantillas aprobadas. **Decisión:** una ejecución ya programada conserva la definición con la que nació (queda en el payload del paso) y sólo se detiene si la receta se pausa o edita.
+- **Cancelación (antes de la llamada y justo antes del efecto):** `customer_replied`, `conversation_changed`, `conversation_closed`, `opportunity_closed`, `stage_changed`, `scope_changed`, `recipe_paused`, `human_takeover`, `material_unavailable`. La toma humana también cancela vía `cancelConversationSteps`.
+- **La acción `template` no se envía si una persona controla la conversación** (asignada o fuera de modo reglas). En la práctica, tras un mensaje de un asesor sólo se ejecutan recetas con `task` y `notify`; el envío de plantilla aplica cuando el último mensaje fue de las reglas y nadie tomó el chat.
+- **Sin bucles:** una receta completada en una conversación no vuelve a dispararse hasta que el cliente responda (su propio mensaje no la reactiva). Se detectó con la prueba de extremo a extremo.
+- **Simulación:** `POST /api/automation/recipes/:id/simulate` evalúa cada condición con explicación, la hora prevista y la vista previa de las acciones, y acepta una definición no guardada. Una prueba comprueba que no cambia mensajes, tareas, avisos, pasos ni eventos.
+- **API (sólo administración):** `GET/POST /api/automation/recipes`, `GET/PATCH /api/automation/recipes/:id`, `POST …/:id/publish|pause|simulate`, `GET …/:id/history|runs`.
+- **Pruebas:** `test/recipes.test.mjs` (9, motor con reloj controlado) y `test/recipes-http.test.mjs` (servidor real: permisos, simulación sin efectos, ejecución con plantilla real del catálogo, tarea y aviso, sin repetición, pausa e historial; retrocede el reloj de un mensaje en la base de pruebas porque no se puede acelerar).
+- **Interfaz (local):** pestaña **Seguimientos** dentro de Operación, sólo administración (`public/recipes.js`, `public/recipes.css`, integrada desde `operations.js`). Panel de automatización por marca (activar/desactivar) y pausa global; tarjetas de receta con estado; formulario de borrador (marca, minutos, curso, etapas, plantilla/tarea/aviso); simulación contra una conversación abierta con la lista de condiciones, hora prevista y vista previa; publicar/pausar; ejecuciones con motivo de cancelación; versiones. Revisada en navegador a escritorio y 390 px sin desbordamiento horizontal ni errores de consola nuevos; la prueba de extremo a extremo valida que los estáticos nuevos se sirvan.
+- **Pendiente de 4B:** más disparadores (solicitud de información/inscripción, petición de asesor, tarea vencida), esperas entre acciones, comprobar que el responsable sigue autorizado en la marca, límites de frecuencia por marca, baja/consentimiento antes de seguimientos proactivos.
 
 Primera interfaz: lista de recetas por marca, formulario de pasos, borrador/publicada/pausada, versiones, simulación y lista de ejecuciones. Mantener un conjunto limitado de activadores, condiciones y acciones; no aceptar JavaScript arbitrario ni `eval`.
 
