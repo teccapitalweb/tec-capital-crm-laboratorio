@@ -1,0 +1,75 @@
+/* Niebla · capa de pulido. Sólo refina (tipografía, movimiento, estados, escala de superficies): no cambia estructura,
+   composición compacta ni colores de marca/canal. Se carga al final para poder afinar sin tocar cada hoja. */
+:root{
+  --text-1:var(--ink);--text-2:#4b515c;--text-3:#636977;
+  --shadow-1:0 1px 2px #1a1a2a0a,0 1px 1px #1a1a2a05;
+  --shadow-2:0 8px 20px -10px #1a1a2a2e,0 2px 5px #1a1a2a0a;
+  --ease:cubic-bezier(.2,.7,.2,1);
+  --ring:#3b414c;
+}
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;-webkit-text-size-adjust:100%}
+::selection{background:#dde1ec;color:var(--ink)}
+*{scrollbar-width:thin;scrollbar-color:#cfd3dd transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#d3d6df;border-radius:10px;border:3px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:#b6bcc8;background-clip:content-box}
+
+/* Tipografía: números alineados, títulos equilibrados y textos sin líneas huérfanas */
+h1,h2,h3,.eyebrow{text-wrap:balance}
+p,.crm-hint,.muted{text-wrap:pretty}
+.an-kpi strong,.day-stat strong,.ops-stat strong,.unread,.source-count,.count,.pipeline-heading>span,.ops-counter,time,.thread-meta,.pill,.ops-chip,.ctc-tag,.crm-table td,.crm-table th,.profile-number{font-variant-numeric:tabular-nums}
+.eyebrow{letter-spacing:.09em}
+.page-heading h1,.content-page h1{letter-spacing:-.035em}
+
+/* Estados: pasar el cursor, presionar y enfocar con teclado, todos con la misma gramática */
+.btn,.cat-tabs button,.nav button,.mode-picker button,.source-tab,.thread,.crm-list-row,.contact-link,.opportunity-card,.ops-stat,input,select,textarea{transition:background-color .16s var(--ease),border-color .16s var(--ease),box-shadow .2s var(--ease),transform .16s var(--ease),color .16s var(--ease)}
+.btn:hover{border-color:#d7dae4}
+.btn:active{transform:translateY(1px) scale(.985)}
+.btn.primary:hover{filter:brightness(1.18)}
+.btn[disabled],.btn:disabled{opacity:.55;cursor:not-allowed}
+.opportunity-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-2);border-color:#dadde7}
+.opportunity-card:active{transform:none;box-shadow:var(--shadow-1)}
+.ops-stat:hover{border-color:#d3d7e2}
+.nav button:active{transform:scale(.985)}
+input:hover,select:hover,textarea:hover{border-color:#d5d9e3}
+input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid #3b414c2e;outline-offset:1px;border-color:#9aa2b5}
+button:focus-visible,a:focus-visible,[role=button]:focus-visible,summary:focus-visible{outline:2px solid var(--ring);outline-offset:2px;border-radius:10px}
+
+/* Movimiento: sólo al navegar y al abrir diálogos (nunca en las actualizaciones en vivo, para que nada parpadee) */
+@keyframes niebla-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes niebla-pop{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes niebla-fade{from{opacity:0}to{opacity:1}}
+@keyframes niebla-pulse{50%{opacity:.5}}
+#page.enter{animation:niebla-rise .32s var(--ease)}
+dialog[open]{animation:niebla-pop .24s var(--ease)}
+dialog::backdrop{animation:niebla-fade .2s ease}
+#toast{transition:opacity .2s var(--ease),transform .2s var(--ease)}
+.loading-message,.boot p{animation:niebla-pulse 1.5s ease-in-out infinite}
+
+/* Bloque de usuario del menú: el rol ya no se corta y el nombre completo está en la ayuda al pasar el cursor */
+.user-card small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-card>button:first-child{flex:1 1 auto}
+.user-card>.icon-btn{flex:0 0 auto}
+.user-card .user-copy{flex:1;min-width:0}
+.user-card strong{letter-spacing:-.01em}
+
+/* Superficies: la misma sombra suave en tarjetas elevadas */
+.crm-panel,.an-kpi,.day-stat{box-shadow:var(--shadow-1)}
+.crm-panel:where(:hover){box-shadow:var(--shadow-1)}
+
+@media (prefers-reduced-motion:reduce){
+  #page.enter,dialog[open],dialog::backdrop,.loading-message,.boot p{animation:none!important}
+  .btn:active,.opportunity-card:hover,.nav button:active{transform:none}
+}
+@media (hover:none){.opportunity-card:hover{transform:none;box-shadow:none}}
+
+/* Táctil: áreas de toque de al menos 40 px sin mover la composición (el margen negativo compensa el relleno) */
+@media (pointer:coarse),(max-width:680px){
+  .btn{min-height:40px}
+  .sidebar .nav button{min-width:40px;min-height:40px}
+  .text-link,.cat-tabs button,.source-tab{position:relative}
+  .text-link::after,.cat-tabs button::after{content:"";position:absolute;inset:-10px -6px}
+  .mode-picker button{min-height:36px}
+  .search input,.crm-toolbar input{min-height:24px}
+}

@@ -246,6 +246,17 @@ Publicado por instrucción expresa del usuario: `main`, commit funcional `8c8c17
 
 Comprobado en la web publicada sin iniciar sesión: versión 0.13.0; los 15+ archivos de la interfaz publicados son idénticos a los de Git; `/api/mfa` responde 401 sin sesión; el segundo paso del acceso rechaza un origen ajeno (403) y un desafío inventado (401); el inicio de sesión con credenciales falsas sigue dando 401 con el mensaje habitual. **No comprobado:** que el inicio de sesión de las cuentas reales siga funcionando tras este cambio en el flujo de acceso (hay pruebas automáticas y la simulación v0.5→v0.11, pero no con tus cuentas), la migración v12 en producción, ni lo pendiente acumulado (respaldos `auto-*`, datos reales, flujos autenticados). **Ocho versiones publicadas (0.6 a 0.13) sin verificación autenticada en producción.** El 2FA es opcional y nadie lo tiene activado todavía. Si lo activas, guarda `mfa.key`/`MFA_KEY` aparte (no va en los respaldos).
 
+## Refinamiento visual (rama `feat/refinamiento-visual`, local, 31 oct 2026)
+
+Sin cambios de datos ni de esquema (sigue en 12). Se mantiene la identidad **Niebla**; el refinamiento se guio por una **auditoría medible** (contraste, tamaño de letra, áreas táctiles, desbordamiento) en las nueve vistas de equipo con datos de práctica variados. Reglas y herramienta para repetirla: [DISENO_Y_AUDITORIA.md](DISENO_Y_AUDITORIA.md). **Sin publicar.**
+
+- **Legibilidad:** más de 290 textos secundarios tenían un contraste de 2,6–4,4:1 (el mínimo accesible es 4,5:1) y 140 textos medían 9–10 px. Los grises de texto se unificaron en dos tokens (`--text-2`, `--text-3`/`--muted`, 5,5:1 sobre blanco) y las letras de 9–10 px pasaron a 11 px, con un script que sólo toca declaraciones `color:` (sin `#fff`) y respeta iconos decorativos, precios tachados y tareas hechas. Resultado: 0 textos bajo 4,5:1 y 0 bajo 11 px en las nueve vistas; el aspecto sigue siendo el mismo, con el texto de apoyo algo más oscuro.
+- **Capa de pulido** (`public/polish.css`, se carga al final): suavizado tipográfico, números tabulares, títulos equilibrados, selección y barras de desplazamiento finas; transiciones y estados al pasar el cursor y al presionar; foco de teclado consistente; animación de entrada **sólo al cambiar de vista** (`#page.enter`, disparada desde `setView`) y al abrir diálogos, nunca en las actualizaciones en vivo; `prefers-reduced-motion` respetado.
+- **Menú:** el botón de cerrar sesión (sólo un icono) ocupaba la mitad del bloque de usuario y cortaba el nombre y el rol («Migu… / Admini…»); ahora se leen completos y el nombre completo está en la ayuda al pasar el cursor.
+- **Móvil:** sin desplazamiento horizontal en ninguna pantalla a 390 px; áreas táctiles de ~40 px (botones y menú) y área ampliada en enlaces de texto sin mover la composición.
+- **Proceso:** la capa de pulido no se aplicó la primera vez porque el servidor de pruebas arrancó antes de registrar el archivo nuevo; se detectó midiendo (el archivo respondía 404) y se repitió la auditoría con la capa activa. La prueba de rutas estáticas ahora incluye `/polish.css`.
+- **Fuera de alcance a propósito:** modo oscuro y rediseño de componentes (ver el documento de diseño).
+
 ## Pendientes reales
 
 0b. **Recetas:** esperas entre acciones (secuencias), disparadores de inscripción/información y oportunidad estancada.
