@@ -32,7 +32,7 @@ export function createFollowup({db,scoped,validOwner,body,json,sendChange,audit,
   }
   function checkActive(o,stage){
     if(!closed(stage)){
-      const active=db.prepare("SELECT id FROM opportunities WHERE contact_id=? AND course_id=? AND id!=? AND stage NOT IN ('ganada','perdida')").get(o.contact_id,o.course_id,o.id);
+      const active=db.prepare("SELECT id FROM opportunities WHERE contact_id=? AND course_id=? AND edition_id=? AND id!=? AND stage NOT IN ('ganada','perdida')").get(o.contact_id,o.course_id,o.edition_id,o.id);
       if(active)throw fail(409,'Ya existe otra oportunidad activa para este contacto y curso. Puedes abrirla para continuar.',{code:'ACTIVE_INTEREST',activeOpportunityId:active.id});
     }
   }

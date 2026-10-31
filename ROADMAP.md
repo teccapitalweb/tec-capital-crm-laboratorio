@@ -8,7 +8,9 @@ Práctica recomendada: cinco clientes y dos asesores. Enviar “Hola”, pedir t
 
 ## 2. Catálogo de las 15 marcas
 
-Cargar nombres oficiales y los aproximadamente 120 cursos iniciales sin inventar información comercial. Separar curso de edición, fechas, zona horaria, docente, cupos, moneda, vigencia de promoción y enlaces. Añadir biblioteca de flyers propios con aprobación, versión y caducidad, plantillas por etapa y marca. Impedir enviar promociones vencidas.
+Base implementada en v0.4: curso separado de edición, fechas y zona horaria, docente, cupos informativos, moneda, vigencia de promoción y enlaces. Biblioteca de flyers propios con aprobación interna, versiones, caducidad e historial; plantillas por escenario y marca con variables y vista previa. El envío bloquea promociones vencidas y material desactualizado y conserva la oferta exacta enviada.
+
+Pendiente de operación: cargar los nombres oficiales y los aproximadamente 120 cursos iniciales con sus fechas, responsables y piezas aprobadas. No inventar información comercial. El catálogo conserva tres marcas y seis cursos de demostración; permite añadir las demás marcas y crea seis plantillas iniciales por marca. Importación masiva, reserva de cupos y editor gráfico de flyers todavía no están incluidos.
 
 ## 3. Operación del equipo
 
@@ -39,4 +41,4 @@ Primero una marca y uno o dos cursos con supervisión humana. Medir mensajes per
 - Simulación → Meta: activos y permisos disponibles, webhooks validados y plantillas aprobadas cuando correspondan.
 - Una marca → quince: separación de datos/contexto, responsables del catálogo, métricas y monitoreo.
 
-La base diseñada para el laboratorio demuestra los flujos. La seguridad operativa, los permisos por marca y la infraestructura de producción son trabajo de las fases siguientes, no capacidades implícitas del prototipo.
+La base diseñada para el laboratorio demuestra los flujos e incluye permisos por marca. Antes de operación comercial siguen siendo necesarios respaldos y restauración ensayados, retención, observabilidad, pruebas de carga y revisión de seguridad de las integraciones reales.

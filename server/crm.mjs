@@ -1,6 +1,7 @@
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { createFollowup } from './followup.mjs';
+import { defaultEditionId } from './catalogue-schema.mjs';
 
 const tokenHash=value=>createHash('sha256').update(value).digest('hex');
 const fail=(status,message)=>Object.assign(new Error(message),{status});
@@ -56,15 +57,16 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
     audit(user,'team.invite.accepted',invite.id);
   };
   function syncConversation(c){
+    if(!c.edition_id){c.edition_id=defaultEditionId(c.course_id);db.prepare('UPDATE conversations SET edition_id=? WHERE id=?').run(c.edition_id,c.id);}
     const existing=db.prepare('SELECT opportunity_id FROM conversation_opportunities WHERE conversation_id=?').get(c.id);
     if(existing)return existing.opportunity_id;
     const now=Date.now(),person=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id);
     let contact=db.prepare('SELECT * FROM contacts WHERE source_user_id=? AND brand_id=?').get(c.customer_id,c.brand_id);
     if(!contact){const id=randomUUID();db.prepare('INSERT INTO contacts(id,brand_id,source_user_id,name,source,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,c.brand_id,c.customer_id,person.name,'laboratorio',now,now);contact={id};}
-    let opportunity=db.prepare("SELECT * FROM opportunities WHERE contact_id=? AND course_id=? AND stage NOT IN ('ganada','perdida')").get(contact.id,c.course_id);
+    let opportunity=db.prepare("SELECT * FROM opportunities WHERE contact_id=? AND course_id=? AND edition_id=? AND stage NOT IN ('ganada','perdida')").get(contact.id,c.course_id,c.edition_id);
     if(!opportunity){
       const id=randomUUID(),stage=c.stage==='inscrito'?'ganada':c.stage,owner=c.assigned_to&&canBrand(db.prepare('SELECT * FROM users WHERE id=?').get(c.assigned_to),c.brand_id)?c.assigned_to:null;
-      db.prepare('INSERT INTO opportunities(id,contact_id,brand_id,course_id,stage,owner_id,lost_reason,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').run(id,contact.id,c.brand_id,c.course_id,stage,owner,'',c.created_at,now);
+      db.prepare('INSERT INTO opportunities(id,contact_id,brand_id,course_id,stage,owner_id,lost_reason,created_at,updated_at,edition_id) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,contact.id,c.brand_id,c.course_id,stage,owner,'',c.created_at,now,c.edition_id);
       opportunity={id,stage};
       followup.stageEvent(id,null,null,stage,'','initial');
       if(stage!=='ganada'){const taskId=randomUUID();db.prepare('INSERT INTO tasks(id,opportunity_id,brand_id,title,owner_id,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').run(taskId,id,c.brand_id,'Dar seguimiento al interés',owner,now+86400000,now,now);followup.taskCreated(taskId,null);}
@@ -91,7 +93,7 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
   function snapshot(user){
     const ids=brandsFor(user).map(b=>b.id),placeholders=ids.map(()=>'?').join(',')||'NULL';
     const contacts=db.prepare(`SELECT c.*,u.test_number,(SELECT count(*) FROM opportunities o WHERE o.contact_id=c.id AND o.stage NOT IN ('ganada','perdida')) active_interests FROM contacts c LEFT JOIN users u ON u.id=c.source_user_id WHERE c.brand_id IN (${placeholders}) ORDER BY c.updated_at DESC`).all(...ids);
-    const opportunities=db.prepare(`SELECT o.*,c.name contact_name,k.title course_title,k.price_cents,u.name owner_name,(SELECT MIN(due_at) FROM tasks t WHERE t.opportunity_id=o.id AND t.status='open') next_due,(SELECT group_concat(conversation_id) FROM conversation_opportunities co WHERE co.opportunity_id=o.id) conversation_ids,(SELECT co.conversation_id FROM conversation_opportunities co JOIN conversations v ON v.id=co.conversation_id WHERE co.opportunity_id=o.id ORDER BY v.updated_at DESC LIMIT 1) conversation_id FROM opportunities o JOIN contacts c ON c.id=o.contact_id JOIN courses k ON k.id=o.course_id LEFT JOIN users u ON u.id=o.owner_id WHERE o.brand_id IN (${placeholders}) ORDER BY o.updated_at DESC`).all(...ids);
+    const opportunities=db.prepare(`SELECT o.*,c.name contact_name,k.title course_title,e.name edition_name,e.price_cents,e.currency,u.name owner_name,(SELECT MIN(due_at) FROM tasks t WHERE t.opportunity_id=o.id AND t.status='open') next_due,(SELECT group_concat(conversation_id) FROM conversation_opportunities co WHERE co.opportunity_id=o.id) conversation_ids,(SELECT co.conversation_id FROM conversation_opportunities co JOIN conversations v ON v.id=co.conversation_id WHERE co.opportunity_id=o.id ORDER BY v.updated_at DESC LIMIT 1) conversation_id FROM opportunities o JOIN contacts c ON c.id=o.contact_id JOIN courses k ON k.id=o.course_id LEFT JOIN editions e ON e.id=o.edition_id LEFT JOIN users u ON u.id=o.owner_id WHERE o.brand_id IN (${placeholders}) ORDER BY o.updated_at DESC`).all(...ids);
     const tasks=db.prepare(`SELECT t.*,c.name contact_name,k.title course_title,u.name owner_name FROM tasks t JOIN opportunities o ON o.id=t.opportunity_id JOIN contacts c ON c.id=o.contact_id JOIN courses k ON k.id=o.course_id LEFT JOIN users u ON u.id=t.owner_id WHERE t.brand_id IN (${placeholders}) ORDER BY t.status,t.due_at`).all(...ids);
     return {contacts,opportunities,tasks,members:staffList(user),preferences:db.prepare('SELECT signature,availability FROM preferences WHERE user_id=?').get(user.id)||{signature:'',availability:'available'}};
   }
@@ -161,10 +163,10 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
     if(notes&&req.method==='POST'){const c=scoped('contacts',notes[1],user),input=await body(req),value=text(input.text,4000);requireBrand(user,c.brand_id);if(!value)throw fail(400,'Escribe una nota.');db.prepare('INSERT INTO internal_notes VALUES(?,?,?,?,?,?)').run(randomUUID(),c.id,c.brand_id,user.id,value,Date.now());audit(user,'note.created',c.id);sendChange(c.brand_id);json(res,201,{ok:true});return true;}
     if(path==='/api/crm/opportunities'&&req.method==='POST'){
       const input=await body(req),c=scoped('contacts',input.contactId,user),course=db.prepare('SELECT * FROM courses WHERE id=? AND brand_id=? AND active=1').get(input.courseId,c.brand_id);
-      if(!course)throw fail(400,'Elige un curso de la marca del contacto.');if(db.prepare("SELECT id FROM opportunities WHERE contact_id=? AND course_id=? AND stage NOT IN ('ganada','perdida')").get(c.id,course.id))throw fail(409,'Ya existe un interés activo en este curso.');
+      if(!course)throw fail(400,'Elige un curso de la marca del contacto.');const editionId=input.editionId||defaultEditionId(course.id),edition=db.prepare("SELECT * FROM editions WHERE id=? AND course_id=? AND status='published'").get(editionId,course.id);if(!edition||edition.starts_at!==null&&edition.starts_at<=Date.now()||edition.available_seats===0)throw fail(400,'Elige una edición publicada, futura y con cupo.');if(db.prepare("SELECT id FROM opportunities WHERE contact_id=? AND course_id=? AND edition_id=? AND stage NOT IN ('ganada','perdida')").get(c.id,course.id,editionId))throw fail(409,'Ya existe un interés activo en este curso.');
       const id=randomUUID(),owner=validOwner(input.ownerId||user.id,c.brand_id),now=Date.now(),due=Number(input.dueAt);
       if(!Number.isSafeInteger(due)||due<now-60000||due>now+366*86400000||!text(input.nextAction,180))throw fail(400,'Indica la siguiente acción y una fecha futura válida.');
-      transaction(db,()=>{db.prepare('INSERT INTO opportunities(id,contact_id,brand_id,course_id,stage,owner_id,lost_reason,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,course.id,'nuevo',owner,'',now,now);db.prepare('INSERT INTO tasks(id,opportunity_id,brand_id,title,owner_id,due_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').run(randomUUID(),id,c.brand_id,text(input.nextAction,180),owner,due,user.id,now,now);followup.stageEvent(id,user,null,'nuevo');for(const task of db.prepare('SELECT id FROM tasks WHERE opportunity_id=?').all(id))followup.taskCreated(task.id,user);});audit(user,'opportunity.created',id);sendChange(c.brand_id);json(res,201,{id});return true;
+      transaction(db,()=>{db.prepare('INSERT INTO opportunities(id,contact_id,brand_id,course_id,stage,owner_id,lost_reason,created_at,updated_at,edition_id) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,course.id,'nuevo',owner,'',now,now,editionId);db.prepare('INSERT INTO tasks(id,opportunity_id,brand_id,title,owner_id,due_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').run(randomUUID(),id,c.brand_id,text(input.nextAction,180),owner,due,user.id,now,now);followup.stageEvent(id,user,null,'nuevo');for(const task of db.prepare('SELECT id FROM tasks WHERE opportunity_id=?').all(id))followup.taskCreated(task.id,user);});audit(user,'opportunity.created',id);sendChange(c.brand_id);json(res,201,{id});return true;
     }
     if(path==='/api/crm/tasks'&&req.method==='POST'){
       const input=await body(req),o=scoped('opportunities',input.opportunityId,user),title=text(input.title,180),due=Number(input.dueAt),owner=validOwner(input.ownerId||o.owner_id||user.id,o.brand_id);

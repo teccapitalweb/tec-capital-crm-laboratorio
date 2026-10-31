@@ -11,14 +11,17 @@ import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
 import { migrateCRM, createCRM } from './crm.mjs';
 import { migrateFollowup } from './followup.mjs';
 import { conversationPage } from './conversations.mjs';
+import { migrateCatalogue, defaultEditionId, seedBrandTemplates } from './catalogue-schema.mjs';
+import { createCatalogue } from './catalogue.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<4&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v4-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<5&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v5-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
+migrateCatalogue(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -65,6 +68,7 @@ function accessConversation(id,user){const c=db.prepare('SELECT * FROM conversat
 function canSee(c,user){return !user.disabled&&(c.customer_id===user.id||crm.canBrand(user,c.brand_id));}
 function disconnect(userId){for(const [socket,user]of sessions)if(user.id===userId)socket.close(1008,'Actualiza tu acceso');}
 const crm=createCRM({db,body,json,audit,passwordHash,checkPassword,rate,disconnect,broadcast});
+const catalogue=createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer});
 async function body(req){
   let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>5_800_000)throw fail(413,'El archivo es demasiado grande. Máximo 4 MB.');chunks.push(chunk);}
   try{const data=JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}');if(!data||typeof data!=='object'||Array.isArray(data))throw Error();return data;}catch{throw fail(400,'Solicitud no válida.');}
@@ -79,36 +83,35 @@ function broadcast(type,conversationId=null,extra={}){
 function online(userId){return [...sessions.values()].some(u=>u.id===userId);}
 function conversationList(user){return conversationPage(db,user,{size:300},online).conversations;}
 function messageList(id,before=Number.MAX_SAFE_INTEGER){
-  return db.prepare(`SELECT m.*,u.name sender_name,a.filename,a.mime,a.size FROM messages m LEFT JOIN users u ON u.id=m.sender_id
-    LEFT JOIN attachments a ON a.id=m.attachment_id WHERE m.conversation_id=? AND m.seq<? ORDER BY m.seq DESC LIMIT 150`).all(id,before).reverse().map(m=>({...m,flyer_snapshot:undefined,attachmentUrl:m.attachment_id?'/api/files/'+m.attachment_id:m.flyer_course_id?'/api/messages/'+m.id+'/flyer':null}));
+  return db.prepare(`SELECT m.*,u.name sender_name,COALESCE(a.filename,lf.filename) filename,COALESCE(a.mime,lf.mime) mime,a.size FROM messages m LEFT JOIN users u ON u.id=m.sender_id
+    LEFT JOIN attachments a ON a.id=m.attachment_id LEFT JOIN library_files lf ON lf.id=json_extract(m.flyer_snapshot,'$.libraryFileId') WHERE m.conversation_id=? AND m.seq<? ORDER BY m.seq DESC LIMIT 150`).all(id,before).reverse().map(m=>({...m,flyer_snapshot:undefined,commercial_snapshot:m.commercial_snapshot?JSON.parse(m.commercial_snapshot):null,attachmentUrl:m.attachment_id?'/api/files/'+m.attachment_id:m.flyer_course_id?'/api/messages/'+m.id+'/flyer':null}));
 }
 function audit(user,action,id){db.prepare('INSERT INTO audit(user_id,action,entity_id,created_at) VALUES(?,?,?,?)').run(user?.id||null,action,id,Date.now());}
-function insertMessage(c,user,text,kind,ref,attachmentId=null,flyer=null){
+function insertMessage(c,user,text,kind,ref,attachmentId=null,flyer=null,prepared=null){
   const id=randomUUID(),now=Date.now();
-  const snapshot=flyer?{course:db.prepare('SELECT * FROM courses WHERE id=?').get(flyer),brand:db.prepare('SELECT * FROM brands WHERE id=?').get(c.brand_id)}:null;
-  if(snapshot)snapshot.artworkId=courseArtwork(snapshot.course);
-  db.prepare('INSERT INTO messages(id,conversation_id,sender_id,sender_kind,text,attachment_id,flyer_course_id,flyer_snapshot,client_ref,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,c.id,user?.id||null,kind,text,attachmentId,flyer,JSON.stringify(snapshot),ref,now);
+  const snapshot=prepared?prepared.flyerSnapshot:flyer?{course:db.prepare('SELECT * FROM courses WHERE id=?').get(flyer),brand:db.prepare('SELECT * FROM brands WHERE id=?').get(c.brand_id)}:null;
+  if(snapshot&&!prepared)snapshot.artworkId=courseArtwork(snapshot.course);
+  db.prepare('INSERT INTO messages(id,conversation_id,sender_id,sender_kind,text,attachment_id,flyer_course_id,flyer_snapshot,client_ref,created_at,commercial_snapshot) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(id,c.id,user?.id||null,kind,text,attachmentId,flyer,JSON.stringify(snapshot),ref,now,prepared?JSON.stringify({...prepared.commercial,sentAt:now}):null);
+  if(prepared){const link=db.prepare('SELECT opportunity_id FROM conversation_opportunities WHERE conversation_id=?').get(c.id);if(link){const value={...prepared.commercial,sentAt:now,messageId:id};db.prepare('UPDATE opportunities SET offer_snapshot=? WHERE id=?').run(JSON.stringify(value),link.opportunity_id);db.prepare("INSERT INTO crm_events(opportunity_id,actor_id,kind,details,created_at) VALUES(?,?,'offer',?,?)").run(link.opportunity_id,user?.id||null,JSON.stringify(value),now);}}
   db.prepare('UPDATE conversations SET updated_at=? WHERE id=?').run(now,c.id);
   return id;
 }
 function botReply(c,trigger){
-  const course=db.prepare('SELECT * FROM courses WHERE id=?').get(c.course_id);
-  const user=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id);
+  const user=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id),context=catalogue.info(c.course_id,c.edition_id),course=context.course;
   const count=db.prepare("SELECT count(*) n FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id).n;
-  const text=normalized(trigger.text);let reply='',flyer=null,stage=null,handoff=false;
-  if(/asesor|humano|persona|atencion|reembolso|devolucion/.test(text)) {reply='Ya avisé al equipo. Un asesor puede tomar esta conversación para continuar contigo.';handoff=true;}
-  else if(/inscrib|registr|apuntar/.test(text)){reply='Anoté tu interés en '+course.title+'. Un asesor continuará con tu inscripción de práctica. En este laboratorio no se realizan cobros ni inscripciones reales.';stage='inscripcion';handoff=true;}
+  const text=normalized(trigger.text);let reply='',stage=null,handoff=false,prepared=null;
+  if(/asesor|humano|persona|atencion|reembolso|devolucion/.test(text)){reply='Ya avisé al equipo. Un asesor puede tomar esta conversación para continuar contigo.';handoff=true;}
+  else if(context.reason){reply=context.reason+'. Un asesor puede ayudarte a revisar otra edición disponible.';handoff=true;}
+  else if(/inscrib|registr|apuntar/.test(text)){reply='Anoté tu interés en '+course.title+' · '+context.edition.name+'. Un asesor continuará con tu inscripción de práctica. En este laboratorio no se realizan cobros ni inscripciones reales.';stage='inscripcion';handoff=true;}
   else if(/comprobante|pague|pago|transferencia/.test(text)){reply='Gracias. El equipo revisará tu consulta de pago. No confirmamos pagos automáticamente y aquí no se realizan cobros reales.';handoff=true;}
-  else if(/precio|cuesta|costo|promocion/.test(text)){reply=`El precio de ejemplo de ${course.title} es $${(course.price_cents/100).toFixed(2)} MXN. Es una oferta de práctica, no una venta real. ¿Te comparto el temario?`;stage='interesado';}
-  else if(/temario|incluye|tema|contenido/.test(text)){reply='El temario de práctica incluye:\n\n'+course.syllabus+'\n\n¿Quieres conocer la fecha o hablar con un asesor?';}
-  else if(/fecha|horario|cuando|dia/.test(text)){reply='La edición de prueba indica: '+course.date_label+'. El equipo puede actualizar este dato desde el catálogo.';}
-  else if(/flyer|imagen|informacion|info|hola|buen/.test(text)||count===1){reply=course.welcome.replaceAll('{{nombre}}',user.name.split(' ')[0]).replaceAll('{{curso}}',course.title);flyer=course.id;}
-  else{reply='Puedo ayudarte con el precio, el temario o la fecha de este curso. Si prefieres, escribe “asesor” y el equipo continuará contigo.';}
-  const ref='automation:'+trigger.id;
-  if(db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref))return;
-  insertMessage(c,null,reply,'automation',ref,null,flyer);
-  if(stage)crm.setStage(c,stage);
-  if(handoff)db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);
+  else if(/precio|cuesta|costo|promocion/.test(text)){prepared=catalogue.prepare(c,{kind:'price'});reply=prepared.text.replace(/^Precio de ejemplo:/,'El precio de ejemplo de '+course.title+' es');stage='interesado';}
+  else if(/temario|incluye|tema|contenido/.test(text)){prepared=catalogue.prepare(c,{kind:'syllabus'});reply=prepared.text;}
+  else if(/fecha|horario|cuando|dia/.test(text)){prepared=catalogue.prepare(c,{kind:'schedule'});reply=prepared.text;}
+  else if(/flyer|imagen|informacion|info|hola|buen/.test(text)||count===1){prepared=catalogue.prepare(c,{kind:'flyer'});reply=course.welcome.replaceAll('{{nombre}}',user.name.split(' ')[0]).replaceAll('{{curso}}',course.title)+'\n\n'+prepared.text;}
+  else reply='Puedo ayudarte con el precio, el temario o la fecha de este curso. Si prefieres, escribe “asesor” y el equipo continuará contigo.';
+  const ref='automation:'+trigger.id;if(db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref))return;
+  insertMessage(c,null,reply,'automation',ref,null,prepared?.flyerSnapshot?course.id:null,prepared);
+  if(stage)crm.setStage(c,stage);if(handoff)db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);
 }
 function processJobs(){
   const jobs=db.prepare("SELECT * FROM jobs WHERE state='pending' AND due_at<=? LIMIT 15").all(Date.now());
@@ -131,13 +134,13 @@ async function serveFlyer(res,course,brand,artworkId){
 }
 function flyer(course,brand){
   const words=course.title.split(' '),lines=[];let line='';for(const word of words){if((line+' '+word).length>24){lines.push(line);line=word;}else line=(line+' '+word).trim();}if(line)lines.push(line);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="760" height="720" viewBox="0 0 760 720"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#23232d"/><stop offset="1" stop-color="#4c4c61"/></linearGradient></defs><rect width="760" height="720" rx="28" fill="#f8f8fa"/><rect width="760" height="470" rx="28" fill="url(#g)"/><circle cx="700" cy="70" r="210" fill="none" stroke="#ffffff15" stroke-width="55"/><text x="48" y="67" font-family="Arial,sans-serif" font-size="22" fill="#ffffffc0" letter-spacing="3">${xml(brand.name.toUpperCase())}</text><text x="48" y="139" font-family="Arial,sans-serif" font-size="17" fill="#ffffffa0" letter-spacing="2">CURSO · EDICIÓN DE PRUEBA</text>${lines.slice(0,5).map((l,i)=>`<text x="48" y="${211+i*55}" font-family="Arial,sans-serif" font-size="43" font-weight="700" fill="#fff">${xml(l)}</text>`).join('')}<text x="48" y="532" font-family="Arial,sans-serif" font-size="19" fill="#666">PRECIO DE EJEMPLO</text><text x="48" y="590" font-family="Arial,sans-serif" font-size="45" font-weight="700" fill="#24242b">$${(course.price_cents/100).toFixed(0)} MXN</text><text x="48" y="647" font-family="Arial,sans-serif" font-size="18" fill="#666">Material simulado. No constituye una oferta real.</text><text x="48" y="684" font-family="Arial,sans-serif" font-size="16" fill="#888">TEC CAPITAL · LABORATORIO CRM · v${course.version}</text></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="760" height="720" viewBox="0 0 760 720"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#23232d"/><stop offset="1" stop-color="#4c4c61"/></linearGradient></defs><rect width="760" height="720" rx="28" fill="#f8f8fa"/><rect width="760" height="470" rx="28" fill="url(#g)"/><circle cx="700" cy="70" r="210" fill="none" stroke="#ffffff15" stroke-width="55"/><text x="48" y="67" font-family="Arial,sans-serif" font-size="22" fill="#ffffffc0" letter-spacing="3">${xml(brand.name.toUpperCase())}</text><text x="48" y="139" font-family="Arial,sans-serif" font-size="17" fill="#ffffffa0" letter-spacing="2">CURSO · EDICIÓN DE PRUEBA</text>${lines.slice(0,5).map((l,i)=>`<text x="48" y="${211+i*55}" font-family="Arial,sans-serif" font-size="43" font-weight="700" fill="#fff">${xml(l)}</text>`).join('')}<text x="48" y="532" font-family="Arial,sans-serif" font-size="19" fill="#666">PRECIO DE EJEMPLO</text><text x="48" y="590" font-family="Arial,sans-serif" font-size="45" font-weight="700" fill="#24242b">$${(course.price_cents/100).toFixed(course.price_cents%100?2:0)} ${xml(course.currency||'MXN')}</text><text x="48" y="622" font-family="Arial,sans-serif" font-size="14" fill="#666">${xml(((course.edition_name||'')+' · '+course.date_label).slice(0,110))}</text><text x="48" y="657" font-family="Arial,sans-serif" font-size="18" fill="#666">Material simulado. No constituye una oferta real.</text><text x="48" y="684" font-family="Arial,sans-serif" font-size="16" fill="#888">TEC CAPITAL · LABORATORIO CRM · v${course.version}</text></svg>`;
 }
 
 const server=http.createServer(async(req,res)=>{
   security(res);const url=new URL(req.url,'http://localhost'),path=url.pathname;
   try{
-    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.3.0',transport:'websocket',mode:'laboratorio'});}
+    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.4.0',transport:'websocket',mode:'laboratorio'});}
     if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!originAllowed(req))throw fail(403,'Origen no permitido.');
     const ip=req.socket.remoteAddress||'unknown';
     if(req.method==='POST'&&path==='/api/auth/recover'){rate('recovery:'+ip,12,900000);await crm.recover(await body(req));return json(res,200,{ok:true});}
@@ -162,9 +165,10 @@ const server=http.createServer(async(req,res)=>{
     }
     if(path.startsWith('/api/')){
       const user=requireUser(req);
+      if(await catalogue.handle(req,res,path,user))return;
       if(await crm.handle(req,res,path,user))return;
       if(req.method==='POST'&&path==='/api/auth/logout'){db.prepare('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash);for(const [ws,u]of sessions)if(u.token_hash===user.token_hash)ws.close(1000,'Sesión cerrada');res.setHeader('Set-Cookie','tc_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'+(production?'; Secure':''));return json(res,200,{ok:true});}
-      if(req.method==='GET'&&path==='/api/bootstrap')return json(res,200,{user:safeUser(user),brands:crm.brandsFor(user),courses:db.prepare('SELECT * FROM courses WHERE active=1 ORDER BY title').all().filter(c=>user.role==='customer'||crm.canBrand(user,c.brand_id)).map(publicCourse),conversations:conversationList(user),onlineAgents:[...new Set([...sessions.values()].filter(staff).map(x=>x.id))].length});
+      if(req.method==='GET'&&path==='/api/bootstrap')return json(res,200,{user:safeUser(user),brands:crm.brandsFor(user),courses:db.prepare('SELECT * FROM courses WHERE active=1 ORDER BY title').all().filter(c=>user.role==='customer'||crm.canBrand(user,c.brand_id)).map(publicCourse),editions:db.prepare("SELECT * FROM editions WHERE status='published' ORDER BY starts_at").all().filter(e=>(user.role==='customer'||crm.canBrand(user,e.brand_id))&&!catalogue.editionState(e)).map(e=>({...e,priceCents:catalogue.info(e.course_id,e.id).priceCents,dateLabel:catalogue.info(e.course_id,e.id).dateLabel})),conversations:conversationList(user),onlineAgents:[...new Set([...sessions.values()].filter(staff).map(x=>x.id))].length});
       if(req.method==='GET'&&path==='/api/conversations'){
         const offset=Math.max(0,Math.min(100000,Number(url.searchParams.get('offset'))||0));
         return json(res,200,conversationPage(db,user,{q:clean(url.searchParams.get('q'),100),offset:Math.floor(offset),cursor:url.searchParams.get('cursor'),brand:url.searchParams.get('brand'),channel:url.searchParams.get('channel'),filter:url.searchParams.get('filter'),mode:url.searchParams.get('mode')},online));
@@ -175,8 +179,9 @@ const server=http.createServer(async(req,res)=>{
         rate('new:'+user.id,20);const input=await body(req);const course=db.prepare('SELECT * FROM courses WHERE id=? AND active=1').get(clean(input.courseId,60));
         if(!course||!['whatsapp','instagram','facebook'].includes(input.channel))throw fail(400,'Elige un curso y un canal válidos.');
         if(staff(user))crm.requireBrand(user,course.brand_id);
-        let c=db.prepare("SELECT * FROM conversations WHERE customer_id=? AND course_id=? AND channel=? AND status!='resolved'").get(user.id,course.id,input.channel);
-        if(!c){const id=randomUUID(),now=Date.now();db.prepare('INSERT INTO conversations(id,customer_id,brand_id,course_id,channel,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,user.id,course.brand_id,course.id,input.channel,now,now);c=db.prepare('SELECT * FROM conversations WHERE id=?').get(id);audit(user,'conversation.created',id);broadcast('conversation',id);}
+        const editionId=clean(input.editionId,100)||defaultEditionId(course.id),context=catalogue.info(course.id,editionId);if(context.reason)throw fail(409,context.reason+'. Elige otra edición.');
+        let c=db.prepare("SELECT * FROM conversations WHERE customer_id=? AND course_id=? AND edition_id=? AND channel=? AND status!='resolved'").get(user.id,course.id,editionId,input.channel);
+        if(!c){const id=randomUUID(),now=Date.now();db.prepare('INSERT INTO conversations(id,customer_id,brand_id,course_id,channel,created_at,updated_at,edition_id) VALUES(?,?,?,?,?,?,?,?)').run(id,user.id,course.brand_id,course.id,input.channel,now,now,editionId);c=db.prepare('SELECT * FROM conversations WHERE id=?').get(id);audit(user,'conversation.created',id);broadcast('conversation',id);}
         transaction(db,()=>crm.syncConversation(c));broadcast('crm',null,{brandId:c.brand_id});return json(res,200,{conversation:conversationPage(db,user,{id:c.id},online).conversations[0]});
       }
       const messages=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/messages$/);
@@ -227,26 +232,26 @@ const server=http.createServer(async(req,res)=>{
       const template=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/template$/);
       if(template&&req.method==='POST'){
         requireStaff(user);const c=accessConversation(template[1],user),input=await body(req);crm.requireBrand(user,c.brand_id);if(c.status==='resolved')throw fail(409,'La conversación está cerrada.');if(c.assigned_to&&c.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor está atendiendo.');
-        const course=db.prepare('SELECT * FROM courses WHERE id=?').get(c.course_id);const text=input.kind==='syllabus'?'Temario:\n\n'+course.syllabus:input.kind==='price'?`Precio de ejemplo: $${(course.price_cents/100).toFixed(2)} MXN. Edición de prueba.`:'Te comparto el flyer de práctica de '+course.title+'.';
+        const prepared=catalogue.prepare(c,input),text=prepared.text;
         const clientRef=clean(input.clientRef,100);if(!/^[a-zA-Z0-9-]{16,100}$/.test(clientRef)||!['syllabus','price','flyer'].includes(input.kind))throw fail(400,'Plantilla o referencia no válida.');const ref=user.id+':'+clientRef;
         const existing=db.prepare('SELECT conversation_id FROM messages WHERE client_ref=?').get(ref);if(existing&&existing.conversation_id!==c.id)throw fail(409,'Referencia ya utilizada.');
-        if(!db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref)){transaction(db,()=>{crm.assignConversation(c,user.id);insertMessage(c,user,text,'agent',ref,null,input.kind==='flyer'?course.id:null);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);});broadcast('conversation',c.id);}return json(res,200,{ok:true});
+        if(!db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref)){transaction(db,()=>{crm.assignConversation(c,user.id);insertMessage(c,user,text,'agent',ref,null,prepared.flyerSnapshot?c.course_id:null,prepared);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);});broadcast('conversation',c.id);}return json(res,200,{ok:true});
       }
       const file=path.match(/^\/api\/files\/([a-f0-9-]+)$/);
       if(file&&req.method==='GET'){const f=db.prepare('SELECT * FROM attachments WHERE id=?').get(file[1]);if(!f)throw fail(404,'Archivo no disponible.');accessConversation(f.conversation_id,user);const bytes=await readFile(resolve(dataDir,'uploads',f.storage_name));res.writeHead(200,{'Content-Type':f.mime,'Content-Disposition':`${f.mime==='application/pdf'?'attachment':'inline'}; filename*=UTF-8''${encodeURIComponent(f.filename)}`});return res.end(bytes);}
       const snapshotImage=path.match(/^\/api\/messages\/([a-f0-9-]+)\/flyer$/);
-      if(snapshotImage&&req.method==='GET'){const message=db.prepare('SELECT * FROM messages WHERE id=?').get(snapshotImage[1]);if(!message?.flyer_snapshot)throw fail(404,'Flyer no disponible.');accessConversation(message.conversation_id,user);const snapshot=JSON.parse(message.flyer_snapshot);if(!snapshot)throw fail(404,'Flyer no disponible.');return await serveFlyer(res,snapshot.course,snapshot.brand,snapshot.artworkId);}
+      if(snapshotImage&&req.method==='GET'){const message=db.prepare('SELECT * FROM messages WHERE id=?').get(snapshotImage[1]);if(!message?.flyer_snapshot)throw fail(404,'Flyer no disponible.');accessConversation(message.conversation_id,user);const snapshot=JSON.parse(message.flyer_snapshot);if(!snapshot)throw fail(404,'Flyer no disponible.');if(snapshot.libraryFileId)return await catalogue.serveFile(res,snapshot.libraryFileId);return await serveFlyer(res,snapshot.course,snapshot.brand,snapshot.artworkId);}
       const image=path.match(/^\/api\/courses\/([a-zA-Z0-9-]+)\/flyer$/);
-      if(image&&req.method==='GET'){const course=db.prepare('SELECT * FROM courses WHERE id=?').get(image[1]);if(!course)throw fail(404,'Curso no disponible.');if(staff(user))crm.requireBrand(user,course.brand_id);const brand=db.prepare('SELECT * FROM brands WHERE id=?').get(course.brand_id);return await serveFlyer(res,course,brand,courseArtwork(course));}
+      if(image&&req.method==='GET'){const course=db.prepare('SELECT * FROM courses WHERE id=?').get(image[1]);if(!course)throw fail(404,'Curso no disponible.');if(staff(user))crm.requireBrand(user,course.brand_id);const ctx=catalogue.info(course.id,clean(url.searchParams.get('editionId'),100)||null);if(ctx.reason)throw fail(409,ctx.reason);const prepared=catalogue.prepare({course_id:course.id,edition_id:ctx.edition.id,brand_id:course.brand_id,channel:'whatsapp'}, {kind:'flyer'});if(prepared.flyerSnapshot.libraryFileId)return await catalogue.serveFile(res,prepared.flyerSnapshot.libraryFileId);return await serveFlyer(res,prepared.flyerSnapshot.course,ctx.brand,null);}
       if(path==='/api/catalog'&&req.method==='POST'){
         requireAdmin(user);const input=await body(req),title=clean(input.title,100),brand=clean(input.brandId,60),price=Number(input.price);
         if(!title||!Number.isFinite(price)||price<0||price>1000000||!clean(input.dateLabel)||!clean(input.syllabus)||!clean(input.welcome)||!db.prepare('SELECT id FROM brands WHERE id=?').get(brand))throw fail(400,'Completa el título, la marca, el precio, la fecha, el temario y la presentación.');
         const id=input.id?clean(input.id,60):randomUUID();
         if(input.id){if(!db.prepare('SELECT id FROM courses WHERE id=? AND brand_id=?').get(id,brand))throw fail(404,'Curso no disponible.');db.prepare('UPDATE courses SET title=?,price_cents=?,date_label=?,syllabus=?,welcome=?,version=version+1,updated_at=? WHERE id=?').run(title,Math.round(price*100),clean(input.dateLabel,180),clean(input.syllabus,5000),clean(input.welcome,2000),Date.now(),id);}
         else db.prepare('INSERT INTO courses(id,brand_id,title,price_cents,date_label,syllabus,welcome,updated_at) VALUES(?,?,?,?,?,?,?,?)').run(id,brand,title,Math.round(price*100),clean(input.dateLabel,180),clean(input.syllabus,5000),clean(input.welcome,2000),Date.now());
-        audit(user,'course.saved',id);broadcast('catalog');return json(res,200,{ok:true,id});
+        catalogue.legacyUpdated(db.prepare('SELECT * FROM courses WHERE id=?').get(id),user);audit(user,'course.saved',id);broadcast('catalog');return json(res,200,{ok:true,id});
       }
-      if(path==='/api/brands'&&req.method==='POST'){requireAdmin(user);const input=await body(req),name=clean(input.name,60);if(name.length<2)throw fail(400,'Escribe el nombre de la marca.');const id=randomUUID();db.prepare('INSERT INTO brands VALUES(?,?,?,?)').run(id,name,clean(input.description,200)||'Marca de prueba',Date.now());audit(user,'brand.created',id);broadcast('catalog');return json(res,201,{id});}
+      if(path==='/api/brands'&&req.method==='POST'){requireAdmin(user);const input=await body(req),name=clean(input.name,60);if(name.length<2)throw fail(400,'Escribe el nombre de la marca.');requireAdmin(db.prepare('SELECT * FROM users WHERE id=?').get(user.id));const id=randomUUID();transaction(db,()=>{db.prepare('INSERT INTO brands VALUES(?,?,?,?)').run(id,name,clean(input.description,200)||'Marca de prueba',Date.now());seedBrandTemplates(db,id);});audit(user,'brand.created',id);broadcast('catalog');return json(res,201,{id});}
       if(path==='/api/metrics'&&req.method==='GET'){
         requireStaff(user);const list=db.prepare('SELECT * FROM conversations').all().filter(c=>crm.canBrand(user,c.brand_id)),ids=new Set(list.map(c=>c.id));
         const byChannel=['whatsapp','instagram','facebook'].map(channel=>({channel,count:list.filter(c=>c.channel===channel).length}));
@@ -257,7 +262,7 @@ const server=http.createServer(async(req,res)=>{
       throw fail(404,'Ruta no disponible.');
     }
     if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'Método no permitido.');
-    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
     const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.',...(error.status&&error.code?{code:error.code}:{}),...(error.status&&error.activeOpportunityId?{activeOpportunityId:error.activeOpportunityId}:{})});}
 });

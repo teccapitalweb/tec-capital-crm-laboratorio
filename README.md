@@ -4,6 +4,24 @@ Aplicación de pruebas multicanal: los participantes crean perfiles y envían me
 
 **[Abrir laboratorio](https://crm-laboratorio-production.up.railway.app)** · [Repositorio público](https://github.com/teccapitalweb/tec-capital-crm-laboratorio)
 
+## Catálogo y biblioteca · v0.4
+
+Entrar en **Catálogo y biblioteca** desde el CRM. Administración gestiona el contenido y los asesores consultan y envían el material aprobado de sus marcas.
+
+- **Cursos:** ficha general, temario, publicación/archivo e historial de versiones. Crear un curso añade una edición en borrador.
+- **Ediciones:** fechas y horario con zona IANA, docente, modalidad, lugar, enlace informativo, cupo, precio regular y moneda. El cliente elige la edición; cada edición tiene su conversación y oportunidad independientes. El cupo es informativo: todavía no se reserva ni descuenta automáticamente.
+- **Promociones:** precio con centavos y vigencia por edición. Las promociones publicadas de una edición no pueden solaparse, superar el precio regular ni acabar después del inicio del curso. El precio vigente se consulta al preparar y enviar cada respuesta.
+- **Flyers:** cargar imágenes o PDF de hasta 4 MB, asociar edición/promoción/canal, caducidad, guardar borrador, aprobar y archivar. Reemplazar un archivo crea una versión nueva; los mensajes anteriores conservan el archivo original. Antes de aprobar, una persona debe revisar que lo escrito en la imagen coincide con los datos: no hay reconocimiento ni corrección automática del texto del flyer.
+- **Plantillas:** por marca, curso, edición, canal y escenario; texto con variables, flyer opcional y vista previa. Las marcas reciben seis plantillas iniciales. Los cambios vuelven a borrador y requieren aprobación interna; esta aprobación no sustituye la futura revisión de plantillas de Meta.
+- **Chat:** botón Biblioteca y respuestas rápidas con vista previa. El envío comprueba otra vez vigencia, permisos, versiones y disponibilidad; si cambió la información, pide generar una vista previa nueva. Los reintentos no duplican el mensaje.
+- **Historial:** conserva el texto, archivo, edición, precio, moneda y promoción exactos enviados. La oportunidad muestra la última oferta compartida. Los contenidos archivados permanecen consultables en el historial.
+
+Variables disponibles: `{{nombre}}`, `{{marca}}`, `{{curso}}`, `{{edicion}}`, `{{fecha}}`, `{{docente}}`, `{{modalidad}}`, `{{precio}}`, `{{precio_regular}}`, `{{promocion}}`, `{{vigencia}}`, `{{temario}}`, `{{enlace}}` y `{{cupo}}`. Usar variables para los datos comerciales; los precios escritos como texto fijo no se actualizan automáticamente.
+
+**Recorrido recomendado:** crear curso → completar y publicar edición → programar promoción si aplica → subir y aprobar flyer → crear, previsualizar y aprobar plantilla → abrir una conversación de esa edición y enviar desde Biblioteca. Si cambia el curso, edición o promoción, el flyer asociado requiere revisión antes de enviarse de nuevo.
+
+La migración v5 es aditiva: genera una edición general para los cursos existentes, conserva sus precios y deja las fechas desconocidas como «Por confirmar». No inventa fechas, docentes ni cupos reales. Importa los seis flyers de demostración sólo cuando siguen coincidiendo con los cursos. Una base con usuarios se respalda primero en `/data/backups/before-crm-v5-*.sqlite`. Los archivos propios se almacenan en `/data/library/`, fuera del repositorio; el respaldo completo debe incluir esa carpeta y `uploads/` además de SQLite. La migración repetida no duplica contenido.
+
 ## Seguimiento consistente · v0.3
 
 - Chat y oportunidad muestran la misma etapa comercial. El estado abierto/cerrado del chat se mantiene independiente. `conversations.stage` queda como dato heredado para importar conversaciones antiguas; las lecturas y transiciones actuales usan `opportunities.stage`.
@@ -35,7 +53,7 @@ La migración v3 conserva perfiles, mensajes y flyers. Los asesores existentes c
 
 El código administrador de entorno sólo permite crear el primer administrador cuando todavía no existe ninguno. Los antiguos códigos compartidos de asesor dejan de conceder acceso. Para incorporar personas nuevas, un administrador debe iniciar sesión y crear invitaciones. No se cambian contraseñas ni se elevan cuentas existentes automáticamente.
 
-Esta entrega implementa el primer bloque de F0/F1. Siguen pendientes, entre otros: MFA, notificaciones fuera de la aplicación, horarios/turnos, paginación del resumen de CRM, supervisores con roles específicos, automatizaciones editables, integración real de Meta, IA, pagos y gestión de ediciones/flyers. Los procesos comerciales continúan simulados.
+Esta entrega implementó el primer bloque de F0/F1. Siguen pendientes, entre otros: MFA, notificaciones fuera de la aplicación, horarios/turnos, paginación del resumen de CRM, supervisores con roles específicos, automatizaciones editables, integración real de Meta, IA y pagos. Los procesos comerciales continúan simulados.
 
 ## Qué puedes probar
 
@@ -102,7 +120,7 @@ El repositorio contiene `Dockerfile` y `railway.json`. Ejecutar **una sola insta
 
 Las cookies de producción requieren HTTPS. El volumen guarda la base de datos y los adjuntos. **GitHub Pages no ejecuta este servidor ni reemplaza la base de datos.** Publicar el código no hace públicas las conversaciones.
 
-Para respaldo consistente, usar la API de backup de SQLite o detener la aplicación antes de copiar la base y los archivos WAL/SHM junto con `uploads/`. Los respaldos automáticos y su restauración deben configurarse y ensayarse antes de usar datos comerciales. Nunca subir copias de la base a este repositorio.
+Para respaldo consistente, usar la API de backup de SQLite o detener la aplicación antes de copiar la base y los archivos WAL/SHM junto con `uploads/` y `library/`. Los respaldos automáticos y su restauración deben configurarse y ensayarse antes de usar datos comerciales. Nunca subir copias de la base a este repositorio.
 
 ## Verificación
 
@@ -111,13 +129,13 @@ npm run check
 npm test
 ```
 
-Las pruebas levantan un servidor y una base temporal, conectan siete clientes y comprueban entrega, permisos, archivos, versiones de flyer, idempotencia, lectura, atención humana y persistencia tras reinicio. También cubren las tres regresiones comerciales, versiones concurrentes, tareas editables, migración v3→v4, permisos del historial y búsqueda con más de 300 conversaciones. No usan Meta ni servicios de IA.
+Las pruebas levantan un servidor y una base temporal, conectan siete clientes y comprueban entrega, permisos, archivos, versiones de flyer, idempotencia, lectura, atención humana y persistencia tras reinicio. También cubren las tres regresiones comerciales, versiones concurrentes, tareas editables, migraciones hasta v5, permisos del historial y búsqueda con más de 300 conversaciones. El catálogo prueba fechas, monedas, cupos, promociones solapadas/vencidas/programadas, variables, aprobaciones, acceso por marca, vistas previas obsoletas y conservación del precio y los bytes originales tras editar o archivar. No usan Meta ni servicios de IA.
 
 ## Arquitectura y límites del piloto
 
 Node HTTP + `ws` para comunicación; SQLite en WAL para persistencia; frontend HTML/CSS/JavaScript sin compilación. Contraseñas derivadas con scrypt, sesiones HttpOnly con tokens almacenados como hash, comprobación de origen y autorización de mensajes/archivos en el servidor. Los códigos de equipo sólo se verifican en el servidor.
 
-Todos los asesores pertenecen a la misma empresa; su acceso se limita a las marcas asignadas. Aún no hay MFA, recuperación autónoma por correo, borrado/retención desde interfaz, carga de flyers propios en el catálogo ni notificaciones push. La bandeja busca y pagina de 50 en 50; los mensajes se leen en páginas de 150 y sus coincidencias en páginas de 50. El bootstrap conserva un resumen de las 300 conversaciones más recientes para los contadores de inicio, que todavía no representan totales globales en grandes volúmenes. El resumen de CRM se carga completo para el volumen del laboratorio; debe paginarse antes de grandes históricos. Los avisos en vivo requieren tener abierta la aplicación.
+Todos los asesores pertenecen a la misma empresa; su acceso se limita a las marcas asignadas. Aún no hay MFA, recuperación autónoma por correo, borrado/retención desde interfaz ni notificaciones push. La bandeja busca y pagina de 50 en 50; los mensajes se leen en páginas de 150 y sus coincidencias en páginas de 50. El bootstrap conserva un resumen de las 300 conversaciones más recientes para los contadores de inicio, que todavía no representan totales globales en grandes volúmenes. El resumen de CRM y el catálogo se cargan completos para el volumen del laboratorio; deben paginarse antes de grandes históricos. Los avisos en vivo requieren tener abierta la aplicación.
 
 Usar datos ficticios. Antes de operar con clientes reales se requieren completar retención, respaldos periódicos y restauración, observabilidad, controles de abuso y pruebas de carga, además de evaluar la seguridad de los nuevos flujos. PostgreSQL y una cola compartida reemplazarán SQLite/procesamiento local si se necesitan varias instancias. No desplegar un binario antiguo sobre una base migrada sin verificar compatibilidad: la reversión de esquema requiere restaurar la copia previa de forma controlada y evaluar los datos posteriores.
 
