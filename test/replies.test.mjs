@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
-import {similarity,bestMatch,tokens,createAiProvider} from '../server/ai-provider.mjs';
+import {similarity,bestMatch,tokens,createAiProvider,validateDraft} from '../server/ai-provider.mjs';
 import {DEMO_KNOWLEDGE} from '../server/replies-schema.mjs';
 
 test('parecido léxico: raíces, variantes y umbral',async()=>{
@@ -22,6 +22,25 @@ test('parecido léxico: raíces, variantes y umbral',async()=>{
   const none=await sim.draft({question:'¿venden cafeteras?',knowledge:kb});assert.equal(none.text,null);
   const claude=createAiProvider({env:{AI_PROVIDER:'claude'}});assert.equal(claude.name,'claude');assert.equal(claude.configured,false);assert.equal(claude.model,'claude-opus-5-5');
   const r=await claude.draft({brand:{name:'x'},question:'q',knowledge:kb,history:[]});assert.equal(r.text,null);assert.match(r.reason,/credenciales/);
+});
+
+test('el texto del proveedor se valida en código antes de llegar al cliente',()=>{
+  const kb=[{id:'k1',question:'¿Cómo pago?',answer:'Pagas desde el enlace oficial https://pagos.ejemplo.mx/curso'},{id:'k2',question:'¿Hay certificado?',answer:'Sí, con QR.'}];
+  const ok=validateDraft({text:'Pagas desde el enlace oficial https://pagos.ejemplo.mx/curso y luego te confirmamos por aquí.',usedIds:['k1'],confidence:.8},kb);
+  assert.equal(ok.ok,true);assert.deepEqual(ok.usedIds,['k1']);
+  const cases=[
+    [{text:'Claro, el curso cuesta $1,200 MXN.',usedIds:['k1'],confidence:.9},/precio o importe/],
+    [{text:'Son 1200 pesos en total.',usedIds:['k1'],confidence:.9},/precio o importe/],
+    [{text:'Listo, tu pago confirmado, ya quedaste inscrita.',usedIds:['k2'],confidence:.9},/no permitido/],
+    [{text:'Te hago un descuento si pagas hoy.',usedIds:['k2'],confidence:.9},/no permitido/],
+    [{text:'Entra a https://sitio-ajeno.com/pagar para pagar.',usedIds:['k1'],confidence:.9},/enlace/],
+    [{text:'Respuesta sin fuente.',usedIds:[],confidence:.9},/ninguna entrada/],
+    [{text:'Respuesta con fuente inventada.',usedIds:['zzz'],confidence:.9},/ninguna entrada/],
+    [{text:'Respuesta dudosa.',usedIds:['k2'],confidence:.2},/Confianza/],
+    [{text:null,usedIds:['k2']},/Sin texto/],
+  ];
+  for(const [draft,re] of cases){const r=validateDraft(draft,kb);assert.equal(r.ok,false,JSON.stringify(draft));assert.match(r.reason,re);}
+  assert.equal(validateDraft({text:'Sí, con QR verificable.',usedIds:['k2']},kb).ok,true);   // sin confianza declarada no se bloquea por ese criterio
 });
 
 test('motor de respuestas v2: conocimiento, niveles por marca, bitácora, sugerencias y escalamiento',async t=>{

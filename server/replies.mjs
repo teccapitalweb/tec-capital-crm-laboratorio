@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {transaction} from './database.mjs';
-import {normalize,bestMatch} from './ai-provider.mjs';
+import {normalize,bestMatch,validateDraft} from './ai-provider.mjs';
 import {seedBrandKnowledge} from './replies-schema.mjs';
 
 const fail=(status,message)=>Object.assign(new Error(message),{status});
@@ -78,7 +78,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
   function commit(c,trigger,p,draft=null){
     const ref='automation:'+trigger.id;if(db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref))return {action:'skipped',reason:'Ya existía una respuesta para este mensaje.'};
     const t=now(),sources=[...p.sources];let reply=p.reply,model=null,reason=p.reason;
-    if(draft){model=draft.model;if(draft.text){reply=draft.text;reason='Proveedor de IA: '+draft.reason;for(const id of draft.usedIds)sources.push({type:'knowledge',id});}else reason+=' Proveedor: '+draft.reason;}
+    if(draft){model=draft.model;const v=validateDraft(draft,p.knowledge);if(v.ok){reply=v.text;reason='Proveedor de IA: '+draft.reason;for(const id of v.usedIds)sources.push({type:'knowledge',id});}else reason+=' Proveedor descartado: '+v.reason+(draft.text?'':' ('+draft.reason+')');}
     const log=(action,replyMessageId=null)=>{const id=randomUUID();db.prepare('INSERT INTO reply_log(id,conversation_id,brand_id,trigger_message_id,reply_message_id,intent,confidence,mode,action,reply_text,sources,model,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,trigger.id,replyMessageId,p.intent,p.confidence,p.mode,action,reply,JSON.stringify(sources),model,reason,t);return id;};
     if(p.mode==='off'){log('skipped');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);return {action:'skipped',reason:'Respuestas automáticas apagadas para la marca: pasa a una persona.'};}
     if(p.mode==='suggest'){log('suggested');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);return {action:'suggested',reply,reason};}
@@ -98,8 +98,8 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const fake={id:'simulacion',customer_id:user.id,brand_id:brandId,course_id:course.id,edition_id:input.editionId||null,status:'open',bot_enabled:1,assigned_to:null},trigger={id:'simulacion',text:message,created_at:now()};
     const p=plan(fake,trigger);let draft=null;
     if(p.needsProvider||(input.forceProvider&&p.intent==='unknown'&&p.knowledge.length)){const ctx=catalogue.info(course.id,fake.edition_id);draft=await provider.draft({brand:ctx.brand,course:ctx.course,edition:{name:ctx.edition.name,dateLabel:ctx.dateLabel,priceLabel:(ctx.priceCents/100).toFixed(2)+' '+ctx.currency},question:message,knowledge:p.knowledge,history:[]});}
-    const reply=draft?.text||p.reply;
-    return {intent:p.intent,confidence:p.confidence,mode:p.mode,reply,handoff:p.handoff,stage:p.stage,sources:[...p.sources,...(draft?.usedIds||[]).map(id=>({type:'knowledge',id}))],reason:draft?(draft.text?'Proveedor de IA: '+draft.reason:p.reason+' Proveedor: '+draft.reason):p.reason,provider:{name:provider.name,model:draft?.model||null,used:Boolean(draft)}};
+    const v=draft?validateDraft(draft,p.knowledge):null,reply=v?.ok?v.text:p.reply;
+    return {intent:p.intent,confidence:p.confidence,mode:p.mode,reply,handoff:p.handoff,stage:p.stage,sources:[...p.sources,...(v?.ok?v.usedIds:[]).map(id=>({type:'knowledge',id}))],reason:draft?(v.ok?'Proveedor de IA: '+draft.reason:p.reason+' Proveedor descartado: '+v.reason):p.reason,provider:{name:provider.name,model:draft?.model||null,used:Boolean(draft),accepted:Boolean(v?.ok)}};
   }
 
   // ---- conocimiento

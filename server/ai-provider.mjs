@@ -23,6 +23,24 @@ export function bestMatch(question,entries,threshold=0.5){
   return best;
 }
 
+// Reglas que el proveedor debe cumplir, verificadas en código antes de usar su texto (el prompt no basta):
+// al menos una fuente de conocimiento real, confianza mínima, sin importes ni precios, sin confirmar pagos, inscripciones,
+// descuentos o reembolsos, y sin enlaces que no estén en el conocimiento aprobado.
+const PRICE_RE=/(\$\s?\d|\d[\d.,]*\s?(pesos|mxn|usd|dolares|dólares|euros?)\b|\bmxn\b\s?\d|\busd\b\s?\d)/i;
+const FORBIDDEN_RE=/\b(pago (confirmado|recibido|acreditado|aprobado)|ya quedaste? inscrit[oa]|inscripci[oó]n (confirmada|lista|realizada)|te confirmo (tu|la|el)|queda(s)? inscrit[oa]|descuento|promoci[oó]n (especial|exclusiva)|precio especial|gratis|sin costo|reembolso (aprobado|autorizado)|te devolvemos|cupo (reservado|apartado)|tu lugar est[aá] (reservado|apartado))\b/i;
+const URL_RE=/https?:\/\/[^\s)]+/gi;
+export function validateDraft(draft,knowledge=[],{minConfidence=0.5}={}){
+  if(!draft||typeof draft.text!=='string'||!draft.text.trim())return {ok:false,reason:'Sin texto del proveedor.'};
+  const text=draft.text.trim(),used=(draft.usedIds||[]).filter(id=>knowledge.some(k=>k.id===id));
+  if(!used.length)return {ok:false,reason:'El proveedor no citó ninguna entrada de conocimiento aprobada.'};
+  if(typeof draft.confidence==='number'&&draft.confidence<minConfidence)return {ok:false,reason:'Confianza del proveedor por debajo del mínimo ('+Math.round(draft.confidence*100)+'%).'};
+  if(PRICE_RE.test(text))return {ok:false,reason:'El borrador contenía un precio o importe: los precios sólo salen del catálogo.'};
+  const forbidden=text.match(FORBIDDEN_RE);if(forbidden)return {ok:false,reason:'El borrador contenía lenguaje no permitido («'+forbidden[0]+'»).'};
+  const allowedUrls=new Set(knowledge.flatMap(k=>String(k.answer||'').match(URL_RE)||[]).map(u=>u.toLowerCase()));
+  for(const u of text.match(URL_RE)||[])if(!allowedUrls.has(u.toLowerCase()))return {ok:false,reason:'El borrador contenía un enlace que no está en el conocimiento aprobado.'};
+  return {ok:true,text,usedIds:used};
+}
+
 export function createAiProvider({env=process.env,log=console,timeoutMs=20000}={}){
   const name=env.AI_PROVIDER==='claude'?'claude':'simulated';
   const model=env.AI_MODEL||'claude-opus-5-5';
@@ -32,7 +50,7 @@ export function createAiProvider({env=process.env,log=console,timeoutMs=20000}={
   async function simulated({question,knowledge}){
     const hit=bestMatch(question,knowledge,0.34);
     if(!hit)return {text:null,usedIds:[],model:'simulado',reason:'Sin entrada de conocimiento suficientemente parecida.'};
-    return {text:hit.entry.answer,usedIds:[hit.entry.id],model:'simulado',reason:'Coincidencia léxica '+Math.round(hit.score*100)+'% con «'+hit.entry.question+'».'};
+    return {text:hit.entry.answer,usedIds:[hit.entry.id],confidence:hit.score,model:'simulado',reason:'Coincidencia léxica '+Math.round(hit.score*100)+'% con «'+hit.entry.question+'».'};
   }
 
   let client=null;
@@ -55,7 +73,8 @@ export function createAiProvider({env=process.env,log=console,timeoutMs=20000}={
     let parsed=null;try{parsed=JSON.parse(text);}catch{return {text:null,usedIds:[],model,reason:'Respuesta del proveedor no válida.'};}
     const answer=typeof parsed?.answer==='string'&&parsed.answer.trim()?parsed.answer.trim().slice(0,1500):null;
     const usedIds=Array.isArray(parsed?.used_ids)?parsed.used_ids.filter(id=>knowledge.some(k=>k.id===id)):[];
-    return {text:answer,usedIds,model:response.model||model,reason:answer?'Redactado por el proveedor con '+usedIds.length+' fuente(s); confianza '+Math.round((Number(parsed.confidence)||0)*100)+'%.':'El proveedor no encontró información suficiente.',usage:response.usage};
+    const confidence=Number.isFinite(Number(parsed?.confidence))?Math.max(0,Math.min(1,Number(parsed.confidence))):0;
+    return {text:answer,usedIds,confidence,model:response.model||model,reason:answer?'Redactado por el proveedor con '+usedIds.length+' fuente(s); confianza '+Math.round(confidence*100)+'%.':'El proveedor no encontró información suficiente.',usage:response.usage};
   }
 
   async function draft(input){
