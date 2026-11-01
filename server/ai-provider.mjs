@@ -28,7 +28,15 @@ export function bestMatch(question,entries,threshold=0.5){
 // descuentos o reembolsos, y sin enlaces que no estén en el conocimiento aprobado.
 const PRICE_RE=/(\$\s?\d|\d[\d.,]*\s?(pesos|mxn|usd|dolares|dólares|euros?)\b|\bmxn\b\s?\d|\busd\b\s?\d)/i;
 const FORBIDDEN_RE=/\b(pago (confirmado|recibido|acreditado|aprobado)|ya quedaste? inscrit[oa]|inscripci[oó]n (confirmada|lista|realizada)|te confirmo (tu|la|el)|queda(s)? inscrit[oa]|descuento|promoci[oó]n (especial|exclusiva)|precio especial|gratis|sin costo|reembolso (aprobado|autorizado)|te devolvemos|cupo (reservado|apartado)|tu lugar est[aá] (reservado|apartado))\b/i;
-const URL_RE=/https?:\/\/[^\s)]+/gi;
+// Cualquier token con forma de dominio cuenta como enlace: con esquema, con www., pelón (sitio.com/ruta), acortador o punycode.
+// Se exige que la etiqueta previa al TLD tenga 3+ caracteres salvo que haya esquema o www., para no confundir «a.m.» o «p.ej.».
+const LINK_RE=/\b(?:(https?:\/\/|www\.)[^\s)]+|(?:[a-z0-9-]{3,}\.)(?:[a-z0-9-]+\.)*(?:xn--[a-z0-9-]+|[a-z]{2,24})(?:\/[^\s)]*|\b))/gi;
+export function hostOf(token){
+  let t=String(token).trim().toLowerCase().replace(/^https?:\/\//,'').replace(/^www\./,'');
+  t=t.split(/[\/?#]/)[0].split('@').pop().split(':')[0].replace(/[.,;:!?)]+$/,'');
+  return t;
+}
+export const linkHosts=text=>[...new Set((String(text||'').match(LINK_RE)||[]).map(hostOf).filter(h=>h.includes('.')))];
 export function validateDraft(draft,knowledge=[],{minConfidence=0.5}={}){
   if(!draft||typeof draft.text!=='string'||!draft.text.trim())return {ok:false,reason:'Sin texto del proveedor.'};
   const text=draft.text.trim(),used=(draft.usedIds||[]).filter(id=>knowledge.some(k=>k.id===id));
@@ -36,8 +44,8 @@ export function validateDraft(draft,knowledge=[],{minConfidence=0.5}={}){
   if(typeof draft.confidence==='number'&&draft.confidence<minConfidence)return {ok:false,reason:'Confianza del proveedor por debajo del mínimo ('+Math.round(draft.confidence*100)+'%).'};
   if(PRICE_RE.test(text))return {ok:false,reason:'El borrador contenía un precio o importe: los precios sólo salen del catálogo.'};
   const forbidden=text.match(FORBIDDEN_RE);if(forbidden)return {ok:false,reason:'El borrador contenía lenguaje no permitido («'+forbidden[0]+'»).'};
-  const allowedUrls=new Set(knowledge.flatMap(k=>String(k.answer||'').match(URL_RE)||[]).map(u=>u.toLowerCase()));
-  for(const u of text.match(URL_RE)||[])if(!allowedUrls.has(u.toLowerCase()))return {ok:false,reason:'El borrador contenía un enlace que no está en el conocimiento aprobado.'};
+  const allowedHosts=new Set(knowledge.flatMap(k=>linkHosts(k.answer)));
+  for(const h of linkHosts(text))if(!allowedHosts.has(h))return {ok:false,reason:'El borrador contenía un enlace o dominio («'+h+'») que no está en el conocimiento aprobado.'};
   return {ok:true,text,usedIds:used};
 }
 

@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
-import {similarity,bestMatch,tokens,createAiProvider,validateDraft} from '../server/ai-provider.mjs';
+import {similarity,bestMatch,tokens,createAiProvider,validateDraft,linkHosts} from '../server/ai-provider.mjs';
 import {DEMO_KNOWLEDGE} from '../server/replies-schema.mjs';
 
 test('parecido léxico: raíces, variantes y umbral',async()=>{
@@ -33,7 +33,12 @@ test('el texto del proveedor se valida en código antes de llegar al cliente',()
     [{text:'Son 1200 pesos en total.',usedIds:['k1'],confidence:.9},/precio o importe/],
     [{text:'Listo, tu pago confirmado, ya quedaste inscrita.',usedIds:['k2'],confidence:.9},/no permitido/],
     [{text:'Te hago un descuento si pagas hoy.',usedIds:['k2'],confidence:.9},/no permitido/],
-    [{text:'Entra a https://sitio-ajeno.com/pagar para pagar.',usedIds:['k1'],confidence:.9},/enlace/],
+    [{text:'Entra a https://sitio-ajeno.com/pagar para pagar.',usedIds:['k1'],confidence:.9},/enlace|dominio/],
+    [{text:'Entra a sitio-ajeno.com/pagar para pagar.',usedIds:['k1'],confidence:.9},/sitio-ajeno\.com/],
+    [{text:'Visita www.pagos-rapidos.mx hoy.',usedIds:['k1'],confidence:.9},/pagos-rapidos\.mx/],
+    [{text:'Usa el acortador bit.ly/abc123 para pagar.',usedIds:['k1'],confidence:.9},/bit\.ly/],
+    [{text:'Paga en PAGOS.EJEMPLO.MX.evil.com/curso ahora.',usedIds:['k1'],confidence:.9},/evil\.com/],
+    [{text:'Entra a xn--pgos-hqa.com para pagar.',usedIds:['k1'],confidence:.9},/xn--pgos-hqa\.com/],
     [{text:'Respuesta sin fuente.',usedIds:[],confidence:.9},/ninguna entrada/],
     [{text:'Respuesta con fuente inventada.',usedIds:['zzz'],confidence:.9},/ninguna entrada/],
     [{text:'Respuesta dudosa.',usedIds:['k2'],confidence:.2},/Confianza/],
@@ -41,6 +46,9 @@ test('el texto del proveedor se valida en código antes de llegar al cliente',()
   ];
   for(const [draft,re] of cases){const r=validateDraft(draft,kb);assert.equal(r.ok,false,JSON.stringify(draft));assert.match(r.reason,re);}
   assert.equal(validateDraft({text:'Sí, con QR verificable.',usedIds:['k2']},kb).ok,true);   // sin confianza declarada no se bloquea por ese criterio
+  assert.equal(validateDraft({text:'Paga en pagos.ejemplo.mx/curso cuando quieras.',usedIds:['k1'],confidence:.9},kb).ok,true);   // dominio pelón del conocimiento: permitido
+  assert.equal(validateDraft({text:'La sesión es a las 10 a.m. y, p. ej., puedes conectarte 5 min antes. Atte. Lic. Gómez.',usedIds:['k2'],confidence:.9},kb).ok,true);   // abreviaturas no cuentan como dominios
+  assert.deepEqual(linkHosts('ve a https://www.Pagos.Ejemplo.MX/curso?x=1 o a bit.ly/z, no a 10 a.m.'),['pagos.ejemplo.mx','bit.ly']);
 });
 
 test('motor de respuestas v2: conocimiento, niveles por marca, bitácora, sugerencias y escalamiento',async t=>{
