@@ -29,6 +29,10 @@ La migración v6 añade tablas de operación sin reescribir catálogo, usuarios,
 
 Cada marca elige en **Operación → Seguimientos** cómo responde a los clientes: apagado, **sugerir** (el asesor ve un borrador con fuentes sobre el redactor), **plantillas** (lo de siempre: catálogo y conocimiento aprobado) o **autónomo con IA** (además redacta con un proveedor usando sólo conocimiento aprobado; sin clave usa un simulador). En **Catálogo y biblioteca → Conocimiento** el equipo escribe preguntas y respuestas por marca o curso y administración las aprueba. En el panel **Equipo** de cada conversación se ve por qué respondió cada mensaje automático y con qué fuente. Precios y fechas nunca salen del conocimiento: siempre del catálogo.
 
+## Simulador de clientes y catálogo de demostración
+
+En **Operación → Demo** (administración) se crean clientes ficticios —su nombre termina en «· demo»— que escriben por la misma API que un cliente real siguiendo ocho guiones (curioso, precio, listo para inscribirse, molesto, baja, dudas, preguntas fuera de guion, silencio) a tres ritmos. El CRM responde como siempre y la tarjeta de la demo muestra en vivo cuántos resolvió solo, cuántos esperan a una persona, la primera respuesta automática media, las bajas y las etapas. **Detener** los calla; **Archivar** cierra sus chats y oportunidades. **Generar catálogo de demostración** crea hasta 15 marcas con 8 cursos cada una (ediciones publicadas y preventas) pasando por la importación CSV; repetirlo no duplica. `SIMULATOR_DISABLED=1` oculta el módulo.
+
 ## Verificación en dos pasos (equipo)
 
 En **Mi configuración → Acceso y seguridad** el equipo puede activar un código temporal de una app de autenticación (opcional). Al iniciar sesión se pide después de la contraseña; hay 10 códigos de recuperación de un solo uso. Administración ve quién la tiene en **Equipo** y puede restablecerla. Si el administrador queda bloqueado, el procedimiento de emergencia está en `docs/OPERACION_Y_PRUEBAS.md`.

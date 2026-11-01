@@ -48,6 +48,7 @@ Para una prueba nueva usa un directorio de datos vacío e independiente. No cone
 | `AI_PROVIDER` | vacío o `simulated` | `claude` activa el SDK oficial; requiere credenciales. Sin él, el nivel autónomo usa el simulador local |
 | `AI_MODEL` | `claude-opus-5-5` | Modelo del proveedor; `claude-haiku-5-5` es la opción económica para volumen |
 | `ANTHROPIC_API_KEY` | No usar en local salvo prueba aislada | Credencial del proveedor; sólo en el entorno del servidor, nunca en Git |
+| `SIMULATOR_DISABLED` | vacío | `1` oculta el simulador de clientes: `/api/simulator` responde 404 y el barrido no corre. Úsalo en un entorno con clientes reales |
 | `MFA_KEY` | Opcional | Clave para cifrar los secretos de la verificación en dos pasos; si falta se usa `DATA_DIR/mfa.key`. Guárdala aparte; sin ella, los 2FA no se pueden verificar tras una restauración |
 | `MFA_RESET_USER` | Sólo emergencia | Usuario cuya verificación en dos pasos se restablece al arrancar; retirarla después |
 | `ADMIN_INVITE_CODE` | Secreto aleatorio privado para inicializar una instalación vacía | Sólo permite crear el primer administrador |
@@ -59,7 +60,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con el bloque local 4A son **119** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta el simulador de clientes son **122** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -70,6 +71,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/catalogue.test.mjs` | Ediciones, fechas, centavos, promociones, variables, aprobación, permisos, vistas previas, archivo, snapshots/bytes históricos y reinicio |
 | `test/automation.test.mjs` | Motor 4A: migración v7, idempotencia, reintentos, reinicio, carreras de cancelación y pausas (sin servidor; base temporal) |
 | `test/automation-http.test.mjs` | Rutas `/api/automation`: sólo administración, revisiones, pausa global (servidor temporal) |
+| `test/simulator.test.mjs` | Simulador de clientes: guiones y catálogo demo coherentes; recorrido por API (permisos, catálogo idempotente, demo de ocho perfiles, respuesta humana, detener/archivar) |
 | `test/replies.test.mjs` | Motor de respuestas v2: parecido léxico, conocimiento, niveles por marca, bitácora, sugerencias, proveedor simulado |
 | `test/mfa.test.mjs` | TOTP (vectores RFC 6238), ventana/reutilización y el flujo completo de 2 pasos |
 | `test/holidays.test.mjs` | Festivos: cálculo por zona horaria, validación y API (política, historial, cola) |
@@ -100,6 +102,7 @@ Usar perfiles/sesiones separados para un administrador, dos asesores de prueba y
 8. **SLA y formularios:** lectura/bot no satisfacen respuesta humana; devolver/transferir no reinician espera. Una actualización WS no borra cambios del formulario en edición.
 9. **Presentación:** escritorio (incluida una ventana de más de 1800 px: el CRM debe llegar a ambos bordes) y móvil de unos 390 px, modales completos, botones accesibles, sin desplazamiento lateral accidental ni errores de consola en el recorrido.
 10. **Cierre de QA:** pausar la macro/receta de prueba, cerrar sus intereses/chats, completar/cancelar sus tareas y suspender asesores técnicos si ya no hacen falta. Conservar auditoría. No borrar registros del equipo para dejar las pantallas vacías.
+11. **Demo (administración):** en un entorno de pruebas, generar el catálogo de demostración, iniciar una demo corta a ritmo rápido, comprobar que los clientes «· demo» aparecen en la bandeja y en la cola, responder a uno que espera persona y archivar la demo al terminar. En la base del equipo una demo crea usuarios, chats y oportunidades identificados pero reales para el CRM: avisar antes y archivar después.
 
 En producción evitar activar/cambiar políticas de marcas existentes para facilitar QA. Registrar la configuración inicial y comprobar que quedó intacta. Los ensayos destructivos, carga y restauración se hacen en entorno aislado.
 
@@ -145,7 +148,7 @@ Publicar sólo dentro del alcance autorizado por el usuario. Para el traspaso do
 El health esperado de referencia:
 
 ```json
-{"ok":true,"version":"0.14.0","transport":"websocket","mode":"laboratorio"}
+{"ok":true,"version":"0.15.0","transport":"websocket","mode":"laboratorio"}
 ```
 
 ## Respaldos y recuperación

@@ -142,7 +142,7 @@ Un libro de ventas alimentado por eventos: pago Stripe confirmado, transferencia
 
 ### Fase 1 (ahora, sin depender de nadie): simulación convincente y contrato de integración
 1. **Motor de respuestas v2** en el CRM: conocimiento aprobado por marca/curso, intenciones, niveles 0–3 por marca, explicación de cada respuesta. Adaptador de IA con Claude y modo «simulado» para demos sin costo.
-2. **Simulador de clientes** con guiones (curioso, precio, listo para pagar, molesto, baja) y velocidad ajustable, más **datos de demostración a escala** (15 marcas, 8 cursos cada una, semanas de historial) con botón de reinicio.
+2. **Simulador de clientes** con guiones (curioso, precio, listo para pagar, molesto, baja) y velocidad ajustable, más **datos de demostración a escala** (15 marcas, 8 cursos cada una, semanas de historial) con botón de reinicio. *Hecho localmente el 31 oct 2026 (guiones, ritmo, métricas en vivo, detener/archivar, catálogo 15×8 idempotente); falta el historial retroactivo de semanas.*
 3. **Canal simulado realista:** estados enviado/entregado/leído/fallido, ventana de 24 h, plantillas de marketing vs servicio, botones, y **referral de anuncio** simulado (el clic al flyer dispara la bienvenida del curso correcto).
 4. **Contrato de conectores** (documento + adaptador simulado) y **documento de requisitos por consultora** para Meta.
 5. **Venta con pago:** enlace de pago de prueba (Stripe en modo test de la Academia), webhook simulado, **cola de validación de comprobantes** con pre-lectura por IA, evento `pago.confirmado` → inscripción → aviso al coordinador.

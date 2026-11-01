@@ -57,4 +57,6 @@ La referencia de v0.5 es **57 pruebas aprobadas** (79 con los bloques locales 4A
 
 ## Lo siguiente
 
+Último bloque local (31 oct 2026): **simulador de clientes** en la rama `feat/simulador-clientes` (esquema **14**, versión 0.15.0, 122 pruebas), construido sobre el motor de respuestas v2 (`feat/motor-respuestas-v2`, esquema 13). Ambos sin publicar; `main` local sólo tiene documentación por delante de `origin/main` (v0.14.0). Estado y siguiente bloque: [CONTINUIDAD.md](docs/CONTINUIDAD.md) y [VISION_PLATAFORMA.md](docs/VISION_PLATAFORMA.md).
+
 La tercera fase del plan competitivo fue **operación del equipo**, ya entregada. La siguiente es **automatización editable e IA supervisada**. Los bloques 4A (motor durable, esquema v7) y una primera entrega de 4B (recetas por silencio, esquema v8, API sin interfaz) están implementados localmente sin publicar; sigue completar 4B (interfaz, más disparadores) y después añade conocimiento aprobado y copiloto. Los detalles y criterios de salida están en [PLAN_FASE_4.md](docs/PLAN_FASE_4.md).
