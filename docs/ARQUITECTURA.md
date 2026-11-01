@@ -39,12 +39,15 @@ Un proceso Node.js 24 atiende HTTP, WebSocket, reglas y reconciliación operativ
 | `server/operations.mjs` | Cola, elegibilidad, capacidad, reparto, transferencias, SLA, notas/menciones y macros atómicas |
 | `server/automation-schema.mjs` | Esquema v7: ajustes por marca, pausa global, pasos durables, trazas y columnas de reintento en `jobs` |
 | `server/automation.mjs` | Motor de pasos diferidos (arrendamientos, reintentos, cancelación, idempotencia, pausas) y rutas `/api/automation` |
+| `server/replies-schema.mjs`, `server/replies.mjs` | Esquema v13 y motor de respuestas v2: niveles por marca, conocimiento aprobado con versiones, intenciones, bitácora con fuentes, sugerencias y simulación |
+| `server/ai-provider.mjs` | Adaptador de IA (simulado y Claude), parecido léxico; se llama sólo fuera de transacciones |
 | `server/mfa-schema.mjs`, `server/mfa.mjs` | Esquema v12 y verificación en dos pasos TOTP (secreto cifrado, códigos de recuperación, desafío de acceso, rutas `/api/mfa`) |
 | `server/analytics.mjs` | Métricas comerciales agregadas por marca autorizada: embudo por cohorte, resultados, atención humana, tendencia, equipo (privacidad por asesor) |
 | `server/contacts-schema.mjs`, `server/contacts.mjs` | Esquema v9 y lógica de etiquetas, duplicados, fusión con vista previa y exportación CSV; rutas bajo `/api/crm` (se atienden antes que `crm.mjs`) |
 | `server/backup.mjs`, `server/verify-backup.mjs` | Respaldos automáticos verificados con manifiesto, rotación, verificación de respaldos y rutas `/api/backups` |
 | `server/catalogue-import.mjs` | Importación CSV de cursos, ediciones y promociones: análisis sin escritura y aplicación por las rutas del catálogo |
 | `server/recipes.mjs` | Recetas de seguimiento (4B): definición validada, versiones, barrido de disparadores, manejador `recipe.run`, simulación y rutas `/api/automation/recipes` |
+| `public/knowledge.js` | Pestaña Conocimiento del catálogo y asistente de respuestas en el chat (sugerencia, bitácora en Equipo) |
 | `public/security.js` | Activación/desactivación de 2 pasos en Mi configuración y estado/restablecimiento en Equipo |
 | `public/analytics.js`, `public/analytics.css` | Pantalla Analítica (KPIs, embudo, gráfica SVG, tablas) |
 | `public/contacts.js` | Etiquetas, filtro, duplicados, fusión y exportación dentro de Contactos |
@@ -66,7 +69,7 @@ Los archivos son deliberadamente sencillos, con bastante código compacto. Antes
 
 `DATA_DIR` contiene `laboratorio.sqlite`, `uploads/`, `library/` y `backups/`. SQLite usa WAL, claves foráneas y `busy_timeout=5000`. Los adjuntos de mensajes viven en `uploads/`; las piezas propias del catálogo, en `library/`. Los originales demo siguen en el repositorio.
 
-En el arranque se ejecutan `openDatabase`, `migrateCRM`, `migrateFollowup`, `migrateCatalogue` y `migrateOperations`. Si hay usuarios y el esquema es menor que 12, el arranque actual crea antes una copia consistente `backups/before-crm-v12-<timestamp>.sqlite` (hasta v0.5.0 era `before-crm-v6-`) con `VACUUM INTO`. Los prefijos v3/v4/v5 citados en entregas anteriores corresponden al código de aquellas versiones. No se hace un respaldo nuevo en cada arranque de una base ya en v6.
+En el arranque se ejecutan `openDatabase`, `migrateCRM`, `migrateFollowup`, `migrateCatalogue` y `migrateOperations`. Si hay usuarios y el esquema es menor que 13, el arranque actual crea antes una copia consistente `backups/before-crm-v13-<timestamp>.sqlite` (hasta v0.5.0 era `before-crm-v6-`) con `VACUUM INTO`. Los prefijos v3/v4/v5 citados en entregas anteriores corresponden al código de aquellas versiones. No se hace un respaldo nuevo en cada arranque de una base ya en v6.
 
 | Versión de esquema | Incorporación |
 | --- | --- |
@@ -74,6 +77,7 @@ En el arranque se ejecutan `openDatabase`, `migrateCRM`, `migrateFollowup`, `mig
 | 3 | Permisos por marca, invitaciones, recuperación, preferencias, contactos, oportunidades, tareas y notas |
 | 4 | Revisiones e historial comercial; importación del historial de etapas disponible |
 | 5 | Ediciones, promociones, archivos de biblioteca, flyers, plantillas, versiones y snapshots de oferta |
+| 13 | Respuestas v2: `reply_settings`, `knowledge_entries`, `knowledge_versions`, `reply_log` |
 | 12 | Verificación en dos pasos: `user_mfa` |
 | 11 | Festivos por marca: `operation_settings.holidays` |
 | 10 | Consentimiento: `contact_consent`, `contact_consent_events` |
@@ -176,6 +180,7 @@ Todas las rutas `/api` salvo health y autenticación inicial requieren sesión. 
 | Macros | `GET/POST /api/operations/macros`; `PATCH /api/operations/macros/:id`; `GET /api/operations/macros/:id/history` |
 | Automatización (admin) | `GET /api/automation`, `/steps`, `/steps/:id/events`; `POST /steps/:id/retry|cancel`; `PATCH /brands/:id`, `/global` |
 | Consentimiento | `GET/PUT /api/crm/contacts/:id/consent` (reactivar una baja: administración con motivo) |
+| Respuestas automáticas | `GET /api/replies/settings`, `PATCH /api/replies/brands/:id` (admin), `GET/POST /api/replies/knowledge`, `PATCH /knowledge/:id`, `POST /knowledge/:id/approve|archive` (admin), `GET /knowledge/:id/history`, `POST /api/replies/test`, `GET /api/replies/provider`; `GET /api/conversations/:id/replies`, `POST /api/conversations/:id/replies/dismiss` |
 | Verificación en dos pasos | `POST /api/auth/mfa` (segundo paso del acceso); `GET /api/mfa`, `POST /api/mfa/setup|enable|disable|recovery-codes`; admin: `GET /api/mfa/members`, `POST /api/mfa/reset/:id` |
 | Analítica | `GET /api/analytics?days=&brand=&tz=` |
 | Etiquetas y contactos | `GET/POST /api/crm/tags`; `PATCH/DELETE /api/crm/tags/:id` (admin); `PUT /api/crm/contacts/:id/tags`; `GET /api/crm/duplicates?brand=`; `POST /api/crm/contacts/merge-preview`, `/merge` (admin); `GET /api/crm/export/contacts.csv`, `/opportunities.csv` (admin) |
@@ -206,7 +211,7 @@ Los mensajes se persisten por HTTP; WebSocket en `/realtime` comunica cambios, p
 
 Cuatro temporizadores viven en el proceso (el cuarto, `automation.tick`, cada segundo, no hace nada mientras ninguna marca tenga automatización habilitada):
 
-1. Trabajos de reglas cada 350 ms, hasta 15 vencidos por pasada. Una entrada del cliente suele programar una respuesta unos 700 ms después. `jobs` es durable, y desde 4A reintenta con espera creciente y se cancela tras 5 fallos (`legacy_job_abandoned`); los pasos nuevos usan el motor de `automation.mjs`.
+1. Trabajos de reglas cada 350 ms, hasta 15 vencidos por pasada. Una entrada del cliente suele programar una respuesta unos 700 ms después; cada trabajo corre en `processJob`: plan síncrono del motor v2, llamada opcional al proveedor de IA fuera de la transacción y confirmación con revalidación (un trabajo en vuelo no se vuelve a tomar). `jobs` es durable, y desde 4A reintenta con espera creciente y se cancela tras 5 fallos (`legacy_job_abandoned`); los pasos nuevos usan el motor de `automation.mjs`.
 2. Reconciliación operativa cada segundo. Usa configuración y estado persistidos para reparto, vencimientos y avisos.
 3. Heartbeat y limpieza de sesiones/límites cada 30 segundos. Una conexión TCP abierta no basta: se comprueba la sesión vigente.
 

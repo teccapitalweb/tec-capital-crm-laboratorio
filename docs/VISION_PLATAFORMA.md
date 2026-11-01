@@ -105,6 +105,10 @@ Ya existe la base en el CRM: plantillas con variables (`{{precio}}`, `{{fecha}}`
 
 Unificar el «apertura» del panel IPCIL con la «cohorte» de la Academia (son lo mismo): curso + fecha de inicio + mínimo de alumnos + ponente + sesiones (Meet) + grupo de WhatsApp + materiales + grabaciones. La venta confirmada **entra sola** a la apertura; el coordinador ve el avance contra el mínimo (ya lo calcula el panel IPCIL), programa sesiones (crear el evento de Google Meet por API es posible con Google Calendar), publica materiales y grabaciones (Bunny), y al cierre marca asistencia para emitir certificados.
 
+### 4.5b Sobre el IPCIL nuevo
+
+El usuario indicó que IPCIL se va a **rehacer** con un nivel mucho más profesional. Consecuencia para este plan: el panel actual en Firebase se toma como **referencia de roles y flujos** (vendedor, coordinador, admin, trafiquer, rh, validar), no como destino de integración. El CRM y el resto de módulos se conectan al **núcleo de datos compartido** (sección 4.1); cuando exista el IPCIL nuevo, consumirá ese mismo núcleo y los eventos (`pago.confirmado`, `inscripcion.activada`, `apertura.abierta`, `certificado.emitido`). No invertir en adaptadores a las colecciones actuales de Firestore más allá de lo necesario para leer históricos.
+
 ### 4.6 Certificación IPCIL
 
 Un solo emisor: el servicio de certificados de la Academia (folio secuencial desde la base, PDF, verificación pública en `/verificar/[folio]`). El panel IPCIL pasa a **consumirlo**, no a emitir por su cuenta. Créditos de certificado por consultora, si se mantiene ese modelo de cobro, se descuentan en el mismo evento.

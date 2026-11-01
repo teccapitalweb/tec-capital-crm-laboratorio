@@ -45,6 +45,9 @@ Para una prueba nueva usa un directorio de datos vacío e independiente. No cone
 | `NODE_ENV` | `development` | `production`; activa cookies Secure y HSTS |
 | `BACKUP_INTERVAL_HOURS` | `24` por defecto (desactivado en `NODE_ENV=test`) | Horas entre respaldos automáticos; `0` los desactiva |
 | `BACKUP_KEEP` | `7` | Respaldos automáticos que se conservan |
+| `AI_PROVIDER` | vacío o `simulated` | `claude` activa el SDK oficial; requiere credenciales. Sin él, el nivel autónomo usa el simulador local |
+| `AI_MODEL` | `claude-opus-5-5` | Modelo del proveedor; `claude-haiku-5-5` es la opción económica para volumen |
+| `ANTHROPIC_API_KEY` | No usar en local salvo prueba aislada | Credencial del proveedor; sólo en el entorno del servidor, nunca en Git |
 | `MFA_KEY` | Opcional | Clave para cifrar los secretos de la verificación en dos pasos; si falta se usa `DATA_DIR/mfa.key`. Guárdala aparte; sin ella, los 2FA no se pueden verificar tras una restauración |
 | `MFA_RESET_USER` | Sólo emergencia | Usuario cuya verificación en dos pasos se restablece al arrancar; retirarla después |
 | `ADMIN_INVITE_CODE` | Secreto aleatorio privado para inicializar una instalación vacía | Sólo permite crear el primer administrador |
@@ -56,7 +59,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con el bloque local 4A son **111** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con el bloque local 4A son **119** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -67,6 +70,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/catalogue.test.mjs` | Ediciones, fechas, centavos, promociones, variables, aprobación, permisos, vistas previas, archivo, snapshots/bytes históricos y reinicio |
 | `test/automation.test.mjs` | Motor 4A: migración v7, idempotencia, reintentos, reinicio, carreras de cancelación y pausas (sin servidor; base temporal) |
 | `test/automation-http.test.mjs` | Rutas `/api/automation`: sólo administración, revisiones, pausa global (servidor temporal) |
+| `test/replies.test.mjs` | Motor de respuestas v2: parecido léxico, conocimiento, niveles por marca, bitácora, sugerencias, proveedor simulado |
 | `test/mfa.test.mjs` | TOTP (vectores RFC 6238), ventana/reutilización y el flujo completo de 2 pasos |
 | `test/holidays.test.mjs` | Festivos: cálculo por zona horaria, validación y API (política, historial, cola) |
 | `test/triggers.test.mjs` | Disparadores de recetas `task_overdue` y `waiting_human`: validación, cancelaciones y simulación |
@@ -190,7 +194,7 @@ Con v7 el arranque guarda `backups/before-crm-v7-<timestamp>.sqlite` antes de mi
 | Flyer no se puede enviar | Publicación/vigencia del curso y edición, precio/promoción actual, aprobación, binding y caducidad |
 | 409 en formulario o macro | Registro actualizado por otra sesión, oferta cambiante o preview antiguo; preservar borrador y recargar/previsualizar |
 | Doble efecto tras reintento | Misma `clientRef` de la acción original, misma identidad/destino, transacción y resultado persistido |
-| No llega una respuesta del bot | Modo humano/cierre, trabajos pendientes, logs del worker, catálogo elegible; la IA no existe aún |
+| No llega una respuesta del bot | Nivel de la marca (Operación → Seguimientos: apagado o sugerir no envían), modo humano/cierre, trabajos pendientes, logs del worker, catálogo elegible; la bitácora del panel Equipo explica cada decisión |
 | Parece que faltan chats | Filtros/alcance, bandeja paginada frente al resumen de 300; revisar búsqueda en servidor |
 | Datos desaparecen al redeploy | Montaje `/data`, `DATA_DIR`, servicio/entorno y volumen correctos; no sembrar una base nueva como arreglo |
 

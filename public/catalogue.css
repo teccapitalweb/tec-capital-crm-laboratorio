@@ -5,3 +5,4 @@
 .imp-summary{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 12px}.imp-rows{display:grid;gap:8px;max-height:44vh;overflow:auto;padding-right:2px}
 .imp-row{border:1px solid #e8eaf0;border-radius:12px;padding:10px 12px;display:grid;gap:4px;min-width:0}.imp-row.bad{border-color:#efd3d3;background:#fffafa}.imp-row small{color:var(--text-3);font-size:11px;overflow-wrap:anywhere}
 .imp-row-top{display:flex;justify-content:space-between;align-items:center;gap:10px}.imp-row-top strong{font-size:13px;overflow-wrap:anywhere}.imp-errors{margin:4px 0 0;padding-left:18px;color:#a33a3a;font-size:12px}
+.kn-card h2{font-size:15px;margin:6px 0}.kn-answer{font-size:13px;color:var(--text-2);line-height:1.5;margin:6px 0 8px}.kn-variants{margin:0 0 8px}.kn-variants .ctc-tag{font-size:11px}

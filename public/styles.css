@@ -27,3 +27,7 @@ dialog{border:1px solid #e8e8ef;border-radius:21px;padding:0;width:min(94vw,550p
 .modal-inner img.full-flyer{width:auto;max-height:74dvh;border-radius:6px}
 @media(min-width:1550px){.course-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:680px){.course-grid{grid-template-columns:minmax(0,1fr);gap:22px}.course-copy h2{min-height:0}.course-art{height:auto}.course-copy{padding:16px}.course-edition{font-size:11px}}
+.reply-suggestion{margin:0 18px 10px;padding:12px 14px;border:1px solid #dfe3ec;border-radius:14px;background:#fbfbfe;display:grid;gap:6px}.reply-suggestion-top{display:flex;align-items:center;gap:8px;font-size:13px}.reply-suggestion-top svg{width:16px;height:16px}.reply-suggestion p{margin:0;font-size:13px;line-height:1.5;white-space:pre-wrap}.reply-suggestion small{color:var(--text-3);font-size:11px;line-height:1.4}.reply-suggestion .actions{display:flex;gap:8px;flex-wrap:wrap}
+.ops-replies{margin:14px 0}.reply-log{display:grid;gap:8px}.reply-log-item{border:1px solid #e8eaf0;border-radius:12px;padding:10px 12px;display:grid;gap:4px}.reply-log-item>div{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:13px}.reply-log-item p{margin:0;font-size:12px;color:var(--text-2);white-space:pre-wrap}.reply-log-item small{color:var(--text-3);font-size:11px;line-height:1.4}
+.rcp-subtitle{font-size:14px;margin:18px 0 6px}.rcp-reply-mode{padding:8px 10px;border:1px solid #e3e6ee;border-radius:11px;background:#fff;max-width:100%}
+@media(max-width:650px){.reply-suggestion{margin:0 12px 10px}}

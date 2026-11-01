@@ -98,6 +98,10 @@ Las macros actuales son acciones manuales con transacción y preview. Pueden apo
 
 La simulación muestra: entrada usada, condiciones evaluadas, datos/versión de catálogo, acciones propuestas, horario previsto y motivo para omitir un paso. Debe ser una operación sin envíos, notas, tareas ni cambios comerciales. Publicar una nueva versión no reescribe la definición de ejecuciones ya iniciadas; decidir y documentar si se cancelan o continúan con su versión original.
 
+### Avance local hacia 4C y 4D (31 oct 2026)
+
+El bloque «motor de respuestas v2» (ver CONTINUIDAD) adelanta dos piezas: la **biblioteca de conocimiento aprobado** por marca y curso con versiones y aprobación (base de 4C, todavía con búsqueda léxica, sin documentos largos ni fragmentos) y el **nivel «sugerir»**, que deja un borrador con fuentes al asesor (base del copiloto de 4D). El proveedor de IA es un adaptador con modo simulado; el real sólo se activa con credenciales en el servidor.
+
 ## 4C. Información vigente y RAG
 
 RAG significa recuperar fragmentos de información antes de generar una respuesta. Es una ayuda para consultar documentos, **no reemplaza** el catálogo estructurado.

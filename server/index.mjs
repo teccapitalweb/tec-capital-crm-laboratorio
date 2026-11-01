@@ -21,6 +21,9 @@ import {createContacts} from './contacts.mjs';
 import {createAnalytics} from './analytics.mjs';
 import {migrateMfa} from './mfa-schema.mjs';
 import {createMfa} from './mfa.mjs';
+import {migrateReplies,seedBrandKnowledge} from './replies-schema.mjs';
+import {createReplies} from './replies.mjs';
+import {createAiProvider} from './ai-provider.mjs';
 import {createRecipes} from './recipes.mjs';
 import {createBackups,backupRoutes} from './backup.mjs';
 import {createCatalogueImport} from './catalogue-import.mjs';
@@ -30,7 +33,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<12&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v12-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<13&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v13-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -41,6 +44,7 @@ migrateContacts(db);
 migrateConsent(db);
 migrateHolidays(db);
 migrateMfa(db);
+migrateReplies(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -94,6 +98,8 @@ const analytics=createAnalytics({db,crm,json});
 const contacts=createContacts({db,crm,body,json,audit,broadcast});
 const catalogueImport=createCatalogueImport({db,catalogue,crm,body,json,audit});
 const operations=createOperations({db,crm,catalogue,body,json,audit,broadcast,online,insertMessage});
+const aiProvider=createAiProvider();
+const replies=createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider:aiProvider});
 const automation=createAutomation({db,onChange:step=>{if(step.conversation_id)broadcast('conversation',step.conversation_id);broadcast('crm',null,{brandId:step.brand_id});}});
 const backupHours=process.env.BACKUP_INTERVAL_HOURS===undefined?(process.env.NODE_ENV==='test'?0:24):Number(process.env.BACKUP_INTERVAL_HOURS);
 const backups=createBackups({db,dataDir,version:'0.14.0',intervalMs:Number.isFinite(backupHours)&&backupHours>0?backupHours*3600000:0,keep:Math.max(1,Number(process.env.BACKUP_KEEP)||7)});
@@ -128,23 +134,23 @@ function insertMessage(c,user,text,kind,ref,attachmentId=null,flyer=null,prepare
   if(kind==='customer')contacts.recordInbound(c,text);
   return id;
 }
-function botReply(c,trigger){
-  const user=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id),context=catalogue.info(c.course_id,c.edition_id),course=context.course;
-  const count=db.prepare("SELECT count(*) n FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id).n;
-  const text=normalized(trigger.text);let reply='',stage=null,handoff=false,prepared=null;
-  if(contacts.isOptOutText(trigger.text)){reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';}
-  else if(/asesor|humano|persona|atencion|reembolso|devolucion/.test(text)){reply='Ya avisé al equipo. Un asesor puede tomar esta conversación para continuar contigo.';handoff=true;}
-  else if(context.reason){reply=context.reason+'. Un asesor puede ayudarte a revisar otra edición disponible.';handoff=true;}
-  else if(/inscrib|registr|apuntar/.test(text)){reply='Anoté tu interés en '+course.title+' · '+context.edition.name+'. Un asesor continuará con tu inscripción de práctica. En este laboratorio no se realizan cobros ni inscripciones reales.';stage='inscripcion';handoff=true;}
-  else if(/comprobante|pague|pago|transferencia/.test(text)){reply='Gracias. El equipo revisará tu consulta de pago. No confirmamos pagos automáticamente y aquí no se realizan cobros reales.';handoff=true;}
-  else if(/precio|cuesta|costo|promocion/.test(text)){prepared=catalogue.prepare(c,{kind:'price'});reply=prepared.text.replace(/^Precio de ejemplo:/,'El precio de ejemplo de '+course.title+' es');stage='interesado';}
-  else if(/temario|incluye|tema|contenido/.test(text)){prepared=catalogue.prepare(c,{kind:'syllabus'});reply=prepared.text;}
-  else if(/fecha|horario|cuando|dia/.test(text)){prepared=catalogue.prepare(c,{kind:'schedule'});reply=prepared.text;}
-  else if(/flyer|imagen|informacion|info|hola|buen/.test(text)||count===1){prepared=catalogue.prepare(c,{kind:'flyer'});reply=course.welcome.replaceAll('{{nombre}}',user.name.split(' ')[0]).replaceAll('{{curso}}',course.title)+'\n\n'+prepared.text;}
-  else reply='Puedo ayudarte con el precio, el temario o la fecha de este curso. Si prefieres, escribe “asesor” y el equipo continuará contigo.';
-  const ref='automation:'+trigger.id;if(db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref))return;
-  insertMessage(c,null,reply,'automation',ref,null,prepared?.flyerSnapshot?course.id:null,prepared);
-  if(stage)crm.setStage(c,stage);if(handoff){db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);}
+// Respuestas automáticas v2 (server/replies.mjs): plan síncrono, proveedor de IA fuera de la transacción y confirmación
+// con revalidación. Un trabajo en vuelo no se vuelve a tomar; el resultado se descarta si el trabajo o el chat cambiaron.
+const jobsInFlight=new Set();
+async function processJob(job){
+  jobsInFlight.add(job.id);
+  try{
+    const planned=transaction(db,()=>{const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(job.conversation_id);if(!c||!c.bot_enabled||c.assigned_to||c.status!=='open'){db.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").run(job.id);return null;}const trigger=db.prepare('SELECT * FROM messages WHERE id=?').get(job.message_id);return {c,trigger,plan:replies.plan(c,trigger)};});
+    if(!planned)return;
+    let draft=null;
+    if(planned.plan.needsProvider){
+      const ctx=catalogue.info(planned.c.course_id,planned.c.edition_id),history=db.prepare('SELECT sender_kind,text FROM messages WHERE conversation_id=? ORDER BY seq DESC LIMIT 6').all(planned.c.id).reverse().map(m=>({role:m.sender_kind==='customer'?'customer':'agent',text:m.text}));
+      draft=await aiProvider.draft({brand:ctx.brand,course:ctx.course,edition:{name:ctx.edition.name,dateLabel:ctx.dateLabel,priceLabel:(ctx.priceCents/100).toFixed(2)+' '+ctx.currency},question:planned.trigger.text,knowledge:planned.plan.knowledge,history});
+    }
+    transaction(db,()=>{const state=db.prepare('SELECT state FROM jobs WHERE id=?').get(job.id)?.state;if(state!=='pending')return;const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(job.conversation_id);if(!c.bot_enabled||c.assigned_to||c.status!=='open'){db.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").run(job.id);return;}replies.commit(c,planned.trigger,planned.plan,draft);db.prepare("UPDATE jobs SET state='done' WHERE id=?").run(job.id);});
+    broadcast('conversation',job.conversation_id);
+  }catch(error){console.error('Automation job failed',error.name);jobFailed(job,error);}
+  finally{jobsInFlight.delete(job.id);}
 }
 const JOB_MAX_ATTEMPTS=5,JOB_BASE_DELAY=2000,JOB_CAP_DELAY=5*60_000;
 function jobFailed(job,error){
@@ -159,7 +165,7 @@ function jobFailed(job,error){
 }
 function processJobs(){
   const jobs=db.prepare("SELECT * FROM jobs WHERE state='pending' AND due_at<=? AND (next_attempt_at IS NULL OR next_attempt_at<=?) LIMIT 15").all(Date.now(),Date.now());
-  for(const job of jobs){try{transaction(db,()=>{const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(job.conversation_id);if(!c.bot_enabled||c.assigned_to||c.status!=='open'){db.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").run(job.id);return;}const trigger=db.prepare('SELECT * FROM messages WHERE id=?').get(job.message_id);botReply(c,trigger);db.prepare("UPDATE jobs SET state='done' WHERE id=?").run(job.id);});broadcast('conversation',job.conversation_id);}catch(error){console.error('Automation job failed',error.name);jobFailed(job,error);}}
+  for(const job of jobs){if(jobsInFlight.has(job.id))continue;processJob(job);}
 }
 function attachmentData(input){
   if(!input)return null;const filename=clean(input.name,120).replace(/[\r\n\x00-\x1f]/g,'');const mime=input.type;
@@ -221,6 +227,7 @@ const server=http.createServer(async(req,res)=>{
       if(await catalogueImport.handle(req,res,path,user))return;
       if(await catalogue.handle(req,res,path,user))return;
       if(await mfa.handle(req,res,path,user))return;
+      if(await replies.handle(req,res,path,user,{body,json,audit,accessConversation}))return;
       if(await analytics.handle(req,res,path,user))return;
       if(await contacts.handle(req,res,path,user))return;
       if(await crm.handle(req,res,path,user))return;
@@ -263,7 +270,7 @@ const server=http.createServer(async(req,res)=>{
             const current=accessConversation(c.id,user);if(current.status==='resolved')throw fail(409,'La conversación se cerró mientras enviabas.');
             if(!isCustomer&&current.assigned_to&&current.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor tomó la conversación.');
             if(attachment)db.prepare('INSERT INTO attachments VALUES(?,?,?,?,?,?,?,?)').run(attachmentId,c.id,user.id,attachment.filename,attachment.storageName,attachment.mime,attachment.buffer.length,Date.now());
-            if(!isCustomer){crm.assignConversation(c,user.id);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);cancelConversationSteps(db,c.id,'human_takeover');}
+            if(!isCustomer){replies.consumeSuggestions(c.id);crm.assignConversation(c,user.id);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);cancelConversationSteps(db,c.id,'human_takeover');}
             messageId=insertMessage(c,user,text,isCustomer?'customer':'agent',ref,attachmentId);
             if(isCustomer&&current.bot_enabled&&!current.assigned_to)db.prepare('INSERT INTO jobs(id,conversation_id,message_id,due_at) VALUES(?,?,?,?)').run(randomUUID(),c.id,messageId,Date.now()+700);
           });}catch(error){if(attachment)await unlink(resolve(dataDir,'uploads',attachment.storageName)).catch(()=>{});throw error;}
@@ -309,7 +316,7 @@ const server=http.createServer(async(req,res)=>{
         else db.prepare('INSERT INTO courses(id,brand_id,title,price_cents,date_label,syllabus,welcome,updated_at) VALUES(?,?,?,?,?,?,?,?)').run(id,brand,title,Math.round(price*100),clean(input.dateLabel,180),clean(input.syllabus,5000),clean(input.welcome,2000),Date.now());
         catalogue.legacyUpdated(db.prepare('SELECT * FROM courses WHERE id=?').get(id),user);audit(user,'course.saved',id);broadcast('catalog');return json(res,200,{ok:true,id});
       }
-      if(path==='/api/brands'&&req.method==='POST'){requireAdmin(user);const input=await body(req),name=clean(input.name,60);if(name.length<2)throw fail(400,'Escribe el nombre de la marca.');requireAdmin(db.prepare('SELECT * FROM users WHERE id=?').get(user.id));const id=randomUUID();transaction(db,()=>{db.prepare('INSERT INTO brands VALUES(?,?,?,?)').run(id,name,clean(input.description,200)||'Marca de prueba',Date.now());seedBrandTemplates(db,id);});audit(user,'brand.created',id);broadcast('catalog');return json(res,201,{id});}
+      if(path==='/api/brands'&&req.method==='POST'){requireAdmin(user);const input=await body(req),name=clean(input.name,60);if(name.length<2)throw fail(400,'Escribe el nombre de la marca.');requireAdmin(db.prepare('SELECT * FROM users WHERE id=?').get(user.id));const id=randomUUID();transaction(db,()=>{db.prepare('INSERT INTO brands VALUES(?,?,?,?)').run(id,name,clean(input.description,200)||'Marca de prueba',Date.now());seedBrandTemplates(db,id);seedBrandKnowledge(db,id);});audit(user,'brand.created',id);broadcast('catalog');return json(res,201,{id});}
       if(path==='/api/metrics'&&req.method==='GET'){
         requireStaff(user);const list=db.prepare('SELECT * FROM conversations').all().filter(c=>crm.canBrand(user,c.brand_id)),ids=new Set(list.map(c=>c.id));
         const byChannel=['whatsapp','instagram','facebook'].map(channel=>({channel,count:list.filter(c=>c.channel===channel).length}));
@@ -320,7 +327,7 @@ const server=http.createServer(async(req,res)=>{
       throw fail(404,'Ruta no disponible.');
     }
     if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'Método no permitido.');
-    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/polish.css':['public/polish.css','text/css; charset=utf-8'],'/security.js':['public/security.js','text/javascript; charset=utf-8'],'/analytics.js':['public/analytics.js','text/javascript; charset=utf-8'],'/analytics.css':['public/analytics.css','text/css; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/knowledge.js':['public/knowledge.js','text/javascript; charset=utf-8'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/polish.css':['public/polish.css','text/css; charset=utf-8'],'/security.js':['public/security.js','text/javascript; charset=utf-8'],'/analytics.js':['public/analytics.js','text/javascript; charset=utf-8'],'/analytics.css':['public/analytics.css','text/css; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
     const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.',...(error.status&&error.code?{code:error.code}:{}),...(error.status&&error.activeOpportunityId?{activeOpportunityId:error.activeOpportunityId}:{})});}
 });

@@ -7,7 +7,8 @@ window.createRecipesUI=function({state,api,esc,icon,showModal,toast}){
   const REASON={customer_replied:'El cliente respondió',conversation_changed:'Hubo un mensaje nuevo',conversation_closed:'La conversación se cerró',opportunity_closed:'La oportunidad se cerró',stage_changed:'Cambió la etapa',scope_changed:'Cambió el curso o la edición',recipe_paused:'Receta pausada',recipe_edited:'Receta editada',human_takeover:'Una persona tomó el control',material_unavailable:'La plantilla ya no está disponible',conversation_missing:'La conversación ya no existe',task_closed:'La tarea se cerró',task_rescheduled:'La tarea se reprogramó',attended:'Ya lo atendió una persona',contact_opted_out:'El contacto pidió no recibir mensajes',no_consent:'Falta consentimiento registrado',frequency_limit:'Se alcanzó el máximo de mensajes automáticos',manual:'Cancelada manualmente',conversation_action:'Acción en la conversación',owner_changed:'Cambió el responsable'};
   const STAGES={nuevo:'Nuevo interés',interesado:'Interesado',inscripcion:'Inscripción solicitada'};
   const CHECKS={conversation_open:'Conversación abierta',opportunity_open:'Oportunidad abierta',stage:'Etapa',scope:'Curso y edición',silence:'Cliente sin responder',recipe_published:'Receta publicada',no_human_control:'Sin control humano',task_open:'Tarea abierta',task_due:'Plazo de la tarea',waiting_human:'Esperando atención humana',consent:'Consentimiento del contacto',frequency:'Frecuencia de mensajes',material_available:'Plantilla disponible'};
-  let overview=null,recipes=[],templates=[],draft=null;
+  let overview=null,recipes=[],templates=[],draft=null,replySettings=[],replyProvider=null;
+  const REPLY_MODES={off:'Apagado',suggest:'Sugerir al asesor',templates:'Responder con plantillas',autonomous:'Autónomo con IA'};
   const chip=(label,kind='')=>`<span class="ops-chip ${kind}">${esc(label)}</span>`;
   const btn=(action,label,id='',extra='')=>`<button type="button" class="btn" data-action="rcp-${action}" data-id="${esc(id)}" ${extra}>${label}</button>`;
   const note=copy=>`<p class="crm-hint">${copy}</p>`;
@@ -18,12 +19,13 @@ window.createRecipesUI=function({state,api,esc,icon,showModal,toast}){
   const summary=d=>`Si ${when(d)}: ${d.actions.map(a=>({template:'enviar plantilla',task:'crear tarea',notify:'avisar al equipo'}[a.type])).join(', ')}`;
 
   async function load(){
-    const [o,r,c]=await Promise.all([api('/api/automation'),api('/api/automation/recipes'+(brandId()?'?brand='+encodeURIComponent(brandId()):'')),api('/api/catalogue')]);
-    overview=o;recipes=r.recipes;templates=c.templates.filter(t=>t.status==='approved');
+    const [o,r,c,rs]=await Promise.all([api('/api/automation'),api('/api/automation/recipes'+(brandId()?'?brand='+encodeURIComponent(brandId()):'')),api('/api/catalogue'),api('/api/replies/settings')]);
+    overview=o;recipes=r.recipes;templates=c.templates.filter(t=>t.status==='approved');replySettings=rs.settings;replyProvider=rs.provider;
   }
   function status(){
     const rows=(brandId()?overview.brands.filter(b=>b.id===brandId()):overview.brands);
-    return `<section class="crm-panel rcp-status"><div class="ops-card-top"><h2>Automatización</h2>${overview.global.paused?chip('Pausa global activa','warn'):chip('Sin pausa global','ok')}</div>${note('Todo empieza desactivado. Una receta sólo se programa si su marca tiene la automatización activa y no hay pausa global.')}<div class="rcp-brands">${rows.map(b=>`<div class="rcp-brand"><div><strong>${esc(b.name)}</strong><small>${b.enabled?'Activa':'Desactivada'}${Object.entries(b.counts).map(([k,n])=>` · ${n} ${esc((STEP[k]||k).toLowerCase())}${n===1?'':'s'}`).join('')}</small></div>${btn('brand-toggle',b.enabled?'Desactivar':'Activar',b.id,`data-revision="${b.revision}" data-enabled="${b.enabled?0:1}"`)}</div>`).join('')}</div><div class="actions">${btn('global-toggle',overview.global.paused?'Reanudar todo':'Pausar todo',String(overview.global.revision),`data-paused="${overview.global.paused?0:1}"`)}</div></section>`;
+    return `<section class="crm-panel rcp-status"><div class="ops-card-top"><h2>Automatización</h2>${overview.global.paused?chip('Pausa global activa','warn'):chip('Sin pausa global','ok')}</div>${note('Todo empieza desactivado. Una receta sólo se programa si su marca tiene la automatización activa y no hay pausa global.')}<div class="rcp-brands">${rows.map(b=>`<div class="rcp-brand"><div><strong>${esc(b.name)}</strong><small>${b.enabled?'Activa':'Desactivada'}${Object.entries(b.counts).map(([k,n])=>` · ${n} ${esc((STEP[k]||k).toLowerCase())}${n===1?'':'s'}`).join('')}</small></div>${btn('brand-toggle',b.enabled?'Desactivar':'Activar',b.id,`data-revision="${b.revision}" data-enabled="${b.enabled?0:1}"`)}</div>`).join('')}</div>
+      <h3 class="rcp-subtitle">Respuestas automáticas a clientes</h3>${note('Nivel por marca. «Responder con plantillas» es el comportamiento de siempre; «Sugerir» no envía nada y deja un borrador al asesor; «Autónomo» además usa el proveedor de IA ('+esc(replyProvider?.name==='claude'?'Claude · '+replyProvider.model:'simulado, sin costo')+') cuando la pregunta no se reconoce, siempre con conocimiento aprobado.')}<div class="rcp-brands">${replySettings.filter(s=>!brandId()||s.brand_id===brandId()).map(s=>`<div class="rcp-brand"><div><strong>${esc(s.brand_name)}</strong><small>Máximo sin reconocer antes de escalar: ${s.max_unknown}</small></div><select class="rcp-reply-mode" data-brand="${esc(s.brand_id)}" data-revision="${s.revision}" aria-label="Nivel de respuestas de ${esc(s.brand_name)}">${Object.entries(REPLY_MODES).map(([k,v])=>`<option value="${k}" ${s.mode===k?'selected':''}>${v}</option>`).join('')}</select></div>`).join('')}</div><div class="actions">${btn('global-toggle',overview.global.paused?'Reanudar todo':'Pausar todo',String(overview.global.revision),`data-paused="${overview.global.paused?0:1}"`)}</div></section>`;
   }
   function card(r){
     const [label,kind]=STATUS[r.status];
@@ -101,6 +103,7 @@ window.createRecipesUI=function({state,api,esc,icon,showModal,toast}){
     const label=$('#rcp-minutes-label');if(label)label.textContent=TRIGGERS[sel.value][1];
   }
   async function change(el){
+    if(el.classList?.contains('rcp-reply-mode')){try{const mode=el.value;await api('/api/replies/brands/'+el.dataset.brand,{method:'PATCH',body:{mode,providerEnabled:mode==='autonomous',expectedRevision:Number(el.dataset.revision)}});toast('Nivel de respuestas actualizado');}catch(e){toast(e.message);}await load();return true;}
     if(el.id==='rcp-trigger'){applyTrigger();return true;}
     if(el.id!=='rcp-brand')return false;
     const b=el.value,courses=state.courses.filter(c=>c.brand_id===b);

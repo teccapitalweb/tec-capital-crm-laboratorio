@@ -25,6 +25,10 @@ Para probar: configurar una marca y sus integrantes; abrir dos sesiones de aseso
 
 La migración v6 añade tablas de operación sin reescribir catálogo, usuarios, mensajes ni adjuntos. Antes de migrar una base con usuarios se genera `/data/backups/before-crm-v6-*.sqlite`. Esta copia no sustituye el respaldo periódico y la restauración conjunta de SQLite, `uploads/` y `library/`. El trabajador de operación se ejecuta en la misma instancia; la cola no depende de tener abierta una página, pero el reparto requiere una sesión conectada del asesor.
 
+## Respuestas automáticas y conocimiento
+
+Cada marca elige en **Operación → Seguimientos** cómo responde a los clientes: apagado, **sugerir** (el asesor ve un borrador con fuentes sobre el redactor), **plantillas** (lo de siempre: catálogo y conocimiento aprobado) o **autónomo con IA** (además redacta con un proveedor usando sólo conocimiento aprobado; sin clave usa un simulador). En **Catálogo y biblioteca → Conocimiento** el equipo escribe preguntas y respuestas por marca o curso y administración las aprueba. En el panel **Equipo** de cada conversación se ve por qué respondió cada mensaje automático y con qué fuente. Precios y fechas nunca salen del conocimiento: siempre del catálogo.
+
 ## Verificación en dos pasos (equipo)
 
 En **Mi configuración → Acceso y seguridad** el equipo puede activar un código temporal de una app de autenticación (opcional). Al iniciar sesión se pide después de la contraseña; hay 10 códigos de recuperación de un solo uso. Administración ve quién la tiene en **Equipo** y puede restablecerla. Si el administrador queda bloqueado, el procedimiento de emergencia está en `docs/OPERACION_Y_PRUEBAS.md`.
