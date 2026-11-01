@@ -30,12 +30,14 @@ import {createCatalogueImport} from './catalogue-import.mjs';
 import {createAutomation,cancelConversationSteps} from './automation.mjs';
 import {migrateSimulator} from './simulator-schema.mjs';
 import {createSimulator} from './simulator.mjs';
+import {migrateChannel} from './channel-schema.mjs';
+import {createChannel} from './channel.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<14&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v14-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<15&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v15-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -48,6 +50,7 @@ migrateHolidays(db);
 migrateMfa(db);
 migrateReplies(db);
 migrateSimulator(db);
+migrateChannel(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -95,6 +98,8 @@ function canSee(c,user){return !user.disabled&&(c.customer_id===user.id||crm.can
 function disconnect(userId){for(const [socket,user]of sessions)if(user.id===userId)socket.close(1008,'Actualiza tu acceso');}
 const crm=createCRM({db,body,json,audit,passwordHash,checkPassword,rate,disconnect,broadcast});
 const catalogue=createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer});
+// Canal simulado (server/channel.mjs): estados de entrega, ventana de 24 h, categorías, botones y anuncio; apagado por marca por omisión.
+const channel=createChannel({db,crm,body,json,audit,broadcast,accessConversation});
 const mfa=createMfa({db,dataDir,json,body,audit,rate,checkPassword});
 if(process.env.MFA_RESET_USER){const had=mfa.resetByUsername(process.env.MFA_RESET_USER);console.log(had?'MFA restablecido para @'+String(process.env.MFA_RESET_USER).trim().toLowerCase()+'. Retira MFA_RESET_USER del entorno.':'MFA_RESET_USER: ese usuario no tenía verificación en dos pasos o no existe.');}
 const analytics=createAnalytics({db,crm,json});
@@ -105,7 +110,7 @@ const aiProvider=createAiProvider();
 const replies=createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider:aiProvider});
 const automation=createAutomation({db,onChange:step=>{if(step.conversation_id)broadcast('conversation',step.conversation_id);broadcast('crm',null,{brandId:step.brand_id});}});
 const backupHours=process.env.BACKUP_INTERVAL_HOURS===undefined?(process.env.NODE_ENV==='test'?0:24):Number(process.env.BACKUP_INTERVAL_HOURS);
-const backups=createBackups({db,dataDir,version:'0.15.0',intervalMs:Number.isFinite(backupHours)&&backupHours>0?backupHours*3600000:0,keep:Math.max(1,Number(process.env.BACKUP_KEEP)||7)});
+const backups=createBackups({db,dataDir,version:'0.16.0',intervalMs:Number.isFinite(backupHours)&&backupHours>0?backupHours*3600000:0,keep:Math.max(1,Number(process.env.BACKUP_KEEP)||7)});
 const backupHandle=backupRoutes(backups);
 const recipes=createRecipes({db,catalogue,automation,insertMessage,broadcast,body,json,audit});
 // Simulador de clientes: habla con la propia API por loopback (nunca dentro de una transacción). SIMULATOR_DISABLED=1 lo oculta.
@@ -123,17 +128,17 @@ function broadcast(type,conversationId=null,extra={}){
   for(const [socket,saved] of sessions){const user=db.prepare('SELECT * FROM users WHERE id=?').get(saved.id);if(user&&!user.disabled&&socket.readyState===WebSocket.OPEN&&(!c||canSee(c,user))&&(type!=='crm'||(staff(user)&&(!extra.brandId||crm.canBrand(user,extra.brandId)))))socket.send(JSON.stringify({type,conversationId,...extra}));}
 }
 function online(userId){return [...sessions].some(([ws,u])=>u.id===userId&&ws.readyState===WebSocket.OPEN&&u.expires_at>Date.now()&&Boolean(db.prepare('SELECT 1 FROM sessions WHERE token_hash=?').get(u.token_hash)));}
-function conversationList(user){return conversationPage(db,user,{size:300},online).conversations;}
+function conversationList(user){return channel.decorate(conversationPage(db,user,{size:300},online).conversations);}
 function messageList(id,before=Number.MAX_SAFE_INTEGER){
   return db.prepare(`SELECT m.*,u.name sender_name,COALESCE(a.filename,lf.filename) filename,COALESCE(a.mime,lf.mime) mime,a.size FROM messages m LEFT JOIN users u ON u.id=m.sender_id
-    LEFT JOIN attachments a ON a.id=m.attachment_id LEFT JOIN library_files lf ON lf.id=json_extract(m.flyer_snapshot,'$.libraryFileId') WHERE m.conversation_id=? AND m.seq<? ORDER BY m.seq DESC LIMIT 150`).all(id,before).reverse().map(m=>({...m,flyer_snapshot:undefined,commercial_snapshot:m.commercial_snapshot?JSON.parse(m.commercial_snapshot):null,attachmentUrl:m.attachment_id?'/api/files/'+m.attachment_id:m.flyer_course_id?'/api/messages/'+m.id+'/flyer':null}));
+    LEFT JOIN attachments a ON a.id=m.attachment_id LEFT JOIN library_files lf ON lf.id=json_extract(m.flyer_snapshot,'$.libraryFileId') WHERE m.conversation_id=? AND m.seq<? ORDER BY m.seq DESC LIMIT 150`).all(id,before).reverse().map(m=>({...m,flyer_snapshot:undefined,buttons:m.buttons?JSON.parse(m.buttons):null,commercial_snapshot:m.commercial_snapshot?JSON.parse(m.commercial_snapshot):null,attachmentUrl:m.attachment_id?'/api/files/'+m.attachment_id:m.flyer_course_id?'/api/messages/'+m.id+'/flyer':null}));
 }
 function audit(user,action,id){db.prepare('INSERT INTO audit(user_id,action,entity_id,created_at) VALUES(?,?,?,?)').run(user?.id||null,action,id,Date.now());}
-function insertMessage(c,user,text,kind,ref,attachmentId=null,flyer=null,prepared=null){
-  const id=randomUUID(),now=Date.now();
+function insertMessage(c,user,text,kind,ref,attachmentId=null,flyer=null,prepared=null,options={}){
+  const id=randomUUID(),now=Date.now(),gate=channel.before(c,kind,{category:options.category||channel.categoryOf(kind,prepared,flyer),buttons:options.buttons});
   const snapshot=prepared?prepared.flyerSnapshot:flyer?{course:db.prepare('SELECT * FROM courses WHERE id=?').get(flyer),brand:db.prepare('SELECT * FROM brands WHERE id=?').get(c.brand_id)}:null;
   if(snapshot&&!prepared)snapshot.artworkId=courseArtwork(snapshot.course);
-  db.prepare('INSERT INTO messages(id,conversation_id,sender_id,sender_kind,text,attachment_id,flyer_course_id,flyer_snapshot,client_ref,created_at,commercial_snapshot) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(id,c.id,user?.id||null,kind,text,attachmentId,flyer,JSON.stringify(snapshot),ref,now,prepared?JSON.stringify({...prepared.commercial,sentAt:now}):null);
+  db.prepare('INSERT INTO messages(category,buttons,id,conversation_id,sender_id,sender_kind,text,attachment_id,flyer_course_id,flyer_snapshot,client_ref,created_at,commercial_snapshot) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(gate.category,gate.buttons,id,c.id,user?.id||null,kind,text,attachmentId,flyer,JSON.stringify(snapshot),ref,now,prepared?JSON.stringify({...prepared.commercial,sentAt:now}):null);
   if(prepared){const link=db.prepare('SELECT opportunity_id FROM conversation_opportunities WHERE conversation_id=?').get(c.id);if(link){const value={...prepared.commercial,sentAt:now,messageId:id};db.prepare('UPDATE opportunities SET offer_snapshot=? WHERE id=?').run(JSON.stringify(value),link.opportunity_id);db.prepare("INSERT INTO crm_events(opportunity_id,actor_id,kind,details,created_at) VALUES(?,?,'offer',?,?)").run(link.opportunity_id,user?.id||null,JSON.stringify(value),now);}}
   db.prepare('UPDATE conversations SET updated_at=? WHERE id=?').run(now,c.id);
   operations.message(c,kind,user);
@@ -196,7 +201,7 @@ function flyer(course,brand){
 const server=http.createServer(async(req,res)=>{
   security(res);const url=new URL(req.url,'http://localhost'),path=url.pathname;
   try{
-    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.15.0',transport:'websocket',mode:'laboratorio'});}
+    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.16.0',transport:'websocket',mode:'laboratorio'});}
     if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!originAllowed(req))throw fail(403,'Origen no permitido.');
     const ip=req.socket.remoteAddress||'unknown';
     if(req.method==='POST'&&path==='/api/auth/recover'){rate('recovery:'+ip,12,900000);await crm.recover(await body(req));return json(res,200,{ok:true});}
@@ -226,6 +231,7 @@ const server=http.createServer(async(req,res)=>{
     }
     if(path.startsWith('/api/')){
       const user=requireUser(req);
+      if(await channel.handle(req,res,path,user))return;
       if(await simulator.handle(req,res,path,user))return;
       if(await operations.handle(req,res,path,user))return;
       if(await backupHandle(req,res,path,user,{json,audit}))return;
@@ -242,18 +248,19 @@ const server=http.createServer(async(req,res)=>{
       if(req.method==='GET'&&path==='/api/bootstrap')return json(res,200,{user:safeUser(user),brands:crm.brandsFor(user),courses:db.prepare('SELECT * FROM courses WHERE active=1 ORDER BY title').all().filter(c=>user.role==='customer'||crm.canBrand(user,c.brand_id)).map(publicCourse),editions:db.prepare("SELECT * FROM editions WHERE status='published' ORDER BY starts_at").all().filter(e=>(user.role==='customer'||crm.canBrand(user,e.brand_id))&&!catalogue.editionState(e)).map(e=>({...e,priceCents:catalogue.info(e.course_id,e.id).priceCents,dateLabel:catalogue.info(e.course_id,e.id).dateLabel})),conversations:conversationList(user),onlineAgents:[...new Set([...sessions.values()].filter(staff).map(x=>x.id))].length});
       if(req.method==='GET'&&path==='/api/conversations'){
         const offset=Math.max(0,Math.min(100000,Number(url.searchParams.get('offset'))||0));
-        return json(res,200,conversationPage(db,user,{q:clean(url.searchParams.get('q'),100),offset:Math.floor(offset),cursor:url.searchParams.get('cursor'),brand:url.searchParams.get('brand'),channel:url.searchParams.get('channel'),filter:url.searchParams.get('filter'),mode:url.searchParams.get('mode')},online));
+        const page=conversationPage(db,user,{q:clean(url.searchParams.get('q'),100),offset:Math.floor(offset),cursor:url.searchParams.get('cursor'),brand:url.searchParams.get('brand'),channel:url.searchParams.get('channel'),filter:url.searchParams.get('filter'),mode:url.searchParams.get('mode')},online);
+        return json(res,200,{...page,conversations:channel.decorate(page.conversations)});
       }
       const detail=path.match(/^\/api\/conversations\/([a-f0-9-]+)$/);
-      if(detail&&req.method==='GET'){const c=conversationPage(db,user,{id:detail[1]},online).conversations[0];if(!c)throw fail(404,'Conversación no disponible.');return json(res,200,{conversation:c});}
+      if(detail&&req.method==='GET'){const c=channel.decorate(conversationPage(db,user,{id:detail[1]},online).conversations)[0];if(!c)throw fail(404,'Conversación no disponible.');return json(res,200,{conversation:c});}
       if(req.method==='POST'&&path==='/api/conversations'){
         rate('new:'+user.id,20);const input=await body(req);const course=db.prepare('SELECT * FROM courses WHERE id=? AND active=1').get(clean(input.courseId,60));
         if(!course||!['whatsapp','instagram','facebook'].includes(input.channel))throw fail(400,'Elige un curso y un canal válidos.');
         if(staff(user))crm.requireBrand(user,course.brand_id);
         const editionId=clean(input.editionId,100)||defaultEditionId(course.id),context=catalogue.info(course.id,editionId);if(context.reason)throw fail(409,context.reason+'. Elige otra edición.');
         let c=db.prepare("SELECT * FROM conversations WHERE customer_id=? AND course_id=? AND edition_id=? AND channel=? AND status!='resolved'").get(user.id,course.id,editionId,input.channel);
-        if(!c){const id=randomUUID(),now=Date.now();db.prepare('INSERT INTO conversations(id,customer_id,brand_id,course_id,channel,created_at,updated_at,edition_id) VALUES(?,?,?,?,?,?,?,?)').run(id,user.id,course.brand_id,course.id,input.channel,now,now,editionId);c=db.prepare('SELECT * FROM conversations WHERE id=?').get(id);audit(user,'conversation.created',id);broadcast('conversation',id);}
-        transaction(db,()=>crm.syncConversation(c));broadcast('crm',null,{brandId:c.brand_id});return json(res,200,{conversation:conversationPage(db,user,{id:c.id},online).conversations[0]});
+        if(!c){const id=randomUUID(),now=Date.now();db.prepare('INSERT INTO conversations(id,customer_id,brand_id,course_id,channel,created_at,updated_at,edition_id,referral) VALUES(?,?,?,?,?,?,?,?,?)').run(id,user.id,course.brand_id,course.id,input.channel,now,now,editionId,staff(user)?null:channel.referralInput(input));c=db.prepare('SELECT * FROM conversations WHERE id=?').get(id);audit(user,'conversation.created',id);broadcast('conversation',id);}
+        transaction(db,()=>crm.syncConversation(c));broadcast('crm',null,{brandId:c.brand_id});return json(res,200,{conversation:channel.decorate(conversationPage(db,user,{id:c.id},online).conversations)[0]});
       }
       const messages=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/messages$/);
       if(messages){const c=accessConversation(messages[1],user);
@@ -286,7 +293,7 @@ const server=http.createServer(async(req,res)=>{
         }
       }
       const read=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/read$/);
-      if(read&&req.method==='POST'){const c=accessConversation(read[1],user);const input=await body(req);if(input.asAgent){requireStaff(user);crm.requireBrand(user,c.brand_id);}const max=Number(input.upTo)||0;if(!Number.isSafeInteger(max)||max<0)throw fail(400,'Lectura no válida.');const kind=c.customer_id===user.id&&!input.asAgent?"sender_kind IN ('agent','automation')":"sender_kind='customer'";const changed=db.prepare(`UPDATE messages SET read_at=? WHERE conversation_id=? AND seq<=? AND read_at IS NULL AND ${kind}`).run(Date.now(),c.id,max);if(changed.changes)broadcast('read',c.id);return json(res,200,{ok:true});}
+      if(read&&req.method==='POST'){const c=accessConversation(read[1],user);const input=await body(req);if(input.asAgent){requireStaff(user);crm.requireBrand(user,c.brand_id);}const max=Number(input.upTo)||0;if(!Number.isSafeInteger(max)||max<0)throw fail(400,'Lectura no válida.');const kind=c.customer_id===user.id&&!input.asAgent?"sender_kind IN ('agent','automation')":"sender_kind='customer'";const changed=db.prepare(`UPDATE messages SET read_at=? WHERE conversation_id=? AND seq<=? AND read_at IS NULL AND ${kind}`).run(Date.now(),c.id,max);if(c.customer_id===user.id&&!input.asAgent)channel.markRead(c.id,max);if(changed.changes)broadcast('read',c.id);return json(res,200,{ok:true});}
       const action=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/action$/);
       if(action&&req.method==='POST'){
         requireStaff(user);const input=await body(req);transaction(db,()=>{const c=accessConversation(action[1],user);crm.requireBrand(user,c.brand_id);if(c.assigned_to&&c.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor está atendiendo esta conversación.');
@@ -352,9 +359,10 @@ server.on('upgrade',(req,socket,head)=>{
 const jobsTimer=setInterval(processJobs,350);
 const operationsTimer=setInterval(()=>{try{operations.reconcile();}catch(e){console.error('Operations tick failed:',e.name,e.message);}},1000);
 const automationTimer=setInterval(()=>{try{recipes.scan();}catch(e){console.error('Recipe scan failed:',e.name);}automation.tick().catch(e=>console.error('Automation tick failed:',e.name));},1000);
+const channelTimer=setInterval(()=>{try{channel.tick();}catch(e){console.error('Channel tick failed:',e.name);}},500);
 const simulatorTimer=setInterval(()=>simulator.tick().catch(e=>console.error('Simulator tick failed:',e.name)),1000);
 const backupTimer=setInterval(()=>backups.tick(),10*60*1000);setTimeout(()=>backups.tick(),5000).unref();
 const heartbeat=setInterval(()=>{for(const [ws,user]of sessions){if(!ws.isAlive||user.expires_at<Date.now()||!db.prepare('SELECT token_hash FROM sessions WHERE token_hash=?').get(user.token_hash)){ws.terminate();continue;}ws.isAlive=false;ws.ping();}const now=Date.now();for(const [key,value]of limits)if(value.end<now)limits.delete(key);db.prepare('DELETE FROM sessions WHERE expires_at<?').run(now);},30000);
 server.listen(port,host,()=>console.log(`TEC Capital Laboratorio: http://${host}:${server.address().port}`));
-function stop(){clearInterval(jobsTimer);clearInterval(operationsTimer);clearInterval(automationTimer);clearInterval(simulatorTimer);clearInterval(backupTimer);clearInterval(heartbeat);for(const ws of sessions.keys())ws.close(1001,'Servidor reiniciando');server.close(()=>{db.close();process.exit(0);});setTimeout(()=>process.exit(0),1500).unref();}
+function stop(){clearInterval(jobsTimer);clearInterval(operationsTimer);clearInterval(automationTimer);clearInterval(simulatorTimer);clearInterval(channelTimer);clearInterval(backupTimer);clearInterval(heartbeat);for(const ws of sessions.keys())ws.close(1001,'Servidor reiniciando');server.close(()=>{db.close();process.exit(0);});setTimeout(()=>process.exit(0),1500).unref();}
 process.on('SIGTERM',stop);process.on('SIGINT',stop);

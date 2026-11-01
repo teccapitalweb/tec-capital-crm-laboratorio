@@ -93,7 +93,8 @@ export function createSimulator({db,catalogue,crm,operations,catalogueImport,bod
     const persona=PERSONAS[a.persona],s=persona.steps[a.step],run=getRun(a.run_id),base=PACES[run.pace].base,poll=Math.min(2000,base),t=now();
     if(!s)return finish(a,'done',persona.outcome);
     if(!a.conversation_id){
-      const r=await call(a,'POST','/api/conversations',{courseId:a.course_id,editionId:a.edition_id,channel:a.channel});
+      const viaAd=Number(String(a.username||'').split('.').pop())%3===1;   // uno de cada tres llega desde un anuncio simulado
+      const r=await call(a,'POST','/api/conversations',{courseId:a.course_id,editionId:a.edition_id,channel:a.channel,...(viaAd?{referral:{ad:'Anuncio · '+(db.prepare('SELECT title FROM courses WHERE id=?').get(a.course_id)?.title||'curso'),campaign:'demo'}}:{})});
       a.conversation_id=r.conversation.id;db.prepare('UPDATE simulator_actors SET conversation_id=?,updated_at=? WHERE id=?').run(a.conversation_id,t,a.id);
     }
     const c=db.prepare('SELECT status FROM conversations WHERE id=?').get(a.conversation_id);
@@ -130,7 +131,7 @@ export function createSimulator({db,catalogue,crm,operations,catalogueImport,bod
   }
   async function tick(){
     if(!enabled||!db.prepare("SELECT 1 FROM simulator_runs WHERE state='running' LIMIT 1").get())return;
-    const due=db.prepare("SELECT a.*,u.name FROM simulator_actors a JOIN simulator_runs r ON r.id=a.run_id JOIN users u ON u.id=a.user_id WHERE r.state='running' AND a.state IN ('active','waiting') AND a.next_at<=? ORDER BY a.next_at LIMIT 10").all(now());
+    const due=db.prepare("SELECT a.*,u.name,u.username FROM simulator_actors a JOIN simulator_runs r ON r.id=a.run_id JOIN users u ON u.id=a.user_id WHERE r.state='running' AND a.state IN ('active','waiting') AND a.next_at<=? ORDER BY a.next_at LIMIT 10").all(now());
     await Promise.all(due.filter(a=>!inFlight.has(a.id)).map(act));
   }
 

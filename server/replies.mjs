@@ -48,7 +48,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const s=settings(c.brand_id),user=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id),first=(user?.name||'').split(' ')[0];
     const ctx=catalogue.info(c.course_id,c.edition_id),course=ctx.course,{intent,confidence}=classify(trigger.text);
     const count=db.prepare("SELECT count(*) n FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id).n;
-    const out={mode:s.mode,intent,confidence,reply:'',sources:[],stage:null,handoff:false,prepared:null,reason:'',needsProvider:false,knowledge:[]};
+    const out={mode:s.mode,intent,confidence,reply:'',sources:[],stage:null,handoff:false,prepared:null,reason:'',needsProvider:false,knowledge:[],buttons:null};
     const catalogueSource={type:'catalogue',courseId:course.id,editionId:ctx.edition.id,promotionId:ctx.promotion?.id||null,priceCents:ctx.priceCents,currency:ctx.currency};
     const kb=approved(c.brand_id,c.course_id);
     const fromKnowledge=(threshold=.5)=>{const hit=bestMatch(trigger.text,kb,threshold)||(TOPIC_INTENTS.includes(intent)?{entry:kb.find(k=>k.topic===intent),score:1}:null);if(!hit?.entry)return false;out.reply=hit.entry.answer;out.sources.push({type:'knowledge',id:hit.entry.id,revision:hit.entry.revision,question:hit.entry.question});out.reason='Conocimiento aprobado «'+hit.entry.question+'»'+(hit.score<1?' (parecido '+Math.round(hit.score*100)+'%)':'')+'.';return true;};
@@ -60,7 +60,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     else if(intent==='price'){out.prepared=catalogue.prepare(c,{kind:'price'});out.reply=out.prepared.text.replace(/^Precio de ejemplo:/,'El precio de ejemplo de '+course.title+' es');out.stage='interesado';out.sources.push(catalogueSource);out.reason='Precio y promoción vigentes consultados en el catálogo al responder.';}
     else if(intent==='syllabus'){out.prepared=catalogue.prepare(c,{kind:'syllabus'});out.reply=out.prepared.text;out.sources.push(catalogueSource);out.reason='Temario del curso en el catálogo.';}
     else if(intent==='schedule'){out.prepared=catalogue.prepare(c,{kind:'schedule'});out.reply=out.prepared.text;out.sources.push(catalogueSource);out.reason='Fecha, horario y docente de la edición en el catálogo.';}
-    else if(intent==='greeting'||count===1){out.prepared=catalogue.prepare(c,{kind:'flyer'});out.reply=course.welcome.replaceAll('{{nombre}}',first).replaceAll('{{curso}}',course.title)+'\n\n'+out.prepared.text;out.sources.push(catalogueSource,{type:'template',kind:'welcome'});out.reason=count===1?'Primer mensaje: bienvenida con la ficha vigente del curso.':'Saludo o petición de información: ficha vigente del curso.';}
+    else if(intent==='greeting'||count===1){out.prepared=catalogue.prepare(c,{kind:'flyer'});out.reply=course.welcome.replaceAll('{{nombre}}',first).replaceAll('{{curso}}',course.title)+'\n\n'+out.prepared.text;out.sources.push(catalogueSource,{type:'template',kind:'welcome'});out.buttons=['Precio','Temario','Fechas'];out.reason=count===1?'Primer mensaje: bienvenida con la ficha vigente del curso.':'Saludo o petición de información: ficha vigente del curso.';}
     else if(intent==='thanks'){out.reply='¡Con gusto! Si quieres, puedo ayudarte con el precio, las fechas o la inscripción de práctica.';out.reason='Agradecimiento o cierre.';}
     else if(fromKnowledge(.5)){/* respondido con conocimiento */}
     else{
@@ -82,7 +82,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const log=(action,replyMessageId=null)=>{const id=randomUUID();db.prepare('INSERT INTO reply_log(id,conversation_id,brand_id,trigger_message_id,reply_message_id,intent,confidence,mode,action,reply_text,sources,model,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,trigger.id,replyMessageId,p.intent,p.confidence,p.mode,action,reply,JSON.stringify(sources),model,reason,t);return id;};
     if(p.mode==='off'){log('skipped');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);return {action:'skipped',reason:'Respuestas automáticas apagadas para la marca: pasa a una persona.'};}
     if(p.mode==='suggest'){log('suggested');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);return {action:'suggested',reply,reason};}
-    const messageId=insertMessage(c,null,reply,'automation',ref,null,p.prepared?.flyerSnapshot?c.course_id:null,p.prepared);
+    const messageId=insertMessage(c,null,reply,'automation',ref,null,p.prepared?.flyerSnapshot?c.course_id:null,p.prepared,{buttons:p.buttons,category:'service'});   // responde a un mensaje entrante: siempre dentro de la ventana de servicio
     log(p.handoff?'escalated':'replied',messageId);
     if(p.stage)crm.setStage(c,p.stage);
     if(p.handoff){db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);}

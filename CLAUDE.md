@@ -57,6 +57,6 @@ La referencia de v0.5 es **57 pruebas aprobadas** (79 con los bloques locales 4A
 
 ## Lo siguiente
 
-Última publicación (31 oct 2026): **v0.15.0** en `main` (`e428bd5`): motor de respuestas v2 (esquema 13) y simulador de clientes (esquema **14**), 122 pruebas; `/api/health` de producción devuelve `0.15.0`. Estado y siguiente bloque: [CONTINUIDAD.md](docs/CONTINUIDAD.md) y [VISION_PLATAFORMA.md](docs/VISION_PLATAFORMA.md).
+Última publicación (31 oct 2026): **v0.15.0** en `main` (`e428bd5`): motor de respuestas v2 (esquema 13) y simulador de clientes (esquema **14**), 122 pruebas; `/api/health` de producción devuelve `0.15.0`. Bloque local posterior, sin publicar: **canal simulado realista** (rama `feat/canal-simulado`, esquema **15**, versión 0.16.0, 123 pruebas). Estado y siguiente bloque: [CONTINUIDAD.md](docs/CONTINUIDAD.md) y [VISION_PLATAFORMA.md](docs/VISION_PLATAFORMA.md).
 
 La tercera fase del plan competitivo fue **operación del equipo**, ya entregada. La siguiente es **automatización editable e IA supervisada**. Los bloques 4A (motor durable, esquema v7) y una primera entrega de 4B (recetas por silencio, esquema v8, API sin interfaz) están implementados localmente sin publicar; sigue completar 4B (interfaz, más disparadores) y después añade conocimiento aprobado y copiloto. Los detalles y criterios de salida están en [PLAN_FASE_4.md](docs/PLAN_FASE_4.md).

@@ -33,6 +33,10 @@ Cada marca elige en **Operación → Seguimientos** cómo responde a los cliente
 
 En **Operación → Demo** (administración) se crean clientes ficticios —su nombre termina en «· demo»— que escriben por la misma API que un cliente real siguiendo ocho guiones (curioso, precio, listo para inscribirse, molesto, baja, dudas, preguntas fuera de guion, silencio) a tres ritmos. El CRM responde como siempre y la tarjeta de la demo muestra en vivo cuántos resolvió solo, cuántos esperan a una persona, la primera respuesta automática media, las bajas y las etapas. **Detener** los calla; **Archivar** cierra sus chats y oportunidades. **Generar catálogo de demostración** crea hasta 15 marcas con 8 cursos cada una (ediciones publicadas y preventas) pasando por la importación CSV; repetirlo no duplica. `SIMULATOR_DISABLED=1` oculta el módulo.
 
+## Canal simulado realista
+
+Por marca y apagado por omisión (**Operación → Seguimientos → Canal simulado**). Al activarlo, los mensajes del equipo y de la automatización pasan por **enviado → entregado → leído** (o **fallido**, con reintento y bitácora), se aplica la **ventana de servicio de 24 h** (72 h si el cliente llegó por anuncio): fuera de ella sólo pasan plantillas aprobadas —temario, precio y fechas como utilidad, flyer como marketing—, la bienvenida automática lleva **botones de respuesta rápida** y cada flyer aprobado ofrece un **enlace de anuncio** (`/?ad=…`) que abre la conversación del curso con el origen marcado. Nada se conecta a Meta; sirve para ensayar el flujo real antes de tener los accesos.
+
 ## Verificación en dos pasos (equipo)
 
 En **Mi configuración → Acceso y seguridad** el equipo puede activar un código temporal de una app de autenticación (opcional). Al iniciar sesión se pide después de la contraseña; hay 10 códigos de recuperación de un solo uso. Administración ve quién la tiene en **Equipo** y puede restablecerla. Si el administrador queda bloqueado, el procedimiento de emergencia está en `docs/OPERACION_Y_PRUEBAS.md`.
