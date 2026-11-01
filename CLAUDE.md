@@ -9,7 +9,7 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 - CRM del equipo: <https://crm-laboratorio-production.up.railway.app/crm>.
 - Experiencia del cliente: <https://crm-laboratorio-production.up.railway.app/>.
 - Repositorio: <https://github.com/teccapitalweb/tec-capital-crm-laboratorio>, rama `main`.
-- Los mensajes entre perfiles son reales y persistentes dentro del laboratorio. WhatsApp, Instagram y Facebook son **canales simulados**. Todavía no hay integración con Meta, modelo de IA, RAG, cobros ni matrícula real.
+- Los mensajes entre perfiles son reales y persistentes dentro del laboratorio. WhatsApp, Instagram y Facebook son **canales simulados**. Todavía no hay integración con Meta, modelo de IA, RAG, cobros ni matrícula real. **Propósito actual:** es una simulación para diseñar y presentar el flujo completo; las conexiones reales llegarán cuando las consultoras entreguen sus accesos (ver VISION_PLATAFORMA.md).
 - Se conservaron tres marcas y seis cursos de demostración. No confundas los objetivos de 15 marcas/120 cursos con datos comerciales ya cargados.
 - Usuario hispanohablante. Comunica con claridad qué cambiaste, qué verificaste y qué falta.
 
@@ -20,6 +20,7 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 3. [Operación y pruebas](docs/OPERACION_Y_PRUEBAS.md): desarrollo, despliegue, verificaciones y recuperación.
 3b. [Diseño y auditoría visual](docs/DISENO_Y_AUDITORIA.md): reglas de Niebla y cómo medirlas.
 4. [Plan de la fase 4](docs/PLAN_FASE_4.md): siguiente trabajo propuesto, todavía sin implementar.
+4b. [Visión de la plataforma](docs/VISION_PLATAFORMA.md): el CRM como módulo de la plataforma de toda la empresa (IPCIL, Academia, finanzas, canales reales); diagnóstico, arquitectura objetivo y fases.
 5. [README](README.md) y [ROADMAP](ROADMAP.md): recorridos del producto y planificación general.
 
 El código y el estado real del repositorio prevalecen si estas notas quedan desactualizadas. Comprueba `git status`, `package.json`, historial de commits y `/api/health` antes de actuar.

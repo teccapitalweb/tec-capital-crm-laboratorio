@@ -263,6 +263,10 @@ Publicado por instrucción expresa del usuario: `main`, commit funcional `c9cb22
 
 Comprobado en la web publicada sin iniciar sesión: versión 0.14.0; los 17 archivos de la interfaz publicados son idénticos a los de Git; `/polish.css` se sirve como `text/css`; en la pantalla pública de acceso de producción, `polish.css` está cargado y la auditoría de diseño da 0 textos bajo 4,5:1 y 0 bajo 11 px, sin desbordamiento horizontal. **No comprobado:** el aspecto de las pantallas internas (Mi día, Oportunidades, Analítica, etc.) en producción con sesión real (se auditaron en local con datos de práctica), la migración v12 en producción y lo pendiente acumulado (respaldos `auto-*`, datos reales, flujos autenticados). **Nueve versiones publicadas (0.6 a 0.14) sin verificación autenticada en producción.**
 
+## Contexto de negocio ampliado y plan maestro (31 oct 2026)
+
+El usuario aclaró que el CRM es **una simulación para diseñar y presentar el flujo** antes de que las consultoras entreguen sus APIs; el objetivo final es una plataforma de toda la empresa (ventas semiautomáticas, coordinación académica, certificación IPCIL, finanzas, tráfico, contenido). Se analizaron los repositorios reales (panel IPCIL con roles vendedor/coordinador/admin/trafiquer/rh en Firebase; Academia IPCI en Supabase/Postgres con cohortes, pagos Stripe, inscripciones, certificados y comisiones; ~30 clubs/webhooks por consultora), la documentación oficial de Meta y el mercado. Diagnóstico, arquitectura objetivo, fases y decisiones pendientes: [VISION_PLATAFORMA.md](VISION_PLATAFORMA.md). Consecuencia para este repo: la **Fase 1** del plan (motor de respuestas v2, simulador de clientes, canal simulado realista, contrato de conectores, venta con pago simulado y modo presentación) es el siguiente trabajo; la verificación autenticada en producción deja de ser prioritaria porque no hay datos reales que proteger.
+
 ## Pendientes reales
 
 0b. **Recetas:** esperas entre acciones (secuencias), disparadores de inscripción/información y oportunidad estancada.
