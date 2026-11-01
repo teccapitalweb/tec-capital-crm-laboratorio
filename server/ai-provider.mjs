@@ -31,12 +31,20 @@ const FORBIDDEN_RE=/\b(pago (confirmado|recibido|acreditado|aprobado)|ya quedast
 // Cualquier token con forma de dominio cuenta como enlace: con esquema, con www., pelón (sitio.com/ruta), acortador o punycode.
 // Se exige que la etiqueta previa al TLD tenga 3+ caracteres salvo que haya esquema o www., para no confundir «a.m.» o «p.ej.».
 const LINK_RE=/\b(?:(https?:\/\/|www\.)[^\s)]+|(?:[a-z0-9-]{3,}\.)(?:[a-z0-9-]+\.)*(?:xn--[a-z0-9-]+|[a-z]{2,24})(?:\/[^\s)]*|\b))/gi;
-export function hostOf(token){
-  let t=String(token).trim().toLowerCase().replace(/^https?:\/\//,'').replace(/^www\./,'');
-  t=t.split(/[\/?#]/)[0].split('@').pop().split(':')[0].replace(/[.,;:!?)]+$/,'');
-  return t;
+// Cada enlace se normaliza con el analizador estándar (`new URL`) y se compara de forma EXACTA (host + ruta + consulta) con los
+// enlaces del conocimiento aprobado: no basta compartir dominio. Un token con «\», «@» o escapes porcentuales en la parte del
+// dominio se considera inválido (son los trucos que hacen que un analizador y un navegador lean hosts distintos).
+export function linkKey(token){
+  let t=String(token).trim().replace(/[.,;:!?)]+$/,'');
+  const hasScheme=/^https?:\/\//i.test(t);const authority=(hasScheme?t.replace(/^https?:\/\//i,''):t).split(/[\/?#]/)[0];
+  if(/[\\@%\s]/.test(authority)||!authority)return {invalid:true,raw:t};
+  let u;try{u=new URL(hasScheme?t:'http://'+t);}catch{return {invalid:true,raw:t};}
+  if(!['http:','https:'].includes(u.protocol)||u.username||u.password||!u.hostname.includes('.'))return {invalid:true,raw:t};
+  const host=u.hostname.toLowerCase().replace(/^www\./,'');
+  return {invalid:false,host,key:host+(u.pathname.replace(/\/+$/,'')||'')+u.search};
 }
-export const linkHosts=text=>[...new Set((String(text||'').match(LINK_RE)||[]).map(hostOf).filter(h=>h.includes('.')))];
+export const linkKeys=text=>(String(text||'').match(LINK_RE)||[]).map(linkKey);
+
 export function validateDraft(draft,knowledge=[],{minConfidence=0.5}={}){
   if(!draft||typeof draft.text!=='string'||!draft.text.trim())return {ok:false,reason:'Sin texto del proveedor.'};
   const text=draft.text.trim(),used=(draft.usedIds||[]).filter(id=>knowledge.some(k=>k.id===id));
@@ -44,8 +52,8 @@ export function validateDraft(draft,knowledge=[],{minConfidence=0.5}={}){
   if(typeof draft.confidence==='number'&&draft.confidence<minConfidence)return {ok:false,reason:'Confianza del proveedor por debajo del mínimo ('+Math.round(draft.confidence*100)+'%).'};
   if(PRICE_RE.test(text))return {ok:false,reason:'El borrador contenía un precio o importe: los precios sólo salen del catálogo.'};
   const forbidden=text.match(FORBIDDEN_RE);if(forbidden)return {ok:false,reason:'El borrador contenía lenguaje no permitido («'+forbidden[0]+'»).'};
-  const allowedHosts=new Set(knowledge.flatMap(k=>linkHosts(k.answer)));
-  for(const h of linkHosts(text))if(!allowedHosts.has(h))return {ok:false,reason:'El borrador contenía un enlace o dominio («'+h+'») que no está en el conocimiento aprobado.'};
+  const allowed=new Set(knowledge.flatMap(k=>linkKeys(k.answer)).filter(l=>!l.invalid).map(l=>l.key));
+  for(const l of linkKeys(text)){if(l.invalid)return {ok:false,reason:'El borrador contenía un enlace con formato sospechoso («'+l.raw.slice(0,60)+'»).'};if(!allowed.has(l.key))return {ok:false,reason:'El borrador contenía un enlace («'+l.key.slice(0,80)+'») que no coincide exactamente con uno del conocimiento aprobado.'};}
   return {ok:true,text,usedIds:used};
 }
 

@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
-import {similarity,bestMatch,tokens,createAiProvider,validateDraft,linkHosts} from '../server/ai-provider.mjs';
+import {similarity,bestMatch,tokens,createAiProvider,validateDraft,linkKeys} from '../server/ai-provider.mjs';
 import {DEMO_KNOWLEDGE} from '../server/replies-schema.mjs';
 
 test('parecido léxico: raíces, variantes y umbral',async()=>{
@@ -48,7 +48,11 @@ test('el texto del proveedor se valida en código antes de llegar al cliente',()
   assert.equal(validateDraft({text:'Sí, con QR verificable.',usedIds:['k2']},kb).ok,true);   // sin confianza declarada no se bloquea por ese criterio
   assert.equal(validateDraft({text:'Paga en pagos.ejemplo.mx/curso cuando quieras.',usedIds:['k1'],confidence:.9},kb).ok,true);   // dominio pelón del conocimiento: permitido
   assert.equal(validateDraft({text:'La sesión es a las 10 a.m. y, p. ej., puedes conectarte 5 min antes. Atte. Lic. Gómez.',usedIds:['k2'],confidence:.9},kb).ok,true);   // abreviaturas no cuentan como dominios
-  assert.deepEqual(linkHosts('ve a https://www.Pagos.Ejemplo.MX/curso?x=1 o a bit.ly/z, no a 10 a.m.'),['pagos.ejemplo.mx','bit.ly']);
+  assert.deepEqual(linkKeys('ve a https://www.Pagos.Ejemplo.MX/curso/?x=1 o a bit.ly/z, no a 10 a.m.').map(l=>l.key),['pagos.ejemplo.mx/curso?x=1','bit.ly/z']);
+  // misma marca, otra ruta: no basta compartir dominio
+  assert.match(validateDraft({text:'Paga en https://pagos.ejemplo.mx/otra-ruta ahora.',usedIds:['k1'],confidence:.9},kb).reason,/no coincide exactamente/);
+  // trucos de analizador: usuario@host, barra invertida y escapes porcentuales en el dominio
+  for(const evil of ['https://evil.com\\@pagos.ejemplo.mx/curso','https://pagos.ejemplo.mx@evil.com/curso','pagos.ejemplo.mx%40evil.com/curso','https://evil.com\\pagos.ejemplo.mx/curso'])assert.equal(validateDraft({text:'Entra a '+evil+' y paga.',usedIds:['k1'],confidence:.9},kb).ok,false,evil);
 });
 
 test('motor de respuestas v2: conocimiento, niveles por marca, bitácora, sugerencias y escalamiento',async t=>{
