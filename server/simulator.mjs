@@ -100,6 +100,7 @@ export function createSimulator({db,catalogue,crm,operations,catalogueImport,bod
     const c=db.prepare('SELECT status FROM conversations WHERE id=?').get(a.conversation_id);
     if(!c||c.status==='resolved')return finish(a,'done','cerrada_por_equipo');
     if(a.phase==='send'){
+      if(s.pay){const o=db.prepare("SELECT id FROM orders WHERE conversation_id=? AND status='pending' AND expires_at>? LIMIT 1").get(a.conversation_id,now());if(o){await call(a,'POST','/api/payments/orders/'+o.id+'/pay',{method:s.pay,outcome:'approved'});await say(a,'Listo, ya pagué en línea. ¡Gracias!');return finish(a,'done','pagado');}}
       if(s.say)await say(a,pick(s.say));
       if(!s.wait)return advance(a,base);
       db.prepare("UPDATE simulator_actors SET phase='wait',waiting_since=?,last_seq=?,next_at=?,updated_at=? WHERE id=?").run(now(),lastSeq(a.conversation_id),now()+poll,now(),a.id);return;

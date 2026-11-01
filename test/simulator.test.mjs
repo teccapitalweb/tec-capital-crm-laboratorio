@@ -33,7 +33,7 @@ test('simulador por API: permisos, catálogo demo, demo rápida con ocho perfile
 
  // permisos: sólo administración; sin sesión, 401
  await call('/api/simulator',client.cookie,undefined,'GET',403);await call('/api/simulator/runs','',undefined,'GET',401);
- const meta=await call('/api/simulator',admin.cookie);assert.equal(meta.personas.length,8);assert.equal(meta.demo.brands,15);
+ const meta=await call('/api/simulator',admin.cookie);assert.equal(meta.personas.length,9);assert.equal(meta.demo.brands,15);
 
  // catálogo de demostración: 4 marcas × 2 cursos → una marca nueva, ocho cursos con edición publicada; repetir no duplica
  const cat=await call('/api/simulator/catalogue',admin.cookie,{brands:4,courses:2});
@@ -49,23 +49,23 @@ test('simulador por API: permisos, catálogo demo, demo rápida con ocho perfile
  await call('/api/simulator/runs',admin.cookie,{count:2,pace:'rapida',brandIds:['no-existe']},'POST',404);
 
  // demo rápida: un cliente por perfil, repartidos entre cursos y canales
- const run=(await call('/api/simulator/runs',admin.cookie,{count:8,pace:'rapida',brandIds:'all'},'POST',201)).run;
- assert.equal(run.actors.length,8);assert.equal(new Set(run.actors.map(a=>a.persona)).size,8);assert.ok(run.actors.every(a=>a.name.endsWith('· demo')));assert.equal(new Set(run.actors.map(a=>a.channel)).size,3);
+ const run=(await call('/api/simulator/runs',admin.cookie,{count:9,pace:'rapida',brandIds:'all'},'POST',201)).run;
+ assert.equal(run.actors.length,9);assert.equal(new Set(run.actors.map(a=>a.persona)).size,9);assert.ok(run.actors.every(a=>a.name.endsWith('· demo')));assert.equal(new Set(run.actors.map(a=>a.channel)).size,3);
  let r;for(let i=0;i<240;i++){r=(await call('/api/simulator/runs/'+run.id,admin.cookie)).run;if(r.stats.byState.active===0)break;await sleep(500);}
  assert.equal(r.stats.byState.active,0,JSON.stringify(r.stats));assert.equal(r.stats.byState.failed,0,JSON.stringify(r.actors.filter(a=>a.error)));
  const by=p=>r.actors.find(a=>a.persona===p);
- for(const p of ['listo','molesto','desconocido'])assert.equal(by(p).state,'waiting',p+' espera a una persona');
+ for(const p of ['listo','molesto','desconocido','pagador'])assert.equal(by(p).state,'waiting',p+' espera a una persona');
  for(const p of ['curioso','precio','baja','dudas','silencio'])assert.equal(by(p).state,'done',p+' termina solo');
  assert.equal(by('silencio').outcome,'silencio');assert.equal(by('baja').outcome,'baja');assert.ok(by('curioso').gotBot>=3,'el curioso recibió respuestas automáticas');
  assert.ok(r.stats.messages.customer>=16,'mensajes de clientes');assert.ok(r.stats.messages.automation>=8,'respuestas automáticas');assert.equal(r.stats.messages.agent,0);
  assert.ok(r.stats.firstReplyMs!==null&&r.stats.firstReplyMs<10000,'primera respuesta automática medida');
  assert.equal(r.stats.optOuts,1,'la baja quedó registrada en consentimiento');
  assert.ok((r.stats.stages.inscripcion||0)>=1,'el cliente listo avanzó a inscripción: '+JSON.stringify(r.stats.stages));
- assert.equal(r.stats.waitingHuman,3);assert.equal(r.stats.finished,5);assert.equal(r.stats.withoutHuman,5);
+ assert.equal(r.stats.waitingHuman,4);assert.equal(r.stats.finished,5);assert.equal(r.stats.withoutHuman,5);
  const d=db();try{
   // el curioso lee las respuestas que espera; la contestación a su despedida puede quedar sin leer, como haría una persona
   assert.ok(d.prepare("SELECT count(*) n FROM messages WHERE sender_kind='automation' AND read_at IS NOT NULL AND conversation_id=?").get(by('curioso').conversationId).n>=3,'los clientes demo marcan como leídas las respuestas');
-  assert.equal(d.prepare("SELECT count(*) n FROM users WHERE username LIKE 'demo.%' AND role='customer'").get().n,8);
+  assert.equal(d.prepare("SELECT count(*) n FROM users WHERE username LIKE 'demo.%' AND role='customer'").get().n,9);
   assert.equal(d.prepare("SELECT count(*) n FROM messages m JOIN users u ON u.id=m.sender_id WHERE u.username LIKE 'demo.%' AND m.client_ref NOT LIKE u.id||':%'").get().n,0,'los mensajes entraron por la API con clientRef del propio cliente');
  }finally{d.close();}
 
@@ -77,16 +77,16 @@ test('simulador por API: permisos, catálogo demo, demo rápida con ocho perfile
  const msgs=(await call('/api/conversations/'+listo.conversationId+'/messages',admin.cookie)).messages;assert.equal(msgs.at(-1).sender_kind,'customer');assert.match(msgs.at(-1).text,/gracias/i);
 
  // detener y archivar: chats resueltos, trabajos cancelados y oportunidades cerradas con motivo
- const stopped=(await call('/api/simulator/runs/'+run.id+'/stop',admin.cookie,{})).run;assert.equal(stopped.state,'stopped');assert.equal(stopped.stats.byState.waiting,0);assert.equal(stopped.stats.byState.stopped,2);
+ const stopped=(await call('/api/simulator/runs/'+run.id+'/stop',admin.cookie,{})).run;assert.equal(stopped.state,'stopped');assert.equal(stopped.stats.byState.waiting,0);assert.equal(stopped.stats.byState.stopped,3);
  await call('/api/simulator/runs/'+run.id+'/stop',admin.cookie,{},'POST',409);
- const archived=(await call('/api/simulator/runs/'+run.id+'/archive',admin.cookie,{})).run;assert.equal(archived.state,'archived');assert.equal(archived.stats.resolved,8);
+ const archived=(await call('/api/simulator/runs/'+run.id+'/archive',admin.cookie,{})).run;assert.equal(archived.state,'archived');assert.equal(archived.stats.resolved,9);
  const check=db();try{
   const ids=archived.actors.map(x=>x.conversationId),ph=ids.map(()=>'?').join(',');
   assert.equal(check.prepare(`SELECT count(*) n FROM conversations WHERE id IN (${ph}) AND (status!='resolved' OR bot_enabled=1)`).get(...ids).n,0);
   assert.equal(check.prepare(`SELECT count(*) n FROM jobs WHERE state='pending' AND conversation_id IN (${ph})`).get(...ids).n,0);
   assert.equal(check.prepare(`SELECT count(*) n FROM automation_steps WHERE state IN ('pending','reserved') AND conversation_id IN (${ph})`).get(...ids).n,0);
   assert.equal(check.prepare(`SELECT count(*) n FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id WHERE co.conversation_id IN (${ph}) AND o.stage NOT IN ('ganada','perdida')`).get(...ids).n,0);
-  assert.equal(check.prepare("SELECT count(*) n FROM opportunities WHERE lost_reason='Demo archivada'").get().n,8);
+  assert.equal(check.prepare("SELECT count(*) n FROM opportunities WHERE lost_reason='Demo archivada'").get().n,9);
   assert.equal(check.prepare("SELECT count(*) n FROM tasks WHERE status='open'").get().n,0);
  }finally{check.close();}
  await call('/api/simulator/runs/'+run.id+'/archive',admin.cookie,{},'POST',409);

@@ -21,6 +21,10 @@ export const PERSONAS={
     {say:['Perfecto. ¿Cómo puedo pagar?','¿Qué formas de pago manejan?','¿Aceptan pago con tarjeta u OXXO?'],wait:'reply'},
     {say:['Listo, ya hice la transferencia. ¿A dónde envío el comprobante?','Ya pagué, les mando el comprobante en un momento.','Acabo de depositar, ¿me confirman que llegó mi pago?'],wait:'human',onHuman:['¡Gracias! Quedo al pendiente de la confirmación.','Perfecto, muchas gracias por confirmar.']},
   ]},
+  pagador:{label:'Paga en línea',description:'Pide inscribirse y, si la marca tiene la venta activa, paga con tarjeta simulada desde el enlace; si no hay pedido, pide el enlace a una persona.',outcome:'escalado_a_persona',steps:[
+    {say:['Hola, quiero inscribirme a {{curso}}. ¿Me pasan el enlace de pago?','Buenas, ya decidí tomar {{curso}}. ¿Cómo me inscribo y pago?'],wait:'reply'},
+    {pay:'card',say:['¿Me pueden enviar el enlace de pago, por favor?','Quedo pendiente del enlace para pagar.'],wait:'human',onHuman:['Gracias, en cuanto llegue el enlace pago.']},
+  ]},
   molesto:{label:'Molesto',description:'Pagó y nadie le responde; amenaza con pedir reembolso. Siempre lo atiende una persona.',outcome:'queja_atendida',steps:[
     {say:['Hola. Pagué hace una semana y nadie me ha respondido. ¿Qué pasó con mi lugar?','Llevo días esperando respuesta después de que pagué. Esto no es serio.','Ya pagué y nadie me confirma nada, ¿me pueden atender?'],wait:'reply'},
     {say:['Esto es pésimo. Si no me responden hoy, quiero un reembolso.','Quiero mi reembolso, no me parece su atención.','Si no hay respuesta pido la devolución de mi dinero.'],wait:'human',onHuman:['Está bien, gracias por atenderme. Espero su respuesta hoy mismo.','Ok. Quedo al pendiente, por favor no lo olviden.']},
@@ -47,7 +51,7 @@ export const PERSONAS={
     {say:['Gracias, lo reviso y les confirmo.']},
   ],reactivated:'reactivado'},
 };
-export const OUTCOMES={informado:'Informado',indeciso_precio:'Indeciso por precio',inscripcion_en_validacion:'Inscripción en validación',queja_atendida:'Queja atendida',baja:'Pidió la baja',escalado_a_persona:'Escalado a una persona',silencio:'Se quedó en silencio',reactivado:'Reactivado por seguimiento',cerrada_por_equipo:'El equipo cerró el chat'};
+export const OUTCOMES={informado:'Informado',indeciso_precio:'Indeciso por precio',inscripcion_en_validacion:'Inscripción en validación',queja_atendida:'Queja atendida',baja:'Pidió la baja',escalado_a_persona:'Escalado a una persona',silencio:'Se quedó en silencio',reactivado:'Reactivado por seguimiento',pagado:'Pagó en línea (simulado)',cerrada_por_equipo:'El equipo cerró el chat'};
 
 // Ritmo: `base` es la pausa típica (ms) entre mensajes de un mismo cliente; las esperas y la paciencia se miden en múltiplos.
 export const PACES={rapida:{label:'Rápida · segundos',base:1500},normal:{label:'Normal · unos 10 s',base:8000},lenta:{label:'Lenta · como una persona real',base:40000}};

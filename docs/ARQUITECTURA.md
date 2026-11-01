@@ -42,6 +42,8 @@ Un proceso Node.js 24 atiende HTTP, WebSocket, reglas y reconciliación operativ
 | `server/replies-schema.mjs`, `server/replies.mjs` | Esquema v13 y motor de respuestas v2: niveles por marca, conocimiento aprobado con versiones, intenciones, bitácora con fuentes, sugerencias y simulación |
 | `server/simulator-schema.mjs`, `server/simulator-personas.mjs`, `server/simulator.mjs` | Esquema v14 y simulador de clientes: guiones por perfil, ritmo, clientes demo que escriben por la API pública (loopback con su propia sesión), métricas por demo, detener/archivar y catálogo de demostración vía importación CSV; rutas `/api/simulator` (administración); `SIMULATOR_DISABLED=1` lo oculta |
 | `server/channel-schema.mjs`, `server/channel.mjs` | Esquema v15 y canal simulado: estados de entrega con barrido y reintento, ventana de servicio 24/72 h aplicada en `insertMessage`, categoría por mensaje, botones de respuesta rápida, llegada por anuncio y enlace `/?ad=`; rutas `/api/channel`, `/api/messages/:id/retry|events`, `/api/ads/:id`; apagado por marca por omisión |
+| `server/payments-schema.mjs`, `server/payments.mjs` | Esquema v16 y venta con pago simulado: pedidos con importe del catálogo y enlace de prueba, proveedor simulado (punto de entrada del webhook real), comprobantes en cola con pre-lectura, confirmación → inscripción, cupo, oportunidad ganada y avisos; rutas `/api/payments` y `/api/conversations/:id/orders`; apagada por marca por omisión |
+| `public/payments.js` | Pestaña Pagos de Operación: configuración por marca, cifras, pedidos, detalle con comprobantes y acciones |
 | `public/simulator.js` | Pestaña Demo de Operación: formulario de demo, tarjetas con cifras en vivo, archivo y generador de catálogo |
 | `server/ai-provider.mjs` | Adaptador de IA (simulado y Claude), parecido léxico; se llama sólo fuera de transacciones |
 | `server/mfa-schema.mjs`, `server/mfa.mjs` | Esquema v12 y verificación en dos pasos TOTP (secreto cifrado, códigos de recuperación, desafío de acceso, rutas `/api/mfa`) |
@@ -72,7 +74,7 @@ Los archivos son deliberadamente sencillos, con bastante código compacto. Antes
 
 `DATA_DIR` contiene `laboratorio.sqlite`, `uploads/`, `library/` y `backups/`. SQLite usa WAL, claves foráneas y `busy_timeout=5000`. Los adjuntos de mensajes viven en `uploads/`; las piezas propias del catálogo, en `library/`. Los originales demo siguen en el repositorio.
 
-En el arranque se ejecutan `openDatabase`, `migrateCRM`, `migrateFollowup`, `migrateCatalogue` y `migrateOperations`. Si hay usuarios y el esquema es menor que 15, el arranque actual crea antes una copia consistente `backups/before-crm-v15-<timestamp>.sqlite` (hasta v0.5.0 era `before-crm-v6-`) con `VACUUM INTO`. Los prefijos v3/v4/v5 citados en entregas anteriores corresponden al código de aquellas versiones. No se hace un respaldo nuevo en cada arranque de una base ya en v6.
+En el arranque se ejecutan `openDatabase`, `migrateCRM`, `migrateFollowup`, `migrateCatalogue` y `migrateOperations`. Si hay usuarios y el esquema es menor que 16, el arranque actual crea antes una copia consistente `backups/before-crm-v16-<timestamp>.sqlite` (hasta v0.5.0 era `before-crm-v6-`) con `VACUUM INTO`. Los prefijos v3/v4/v5 citados en entregas anteriores corresponden al código de aquellas versiones. No se hace un respaldo nuevo en cada arranque de una base ya en v6.
 
 | Versión de esquema | Incorporación |
 | --- | --- |
@@ -80,6 +82,7 @@ En el arranque se ejecutan `openDatabase`, `migrateCRM`, `migrateFollowup`, `mig
 | 3 | Permisos por marca, invitaciones, recuperación, preferencias, contactos, oportunidades, tareas y notas |
 | 4 | Revisiones e historial comercial; importación del historial de etapas disponible |
 | 5 | Ediciones, promociones, archivos de biblioteca, flyers, plantillas, versiones y snapshots de oferta |
+| 16 | Venta con pago simulado: `payment_settings`, `orders`, `receipts`, `enrollments`, `payment_events` |
 | 15 | Canal simulado: columnas de entrega, categoría y botones en `messages`, `conversations.referral`, `channel_settings`, `channel_events` |
 | 14 | Simulador de clientes: `simulator_runs`, `simulator_actors` |
 | 13 | Respuestas v2: `reply_settings`, `knowledge_entries`, `knowledge_versions`, `reply_log` |

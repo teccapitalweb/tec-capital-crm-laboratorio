@@ -60,7 +60,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta el canal simulado son **123** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta la venta con pago simulado son **124** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -71,6 +71,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/catalogue.test.mjs` | Ediciones, fechas, centavos, promociones, variables, aprobación, permisos, vistas previas, archivo, snapshots/bytes históricos y reinicio |
 | `test/automation.test.mjs` | Motor 4A: migración v7, idempotencia, reintentos, reinicio, carreras de cancelación y pausas (sin servidor; base temporal) |
 | `test/automation-http.test.mjs` | Rutas `/api/automation`: sólo administración, revisiones, pausa global (servidor temporal) |
+| `test/payments.test.mjs` | Venta con pago simulado: apagada por omisión, cobro desde el chat, pago simulado con inscripción y etapa ganada, pedido del motor, comprobantes en cola (rechazo/aceptación), cancelación, vencimiento, permisos |
 | `test/channel.test.mjs` | Canal simulado: apagado por omisión, permisos, ventana 24/72 h, estados de entrega, fallo y reintento con bitácora, botones, anuncio, plantillas vs texto libre |
 | `test/simulator.test.mjs` | Simulador de clientes: guiones y catálogo demo coherentes; recorrido por API (permisos, catálogo idempotente, demo de ocho perfiles, respuesta humana, detener/archivar) |
 | `test/replies.test.mjs` | Motor de respuestas v2: parecido léxico, conocimiento, niveles por marca, bitácora, sugerencias, proveedor simulado |
@@ -105,6 +106,7 @@ Usar perfiles/sesiones separados para un administrador, dos asesores de prueba y
 10. **Cierre de QA:** pausar la macro/receta de prueba, cerrar sus intereses/chats, completar/cancelar sus tareas y suspender asesores técnicos si ya no hacen falta. Conservar auditoría. No borrar registros del equipo para dejar las pantallas vacías.
 11. **Demo (administración):** en un entorno de pruebas, generar el catálogo de demostración, iniciar una demo corta a ritmo rápido, comprobar que los clientes «· demo» aparecen en la bandeja y en la cola, responder a uno que espera persona y archivar la demo al terminar. En la base del equipo una demo crea usuarios, chats y oportunidades identificados pero reales para el CRM: avisar antes y archivar después.
 12. **Canal simulado (administración):** activarlo sólo en una marca de pruebas; comprobar botones en la vista del cliente, estados enviado/entregado/leído, cierre de ventana (texto libre bloqueado, plantilla permitida), fallo y reintento, y un enlace de anuncio desde un flyer aprobado. Desactivarlo al terminar si la marca atiende clientes reales.
+13. **Venta con pago simulado (administración):** activarla en una marca de pruebas; «Cobrar» desde el chat, pagar desde el enlace como cliente de prueba, enviar un adjunto con pedido vigente y aceptarlo o rechazarlo en Pagos; comprobar inscripción, etapa ganada y aviso. Cancelar o dejar vencer los pedidos de prueba al terminar.
 
 En producción evitar activar/cambiar políticas de marcas existentes para facilitar QA. Registrar la configuración inicial y comprobar que quedó intacta. Los ensayos destructivos, carga y restauración se hacen en entorno aislado.
 
@@ -150,7 +152,7 @@ Publicar sólo dentro del alcance autorizado por el usuario. Para el traspaso do
 El health esperado de referencia:
 
 ```json
-{"ok":true,"version":"0.16.0","transport":"websocket","mode":"laboratorio"}
+{"ok":true,"version":"0.17.0","transport":"websocket","mode":"laboratorio"}
 ```
 
 ## Respaldos y recuperación

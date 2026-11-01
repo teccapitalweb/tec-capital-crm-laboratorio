@@ -37,6 +37,10 @@ En **Operación → Demo** (administración) se crean clientes ficticios —su n
 
 Por marca y apagado por omisión (**Operación → Seguimientos → Canal simulado**). Al activarlo, los mensajes del equipo y de la automatización pasan por **enviado → entregado → leído** (o **fallido**, con reintento y bitácora), se aplica la **ventana de servicio de 24 h** (72 h si el cliente llegó por anuncio): fuera de ella sólo pasan plantillas aprobadas —temario, precio y fechas como utilidad, flyer como marketing—, la bienvenida automática lleva **botones de respuesta rápida** y cada flyer aprobado ofrece un **enlace de anuncio** (`/?ad=…`) que abre la conversación del curso con el origen marcado. Nada se conecta a Meta; sirve para ensayar el flujo real antes de tener los accesos.
 
+## Venta con pago simulado
+
+Por marca y apagada por omisión (**Operación → Pagos**). Activa, el equipo puede **Cobrar** desde el chat (pedido con el precio vigente del catálogo, referencia y enlace de pago de prueba) y el motor de respuestas genera el pedido cuando el cliente pide inscribirse. El cliente paga con **tarjeta u OXXO simulados** desde el enlace o envía su **comprobante** por el chat, que entra solo a la cola de validación de Pagos. Confirmar un pago inscribe, descuenta cupo, cierra la oportunidad como **ganada**, avisa al equipo y se lo dice al cliente. No se cobra nada real: el webhook de una pasarela real entrará por el mismo punto cuando existan los accesos.
+
 ## Verificación en dos pasos (equipo)
 
 En **Mi configuración → Acceso y seguridad** el equipo puede activar un código temporal de una app de autenticación (opcional). Al iniciar sesión se pide después de la contraseña; hay 10 códigos de recuperación de un solo uso. Administración ve quién la tiene en **Equipo** y puede restablecerla. Si el administrador queda bloqueado, el procedimiento de emergencia está en `docs/OPERACION_Y_PRUEBAS.md`.

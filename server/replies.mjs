@@ -28,7 +28,7 @@ const PATTERNS=[
 // Motor de respuestas v2. Reglas del proyecto que cumple: precios/fechas/cupos sólo del catálogo; nunca confirma pagos ni
 // inscripciones; cada decisión queda en reply_log con intención, fuentes y motivo; las llamadas al proveedor de IA van fuera
 // de las transacciones (plan() y commit() son síncronos; el proveedor se consulta entre ambos).
-export function createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider,now=Date.now}){
+export function createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider,payments=null,now=Date.now}){
   const defaults=brandId=>({brand_id:brandId,mode:'templates',provider_enabled:0,max_unknown:2,revision:0,updated_by:null,updated_at:null});
   const settings=brandId=>db.prepare('SELECT * FROM reply_settings WHERE brand_id=?').get(brandId)||defaults(brandId);
   const entry=id=>typeof id==='string'?db.prepare('SELECT * FROM knowledge_entries WHERE id=?').get(id):null;
@@ -48,14 +48,19 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const s=settings(c.brand_id),user=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id),first=(user?.name||'').split(' ')[0];
     const ctx=catalogue.info(c.course_id,c.edition_id),course=ctx.course,{intent,confidence}=classify(trigger.text);
     const count=db.prepare("SELECT count(*) n FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id).n;
-    const out={mode:s.mode,intent,confidence,reply:'',sources:[],stage:null,handoff:false,prepared:null,reason:'',needsProvider:false,knowledge:[],buttons:null};
+    const out={mode:s.mode,intent,confidence,reply:'',sources:[],stage:null,handoff:false,prepared:null,reason:'',needsProvider:false,knowledge:[],buttons:null,order:false};
     const catalogueSource={type:'catalogue',courseId:course.id,editionId:ctx.edition.id,promotionId:ctx.promotion?.id||null,priceCents:ctx.priceCents,currency:ctx.currency};
     const kb=approved(c.brand_id,c.course_id);
     const fromKnowledge=(threshold=.5)=>{const hit=bestMatch(trigger.text,kb,threshold)||(TOPIC_INTENTS.includes(intent)?{entry:kb.find(k=>k.topic===intent),score:1}:null);if(!hit?.entry)return false;out.reply=hit.entry.answer;out.sources.push({type:'knowledge',id:hit.entry.id,revision:hit.entry.revision,question:hit.entry.question});out.reason='Conocimiento aprobado «'+hit.entry.question+'»'+(hit.score<1?' (parecido '+Math.round(hit.score*100)+'%)':'')+'.';return true;};
     if(intent==='opt_out'){out.reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';out.reason='El cliente pidió la baja; se registra y se confirma una sola vez.';}
     else if(intent==='human'||intent==='refund'){out.reply=intent==='refund'?'Lamento la molestia. Una persona del equipo revisará tu caso y te responderá por aquí.':'Ya avisé al equipo. Un asesor puede tomar esta conversación para continuar contigo.';out.handoff=true;out.reason=intent==='refund'?'Queja o reembolso: siempre lo atiende una persona.':'El cliente pidió hablar con una persona.';}
     else if(ctx.reason){out.reply=ctx.reason+'. Un asesor puede ayudarte a revisar otra edición disponible.';out.handoff=true;out.reason='La edición no está disponible según el catálogo.';out.sources.push(catalogueSource);}
-    else if(intent==='enroll'){out.reply='Anoté tu interés en '+course.title+' · '+ctx.edition.name+'. Un asesor continuará con tu inscripción de práctica. En este laboratorio no se realizan cobros ni inscripciones reales.';out.stage='inscripcion';out.handoff=true;out.reason='Solicitud de inscripción: avanza la etapa y pasa a una persona; nunca se confirma sola.';out.sources.push(catalogueSource);}
+    else if(intent==='enroll'){
+      const open=payments?.openOrder(c.id);
+      if(open){out.reply='Ya tienes el pedido '+open.reference+' vigente.\n\n'+payments.linkMessage(open);out.stage='inscripcion';out.reason='Ya existía un pedido vigente: se recuerda el enlace de pago.';out.sources.push(catalogueSource);}
+      else if(payments?.settings(c.brand_id).enabled){out.order=true;out.reply='¡Qué gusto! Anoté tu interés en '+course.title+' · '+ctx.edition.name+'.\n\n{{pedido}}';out.stage='inscripcion';out.reason='Solicitud de inscripción con venta activa: se genera un pedido con enlace de pago simulado; un comprobante siempre lo valida una persona.';out.sources.push(catalogueSource);}
+      else{out.reply='Anoté tu interés en '+course.title+' · '+ctx.edition.name+'. Un asesor continuará con tu inscripción de práctica. En este laboratorio no se realizan cobros ni inscripciones reales.';out.stage='inscripcion';out.handoff=true;out.reason='Solicitud de inscripción: avanza la etapa y pasa a una persona; nunca se confirma sola.';out.sources.push(catalogueSource);}
+    }
     else if(intent==='payment'){if(!fromKnowledge(.6))out.reply='Gracias. El equipo revisará tu consulta de pago. No confirmamos pagos automáticamente y aquí no se realizan cobros reales.';out.handoff=/comprobante|pague|ya pague|transferi|deposite/.test(normalize(trigger.text));out.reason=(out.reason?out.reason+' ':'')+(out.handoff?'Menciona un pago realizado: lo valida una persona.':'Información general de pago.');}
     else if(intent==='price'){out.prepared=catalogue.prepare(c,{kind:'price'});out.reply=out.prepared.text.replace(/^Precio de ejemplo:/,'El precio de ejemplo de '+course.title+' es');out.stage='interesado';out.sources.push(catalogueSource);out.reason='Precio y promoción vigentes consultados en el catálogo al responder.';}
     else if(intent==='syllabus'){out.prepared=catalogue.prepare(c,{kind:'syllabus'});out.reply=out.prepared.text;out.sources.push(catalogueSource);out.reason='Temario del curso en el catálogo.';}
@@ -82,6 +87,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const log=(action,replyMessageId=null)=>{const id=randomUUID();db.prepare('INSERT INTO reply_log(id,conversation_id,brand_id,trigger_message_id,reply_message_id,intent,confidence,mode,action,reply_text,sources,model,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,trigger.id,replyMessageId,p.intent,p.confidence,p.mode,action,reply,JSON.stringify(sources),model,reason,t);return id;};
     if(p.mode==='off'){log('skipped');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);return {action:'skipped',reason:'Respuestas automáticas apagadas para la marca: pasa a una persona.'};}
     if(p.mode==='suggest'){log('suggested');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);return {action:'suggested',reply,reason};}
+    if(p.order){const made=payments.createOrder(c,{user:null,source:'bot'});reply=reply.replace('{{pedido}}',payments.linkMessage(made.order));}
     const messageId=insertMessage(c,null,reply,'automation',ref,null,p.prepared?.flyerSnapshot?c.course_id:null,p.prepared,{buttons:p.buttons,category:'service'});   // responde a un mensaje entrante: siempre dentro de la ventana de servicio
     log(p.handoff?'escalated':'replied',messageId);
     if(p.stage)crm.setStage(c,p.stage);
@@ -98,7 +104,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const fake={id:'simulacion',customer_id:user.id,brand_id:brandId,course_id:course.id,edition_id:input.editionId||null,status:'open',bot_enabled:1,assigned_to:null},trigger={id:'simulacion',text:message,created_at:now()};
     const p=plan(fake,trigger);let draft=null;
     if(p.needsProvider||(input.forceProvider&&p.intent==='unknown'&&p.knowledge.length)){const ctx=catalogue.info(course.id,fake.edition_id);draft=await provider.draft({brand:ctx.brand,course:ctx.course,edition:{name:ctx.edition.name,dateLabel:ctx.dateLabel,priceLabel:(ctx.priceCents/100).toFixed(2)+' '+ctx.currency},question:message,knowledge:p.knowledge,history:[]});}
-    const v=draft?validateDraft(draft,p.knowledge):null,reply=v?.ok?v.text:p.reply;
+    const v=draft?validateDraft(draft,p.knowledge):null,reply=(v?.ok?v.text:p.reply).replace('{{pedido}}','[aquí iría el pedido con su enlace de pago de prueba]');
     return {intent:p.intent,confidence:p.confidence,mode:p.mode,reply,handoff:p.handoff,stage:p.stage,sources:[...p.sources,...(v?.ok?v.usedIds:[]).map(id=>({type:'knowledge',id}))],reason:draft?(v.ok?'Proveedor de IA: '+draft.reason:p.reason+' Proveedor descartado: '+v.reason):p.reason,provider:{name:provider.name,model:draft?.model||null,used:Boolean(draft),accepted:Boolean(v?.ok)}};
   }
 
