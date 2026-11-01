@@ -16,6 +16,15 @@ Una plataforma única que **venda semiautomáticamente** por WhatsApp, Instagram
 | **Clubs y webhooks por consultora** (~30 repos) | `teccapitalweb/*-club`, `*-webhook`, `dermalysse-platform`, Visión Pecuaria… | Express + Firebase + Stripe + Bunny Stream + Resend, en Railway | Membresías VIP, checkout, videos protegidos, correos. **Cada consultora tiene su Firebase y su Stripe** |
 | **Panel Visión Pecuaria** | `teccapitalweb/VisionPecuaria-ADMIN` | HTML + Firebase | Miembros, pagos pendientes, cursos, sesiones, PDFs, certificados |
 
+### 2.1 Dos líneas de producto que no deben mezclarse
+
+| | **Cursos en vivo** | **Membresías / clubs** |
+|---|---|---|
+| Qué es | Un curso con fecha: se anuncia, se vende por chat, se abre un grupo con mínimo de alumnos, se imparte en vivo por Meet, se graba y termina en certificado IPCIL | Suscripción (mensual/anual) al club de una consultora, en **su propio sitio y dominio**: biblioteca de cursos **pregrabados**, un curso de regalo con todas las clases abiertas **menos la última**, materiales, retos y minijuegos |
+| Quién lo opera | Vendedores (venta), coordinador (apertura, ponente, sesiones, grabaciones), IPCIL (certificado) | El sitio del club con su webhook (Stripe + Firebase + Bunny); no pasa por vendedores ni por aperturas |
+| Dónde vive hoy | Panel IPCIL (`aperturas`, `alumnos`) y, en la Academia, la modalidad `acompanado` con `cohortes` | Repos `*-club` / `*-webhook` por consultora (el de Synova describe exactamente el curso gratis «todas las clases menos la última») |
+| Papel en esta plataforma | **Es el flujo central**: todo el capítulo 3 y la venta semiautomática del 4.3 son de cursos en vivo | **Producto aparte.** No se migra ni entra al flujo de ventas. Se conecta sólo para dos cosas: saber si una persona ya es socia (señal útil al vender y para ofrecer la membresía, como ya hace el botón «Membresía» del panel del vendedor) y que su ingreso llegue al mismo libro de finanzas |
+
 **Diagnóstico honesto:** la empresa ya tiene casi todas las piezas, pero en **tres modelos de datos distintos** (SQLite del CRM, Firestore de IPCIL y de cada club, Postgres de la Academia) y con **dos emisores de certificados** (panel IPCIL y Academia). El alumno existe repetido en varios lados, el pago vive en el Stripe de cada consultora y nada conecta la conversación con la inscripción. El problema a resolver no es construir más pantallas: es **un núcleo de datos único y un flujo de punta a punta**.
 
 ## 3. El flujo real, de punta a punta
@@ -54,7 +63,7 @@ Meta mañana      │  recetas, IA) grabaciones, grupos)                      �
 
 **Decisiones de fondo:**
 
-1. **Postgres como base única.** La Academia ya eligió Supabase/Postgres y su esquema es el mejor de los tres. El CRM migra de SQLite a Postgres cuando se integre (su diseño ya lo prevé: una instancia, migraciones versionadas). Los Firebase de los clubs se conectan por eventos, no se reescriben el primer día.
+1. **Postgres como base única.** La Academia ya eligió Supabase/Postgres y su esquema es el mejor de los tres. El CRM migra de SQLite a Postgres cuando se integre (su diseño ya lo prevé: una instancia, migraciones versionadas). Los clubs siguen siendo productos aparte en sus sitios; sólo comparten identidad de persona y libro de finanzas mediante eventos (ver 2.1). No se migran.
 2. **Una sola identidad de persona** (teléfono normalizado + correo), con consentimiento, a la que cuelgan conversaciones, compras, inscripciones y certificados de cualquier consultora. Permisos por consultora en servidor (ya lo hace el CRM).
 3. **Eventos, no copias.** Cada módulo publica hechos (`pago.confirmado`, `inscripcion.activada`, `apertura.abierta`, `certificado.emitido`) en una tabla de eventos con idempotencia; los demás reaccionan. Así la conversación, la coordinación y la contabilidad ven lo mismo.
 4. **Archivos fuera de la base.** Comprobantes, flyers y grabaciones van a almacenamiento de objetos (Supabase Storage, Cloudflare R2 o S3; Bunny ya se usa para video), con URL firmada, miniatura y **política de retención** (p. ej. comprobantes 5 años, imágenes de chat 12 meses). La base solo guarda la referencia. Esto responde a la preocupación de que «las imágenes saturen el sistema»: no saturan si no viven en la base; el costo de objetos es de centavos por GB al mes (verificar tarifa del proveedor elegido). Un botón **«Exportar todo»** genera un paquete con la base y el manifiesto de archivos; no hace falta una app de escritorio para eso, y una PWA cubre el uso en celular.
