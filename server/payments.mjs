@@ -51,7 +51,8 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
   // Confirmación de pago (proveedor simulado o persona). Dentro de la transacción del llamador.
   function confirm(o,{actor=null,method,providerRef=null,note=''}){
     const t=now(),c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id),n=names(o);
-    db.prepare("UPDATE orders SET status='paid',method=?,provider_ref=COALESCE(?,provider_ref),paid_at=?,confirmed_by=?,note=?,revision=revision+1,updated_at=? WHERE id=?").run(method,providerRef,t,actor?.id||null,text(note,500),t,o.id);
+    // Guarda de estado dentro de la transacción: dos confirmaciones concurrentes (o una tras cancelar) no pueden pasar las dos.
+    if(!db.prepare("UPDATE orders SET status='paid',method=?,provider_ref=COALESCE(?,provider_ref),paid_at=?,confirmed_by=?,note=?,revision=revision+1,updated_at=? WHERE id=? AND status IN ('pending','review')").run(method,providerRef,t,actor?.id||null,text(note,500),t,o.id).changes)throw fail(409,'El pedido cambió de estado mientras se confirmaba. Recárgalo.');
     db.prepare('INSERT INTO enrollments(id,order_id,brand_id,contact_id,opportunity_id,course_id,edition_id,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)').run(randomUUID(),o.id,o.brand_id,o.contact_id,o.opportunity_id,o.course_id,o.edition_id,'enrolled',t);
     db.prepare('UPDATE editions SET available_seats=available_seats-1,updated_at=? WHERE id=? AND available_seats IS NOT NULL AND available_seats>0').run(t,o.edition_id);
     // La venta la cierra quien confirma; un pago del proveedor simulado queda sin actor (origen «pago»).
@@ -70,7 +71,8 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     const method=['card','oxxo'].includes(input.method)?input.method:null;if(!method)throw fail(400,'Elige tarjeta u OXXO (simulados).');
     const approved=input.outcome!=='declined',providerRef='sim_'+randomBytes(6).toString('hex');
     const out=transaction(db,()=>{
-      if(approved)return confirm(o,{actor:null,method,providerRef});
+      const fresh=get(o.id);if(fresh.status!=='pending')throw fail(409,'Este pedido ya no admite pago: '+STATUS[fresh.status].toLowerCase()+'.');
+      if(approved)return confirm(fresh,{actor:null,method,providerRef});
       event(o.id,'provider.declined',{method,providerRef},null,now());
       say(c,`El pago simulado con ${method==='card'?'tarjeta':'OXXO'} no se completó (${o.reference}). Puedes intentarlo de nuevo desde el enlace o enviar tu comprobante por aquí.`,'order:'+o.id+':declined:'+providerRef);
       return get(o.id);
@@ -93,14 +95,17 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
   function accept(r,user,input){
     const o=get(r.order_id),c=accessConversation(o.conversation_id,user);crm.requireBrand(user,c.brand_id);
     if(r.status!=='pending')throw fail(409,'Este comprobante ya fue revisado.');if(o.status!=='review')throw fail(409,'El pedido ya no está en revisión: '+STATUS[o.status].toLowerCase()+'.');
-    const t=now(),out=transaction(db,()=>{db.prepare("UPDATE receipts SET status='accepted',reviewed_by=?,review_note=?,reviewed_at=? WHERE id=?").run(user.id,text(input.note,500),t,r.id);return confirm(o,{actor:user,method:'transfer',note:text(input.note,500)});});
+    const t=now(),out=transaction(db,()=>{
+      if(!db.prepare("UPDATE receipts SET status='accepted',reviewed_by=?,review_note=?,reviewed_at=? WHERE id=? AND status='pending'").run(user.id,text(input.note,500),t,r.id).changes)throw fail(409,'Este comprobante ya fue revisado.');
+      const fresh=get(o.id);if(fresh.status!=='review')throw fail(409,'El pedido ya no está en revisión: '+STATUS[fresh.status].toLowerCase()+'.');
+      return confirm(fresh,{actor:user,method:'transfer',note:text(input.note,500)});});
     audit(user,'payment.receipt.accept',r.id);broadcast('conversation',c.id);broadcast('crm',null,{brandId:c.brand_id});return out;
   }
   function reject(r,user,input){
     const o=get(r.order_id),c=accessConversation(o.conversation_id,user);crm.requireBrand(user,c.brand_id);const reason=text(input.reason,500);
     if(r.status!=='pending')throw fail(409,'Este comprobante ya fue revisado.');if(reason.length<5)throw fail(400,'Explica al cliente por qué no se valida (mínimo 5 caracteres).');
     const t=now(),out=transaction(db,()=>{
-      db.prepare("UPDATE receipts SET status='rejected',reviewed_by=?,review_note=?,reviewed_at=? WHERE id=?").run(user.id,reason,t,r.id);
+      if(!db.prepare("UPDATE receipts SET status='rejected',reviewed_by=?,review_note=?,reviewed_at=? WHERE id=? AND status='pending'").run(user.id,reason,t,r.id).changes)throw fail(409,'Este comprobante ya fue revisado.');
       if(!db.prepare("SELECT 1 FROM receipts WHERE order_id=? AND status='pending'").get(o.id))db.prepare("UPDATE orders SET status=CASE WHEN expires_at>? THEN 'pending' ELSE 'expired' END,revision=revision+1,updated_at=? WHERE id=? AND status='review'").run(t,t,o.id);
       event(o.id,'receipt.rejected',{receiptId:r.id,reason},user.id,t);
       say(c,`No pudimos validar tu comprobante del pedido ${o.reference}: ${reason}. Puedes enviar otro por aquí o pagar desde el enlace.`,'order:'+o.id+':rejected:'+r.id);
@@ -113,7 +118,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     if(!['pending','review'].includes(o.status))throw fail(409,'Sólo se cancela un pedido pendiente o en revisión.');if(reason.length<5)throw fail(400,'Indica el motivo (mínimo 5 caracteres).');
     const t=now(),out=transaction(db,()=>{
       db.prepare("UPDATE receipts SET status='rejected',reviewed_by=?,review_note=?,reviewed_at=? WHERE order_id=? AND status='pending'").run(user.id,'Pedido cancelado: '+reason,t,o.id);
-      db.prepare("UPDATE orders SET status='cancelled',note=?,revision=revision+1,updated_at=? WHERE id=?").run(reason,t,o.id);event(o.id,'cancelled',{reason},user.id,t);
+      if(!db.prepare("UPDATE orders SET status='cancelled',note=?,revision=revision+1,updated_at=? WHERE id=? AND status IN ('pending','review')").run(reason,t,o.id).changes)throw fail(409,'El pedido cambió de estado. Recárgalo.');event(o.id,'cancelled',{reason},user.id,t);
       say(c,`El pedido ${o.reference} se canceló: ${reason}. Si quieres continuar, el equipo puede generarte uno nuevo.`,'order:'+o.id+':cancelled');
       return get(o.id);
     });
