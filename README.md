@@ -41,6 +41,10 @@ Por marca y apagado por omisión (**Operación → Seguimientos → Canal simula
 
 Por marca y apagada por omisión (**Operación → Pagos**). Activa, el equipo puede **Cobrar** desde el chat (pedido con el precio vigente del catálogo, referencia y enlace de pago de prueba) y el motor de respuestas genera el pedido cuando el cliente pide inscribirse. El cliente paga con **tarjeta u OXXO simulados** desde el enlace o envía su **comprobante** por el chat, que entra solo a la cola de validación de Pagos. Confirmar un pago inscribe, descuenta cupo, cierra la oportunidad como **ganada**, avisa al equipo y se lo dice al cliente. No se cobra nada real: el webhook de una pasarela real entrará por el mismo punto cuando existan los accesos.
 
+## Modo presentación
+
+La vista **Presentación** del equipo reúne, en vivo y por marca, lo que la plataforma ya hace: conversaciones (y cuántas llegaron por anuncio), **% resueltas sin intervención humana**, primera respuesta **automática vs humana**, ventas de práctica y cobrado por marca, mensajes por categoría con **costo estimado** (tarifas orientativas, editables con `MESSAGE_RATES`) y un **guion de 10 pasos** que indica si cada pantalla está lista, qué decir y un botón para ir a ella. Tiene pantalla completa para proyectar.
+
 ## Verificación en dos pasos (equipo)
 
 En **Mi configuración → Acceso y seguridad** el equipo puede activar un código temporal de una app de autenticación (opcional). Al iniciar sesión se pide después de la contraseña; hay 10 códigos de recuperación de un solo uso. Administración ve quién la tiene en **Equipo** y puede restablecerla. Si el administrador queda bloqueado, el procedimiento de emergencia está en `docs/OPERACION_Y_PRUEBAS.md`.

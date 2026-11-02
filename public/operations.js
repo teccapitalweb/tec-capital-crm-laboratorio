@@ -96,5 +96,5 @@ window.createOperationsUI=function({state,api,esc,icon,icons,showModal,toast,ref
   }catch(e){const target=form.querySelector('.ops-feedback')||$('.ops-feedback');if(target)target.textContent=e.message;toast(e.message);}return true;}
   document.addEventListener('input',e=>{if(e.target.closest('#ops-settings-form'))configDirty=true;});
   const autoRefresh=()=>{if((tab==='recipes'||tab==='demo'||tab==='payments')&&$('#modal')?.open||document.activeElement?.closest('#sim-form,#sim-catalogue-form,.rcp-channel')||tab==='settings'&&configDirty||document.activeElement?.closest('#ops-search-form'))return;return render();};
-  return {nav,render,autoRefresh,action,change,submit,badge};
+  return {nav,render,autoRefresh,action,change,submit,badge,openTab:async t=>{tab=t;offset=0;await render();}};
 };
