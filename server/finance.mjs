@@ -126,7 +126,7 @@ export function createFinance({db,crm,events,body,json,audit,broadcast,now=Date.
     const reconciliation={paidOrders:paidOrders.length,paidOrdersCents:paidOrders.reduce((n,o)=>n+o.amount_cents,0),ledgerSales:sales.length,ledgerSalesCents:sum(sales),mismatches,ok:mismatches.length===0&&paidOrders.length===sales.length};
     return {period:{from,to,group,fromDay:periodDay(from),toDay:periodDay(to-1),timezone:COMPANY_TZ},scope:{brand:params.get('brand')&&params.get('brand')!=='all'?params.get('brand'):null,brands:ids.map(id=>({id,name:brandName(id)}))},currency,
       totals:{sales:sales.length,salesCents:sum(sales),salesLabel:money(sum(sales),currency),refunds:refunds.length,refundsCents:-sum(refunds),refundsLabel:money(-sum(refunds),currency),netCents:sum(rows),netLabel:money(sum(rows),currency),avgTicketCents:sales.length?Math.round(sum(sales)/sales.length):0,avgTicketLabel:money(sales.length?Math.round(sum(sales)/sales.length):0,currency)},
-      byPeriod,byBrand,byCourse,bySeller,byMethod,commissions,pendingCommissions:Object.fromEntries(Object.keys(ROLES).map(r=>[r,pendingAll.find(x=>x.role===r)?.cents||0])),reconciliation,rules:rules(),access:access(user),roles:ROLES,
+      legacy:legacyFn?legacyFn(ids,from,to):null,byPeriod,byBrand,byCourse,bySeller,byMethod,commissions,pendingCommissions:Object.fromEntries(Object.keys(ROLES).map(r=>[r,pendingAll.find(x=>x.role===r)?.cents||0])),reconciliation,rules:rules(),access:access(user),roles:ROLES,
       notes:['Cifras del laboratorio: los pagos son simulados y no hay cobros reales.','El libro se alimenta de eventos (pago confirmado, reembolso registrado); las tablas de pedidos siguen siendo el detalle.','Las comisiones se devengan con la regla vigente al entrar la línea y quedan registradas con esa regla; cambiar la regla no modifica las ya devengadas.','Días en la zona '+COMPANY_TZ+'.']};
   }
   function ledger(user,params){
@@ -188,5 +188,6 @@ export function createFinance({db,crm,events,body,json,audit,broadcast,now=Date.
     if(path==='/api/finance/access'){if(req.method==='GET'){json(res,200,{members:accessList(user)});return true;}if(req.method==='PUT'){json(res,200,{members:setAccess(await body(req),user)});return true;}}
     throw fail(404,'Ruta de finanzas no encontrada.');
   }
-  return {handle,access,summary,ledger,commissions,payout,setRule,refund,recompute,recordSale,accrue};
+  let legacyFn=null;
+  return {handle,access,summary,ledger,commissions,payout,setRule,refund,recompute,recordSale,accrue,setLegacy:fn=>{legacyFn=fn;}};
 }

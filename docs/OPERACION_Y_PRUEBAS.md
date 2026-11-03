@@ -64,7 +64,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta el núcleo compartido son **150** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta los históricos del IPCIL son **152** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -75,6 +75,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/catalogue.test.mjs` | Ediciones, fechas, centavos, promociones, variables, aprobación, permisos, vistas previas, archivo, snapshots/bytes históricos y reinicio |
 | `test/automation.test.mjs` | Motor 4A: migración v7, idempotencia, reintentos, reinicio, carreras de cancelación y pausas (sin servidor; base temporal) |
 | `test/automation-http.test.mjs` | Rutas `/api/automation`: sólo administración, revisiones, pausa global (servidor temporal) |
+| `test/legacy.test.mjs` | Históricos IPCIL: fechas e importes del panel, normalización JSON/CSV, vista previa con errores sin escribir, importación idempotente ligada a personas existentes y nuevas, ficha de persona, Finanzas fuera del libro, secuencia de folios, lotes y permisos |
 | `test/core.test.mjs` | Núcleo compartido: firma HMAC y tolerancia, esquema SQL, outbox con receptor local (sobres firmados con registros proyectados, reintento ante 5xx, fallo permanente ante 4xx, reintento masivo, reproducción idempotente del historial, ping, permisos) y modo simulado sin URL |
 | `test/academics.test.mjs` | Pagos por sesión y encuestas: precio por sesión en catálogo, inscripción por sesión que cubre la primera sesión, cobro manual y con el recordatorio, pago de sesión sin nueva inscripción, condonación y cancelaciones en cascada, encuesta automática y manual, respuesta pública por token (HTML y JSON), resultados, CSV y permisos |
 | `test/content.test.mjs` | Contenido: funciones de diseño y aprobación, plantillas por evento (pago, sesión, certificado, grabación, anuncio) con respaldo en texto fijo, variantes por IA validadas, fichas con caché y flyer |
@@ -127,6 +128,7 @@ Usar perfiles/sesiones separados para un administrador, dos asesores de prueba y
 14. **Presentación:** abrir la vista Presentación, revisar que el guion marque «Listo» en los pasos que se van a mostrar, probar «Ir a la pantalla» y la pantalla completa; el filtro por marca y periodo debe cambiar las cifras sin recargar.
 15. **Conectores (administración):** con `CONNECTOR_WEBHOOK_SECRET` en un entorno de pruebas, enviar un webhook firmado de estado y otro de pago desde la pestaña Conectores y comprobar que el mensaje y el pedido cambian y que repetirlo responde «duplicado». No registrar URLs de webhook en proveedores reales sin instrucción expresa.
 16. **Evaluación:** en Catálogo → Evaluación ejecutar el banco de una marca de pruebas antes y después de cambiar conocimiento o nivel; revisar los casos que fallan y su motivo. Es la forma de comprobar el motor (y el proveedor de IA, cuando haya clave) sin escribir a clientes.
+24. **Históricos IPCIL (administración):** en Operación → Históricos pegar el ejemplo del formato para una marca de prueba, revisar la vista previa, importar y comprobar en Contactos → Personas la sección «Históricos IPCIL» de la persona creada y en Finanzas el bloque «Históricos IPCIL» del periodo; quitar el lote al terminar.
 23. **Núcleo compartido (administración):** en Operación → Conectores comprobar el panel «Núcleo compartido» en modo simulado (sobres recientes tras cualquier acción del laboratorio); cuando existan `CORE_SINK_URL` y `CORE_SINK_SECRET`, «Probar envío» debe responder 2xx y «Reproducir historial» dejar cero entregas sin entrega y cero fallidas en Eventos.
 22. **Pagos por sesión y encuestas:** en Catálogo poner precio por sesión a una edición de prueba y activar Pagos; desde un chat de prueba «Cobrar» con plan por sesión y pagar como cliente; en la ficha de la apertura programar dos sesiones, comprobar que la primera queda cubierta y cobrar la segunda («Cobrar sesión»), pagarla como cliente y ver la fila pagada y el libro de Finanzas; condonar una tercera; marcar una sesión realizada y enviar su encuesta, responderla desde el botón del chat y desde el enlace público en celular, y revisar promedios, NPS, comentario y CSV. Cerrar la encuesta y archivar los registros de prueba al terminar.
 21. **Contenido:** en Catálogo → Contenido conceder diseño y aprobación a dos personas de prueba; crear como diseño una plantilla de «Pago confirmado» con sus variables, aprobarla como aprobación y mapearla a la marca de pruebas; confirmar un pago de prueba y comprobar que el mensaje al cliente sale de la plantilla; pedir variantes a una plantilla, aceptar una y verla como borrador; generar la ficha de una edición de prueba y guardarla como flyer. Al terminar, quitar las funciones de prueba y pausar los mapas de la marca de pruebas.
@@ -179,7 +181,7 @@ Publicar sólo dentro del alcance autorizado por el usuario. Para el traspaso do
 El health esperado de referencia:
 
 ```json
-{"ok":true,"version":"0.27.0","transport":"websocket","mode":"laboratorio"}
+{"ok":true,"version":"0.28.0","transport":"websocket","mode":"laboratorio"}
 ```
 
 ## Respaldos y recuperación

@@ -57,6 +57,10 @@ En **Catálogo y biblioteca → Evaluación** cada marca tiene casos que dicen q
 
 En **Catálogo y biblioteca → Contenido** cada marca elige qué plantilla aprobada se envía en cada hecho del curso: bienvenida por anuncio, enlace de pago, pago confirmado, recordatorio de sesión, grabación disponible y certificado listo; sin plantilla se conserva el texto fijo del laboratorio. Administración concede las funciones de **diseño** (crear borradores, subir archivos, pedir variantes, generar fichas) y **aprobación** (aprobar, archivar y mapear). Desde cada plantilla se piden **variantes** al adaptador de IA, que se validan y sólo entran como borrador cuando una persona las acepta; desde cada edición se genera una **ficha** SVG con los datos vigentes del catálogo y código QR, guardable como flyer.
 
+## Históricos del IPCIL
+
+Mientras llega el IPCIL nuevo, administración importa en **Operación → Históricos** un JSON o CSV exportado del panel actual (alumnos con sus pagos, cursos, aperturas, certificados) con los mismos nombres de campo del panel. Cada alumno queda ligado a la persona única del CRM; sus pagos y certificados se ven en la ficha de persona y en Finanzas como históricos, fuera del libro de ventas y sin comisiones. Repetir un archivo no duplica y un lote se puede quitar. No hay conexión en vivo con Firebase.
+
 ## Núcleo compartido (preparado)
 
 El CRM está listo para alimentar un **núcleo de datos único en Postgres/Supabase** (el mismo que usarán la Academia y el IPCIL nuevo): cada hecho del negocio sale como un sobre firmado con el evento y los registros implicados (personas, cursos, ediciones, pagos, inscripciones, certificados), con reintento y reproducción del historial. Sin `CORE_SINK_URL` nada sale del servidor y el panel de Operación → Conectores muestra los sobres simulados. Esquema en `nucleo/esquema-v1.sql`, contrato en [docs/NUCLEO.md](docs/NUCLEO.md).

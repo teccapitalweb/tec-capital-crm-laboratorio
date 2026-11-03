@@ -110,6 +110,7 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
       opportunities:db.prepare(`SELECT o.id,o.brand_id,o.stage,o.updated_at,o.created_at,k.title course_title,e.name edition_name,u.name owner_name,(SELECT co.conversation_id FROM conversation_opportunities co WHERE co.opportunity_id=o.id) conversation_id FROM opportunities o JOIN courses k ON k.id=o.course_id LEFT JOIN editions e ON e.id=o.edition_id LEFT JOIN users u ON u.id=o.owner_id WHERE o.contact_id IN (${ph}) ORDER BY o.updated_at DESC`).all(...ids).map(o=>({...o,brand_name:brandName(o.brand_id)})),
       orders:db.prepare(`SELECT o.id,o.brand_id,o.reference,o.amount_cents,o.currency,o.status,o.method,o.paid_at,o.created_at,k.title course_title,e.name edition_name FROM orders o JOIN courses k ON k.id=o.course_id JOIN editions e ON e.id=o.edition_id WHERE o.contact_id IN (${ph}) ORDER BY o.created_at DESC`).all(...ids).map(o=>({...o,brand_name:brandName(o.brand_id)})),
       enrollments:db.prepare(`SELECT en.id,en.brand_id,en.status,en.created_at,en.cancelled_at,k.title course_title,e.name edition_name,e.run_status,e.id edition_id,(SELECT count(*) FROM attendance a JOIN edition_sessions s ON s.id=a.session_id WHERE a.enrollment_id=en.id AND a.status IN ('present','late')) attended,(SELECT count(*) FROM edition_sessions s WHERE s.edition_id=en.edition_id AND s.status='done') held FROM enrollments en JOIN courses k ON k.id=en.course_id JOIN editions e ON e.id=en.edition_id WHERE en.contact_id IN (${ph}) ORDER BY en.created_at DESC`).all(...ids).map(e=>({...e,brand_name:brandName(e.brand_id)})),
+      legacy:legacyOf?legacyOf(id,allowed):[],
       candidates:roleOf(user).role==='admin'?db.prepare("SELECT c.*,pa.name name_a,pb.name name_b FROM person_candidates c JOIN persons pa ON pa.id=c.person_a JOIN persons pb ON pb.id=c.person_b WHERE (c.person_a=? OR c.person_b=?) AND c.status='pending'").all(id,id):[]};
   }
   function update(id,input,user){
@@ -201,5 +202,6 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
     }
     throw fail(404,'Ruta de personas no encontrada.');
   }
-  return {handle,attach,setConsentForContact,writeConsent,consentOf,afterContactMerge,list,detail,plan,applyMerge,candidates};
+  let legacyOf=null;
+  return {handle,attach,setLegacy:fn=>{legacyOf=fn;},setConsentForContact,writeConsent,consentOf,afterContactMerge,list,detail,plan,applyMerge,candidates};
 }

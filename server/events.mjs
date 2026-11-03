@@ -43,8 +43,9 @@ export const EVENT_TYPES={
   'pago.condonado':{title:'Pago de sesión condonado',entity:'session',payload:'editionId, enrollmentId, number, amountCents, currency, note'},
   'encuesta.enviada':{title:'Encuesta enviada',entity:'survey',payload:'editionId, sessionId, kind, title, invited, skipped'},
   'encuesta.respondida':{title:'Encuesta respondida',entity:'survey',payload:'editionId, sessionId, title, contentScore, instructorScore, organizationScore, nps, comment'},
+  'historico.importado':{title:'Históricos importados',entity:'batch',payload:'source, format, filename, counts, repeated, personsCreated'},
 };
-export const ENTITY_KINDS={conversation:'Conversación',opportunity:'Oportunidad',order:'Pedido',enrollment:'Inscripción',message:'Mensaje',contact:'Contacto',edition:'Apertura',session:'Sesión',payout:'Pago de comisión',person:'Persona',certificate:'Certificado',resource:'Recurso de apertura',survey:'Encuesta'};
+export const ENTITY_KINDS={conversation:'Conversación',opportunity:'Oportunidad',order:'Pedido',enrollment:'Inscripción',message:'Mensaje',contact:'Contacto',edition:'Apertura',session:'Sesión',payout:'Pago de comisión',person:'Persona',certificate:'Certificado',resource:'Recurso de apertura',survey:'Encuesta',batch:'Importación de históricos'};
 
 export function createEvents({db,crm=null,body,json,audit=()=>{},now=Date.now,log=console,baseDelayMs=5_000,capDelayMs=15*60_000,maxAttempts=5,batch=20}){
   const subscribers=new Map();   // tipo -> [{name,handler}]
