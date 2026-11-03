@@ -53,6 +53,10 @@ El CRM habla con una **interfaz única** de canal y de pago (`docs/CONECTORES.md
 
 En **Catálogo y biblioteca → Evaluación** cada marca tiene casos que dicen qué escribe un cliente y qué debería hacer el motor (intención, acción, fuente y texto). **Ejecutar** corre la misma simulación que «Probar respuesta», sin enviar nada, con el nivel vigente de la marca, y guarda la puntuación y el detalle de cada caso para comparar antes y después de cambiar conocimiento, nivel o proveedor de IA. Cada marca nace con 17 casos.
 
+## Contenido: plantillas por evento, variantes y fichas
+
+En **Catálogo y biblioteca → Contenido** cada marca elige qué plantilla aprobada se envía en cada hecho del curso: bienvenida por anuncio, enlace de pago, pago confirmado, recordatorio de sesión, grabación disponible y certificado listo; sin plantilla se conserva el texto fijo del laboratorio. Administración concede las funciones de **diseño** (crear borradores, subir archivos, pedir variantes, generar fichas) y **aprobación** (aprobar, archivar y mapear). Desde cada plantilla se piden **variantes** al adaptador de IA, que se validan y sólo entran como borrador cuando una persona las acepta; desde cada edición se genera una **ficha** SVG con los datos vigentes del catálogo y código QR, guardable como flyer.
+
 ## Certificados verificables
 
 Al cerrar una apertura, cada inscrito con la asistencia mínima recibe su certificado con folio secuencial IPCI y código QR; también se emite a mano desde la ficha de apertura. Cualquiera puede verificarlo en `/verificar/<folio>` sin iniciar sesión (con el nombre abreviado); el enlace del QR, que el alumno recibe por su chat, muestra el nombre completo y permite descargar el SVG. Ajustes por marca en **Operación → Certificados**: emisión automática (apagada por omisión), asistencia mínima, firma, logotipo y créditos por consultora. Certificados de práctica, sin validez oficial.

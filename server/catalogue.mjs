@@ -9,8 +9,11 @@ import {artworkAsset} from './demo-catalog.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const txt=(v,n)=>typeof v==='string'?v.trim().slice(0,n):'';
 const channels=['all','whatsapp','instagram','facebook'];
-const scenarios=['info','syllabus','schedule','price','enroll','followup','after_sale'];
-export const variables=['nombre','marca','curso','edicion','fecha','docente','modalidad','precio','precio_regular','promocion','vigencia','temario','enlace','cupo'];
+// Escenarios: los clásicos de venta y, desde la Fase 2 (bloque 2.6), uno por evento del ciclo (los mapea Contenido).
+export const scenarios=['info','syllabus','schedule','price','enroll','followup','after_sale','ad_welcome','payment_pending','payment_confirmed','session_reminder','recording_available','certificate_ready'];
+export const variables=['nombre','marca','curso','edicion','fecha','docente','modalidad','precio','precio_regular','promocion','vigencia','temario','enlace','cupo','pedido','importe','enlace_pago','vigencia_pago','sesion','fecha_sesion','enlace_sesion','grupo','grabacion','folio','enlace_certificado','asistencia'];
+// Variables de evento sin valor en una plantilla de venta quedan vacías (no «undefined»).
+export const fillTemplate=(bodyText,values)=>String(bodyText).replace(/\{\{\s*([a-z_]+)\s*\}\}/g,(_,key)=>values[key]??'');
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const money=(cents,currency)=>new Intl.NumberFormat('es-MX',{style:'currency',currency,minimumFractionDigits:2}).format(cents/100)+' '+currency;
 const nullableInt=v=>v===''||v==null?null:Number(v);
@@ -19,6 +22,19 @@ const price=v=>{const n=Number(v);if(v===''||v==null||!Number.isFinite(n)||n<0||
 const revision=(row,input)=>{if(!row)return;if(Number(input.expectedRevision)!==row.revision)throw fail(409,'El registro cambió. Recarga los datos antes de guardar.');};
 const timeText=(value,zone)=>value===null?'Por confirmar':new Intl.DateTimeFormat('es-MX',{dateStyle:'medium',timeStyle:'short',timeZone:zone}).format(value)+' · '+zone;
 
+// Valores de las variables de una plantilla para un curso/edición (los usa también Contenido para las plantillas por evento).
+export function templateValues(ctx,name){
+  const {course:c,edition:e,promotion:p,brand}=ctx;
+  return {nombre:name||'Hola',marca:brand.name,curso:c.title,edicion:e.name,fecha:ctx.dateLabel,docente:e.instructor||'Por confirmar',
+    modalidad:{online:'En línea',in_person:'Presencial',hybrid:'Híbrida'}[e.modality],precio:money(ctx.priceCents,e.currency),precio_regular:money(e.price_cents,e.currency),
+    promocion:p?p.name:'Sin promoción vigente',vigencia:p?timeText(p.ends_at,e.timezone):'No aplica',temario:c.syllabus,enlace:e.info_url||'Por confirmar',cupo:e.available_seats===null?'Por confirmar':String(e.available_seats)};
+}
+export function validateTemplateBody(bodyText){
+  const fail=(status,message)=>Object.assign(new Error(message),{status});
+  if(!bodyText)throw fail(400,'Escribe el texto de la plantilla.');
+  const matches=[...bodyText.matchAll(/\{\{([^{}]+)\}\}/g)];
+  if(matches.some(m=>!variables.includes(m[1].trim()))||bodyText.replace(/\{\{[^{}]+\}\}/g,'').includes('{{')||bodyText.replace(/\{\{[^{}]+\}\}/g,'').includes('}}'))throw fail(400,'Usa sólo las variables disponibles y cierra sus llaves.');
+}
 export function createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer}){
   function admin(user){const current=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!current||current.disabled||current.role!=='admin')throw fail(403,'Sólo administración puede editar y aprobar el catálogo.');}
   function scoped(table,id,user){const row=db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);if(!row)throw fail(404,'Contenido no disponible.');crm.requireBrand(user,row.brand_id);return row;}
@@ -60,14 +76,11 @@ export function createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,a
       dateLabel:e.starts_at===null?(e.legacy?c.date_label:'Por confirmar'):timeText(e.starts_at,e.timezone)};
   }
   function templateText(t,ctx,name){
-    const {course:c,edition:e,promotion:p,brand}=ctx;
-    const values={nombre:name||'Hola',marca:brand.name,curso:c.title,edicion:e.name,fecha:ctx.dateLabel,docente:e.instructor||'Por confirmar',
-      modalidad:{online:'En línea',in_person:'Presencial',hybrid:'Híbrida'}[e.modality],precio:money(ctx.priceCents,e.currency),precio_regular:money(e.price_cents,e.currency),
-      promocion:p?p.name:'Sin promoción vigente',vigencia:p?timeText(p.ends_at,e.timezone):'No aplica',temario:c.syllabus,enlace:e.info_url||'Por confirmar',cupo:e.available_seats===null?'Por confirmar':String(e.available_seats)};
-    const rendered=t.body.replace(/\{\{\s*([a-z_]+)\s*\}\}/g,(_,key)=>values[key]);
+    const rendered=fillTemplate(t.body,templateValues(ctx,name));
     if(rendered.length>5000)throw fail(400,'La plantilla resuelta supera 5000 caracteres. Reduce el texto o temario.');return rendered;
   }
-  function validateTemplate(bodyText){
+  function validateTemplate(bodyText){return validateTemplateBody(bodyText);}
+  function validateTemplate_(bodyText){
     if(!bodyText)throw fail(400,'Escribe el texto de la plantilla.');
     const matches=[...bodyText.matchAll(/\{\{([^{}]+)\}\}/g)];
     if(matches.some(m=>!variables.includes(m[1].trim()))||bodyText.replace(/\{\{[^{}]+\}\}/g,'').includes('{{')||bodyText.replace(/\{\{[^{}]+\}\}/g,'').includes('}}'))throw fail(400,'Usa sólo las variables disponibles y cierra sus llaves.');
@@ -162,16 +175,15 @@ export function createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,a
       if(t.brand_id&&t.brand_id!==e.brand_id||t.course_id&&t.course_id!==e.course_id||t.edition_id&&t.edition_id!==e.id)throw fail(400,'La plantilla no corresponde a esta edición.');
       json(res,200,{text:templateText(t,info(e.course_id,e.id),txt(input.name,60)||'Cliente de prueba')});return true;
     }
-    admin(user);
     if(path==='/api/catalogue/files'&&req.method==='POST'){
-      const input=await body(req);admin(user);crm.requireBrand(user,input.brandId);const f=attachmentData(input.file);if(!f)throw fail(400,'Elige una imagen o PDF.');
+      const input=await body(req);if(contentGate)contentGate(user,'files','create');else admin(user);crm.requireBrand(user,input.brandId);const f=attachmentData(input.file);if(!f)throw fail(400,'Elige una imagen o PDF.');
       await mkdir(resolve(dataDir,'library'),{recursive:true});const filePath=resolve(dataDir,'library',f.storageName);await writeFile(filePath,f.buffer,{flag:'wx'});
-      const id=randomUUID();try{admin(user);crm.requireBrand(user,input.brandId);db.prepare('INSERT INTO library_files(id,brand_id,filename,mime,size,storage_name,created_by,created_at) VALUES(?,?,?,?,?,?,?,?)').run(id,input.brandId,f.filename,f.mime,f.buffer.length,f.storageName,user.id,Date.now());}catch(e){await unlink(filePath).catch(()=>{});throw e;}
+      const id=randomUUID();try{crm.requireBrand(user,input.brandId);db.prepare('INSERT INTO library_files(id,brand_id,filename,mime,size,storage_name,created_by,created_at) VALUES(?,?,?,?,?,?,?,?)').run(id,input.brandId,f.filename,f.mime,f.buffer.length,f.storageName,user.id,Date.now());}catch(e){await unlink(filePath).catch(()=>{});throw e;}
       json(res,201,{id,filename:f.filename,mime:f.mime});return true;
     }
     const endpoint=path.match(/^\/api\/catalogue\/(courses|editions|promotions|flyers|templates)(?:\/([a-z0-9-]+))?(?:\/(approve|archive))?$/);
     if(!endpoint||!['POST','PATCH'].includes(req.method))throw fail(404,'Acción de catálogo no disponible.');
-    const [,type,id,action]=endpoint,input=await body(req);admin(user);
+    const [,type,id,action]=endpoint,input=await body(req);if(['flyers','templates'].includes(type)&&contentGate)contentGate(user,type,action);else admin(user);
     const table={courses:'courses',editions:'editions',promotions:'promotions',flyers:'flyers',templates:'content_templates'}[type],kind={courses:'course',editions:'edition',promotions:'promotion',flyers:'flyer',templates:'template'}[type];
     const saved=transaction(db,()=>{
       const old=id?scoped(table,id,user):null;revision(old&&{revision:old.revision||old.version},input);
@@ -227,5 +239,6 @@ export function createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,a
     });changed(saved.brand_id);json(res,id?200:201,{item:saved});return true;
   }
   function save(table,row,old){const keys=Object.keys(row);if(old)db.prepare(`UPDATE ${table} SET ${keys.filter(k=>k!=='id').map(k=>k+'=?').join(',')} WHERE id=?`).run(...keys.filter(k=>k!=='id').map(k=>row[k]),row.id);else db.prepare(`INSERT INTO ${table}(${keys.join(',')}) VALUES(${keys.map(()=>'?').join(',')})`).run(...keys.map(k=>row[k]));}
-  return {handle,info,prepare,serveFile,flyerState,legacyUpdated,editionState};
+  let contentGate=null;
+  return {handle,info,prepare,serveFile,flyerState,legacyUpdated,editionState,setContentGate:fn=>{contentGate=fn;}};
 }

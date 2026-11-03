@@ -15,7 +15,7 @@ export const METHODS={card:'Tarjeta (simulada)',oxxo:'OXXO (simulado)',transfer:
 const money=(cents,currency)=>new Intl.NumberFormat('es-MX',{style:'currency',currency:currency||'MXN'}).format(cents/100);
 const stamp=t=>new Intl.DateTimeFormat('es-MX',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Mexico_City'}).format(t);
 
-export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events=null,now=Date.now,env=process.env}){
+export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events=null,content=null,now=Date.now,env=process.env}){
   const defaults=b=>({brand_id:b,enabled:0,link_hours:48,revision:0,updated_by:null,updated_at:null});
   const settings=b=>db.prepare('SELECT * FROM payment_settings WHERE brand_id=?').get(b)||defaults(b);
   const requireAdmin=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||u.role!=='admin')throw fail(403,'La venta con pago la configura un administrador.');};
@@ -35,6 +35,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
   // Texto del enlace de pago que recibe el cliente (lo envía el equipo o el motor de respuestas).
   function linkMessage(o){
     const n=names(o);
+    const t=content?.render('payment_pending',o.brand_id,{courseId:o.course_id,editionId:o.edition_id,name:n.contact.split(' ')[0],extra:{pedido:o.reference,importe:money(o.amount_cents,o.currency),enlace_pago:linkFor(o),vigencia_pago:stamp(o.expires_at)}});if(t)return t.text;
     return `Pedido de práctica ${o.reference}: ${n.course} · ${n.edition} por ${money(o.amount_cents,o.currency)}${n.promotion?' ('+n.promotion+')':''}.\nPaga aquí (simulado): ${linkFor(o)}\nVigente hasta ${stamp(o.expires_at)}. También puedes enviar tu comprobante de transferencia por este chat y una persona lo valida.\nLaboratorio: no se realizan cobros reales.`;
   }
   // Crea el pedido dentro de la transacción del llamador. Si ya hay uno vigente en la conversación, lo devuelve.
@@ -64,7 +65,8 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     event(o.id,'confirmed',{method,providerRef,note:text(note,500)},actor?.id||null,t);
     emit('pago.confirmado',o,{method,providerRef,enrollmentId,opportunityId:o.opportunity_id,courseTitle:n.course,editionName:n.edition},actor);
     events?.publish({type:'inscripcion.activada',brandId:o.brand_id,entityKind:'enrollment',entityId:enrollmentId,payload:{orderId:o.id,reference:o.reference,editionId:o.edition_id,courseId:o.course_id,courseTitle:n.course,editionName:n.edition,contactId:o.contact_id},actorId:actor?.id||null,source:'payments'});
-    say(c,`Pago confirmado (laboratorio) · ${o.reference}. Quedaste inscrito en ${n.course} · ${n.edition}. El equipo coordinador te enviará los accesos y recordatorios por aquí. No se realizó ningún cobro real.`,'order:'+o.id+':paid');
+    const tpl=content?.render('payment_confirmed',o.brand_id,{courseId:o.course_id,editionId:o.edition_id,name:n.contact.split(' ')[0],extra:{pedido:o.reference,importe:money(o.amount_cents,o.currency)}});
+    say(c,tpl?tpl.text:`Pago confirmado (laboratorio) · ${o.reference}. Quedaste inscrito en ${n.course} · ${n.edition}. El equipo coordinador te enviará los accesos y recordatorios por aquí. No se realizó ningún cobro real.`,'order:'+o.id+':paid');
     notifyStaff(c,'payment','Pago confirmado · '+n.contact+' · '+n.course+' · '+money(o.amount_cents,o.currency),'order:'+o.id+':paid');
     return get(o.id);
   }

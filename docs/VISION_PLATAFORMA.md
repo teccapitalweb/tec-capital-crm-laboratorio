@@ -97,7 +97,7 @@ Reglas no negociables: precio, fechas y cupos **siempre** de la base (nunca de l
 Ya existe la base en el CRM: plantillas con variables (`{{precio}}`, `{{fecha}}`, `{{docente}}`…), flyers con aprobación, versiones y caducidad, y el precio vigente se calcula al enviar. Lo que falta para el nivel que pides:
 
 - **Roles de contenido:** diseñador (sube flyer), coordinador (aprueba contra los datos del curso), vendedor (solo usa lo aprobado).
-- **Plantilla por evento:** bienvenida por anuncio, precio, fechas, pago pendiente, pago confirmado, recordatorio de clase, grabación disponible, certificado listo. Cada una mapeada a una plantilla **aprobada por Meta** cuando aplique fuera de la ventana de 24 h.
+- **Plantilla por evento:** bienvenida por anuncio, precio, fechas, pago pendiente, pago confirmado, recordatorio de clase, grabación disponible, certificado listo. Cada una mapeada a una plantilla **aprobada por Meta** cuando aplique fuera de la ventana de 24 h. *El mapa evento → plantilla aprobada por marca, con variantes por IA y fichas generadas, quedó hecho localmente el 3 nov 2026 (bloque 2.6 de PLAN_FASE_2.md); la aprobación por Meta llega con el canal real.*
 - **Generación asistida:** la IA redacta variantes a partir de la plantilla base y los datos del curso; una persona aprueba; la variante queda versionada. Nunca se envía texto generado sin aprobar fuera del nivel 3.
 - **Flyer con texto vivo:** el flyer estático no se corrige solo; conviene un **generador de fichas** (SVG/PNG desde los datos del curso) para fechas y precios, y dejar el arte del diseñador como fondo. El CRM ya tiene una ficha SVG de respaldo.
 

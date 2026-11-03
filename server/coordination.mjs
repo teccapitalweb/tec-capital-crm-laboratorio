@@ -21,7 +21,7 @@ const stamp=(t,tz)=>{try{return new Intl.DateTimeFormat('es-MX',{dateStyle:'full
 // Google Calendar/Meet cumplirá la misma interfaz {name, createEvent({title,startsAt,durationMin,description}) → {url,providerRef}}.
 export const simulatedCalendar={name:'simulated',async createEvent(){const code=randomBytes(6).toString('hex');return {url:'https://meet.simulado.tec-capital.test/'+code.slice(0,3)+'-'+code.slice(3,7)+'-'+code.slice(7,10),providerRef:'simcal_'+code};}};
 
-export function createCoordination({db,crm,events,insertMessage,body,json,audit,broadcast,now=Date.now}){
+export function createCoordination({db,crm,events,insertMessage,body,json,audit,broadcast,content=null,now=Date.now}){
   let calendarOf=()=>simulatedCalendar;const useCalendar=fn=>{calendarOf=fn;};
   const defaults=b=>({brand_id:b,enabled:0,auto_open:1,reminder_hours:24,revision:0,updated_by:null,updated_at:null});
   const settings=b=>db.prepare('SELECT * FROM coordination_settings WHERE brand_id=?').get(b)||defaults(b);
@@ -184,6 +184,7 @@ export function createCoordination({db,crm,events,insertMessage,body,json,audit,
     if(db.prepare('SELECT count(*) n FROM edition_resources WHERE edition_id=?').get(e.id).n>=300)throw fail(409,'Máximo 300 recursos por apertura.');
     const id=randomUUID();db.prepare('INSERT INTO edition_resources(id,edition_id,brand_id,session_id,kind,title,url,file_id,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,e.id,e.brand_id,sessionId,kind,title,link,fileId,user.id,now());
     if(kind==='recording'&&sessionId&&link)db.prepare("UPDATE edition_sessions SET recording_url=CASE WHEN recording_url='' THEN ? ELSE recording_url END,updated_at=? WHERE id=?").run(link,now(),sessionId);
+    if(kind==='recording')emit('grabacion.disponible',e,'resource',id,{editionId:e.id,sessionId,title,url:link||null,fileId},user,'coordination');   // Contenido avisa a los inscritos sólo si la marca tiene plantilla mapeada
     audit(user,'coordination.resource.create',id);broadcast('crm',null,{brandId:e.brand_id});return id;
   }
   function removeResource(id,user){
@@ -238,7 +239,9 @@ export function createCoordination({db,crm,events,insertMessage,body,json,audit,
       if(r.consent==='opted_out'){skipped++;continue;}   // la baja de mensajes se respeta también en recordatorios; la persona coordinadora avisa por otro medio
       const ref='session:'+s.id+':reminder:'+r.enrollment_id;if(db.prepare('SELECT 1 FROM messages WHERE client_ref=?').get(ref))continue;
       const conv=db.prepare('SELECT * FROM conversations WHERE id=?').get(r.conversation_id);if(!conv||conv.status==='resolved')continue;
-      const body=`Recordatorio de clase · ${c.title} · ${e.name}\nSesión ${s.number}: ${s.title}\n${stamp(s.starts_at,e.timezone)} (${s.duration_min} min)\n${s.meet_url?'Enlace: '+s.meet_url:'El enlace de la videollamada se enviará por aquí.'}${e.group_url?'\nGrupo del curso: '+e.group_url:''}\nLaboratorio: aviso de práctica.`;
+      const first=db.prepare('SELECT name FROM users WHERE id=?').get(conv.customer_id)?.name?.split(' ')[0]||null;
+      const tpl=content?.render('session_reminder',e.brand_id,{courseId:e.course_id,editionId:e.id,name:first,extra:{sesion:s.number+'. '+s.title,fecha_sesion:stamp(s.starts_at,e.timezone)+' ('+s.duration_min+' min)',enlace_sesion:s.meet_url||'',grupo:e.group_url||''}});
+      const body=tpl?tpl.text:`Recordatorio de clase · ${c.title} · ${e.name}\nSesión ${s.number}: ${s.title}\n${stamp(s.starts_at,e.timezone)} (${s.duration_min} min)\n${s.meet_url?'Enlace: '+s.meet_url:'El enlace de la videollamada se enviará por aquí.'}${e.group_url?'\nGrupo del curso: '+e.group_url:''}\nLaboratorio: aviso de práctica.`;
       try{transaction(db,()=>insertMessage(conv,null,body,'automation',ref,null,null,null,{category:'utility'}));sent++;broadcast('conversation',conv.id);}
       catch(err){if(err?.status!==409)throw err;}
     }

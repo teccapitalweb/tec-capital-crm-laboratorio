@@ -29,7 +29,7 @@ const PATTERNS=[
 // Motor de respuestas v2. Reglas del proyecto que cumple: precios/fechas/cupos sólo del catálogo; nunca confirma pagos ni
 // inscripciones; cada decisión queda en reply_log con intención, fuentes y motivo; las llamadas al proveedor de IA van fuera
 // de las transacciones (plan() y commit() son síncronos; el proveedor se consulta entre ambos).
-export function createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider,payments=null,now=Date.now}){
+export function createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider,payments=null,content=null,now=Date.now}){
   const defaults=brandId=>({brand_id:brandId,mode:'templates',provider_enabled:0,max_unknown:2,revision:0,updated_by:null,updated_at:null});
   const settings=brandId=>db.prepare('SELECT * FROM reply_settings WHERE brand_id=?').get(brandId)||defaults(brandId);
   const entry=id=>typeof id==='string'?db.prepare('SELECT * FROM knowledge_entries WHERE id=?').get(id):null;
@@ -66,7 +66,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     else if(intent==='price'){out.prepared=catalogue.prepare(c,{kind:'price'});out.reply=out.prepared.text.replace(/^Precio de ejemplo:/,'El precio de ejemplo de '+course.title+' es');out.stage='interesado';out.sources.push(catalogueSource);out.reason='Precio y promoción vigentes consultados en el catálogo al responder.';}
     else if(intent==='syllabus'){out.prepared=catalogue.prepare(c,{kind:'syllabus'});out.reply=out.prepared.text;out.sources.push(catalogueSource);out.reason='Temario del curso en el catálogo.';}
     else if(intent==='schedule'){out.prepared=catalogue.prepare(c,{kind:'schedule'});out.reply=out.prepared.text;out.sources.push(catalogueSource);out.reason='Fecha, horario y docente de la edición en el catálogo.';}
-    else if(intent==='greeting'||count===1){out.prepared=catalogue.prepare(c,{kind:'flyer'});out.reply=course.welcome.replaceAll('{{nombre}}',first).replaceAll('{{curso}}',course.title)+'\n\n'+out.prepared.text;out.sources.push(catalogueSource,{type:'template',kind:'welcome'});out.buttons=['Precio','Temario','Fechas'];out.reason=count===1?'Primer mensaje: bienvenida con la ficha vigente del curso.':'Saludo o petición de información: ficha vigente del curso.';}
+    else if(intent==='greeting'||count===1){out.prepared=catalogue.prepare(c,{kind:'flyer'});const ad=c.referral&&count===1?content?.render('ad_welcome',c.brand_id,{courseId:course.id,editionId:c.edition_id,name:first}):null;out.reply=ad?ad.text:course.welcome.replaceAll('{{nombre}}',first).replaceAll('{{curso}}',course.title)+'\n\n'+out.prepared.text;out.sources.push(catalogueSource,ad?{type:'template',kind:'ad_welcome',id:ad.templateId}:{type:'template',kind:'welcome'});out.buttons=['Precio','Temario','Fechas'];out.reason=count===1?'Primer mensaje: bienvenida con la ficha vigente del curso.':'Saludo o petición de información: ficha vigente del curso.';}
     else if(intent==='thanks'){out.reply='¡Con gusto! Si quieres, puedo ayudarte con el precio, las fechas o la inscripción de práctica.';out.reason='Agradecimiento o cierre.';}
     else if(fromKnowledge(.5)){/* respondido con conocimiento */}
     else{

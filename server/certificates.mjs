@@ -19,7 +19,7 @@ const longDate=t=>new Intl.DateTimeFormat('es-MX',{dateStyle:'long',timeZone:TZ}
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const FOLIO=/^IPCI-\d{4}-\d{5}$/;
 
-export function createCertificates({db,crm,events,insertMessage,body,json,audit,broadcast,rate,dataDir,root,now=Date.now,env=process.env}){
+export function createCertificates({db,crm,events,insertMessage,body,json,audit,broadcast,rate,dataDir,root,content=null,now=Date.now,env=process.env}){
   const defaults=b=>({brand_id:b,auto_issue:0,min_attendance_pct:80,issuer_name:'IPCI · TEC Capital',signer_name:'',signer_title:'',logo_file_id:null,accent:'#30343c',credits_enabled:0,revision:0,updated_by:null,updated_at:null});
   const settings=b=>db.prepare('SELECT * FROM certificate_settings WHERE brand_id=?').get(b)||defaults(b);
   const roleOf=user=>db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);
@@ -73,7 +73,8 @@ export function createCertificates({db,crm,events,insertMessage,body,json,audit,
     events.publish({type:'certificado.emitido',brandId:en.brand_id,entityKind:'certificate',entityId:id,payload:{folio,enrollmentId:en.id,personId:person?.id||null,contactId:en.contact_id,courseId:en.course_id,editionId:en.edition_id,holder,attendancePct:el.pct,source},actorId:actor?.id||null,source:'certificates'});
     // Aviso al alumno por su conversación (plantilla de utilidad); idempotente por folio.
     const conv=db.prepare('SELECT c.* FROM conversations c JOIN orders o ON o.conversation_id=c.id WHERE o.id=(SELECT order_id FROM enrollments WHERE id=?)').get(en.id);
-    if(conv&&conv.status!=='resolved'){try{insertMessage(conv,null,`¡Felicidades, ${holder}! Tu certificado de ${course?.title||'el curso'} (${e.name}) ya está emitido.\nFolio: ${folio}\nVerifícalo y descárgalo aquí: ${verifyUrl(folio,code)}\nLaboratorio: certificado de práctica.`,'automation','certificate:'+folio,null,null,null,{category:'utility'});}catch(err){if(err?.status!==409)throw err;}}
+    if(conv&&conv.status!=='resolved'){const tpl=content?.render('certificate_ready',en.brand_id,{courseId:en.course_id,editionId:en.edition_id,name:holder.split(' ')[0],extra:{folio,enlace_certificado:verifyUrl(folio,code),asistencia:el.pct+' %'}});
+      try{insertMessage(conv,null,tpl?tpl.text:`¡Felicidades, ${holder}! Tu certificado de ${course?.title||'el curso'} (${e.name}) ya está emitido.\nFolio: ${folio}\nVerifícalo y descárgalo aquí: ${verifyUrl(folio,code)}\nLaboratorio: certificado de práctica.`,'automation','certificate:'+folio,null,null,null,{category:'utility'});}catch(err){if(err?.status!==409)throw err;}}
     return get(id);
   }
   function issue(e,input,user,source='manual'){

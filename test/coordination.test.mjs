@@ -158,5 +158,5 @@ test('coordinación académica por API: la venta confirmada entra sola a la aper
  await call('/api/events/999999',admin.cookie,undefined,'GET',404);await call('/api/events/1/retry',admin.cookie,{subscriber:'nadie'},'POST',404);
  assert.equal((await fetch(origin+'/api/events.csv',{headers:{Cookie:clients[0].cookie,Origin:origin}})).status,403);
 
- const d=db();try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,22);assert.equal(d.prepare('SELECT count(*) n FROM domain_deliveries WHERE state!=\'done\'').get().n,0);assert.equal(d.prepare("SELECT count(*) n FROM edition_sessions WHERE edition_id='edition-aves'").get().n,2);}finally{d.close();}
+ const d=db();try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,23);assert.equal(d.prepare('SELECT count(*) n FROM domain_deliveries WHERE state!=\'done\'').get().n,0);assert.equal(d.prepare("SELECT count(*) n FROM edition_sessions WHERE edition_id='edition-aves'").get().n,2);}finally{d.close();}
 });

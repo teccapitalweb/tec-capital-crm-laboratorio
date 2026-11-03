@@ -93,9 +93,36 @@ export function createAiProvider({env=process.env,log=console,timeoutMs=20000}={
     return {text:answer,usedIds,confidence,model:response.model||model,reason:answer?'Redactado por el proveedor con '+usedIds.length+' fuente(s); confianza '+Math.round(confidence*100)+'%.':'El proveedor no encontró información suficiente.',usage:response.usage};
   }
 
+  // Variantes de una plantilla en distintos tonos. El simulado transforma el texto de forma determinista y sin red;
+  // Claude recibe las reglas (mismas variables, sin enlaces ni importes nuevos) y el resultado se valida en código.
+  function simulatedRewrite({template,tones}){
+    const b=template.body.trim(),lines=b.split('\n').filter(l=>l.trim()),vars=[...new Set([...b.matchAll(/\{\{\s*([a-z_]+)\s*\}\}/g)].map(m=>'{{'+m[1]+'}}'))];
+    const ensure=t=>{const missing=vars.filter(v=>!t.includes(v));return missing.length?t+'\n'+missing.join(' · '):t;};
+    const by={
+      formal:()=>{const keep=(m,w)=>m[0]===m[0].toUpperCase()?w[0].toUpperCase()+w.slice(1):w;return ensure(b.replace(/^¡?hola,?\s*/i,'Estimado/a ').replace(/\btú\b/gi,m=>keep(m,'usted')).replace(/\bte\b/gi,m=>keep(m,'le')).replace(/\btu\b/gi,m=>keep(m,'su')).replace(/\bpuedes\b/gi,m=>keep(m,'puede')).replace(/\bquieres\b/gi,m=>keep(m,'desea')).replace(/\btienes\b/gi,m=>keep(m,'tiene'))+'\n\nQuedamos atentos a cualquier duda.');},
+      cercano:()=>ensure((/^¡?hola/i.test(b)?b.replace(/^¡?hola,?\s*/i,'¡Hola, '):'¡Hola! '+b)+'\n\n¿Te ayudo con algo más? Estoy por aquí.'),
+      breve:()=>ensure(lines.slice(0,Math.max(1,Math.min(2,lines.length))).join('\n')),
+    };
+    return {variants:tones.filter(t=>by[t]).map(t=>({tone:t,body:by[t]()})),model:'simulado',reason:'Variantes generadas por reglas, sin red ni costo; las revisa una persona.'};
+  }
+  async function claudeRewrite({brand,template,tones,variables:allowed}){
+    if(!hasCredentials)return {variants:[],model,reason:'Proveedor sin credenciales.'};
+    if(!client){const {default:Anthropic}=await import('@anthropic-ai/sdk');client=new Anthropic({timeout:timeoutMs,maxRetries:1});}
+    const system=['Redactas variantes de una plantilla de mensajes de una consultora de cursos (español de México).','REGLAS: conserva exactamente las variables {{...}} del original y no uses otras que no estén en la lista; no añadas enlaces, importes, fechas ni promesas (pagos, inscripciones, descuentos); respeta el sentido; máximo 1200 caracteres por variante.','Variables permitidas: '+allowed.join(', '),'Devuelve SOLO un JSON: {"variants":[{"tone":"formal|cercano|breve","body":string}]}'].join('\n\n');
+    const response=await client.beta.messages.create({model,max_tokens:2048,system,messages:[{role:'user',content:'Marca: '+brand.name+'\nEscenario: '+template.scenario+'\nTonos: '+tones.join(', ')+'\nPLANTILLA ORIGINAL:\n'+template.body}],output_config:{effort:'low'},betas:['server-side-fallback-2026-07-01'],fallbacks:'default'});
+    if(response.stop_reason==='refusal')return {variants:[],model,reason:'El proveedor declinó.'};
+    const text=response.content.filter(b=>b.type==='text').map(b=>b.text).join('').trim().replace(/^```(?:json)?\s*|\s*```$/g,'');
+    let parsed=null;try{parsed=JSON.parse(text);}catch{return {variants:[],model,reason:'Respuesta del proveedor no válida.'};}
+    const variants=(Array.isArray(parsed?.variants)?parsed.variants:[]).filter(v=>tones.includes(v?.tone)&&typeof v?.body==='string').map(v=>({tone:v.tone,body:v.body.trim().slice(0,3000)}));
+    return {variants,model:response.model||model,reason:'Redactadas por el proveedor; cada una se valida antes de guardarse.',usage:response.usage};
+  }
+  async function rewrite(input){
+    try{return await (name==='claude'?claudeRewrite(input):simulatedRewrite(input));}
+    catch(e){log.error('AI rewrite failed:',e?.name||'Error',String(e?.message||'').slice(0,160));return {variants:[],model,reason:'Error del proveedor: '+String(e?.message||e).slice(0,120)};}
+  }
   async function draft(input){
     try{return await (name==='claude'?claude(input):simulated(input));}
     catch(e){log.error('AI provider failed:',e?.name||'Error',String(e?.message||'').slice(0,160));return {text:null,usedIds:[],model,reason:'Error del proveedor: '+String(e?.message||e).slice(0,120)};}
   }
-  return {name,model:name==='claude'?model:'simulado',configured,draft};
+  return {name,model:name==='claude'?model:'simulado',configured,draft,rewrite};
 }
