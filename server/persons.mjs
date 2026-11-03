@@ -20,6 +20,10 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
   const owner=(kind,value)=>value?db.prepare('SELECT person_id FROM person_identities WHERE kind=? AND value=?').get(kind,value)?.person_id||null:null;
   const contactsOf=id=>db.prepare('SELECT * FROM contacts WHERE persona_id=? ORDER BY created_at').all(id);
   const visibleBrands=user=>new Set(crm.brandsFor(user).map(b=>b.id));
+  // Identidades respaldadas por un conjunto de contactos: lo único de la persona que ve quien no es administración.
+  const identitySet=cs=>new Set(cs.flatMap(c=>[c.source_user_id&&'profile:'+c.source_user_id,normalizePhone(c.phone)&&'phone:'+normalizePhone(c.phone),normalizeEmail(c.email)&&'email:'+normalizeEmail(c.email)].filter(Boolean)));
+  // Proyecta el consentimiento vigente de la persona a todos sus contactos (tras fusiones o reasignaciones).
+  function project(personId){const p=get(personId);if(!p||p.consent_status==='unknown')return;for(const c of contactsOf(personId))db.prepare('INSERT INTO contact_consent(contact_id,brand_id,status,source,note,actor_id,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET status=excluded.status,source=excluded.source,note=excluded.note,actor_id=excluded.actor_id,updated_at=excluded.updated_at WHERE excluded.status!=contact_consent.status').run(c.id,c.brand_id,p.consent_status,'person',p.consent_note,p.consent_actor_id,now());}
   function candidate(a,b,reason,detail=''){
     if(!a||!b||a===b)return;const [x,y]=[a,b].sort();
     db.prepare('INSERT OR IGNORE INTO person_candidates(id,person_a,person_b,reason,detail,status,created_at) VALUES(?,?,?,?,?,\'pending\',?)').run(randomUUID(),x,y,reason,detail.slice(0,200),now());
@@ -62,28 +66,35 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
   function setConsentForContact(c,status,source,note,actor){const pid=c.persona_id||attach(c);writeConsent(pid,status,source,note,actor,c.brand_id);}
   // ---- vistas
   const brandName=id=>db.prepare('SELECT name FROM brands WHERE id=?').get(id)?.name||id;
-  function summary(p,allowed){
-    const contacts=contactsOf(p.id),mine=contacts.filter(c=>allowed.has(c.brand_id)),ids=mine.map(c=>c.id),ph=ids.map(()=>'?').join(',')||'NULL';
+  function summary(p,allowed,isAdmin=false){
+    const contacts=contactsOf(p.id),mine=contacts.filter(c=>allowed.has(c.brand_id)),ids=mine.map(c=>c.id),ph=ids.map(()=>'?').join(',')||'NULL',vis=identitySet(mine);
     const opps=db.prepare(`SELECT stage,count(*) n FROM opportunities WHERE contact_id IN (${ph}) GROUP BY stage`).all(...ids);
-    return {id:p.id,name:p.name,phone:p.phone,email:p.email,profile:Boolean(p.source_user_id),testNumber:p.source_user_id?db.prepare('SELECT test_number FROM users WHERE id=?').get(p.source_user_id)?.test_number||null:null,consent:p.consent_status,revision:p.revision,created_at:p.created_at,updated_at:p.updated_at,
+    return {id:p.id,name:p.name,phone:isAdmin||vis.has('phone:'+p.phone)?p.phone:'',email:isAdmin||vis.has('email:'+p.email)?p.email:'',canEdit:isAdmin||contacts.every(c=>allowed.has(c.brand_id)),profile:Boolean(p.source_user_id),testNumber:p.source_user_id?db.prepare('SELECT test_number FROM users WHERE id=?').get(p.source_user_id)?.test_number||null:null,consent:p.consent_status,revision:p.revision,created_at:p.created_at,updated_at:p.updated_at,
       brands:mine.map(c=>({id:c.brand_id,name:brandName(c.brand_id),contactId:c.id})),otherBrands:contacts.length-mine.length,
       opportunities:opps.reduce((n,r)=>n+r.n,0),won:opps.find(r=>r.stage==='ganada')?.n||0,enrollments:db.prepare(`SELECT count(*) n FROM enrollments WHERE contact_id IN (${ph}) AND status='enrolled'`).get(...ids).n,
       paidCents:db.prepare(`SELECT COALESCE(sum(amount_cents),0) n FROM orders WHERE contact_id IN (${ph}) AND status='paid'`).get(...ids).n,lastActivity:db.prepare(`SELECT max(updated_at) m FROM opportunities WHERE contact_id IN (${ph})`).get(...ids).m};
   }
   function list(user,params){
-    requireStaff(user);const allowed=visibleBrands(user),brand=params.get('brand'),q=normalizeName(params.get('q')||'').slice(0,80),limit=Math.min(200,Math.max(1,Number(params.get('limit'))||100));
+    const isAdmin=requireStaff(user).role==='admin',allowed=visibleBrands(user),brand=params.get('brand'),q=normalizeName(params.get('q')||'').slice(0,80),limit=Math.min(200,Math.max(1,Number(params.get('limit'))||100));
     const ids=[...allowed].filter(id=>!brand||brand==='all'||id===brand);if(!ids.length)return [];
     const rows=db.prepare(`SELECT DISTINCT p.* FROM persons p JOIN contacts c ON c.persona_id=p.id WHERE c.brand_id IN (${ids.map(()=>'?').join(',')}) ORDER BY p.updated_at DESC LIMIT 2000`).all(...ids);
     const digits=q.replace(/\D/g,'');
-    return rows.filter(p=>!q||normalizeName(p.name).includes(q)||(digits.length>=4&&p.phone.includes(digits))||p.email.includes(q)).slice(0,limit).map(p=>summary(p,allowed));
+    return rows.filter(p=>!q||normalizeName(p.name).includes(q)||(digits.length>=4&&p.phone.includes(digits))||p.email.includes(q)).slice(0,limit).map(p=>summary(p,allowed,isAdmin));
   }
   function detail(id,user){
     requireStaff(user);const p=get(id);if(!p)throw fail(404,'Persona no encontrada.');
     const allowed=visibleBrands(user),contacts=contactsOf(id),mine=contacts.filter(c=>allowed.has(c.brand_id));
     if(!mine.length)throw fail(404,'Persona no encontrada.');   // sin contacto en una marca autorizada, no existe para este usuario
-    const ids=mine.map(c=>c.id),ph=ids.map(()=>'?').join(',');
-    return {person:summary(p,allowed),identities:db.prepare('SELECT kind,value,source,created_at FROM person_identities WHERE person_id=? ORDER BY kind').all(id).map(i=>i.kind==='profile'?{...i,value:'perfil del laboratorio'}:i),
-      consent:consentOf(id),consentHistory:db.prepare('SELECT e.status,e.source,e.note,e.created_at,e.brand_id,u.name actor_name,b.name brand_name FROM person_consent_events e LEFT JOIN users u ON u.id=e.actor_id LEFT JOIN brands b ON b.id=e.brand_id WHERE e.person_id=? ORDER BY e.seq DESC LIMIT 30').all(id),
+    const ids=mine.map(c=>c.id),ph=ids.map(()=>'?').join(','),isAdmin=roleOf(user).role==='admin';
+    // El consentimiento es de toda la empresa, pero quién lo registró, desde qué marca y con qué nota sólo se enseña
+    // para las marcas autorizadas (o a administración): el estado y la fecha sí, porque rigen para todas.
+    const history=db.prepare('SELECT e.status,e.source,e.note,e.created_at,e.brand_id,u.name actor_name,b.name brand_name FROM person_consent_events e LEFT JOIN users u ON u.id=e.actor_id LEFT JOIN brands b ON b.id=e.brand_id WHERE e.person_id=? ORDER BY e.seq DESC LIMIT 30').all(id);
+    const canSee=h=>isAdmin||(h.brand_id!==null&&allowed.has(h.brand_id));
+    const redact=h=>canSee(h)?h:{status:h.status,source:h.source,note:'',created_at:h.created_at,brand_id:null,actor_name:null,brand_name:null,redacted:true};
+    const current=consentOf(id),lastEvent=history[0];
+    const vis=identitySet(mine);
+    return {person:summary(p,allowed,isAdmin),identities:db.prepare('SELECT kind,value,source,created_at FROM person_identities WHERE person_id=? ORDER BY kind').all(id).filter(i=>isAdmin||vis.has(i.kind+':'+i.value)).map(i=>i.kind==='profile'?{...i,value:'perfil del laboratorio'}:i),
+      consent:lastEvent&&!canSee(lastEvent)?{...current,note:'',actor_id:null,redacted:true}:current,consentHistory:history.map(redact),
       contacts:mine.map(c=>({id:c.id,brand_id:c.brand_id,brand_name:brandName(c.brand_id),name:c.name,phone:c.phone,email:c.email,source:c.source,created_at:c.created_at,tags:db.prepare('SELECT t.name,t.color FROM contact_tag_links l JOIN contact_tags t ON t.id=l.tag_id WHERE l.contact_id=?').all(c.id)})),
       opportunities:db.prepare(`SELECT o.id,o.brand_id,o.stage,o.updated_at,o.created_at,k.title course_title,e.name edition_name,u.name owner_name,(SELECT co.conversation_id FROM conversation_opportunities co WHERE co.opportunity_id=o.id) conversation_id FROM opportunities o JOIN courses k ON k.id=o.course_id LEFT JOIN editions e ON e.id=o.edition_id LEFT JOIN users u ON u.id=o.owner_id WHERE o.contact_id IN (${ph}) ORDER BY o.updated_at DESC`).all(...ids).map(o=>({...o,brand_name:brandName(o.brand_id)})),
       orders:db.prepare(`SELECT o.id,o.brand_id,o.reference,o.amount_cents,o.currency,o.status,o.method,o.paid_at,o.created_at,k.title course_title,e.name edition_name FROM orders o JOIN courses k ON k.id=o.course_id JOIN editions e ON e.id=o.edition_id WHERE o.contact_id IN (${ph}) ORDER BY o.created_at DESC`).all(...ids).map(o=>({...o,brand_name:brandName(o.brand_id)})),
@@ -91,15 +102,17 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
       candidates:roleOf(user).role==='admin'?db.prepare("SELECT c.*,pa.name name_a,pb.name name_b FROM person_candidates c JOIN persons pa ON pa.id=c.person_a JOIN persons pb ON pb.id=c.person_b WHERE (c.person_a=? OR c.person_b=?) AND c.status='pending'").all(id,id):[]};
   }
   function update(id,input,user){
-    requireStaff(user);const p=get(id);if(!p)throw fail(404,'Persona no encontrada.');
-    if(!contactsOf(id).some(c=>visibleBrands(user).has(c.brand_id)))throw fail(404,'Persona no encontrada.');
+    const u=requireStaff(user),p=get(id);if(!p)throw fail(404,'Persona no encontrada.');
+    const cs=contactsOf(id),allowed=visibleBrands(user);if(!cs.some(c=>allowed.has(c.brand_id)))throw fail(404,'Persona no encontrada.');
+    // Los datos de la persona valen para toda la empresa: los edita administración o quien tiene acceso a todas sus marcas.
+    if(u.role!=='admin'&&!cs.every(c=>allowed.has(c.brand_id)))throw fail(403,'Esta persona tiene contactos en marcas a las que no tienes acceso: edita el contacto de tu marca o pide el cambio a administración.');
     if(!Number.isInteger(input.expectedRevision)||input.expectedRevision!==p.revision)throw fail(409,'La persona cambió. Recárgala.');
     const name=input.name===undefined?p.name:text(input.name,100);if(name.length<2)throw fail(400,'Escribe el nombre de la persona.');
     const rawPhone=input.phone===undefined?p.phone:text(input.phone,40),phone=rawPhone?normalizePhone(rawPhone):'';if(rawPhone&&!phone)throw fail(400,'El teléfono no se reconoce: usa 10 dígitos de México o el formato internacional +52…');
     const rawEmail=input.email===undefined?p.email:text(input.email,150),email=rawEmail?normalizeEmail(rawEmail):'';if(rawEmail&&!email)throw fail(400,'El correo no es válido.');
     for(const [kind,value] of [['phone',phone],['email',email]]){const o=owner(kind,value);if(value&&o&&o!==id)throw fail(409,(kind==='phone'?'Ese teléfono':'Ese correo')+' ya pertenece a otra persona. Revisa si son la misma y fusiónalas.');}
     transaction(db,()=>{db.prepare('UPDATE persons SET name=?,phone=?,email=?,revision=revision+1,updated_at=? WHERE id=?').run(name,phone,email,now(),id);claim('phone',phone,id,'staff');claim('email',email,id,'staff');});
-    audit(user,'person.update',id);for(const b of new Set(contactsOf(id).map(c=>c.brand_id)))broadcast('crm',null,{brandId:b});return summary(get(id),visibleBrands(user));
+    audit(user,'person.update',id);for(const b of new Set(contactsOf(id).map(c=>c.brand_id)))broadcast('crm',null,{brandId:b});return summary(get(id),allowed,u.role==='admin');
   }
   function setConsent(id,input,user){
     requireStaff(user);const p=get(id);if(!p)throw fail(404,'Persona no encontrada.');const mine=contactsOf(id).filter(c=>visibleBrands(user).has(c.brand_id));if(!mine.length)throw fail(404,'Persona no encontrada.');
@@ -138,7 +151,7 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
       db.prepare('UPDATE person_consent_events SET person_id=? WHERE person_id=?').run(keep.id,merge.id);
       db.prepare("UPDATE persons SET phone=CASE WHEN phone='' THEN ? ELSE phone END,email=CASE WHEN email='' THEN ? ELSE email END,source_user_id=COALESCE(source_user_id,?),revision=revision+1,updated_at=? WHERE id=?").run(merge.phone,merge.email,merge.source_user_id,t,keep.id);
       db.prepare('UPDATE persons SET source_user_id=NULL WHERE id=?').run(merge.id);
-      if(p.moves.consent)writeConsent(keep.id,merge.consent_status,'merge','Heredado al fusionar con «'+merge.name+'»',user.id,null);
+      if(p.moves.consent)writeConsent(keep.id,merge.consent_status,'merge','Heredado al fusionar con «'+merge.name+'»',user.id,null);else project(keep.id);   // los contactos que llegan reciben el consentimiento vigente
       db.prepare("UPDATE person_candidates SET status=CASE WHEN status='pending' THEN 'merged' ELSE status END,decided_by=COALESCE(decided_by,?),decided_at=COALESCE(decided_at,?) WHERE person_a IN (?,?) AND person_b IN (?,?)").run(user.id,t,keep.id,merge.id,keep.id,merge.id);
       for(const c of db.prepare('SELECT * FROM person_candidates WHERE person_a=? OR person_b=?').all(merge.id,merge.id)){const other=c.person_a===merge.id?c.person_b:c.person_a;db.prepare('DELETE FROM person_candidates WHERE id=?').run(c.id);if(other!==keep.id&&c.status==='pending')candidate(keep.id,other,c.reason,c.detail);}
       db.prepare('INSERT INTO person_merges(id,kept_id,merged_id,merged_snapshot,moved,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(randomUUID(),keep.id,merge.id,JSON.stringify(merge),JSON.stringify(p.moves),user.id,t);
@@ -158,7 +171,7 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
     db.prepare('UPDATE persons SET source_user_id=NULL WHERE id=?').run(mergedPersonId);db.prepare("UPDATE persons SET source_user_id=COALESCE(source_user_id,?) WHERE id=?").run(merge.source_user_id,keepPid);
     db.prepare('DELETE FROM person_candidates WHERE person_a=? OR person_b=?').run(mergedPersonId,mergedPersonId);
     db.prepare('INSERT INTO person_merges(id,kept_id,merged_id,merged_snapshot,moved,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(randomUUID(),keepPid,mergedPersonId,JSON.stringify(merge),JSON.stringify({via:'contact_merge'}),user?.id||null,t);
-    db.prepare('DELETE FROM persons WHERE id=?').run(mergedPersonId);
+    db.prepare('DELETE FROM persons WHERE id=?').run(mergedPersonId);project(keepPid);
   }
 
   async function handle(req,res,path,user){

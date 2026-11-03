@@ -86,14 +86,18 @@ test('personas por API: dos conversaciones de la misma persona en marcas distint
  assert.equal((await call('/api/crm/contacts/'+dAdmin.contacts[0].id,admin.cookie)).contact.persona_id,p.id,'la ficha del contacto enlaza a la persona');
  assert.equal((await call('/api/persons?brand=all&q=perez',agent.cookie)).persons.length,1);assert.equal((await call('/api/persons?brand=all&q=nadie',agent.cookie)).persons.length,0);
 
- // edición de la persona: teléfono normalizado; un teléfono de otra persona no se roba
- await call('/api/persons/'+p.id,agent.cookie,{phone:'12',expectedRevision:p.revision},'PATCH',400);
- await call('/api/persons/'+p.id,agent.cookie,{phone:'55 1234 5678',expectedRevision:99},'PATCH',409);
- const edited=(await call('/api/persons/'+p.id,agent.cookie,{phone:'55 1234 5678',email:'Ana@Mail.com',expectedRevision:p.revision},'PATCH')).person;assert.equal(edited.phone,'+525512345678');assert.equal(edited.email,'ana@mail.com');
+ // edición de la persona: sólo administración o quien tiene acceso a todas sus marcas; teléfono normalizado; un teléfono de otra persona no se roba
+ await call('/api/persons/'+p.id,agent.cookie,{phone:'55 1234 5678',expectedRevision:p.revision},'PATCH',403);assert.equal(dAgent.person.canEdit,false);assert.equal(dAdmin.person.canEdit,true);
+ await call('/api/persons/'+p.id,admin.cookie,{phone:'12',expectedRevision:p.revision},'PATCH',400);
+ await call('/api/persons/'+p.id,admin.cookie,{phone:'55 1234 5678',expectedRevision:99},'PATCH',409);
+ const edited=(await call('/api/persons/'+p.id,admin.cookie,{phone:'55 1234 5678',email:'Ana@Mail.com',expectedRevision:p.revision},'PATCH')).person;assert.equal(edited.phone,'+525512345678');assert.equal(edited.email,'ana@mail.com');
  // un contacto manual en Dermalysse con el mismo teléfono se une solo a la persona
  const manual=(await call('/api/crm/contacts',admin.cookie,{brandId:'dermalysse',name:'Ana P',phone:'+52 55 1234 5678'},'POST',201)).id;
  assert.equal((await call('/api/crm/contacts/'+manual,admin.cookie)).contact.persona_id,p.id,'mismo teléfono → misma persona');
  assert.equal((await call('/api/persons?brand=all',admin.cookie)).persons[0].brands.length,3);
+ // la asesora de GlobalVet no ve teléfono, correo ni identidades que sólo respaldan otras marcas; sí el perfil (su contacto lo tiene)
+ const redacted=await call('/api/persons/'+p.id,agent.cookie);assert.equal(redacted.person.phone,'');assert.equal(redacted.person.email,'');assert.deepEqual(redacted.identities.map(i=>i.kind),['profile']);
+ assert.equal((await call('/api/persons?brand=all',agent.cookie)).persons[0].phone,'');assert.equal((await call('/api/persons/'+p.id,admin.cookie)).person.phone,'+525512345678');
  // mismo nombre completo en otra persona: candidatura para revisar, no unión automática
  const homonimo=(await call('/api/crm/contacts',admin.cookie,{brandId:'globalvet',name:'Ana Pérez',phone:'5599887766'},'POST',201)).id;
  const other=(await call('/api/crm/contacts/'+homonimo,admin.cookie)).contact.persona_id;assert.notEqual(other,p.id);
@@ -117,6 +121,10 @@ test('personas por API: dos conversaciones de la misma persona en marcas distint
  // y al revés: registrar consentimiento desde un contacto actualiza la persona
  await call('/api/crm/contacts/'+manual+'/consent',admin.cookie,{status:'opted_out',note:'Baja desde Dermalysse'},'PUT');
  assert.equal((await call('/api/persons/'+p.id,admin.cookie)).consent.status,'opted_out');
+ // la asesora de GlobalVet ve que la persona está de baja, pero no la nota, la marca ni quién lo registró desde Dermalysse
+ const seen=await call('/api/persons/'+p.id,agent.cookie);assert.equal(seen.consent.status,'opted_out');assert.equal(seen.consent.note,'');assert.equal(seen.consent.redacted,true);
+ assert.ok(!JSON.stringify(seen).includes('Baja desde Dermalysse'));assert.ok(seen.consentHistory.some(h=>h.redacted&&h.brand_name===null));assert.ok(seen.consentHistory.some(h=>h.brand_name==='GlobalVet'&&!h.redacted),'lo registrado en su marca sí se ve completo');
+ assert.ok(JSON.stringify(await call('/api/persons/'+p.id,admin.cookie)).includes('Baja desde Dermalysse'),'administración ve todo');
  await call('/api/persons/'+p.id+'/consent',admin.cookie,{status:'opted_in',note:'Reactivada para la prueba de fusión'},'PUT');
 
  // fusión de personas (homónima → Ana): vista previa, token, permisos, resultado
@@ -135,10 +143,12 @@ test('personas por API: dos conversaciones de la misma persona en marcas distint
  const x1=(await call('/api/crm/contacts',admin.cookie,{brandId:'globalvet',name:'Carlos Ruiz',phone:'5511112222'},'POST',201)).id,x2=(await call('/api/crm/contacts',admin.cookie,{brandId:'dermalysse',name:'Carlos Ruiz',email:'carlos@mail.com'},'POST',201)).id;
  const pa=(await call('/api/crm/contacts/'+x1,admin.cookie)).contact.persona_id,pb=(await call('/api/crm/contacts/'+x2,admin.cookie)).contact.persona_id;assert.notEqual(pa,pb);
  const cand=(await call('/api/persons/candidates',admin.cookie)).candidates;assert.equal(cand.length,1);assert.equal(cand[0].reason,'name');
- const pl=(await call('/api/persons/merge-preview',admin.cookie,{keepId:pa,mergeId:pb},'POST')).plan;assert.equal(pl.canMerge,true);assert.equal(pl.moves.contacts,1);assert.equal(pl.moves.fill.email,true);
+ await call('/api/crm/contacts/'+x1+'/consent',admin.cookie,{status:'opted_out',note:'Carlos pidió la baja'},'PUT');   // la persona conservada está de baja
+ const pl=(await call('/api/persons/merge-preview',admin.cookie,{keepId:pa,mergeId:pb},'POST')).plan;assert.equal(pl.canMerge,true);assert.equal(pl.moves.contacts,1);assert.equal(pl.moves.fill.email,true);assert.equal(pl.moves.consent,null);
  await call('/api/persons/merge',admin.cookie,{keepId:pa,mergeId:pb,previewToken:'viejo'},'POST',409);
  const merged=await call('/api/persons/merge',admin.cookie,{keepId:pa,mergeId:pb,previewToken:pl.previewToken});assert.equal(merged.keepId,pa);
  const carlos=await call('/api/persons/'+pa,admin.cookie);assert.equal(carlos.contacts.length,2);assert.equal(carlos.person.email,'carlos@mail.com');assert.equal(carlos.person.phone,'+525511112222');
+ assert.equal((await call('/api/crm/contacts/'+x2+'/consent',admin.cookie)).consent.status,'opted_out','el contacto que llega hereda la baja de la persona conservada');
  assert.equal((await call('/api/persons/candidates',admin.cookie)).candidates.length,0);
  assert.equal((await call('/api/events?brand=all&type=persona.fusionada',admin.cookie)).events.length,2,'un evento por marca de la persona conservada');
  // descartar una candidatura
