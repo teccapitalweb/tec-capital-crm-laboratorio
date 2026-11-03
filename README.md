@@ -55,7 +55,7 @@ En **Catálogo y biblioteca → Evaluación** cada marca tiene casos que dicen q
 
 ## Certificados verificables
 
-Al cerrar una apertura, cada inscrito con la asistencia mínima recibe su certificado con folio secuencial IPCI y código QR; también se emite a mano desde la ficha de apertura. Cualquiera puede verificarlo en `/verificar/<folio>` sin iniciar sesión (y descargar el SVG); el alumno recibe el enlace por su chat. Ajustes por marca en **Operación → Certificados**: emisión automática (apagada por omisión), asistencia mínima, firma, logotipo y créditos por consultora. Certificados de práctica, sin validez oficial.
+Al cerrar una apertura, cada inscrito con la asistencia mínima recibe su certificado con folio secuencial IPCI y código QR; también se emite a mano desde la ficha de apertura. Cualquiera puede verificarlo en `/verificar/<folio>` sin iniciar sesión (con el nombre abreviado); el enlace del QR, que el alumno recibe por su chat, muestra el nombre completo y permite descargar el SVG. Ajustes por marca en **Operación → Certificados**: emisión automática (apagada por omisión), asistencia mínima, firma, logotipo y créditos por consultora. Certificados de práctica, sin validez oficial.
 
 ## Personas: una identidad entre marcas
 

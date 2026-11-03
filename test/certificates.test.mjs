@@ -77,14 +77,18 @@ test('certificación por API: emisión al cerrar con asistencia mínima, folio s
  assert.equal((await call('/api/events?brand=all&type=certificado.emitido',admin.cookie)).events.length,1);
 
  // verificación pública sin sesión: página, JSON y SVG; folio inexistente; límite de peticiones
+ const vcode=cert.verifyUrl.split('/').pop();assert.match(vcode,/^[a-f0-9]{10}$/);assert.ok(notice.text.includes('/verificar/'+cert.folio+'/'+vcode),'el enlace del alumno lleva el código');
  const page=await fetch(origin+'/verificar/'+cert.folio.toLowerCase());assert.equal(page.status,200);assert.match(page.headers.get('content-type'),/text\/html/);const html=await page.text();
- assert.ok(html.includes('Certificado vigente')&&html.includes('Ana Pérez')&&html.includes('Plan sanitario para aves')&&html.includes(cert.folio));assert.ok(!html.includes('<script'));
- const vj=await (await fetch(origin+'/api/verify/'+cert.folio)).json();assert.equal(vj.valid,true);assert.equal(vj.certificate.holder,'Ana Pérez');assert.equal(vj.certificate.brand,'GlobalVet');
- const svgRes=await fetch(origin+'/verificar/'+cert.folio+'.svg');assert.equal(svgRes.status,200);assert.match(svgRes.headers.get('content-type'),/image\/svg\+xml/);const svg=await svgRes.text();
+ assert.ok(html.includes('Certificado vigente')&&html.includes('Ana P.')&&!html.includes('Ana Pérez')&&html.includes('Plan sanitario para aves')&&html.includes(cert.folio),'por folio solo: nombre abreviado');assert.ok(!html.includes('<script'));
+ const fullHtml=await (await fetch(origin+'/verificar/'+cert.folio+'/'+vcode)).text();assert.ok(fullHtml.includes('Ana Pérez')&&fullHtml.includes('Ver el certificado'),'con el código del QR: nombre completo y descarga');
+ const vj=await (await fetch(origin+'/api/verify/'+cert.folio)).json();assert.equal(vj.valid,true);assert.equal(vj.certificate.holder,'Ana P.');assert.equal(vj.certificate.full,false);assert.equal(vj.certificate.brand,'GlobalVet');
+ assert.equal((await (await fetch(origin+'/api/verify/'+cert.folio+'?code='+vcode)).json()).certificate.holder,'Ana Pérez');
+ assert.equal((await fetch(origin+'/verificar/'+cert.folio+'.svg')).status,404,'el SVG con el nombre completo exige el código');
+ const svgRes=await fetch(origin+'/verificar/'+cert.folio+'/'+vcode+'.svg');assert.equal(svgRes.status,200);assert.match(svgRes.headers.get('content-type'),/image\/svg\+xml/);const svg=await svgRes.text();
  assert.ok(svg.includes('Ana Pérez')&&svg.includes(cert.folio)&&svg.includes('<path d="M')&&svg.includes('Dirección Académica')&&svg.includes('#2a7a5e')&&!svg.includes('REVOCADO'));
  const missing=await fetch(origin+'/verificar/IPCI-2026-99999');assert.equal(missing.status,404);assert.ok((await missing.text()).includes('Folio no encontrado'));
  assert.equal((await fetch(origin+'/api/verify/nada')).status,404);
- assert.equal((await call('/api/certificates?brand=all',admin.cookie)).stats.verifications,3);
+ assert.equal((await call('/api/certificates?brand=all',admin.cookie)).stats.verifications,5);
  const staffSvg=await raw('/api/certificates/'+cert.id+'.svg',admin.cookie);assert.equal(staffSvg.status,200);await raw('/api/certificates/'+cert.id+'.svg',c1.cookie).then(r=>assert.equal(r.status,403));
 
  // emisión manual tras bajar la asistencia mínima; folio consecutivo; una inscripción no se certifica dos veces
@@ -100,7 +104,7 @@ test('certificación por API: emisión al cerrar con asistencia mínima, folio s
  const rv=(await call('/api/certificates/'+cert.id+'/revoke',admin.cookie,{reason:'Emitido por error de asistencia'})).certificate;assert.equal(rv.status,'revoked');
  await call('/api/certificates/'+cert.id+'/revoke',admin.cookie,{reason:'Otra vez'},'POST',409);
  const rpage=await (await fetch(origin+'/verificar/'+cert.folio)).text();assert.ok(rpage.includes('Certificado revocado'));
- assert.ok((await (await fetch(origin+'/verificar/'+cert.folio+'.svg')).text()).includes('REVOCADO'));
+ assert.ok((await (await fetch(origin+'/verificar/'+cert.folio+'/'+vcode+'.svg')).text()).includes('REVOCADO'));
  assert.equal((await (await fetch(origin+'/api/verify/'+cert.folio)).json()).valid,false);
  // tras revocar, la inscripción puede certificarse de nuevo con folio nuevo
  const re=await call('/api/certificates/editions/edition-aves/issue',admin.cookie,{enrollmentIds:[ids['Ana Pérez']]});assert.equal(re.issued[0].folio,'IPCI-'+year+'-00003');

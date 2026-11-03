@@ -1,4 +1,4 @@
-import {randomUUID} from 'node:crypto';
+import {randomUUID,randomBytes} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {transaction} from './database.mjs';
@@ -7,8 +7,9 @@ import {artworkAsset} from './demo-catalog.mjs';
 
 // Certificación (Fase 2 · bloque 2.5). Un solo emisor: al cerrar una apertura (o a mano desde Coordinación) cada
 // inscripción con la asistencia mínima recibe un certificado con folio secuencial IPCI-AAAA-NNNNN, snapshot de lo
-// certificado, SVG con código QR y verificación pública en /verificar/<folio> sin sesión (JSON en /api/verify/<folio>),
-// con límite de peticiones. Se avisa al alumno por su conversación con el enlace. Revocar deja el folio visible como
+// certificado, SVG con código QR y verificación pública sin sesión: por folio solo (/verificar/<folio>) se confirma el estado
+// con el nombre abreviado; con el código que lleva el QR (/verificar/<folio>/<código>) se ve el nombre completo y el SVG.
+// Así un folio secuencial no permite recorrer nombres. JSON en /api/verify/<folio>[?code=]. Límite de peticiones por IP. Se avisa al alumno por su conversación con el enlace. Revocar deja el folio visible como
 // revocado. Créditos por consultora opcionales (se descuentan al emitir). Sin firma digital avanzada ni folios históricos.
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
@@ -30,7 +31,9 @@ export function createCertificates({db,crm,events,insertMessage,body,json,audit,
   const byFolio=f=>db.prepare('SELECT * FROM certificates WHERE folio=?').get(f);
   const edition=id=>{const e=db.prepare('SELECT * FROM editions WHERE id=?').get(id);if(!e)throw fail(404,'Edición no disponible.');return e;};
   const origin=()=>(env.APP_ORIGIN||'').replace(/\/$/,'');
-  const verifyUrl=folio=>origin()+'/verificar/'+folio;
+  const verifyUrl=(folio,code)=>origin()+'/verificar/'+folio+(code?'/'+code:'');
+  // Nombre abreviado para la consulta pública por folio: primer nombre e iniciales.
+  const maskName=n=>{const p=String(n||'').split('·')[0].trim().split(/\s+/).filter(w=>/\p{L}/u.test(w));return p.length>1?p[0]+' '+p.slice(1).map(w=>w[0]+'.').join(' '):p[0]||'Titular';};   // ignora sufijos como «· demo»
   const balance=b=>db.prepare('SELECT COALESCE(sum(delta),0) n FROM certificate_credits WHERE brand_id=?').get(b).n;
   const staffOf=brandId=>db.prepare("SELECT id FROM users WHERE role IN ('admin','agent') AND COALESCE(disabled,0)=0 AND (role='admin' OR id IN (SELECT user_id FROM brand_members WHERE brand_id=?))").all(brandId).map(u=>u.id);
   function notify(e,title,key){const t=now(),targets=e.coordinator_id?[e.coordinator_id]:staffOf(e.brand_id);for(const id of targets)db.prepare('INSERT OR IGNORE INTO notifications(id,user_id,brand_id,conversation_id,kind,title,event_key,created_at) VALUES(?,?,?,NULL,?,?,?,?)').run(randomUUID(),id,e.brand_id,'certificate',title,key,t);}
@@ -60,17 +63,17 @@ export function createCertificates({db,crm,events,insertMessage,body,json,audit,
   }
   function issueOne(en,e,s,actor,source){
     const el=eligibility(en,e,s);if(!el.eligible)throw fail(409,el.reason);
-    const t=now(),id=randomUUID(),folio=nextFolio(t),course=db.prepare('SELECT title FROM courses WHERE id=?').get(en.course_id),brand=db.prepare('SELECT name FROM brands WHERE id=?').get(en.brand_id),contact=db.prepare('SELECT * FROM contacts WHERE id=?').get(en.contact_id);
+    const t=now(),id=randomUUID(),folio=nextFolio(t),code=randomBytes(5).toString('hex'),course=db.prepare('SELECT title FROM courses WHERE id=?').get(en.course_id),brand=db.prepare('SELECT name FROM brands WHERE id=?').get(en.brand_id),contact=db.prepare('SELECT * FROM contacts WHERE id=?').get(en.contact_id);
     const person=contact?.persona_id?db.prepare('SELECT id,name FROM persons WHERE id=?').get(contact.persona_id):null,holder=(person?.name||contact?.name||'Alumno').trim();
     const hours=db.prepare("SELECT COALESCE(sum(duration_min),0) m FROM edition_sessions WHERE edition_id=? AND status='done'").get(e.id).m;
     const snapshot={issuer:s.issuer_name,signer:s.signer_name,signerTitle:s.signer_title,accent:s.accent,logoFileId:s.logo_file_id,minAttendance:s.min_attendance_pct,editionStarts:e.starts_at,editionEnds:e.ends_at,instructor:e.instructor,modality:e.modality};
-    db.prepare("INSERT INTO certificates(id,folio,brand_id,enrollment_id,person_id,contact_id,course_id,edition_id,holder_name,course_title,edition_name,brand_name,sessions_held,sessions_attended,attendance_pct,hours,issued_at,issued_by,source,status,snapshot,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'issued',?,?)")
-      .run(id,folio,en.brand_id,en.id,person?.id||null,en.contact_id,en.course_id,en.edition_id,holder,course?.title||'Curso',e.name,brand?.name||en.brand_id,el.held,el.attended,el.pct,Math.round(hours/60)||null,t,actor?.id||null,source,JSON.stringify(snapshot),t);
+    db.prepare("INSERT INTO certificates(id,folio,verify_code,brand_id,enrollment_id,person_id,contact_id,course_id,edition_id,holder_name,course_title,edition_name,brand_name,sessions_held,sessions_attended,attendance_pct,hours,issued_at,issued_by,source,status,snapshot,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'issued',?,?)")
+      .run(id,folio,code,en.brand_id,en.id,person?.id||null,en.contact_id,en.course_id,en.edition_id,holder,course?.title||'Curso',e.name,brand?.name||en.brand_id,el.held,el.attended,el.pct,Math.round(hours/60)||null,t,actor?.id||null,source,JSON.stringify(snapshot),t);
     if(s.credits_enabled)db.prepare('INSERT INTO certificate_credits(id,brand_id,delta,reason,certificate_id,actor_id,created_at) VALUES(?,?,-1,?,?,?,?)').run(randomUUID(),en.brand_id,'Emisión '+folio,id,actor?.id||null,t);
     events.publish({type:'certificado.emitido',brandId:en.brand_id,entityKind:'certificate',entityId:id,payload:{folio,enrollmentId:en.id,personId:person?.id||null,contactId:en.contact_id,courseId:en.course_id,editionId:en.edition_id,holder,attendancePct:el.pct,source},actorId:actor?.id||null,source:'certificates'});
     // Aviso al alumno por su conversación (plantilla de utilidad); idempotente por folio.
     const conv=db.prepare('SELECT c.* FROM conversations c JOIN orders o ON o.conversation_id=c.id WHERE o.id=(SELECT order_id FROM enrollments WHERE id=?)').get(en.id);
-    if(conv&&conv.status!=='resolved'){try{insertMessage(conv,null,`¡Felicidades, ${holder}! Tu certificado de ${course?.title||'el curso'} (${e.name}) ya está emitido.\nFolio: ${folio}\nVerifícalo y descárgalo aquí: ${verifyUrl(folio)}\nLaboratorio: certificado de práctica.`,'automation','certificate:'+folio,null,null,null,{category:'utility'});}catch(err){if(err?.status!==409)throw err;}}
+    if(conv&&conv.status!=='resolved'){try{insertMessage(conv,null,`¡Felicidades, ${holder}! Tu certificado de ${course?.title||'el curso'} (${e.name}) ya está emitido.\nFolio: ${folio}\nVerifícalo y descárgalo aquí: ${verifyUrl(folio,code)}\nLaboratorio: certificado de práctica.`,'automation','certificate:'+folio,null,null,null,{category:'utility'});}catch(err){if(err?.status!==409)throw err;}}
     return get(id);
   }
   function issue(e,input,user,source='manual'){
@@ -103,7 +106,7 @@ export function createCertificates({db,crm,events,insertMessage,body,json,audit,
     audit(user,'certificate.revoke',c.id);broadcast('crm',null,{brandId:c.brand_id});return view(get(c.id));
   }
   // ---- vistas
-  const view=c=>({...c,snapshot:JSON.parse(c.snapshot||'{}'),statusLabel:c.status==='issued'?'Vigente':'Revocado',issuedLabel:longDate(c.issued_at),verifyUrl:verifyUrl(c.folio),svgUrl:'/api/certificates/'+c.id+'.svg',issued_by_name:c.issued_by?db.prepare('SELECT name FROM users WHERE id=?').get(c.issued_by)?.name||null:null});
+  const view=c=>({...c,snapshot:JSON.parse(c.snapshot||'{}'),statusLabel:c.status==='issued'?'Vigente':'Revocado',issuedLabel:longDate(c.issued_at),verifyUrl:verifyUrl(c.folio,c.verify_code),publicUrl:verifyUrl(c.folio),svgUrl:'/api/certificates/'+c.id+'.svg',issued_by_name:c.issued_by?db.prepare('SELECT name FROM users WHERE id=?').get(c.issued_by)?.name||null:null});
   function editionView(e,user){
     requireStaff(user);crm.requireBrand(user,e.brand_id);const s=settings(e.brand_id);
     const rows=db.prepare('SELECT en.*,c.name contact_name FROM enrollments en JOIN contacts c ON c.id=en.contact_id WHERE en.edition_id=? ORDER BY en.status,en.created_at').all(e.id).map(en=>{const el=eligibility(en,e,s);return {enrollmentId:en.id,status:en.status,contactName:en.contact_name,held:el.held,attended:el.attended,pct:el.pct,eligible:el.eligible,reason:el.reason,certificate:el.certificate?view(el.certificate):null};});
@@ -140,7 +143,7 @@ export function createCertificates({db,crm,events,insertMessage,body,json,audit,
     try{const builtin=f.builtin_id?artworkAsset(f.builtin_id):null,bytes=await readFile(builtin?resolve(root,'public','flyers',builtin.filename):resolve(dataDir,'library',f.storage_name));if(bytes.length>400*1024)return null;return 'data:'+f.mime+';base64,'+bytes.toString('base64');}catch{return null;}
   }
   async function svg(c){
-    const s=c.snapshot||{},accent=/^#[0-9a-fA-F]{6}$/.test(s.accent||'')?s.accent:'#30343c',qr=encodeQR(verifyUrl(c.folio)),{path,side}=qrSvgPath(qr,3,2),logo=await logoData(s.logoFileId);
+    const s=c.snapshot||{},accent=/^#[0-9a-fA-F]{6}$/.test(s.accent||'')?s.accent:'#30343c',qr=encodeQR(verifyUrl(c.folio,c.verify_code)),{path,side}=qrSvgPath(qr,3,2),logo=await logoData(s.logoFileId);
     const W=1123,H=794,revoked=c.status==='revoked';
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
 <rect width="${W}" height="${H}" fill="#ffffff"/><rect x="28" y="28" width="${W-56}" height="${H-56}" fill="none" stroke="${accent}" stroke-width="2"/><rect x="40" y="40" width="${W-80}" height="${H-80}" fill="none" stroke="#e3e6ec" stroke-width="1"/>
@@ -155,7 +158,7 @@ ${logo?`<image href="${logo}" x="80" y="78" width="120" height="120" preserveAsp
 <text x="80" y="498" font-size="15" fill="#5b6472">${esc(c.edition_name)}${s.instructor?' · '+esc(s.instructor):''}${c.hours?' · '+c.hours+' h':''} · asistencia ${c.attendance_pct} % (${c.sessions_attended} de ${c.sessions_held} sesiones)</text>
 <text x="80" y="600" font-size="14" fill="#5b6472">Emitido el ${esc(longDate(c.issued_at))}</text>
 <text x="80" y="628" font-size="14" fill="#1f242c" font-weight="500">Folio ${esc(c.folio)}</text>
-<text x="80" y="652" font-size="12" fill="#8a919c">${esc(verifyUrl(c.folio))}</text>
+<text x="80" y="652" font-size="12" fill="#8a919c">${esc(verifyUrl(c.folio))} · código ${esc(c.verify_code)}</text>
 ${s.signer?`<line x1="${W-440}" y1="610" x2="${W-200}" y2="610" stroke="#b9bfc9"/><text x="${W-320}" y="634" font-size="14" fill="#1f242c" text-anchor="middle">${esc(s.signer)}</text><text x="${W-320}" y="654" font-size="12" fill="#8a919c" text-anchor="middle">${esc(s.signerTitle||'')}</text>`:''}
 <g transform="translate(${W-80-side},78)"><rect width="${side}" height="${side}" fill="#fff"/><path d="${path}" fill="#000" shape-rendering="crispEdges"/></g>
 <text x="${W-80-side/2}" y="${78+side+18}" font-size="11" fill="#8a919c" text-anchor="middle">Escanea para verificar</text>
@@ -164,27 +167,27 @@ ${revoked?`<g transform="rotate(-18 ${W/2} ${H/2})"><rect x="${W/2-260}" y="${H/
 </svg>`;
   }
   // ---- verificación pública (sin sesión; con límite por IP)
-  const publicView=c=>({folio:c.folio,status:c.status,statusLabel:c.status==='issued'?'Vigente':'Revocado',holder:c.holder_name,course:c.course_title,edition:c.edition_name,brand:c.brand_name,issuer:(JSON.parse(c.snapshot||'{}').issuer)||'IPCI',issuedAt:c.issued_at,issuedLabel:longDate(c.issued_at),attendancePct:c.attendance_pct,hours:c.hours,revokedAt:c.revoked_at,verifiedAt:now()});
-  function verifyPage(c,folio){
-    const v=c?publicView(c):null,ok=v&&v.status==='issued';
+  const publicView=(c,full)=>({folio:c.folio,status:c.status,statusLabel:c.status==='issued'?'Vigente':'Revocado',holder:full?c.holder_name:maskName(c.holder_name),full:Boolean(full),course:c.course_title,edition:c.edition_name,brand:c.brand_name,issuer:(JSON.parse(c.snapshot||'{}').issuer)||'IPCI',issuedAt:c.issued_at,issuedLabel:longDate(c.issued_at),attendancePct:c.attendance_pct,hours:c.hours,revokedAt:c.revoked_at,verifiedAt:now()});
+  function verifyPage(c,folio,full){
+    const v=c?publicView(c,full):null,ok=v&&v.status==='issued';
     const head=`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Verificación de certificado · ${esc(folio)}</title><meta name="robots" content="noindex"><style>body{margin:0;background:#fbfbfd;color:#1f242c;font:15px/1.6 Inter,'Segoe UI',Helvetica,Arial,sans-serif}main{max-width:720px;margin:0 auto;padding:40px 16px}.card{background:#fff;border:1px solid #e6e8ee;border-radius:18px;padding:28px}.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#67717d}h1{font-size:26px;margin:6px 0 18px;font-weight:600}.state{display:inline-block;padding:7px 14px;border-radius:20px;font-size:13px;border:1px solid #e2e5eb;background:#fafbfc;color:#67717d}.ok{background:#eff9f5;color:#258163;border-color:#cfe9dd}.bad{background:#fff2ef;color:#ac3d30;border-color:#f4d7d0}dl{display:grid;grid-template-columns:max-content 1fr;gap:8px 18px;margin:22px 0;font-size:14px}dt{color:#67717d}dd{margin:0}a.btn{display:inline-block;margin-top:8px;padding:11px 16px;border:1px solid #d7dbe3;border-radius:12px;color:#1f242c;text-decoration:none;font-size:13px}small{display:block;color:#8a919c;font-size:12px;margin-top:22px}@media(max-width:480px){dl{grid-template-columns:1fr;gap:2px}dt{margin-top:8px}}</style></head><body><main><div class="card"><div class="eyebrow">Verificación de certificado</div>`;
     const body=!v?`<h1>Folio no encontrado</h1><span class="state bad">No existe</span><p>El folio <strong>${esc(folio)}</strong> no corresponde a ningún certificado emitido por este laboratorio. Revisa que esté bien escrito.</p>`
-      :`<h1>${esc(v.holder)}</h1><span class="state ${ok?'ok':'bad'}">${ok?'Certificado vigente':'Certificado revocado'}</span><dl><dt>Folio</dt><dd><strong>${esc(v.folio)}</strong></dd><dt>Curso</dt><dd>${esc(v.course)}</dd><dt>Edición</dt><dd>${esc(v.edition)}</dd><dt>Marca</dt><dd>${esc(v.brand)}</dd><dt>Emisor</dt><dd>${esc(v.issuer)}</dd><dt>Fecha de emisión</dt><dd>${esc(v.issuedLabel)}</dd><dt>Asistencia</dt><dd>${v.attendancePct} %${v.hours?' · '+v.hours+' h':''}</dd>${v.revokedAt?`<dt>Revocado</dt><dd>${esc(longDate(v.revokedAt))}</dd>`:''}</dl><a class="btn" href="/verificar/${esc(v.folio)}.svg">Ver el certificado</a>`;
+      :`<h1>${esc(v.holder)}</h1><span class="state ${ok?'ok':'bad'}">${ok?'Certificado vigente':'Certificado revocado'}</span><dl><dt>Folio</dt><dd><strong>${esc(v.folio)}</strong></dd><dt>Curso</dt><dd>${esc(v.course)}</dd><dt>Edición</dt><dd>${esc(v.edition)}</dd><dt>Marca</dt><dd>${esc(v.brand)}</dd><dt>Emisor</dt><dd>${esc(v.issuer)}</dd><dt>Fecha de emisión</dt><dd>${esc(v.issuedLabel)}</dd><dt>Asistencia</dt><dd>${v.attendancePct} %${v.hours?' · '+v.hours+' h':''}</dd>${v.revokedAt?`<dt>Revocado</dt><dd>${esc(longDate(v.revokedAt))}</dd>`:''}</dl>${full?`<a class="btn" href="/verificar/${esc(v.folio)}/${esc(c.verify_code)}.svg">Ver el certificado</a>`:`<p>Nombre abreviado por privacidad. Para ver el nombre completo y el certificado, abre el enlace del código QR impreso en él (incluye su código de verificación).</p>`}`;
     return head+body+`<small>Laboratorio TEC Capital · certificado de práctica, sin validez oficial. Consulta realizada el ${esc(longDate(now()))}.</small></div></main></body></html>`;
   }
   function bump(c){db.prepare('UPDATE certificates SET verifications=verifications+1,last_verified_at=? WHERE id=?').run(now(),c.id);}
   async function handlePublic(req,res,path,ip){
     let x;
-    if((x=path.match(/^\/verificar\/([A-Za-z0-9-]{1,20})(\.svg)?$/))){
+    if((x=path.match(/^\/verificar\/([A-Za-z0-9-]{1,20})(?:\/([a-f0-9]{10}))?(\.svg)?$/))){
       if(req.method!=='GET')throw fail(405,'Método no permitido.');rate('verify:'+ip,60);
-      const folio=x[1].toUpperCase(),c=FOLIO.test(folio)?byFolio(folio):null;
-      if(x[2]){if(!c)throw fail(404,'Certificado no encontrado.');bump(c);res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8','Content-Disposition':'inline; filename="'+folio+'.svg"'});res.end(await svg(view(c)));return true;}
-      if(c)bump(c);res.writeHead(c?200:404,{'Content-Type':'text/html; charset=utf-8'});res.end(verifyPage(c,folio));return true;
+      const folio=x[1].toUpperCase(),c=FOLIO.test(folio)?byFolio(folio):null,full=Boolean(c&&x[2]&&x[2]===c.verify_code);
+      if(x[3]){if(!c)throw fail(404,'Certificado no encontrado.');if(!full)throw fail(404,'El certificado se descarga con el enlace del código QR.');bump(c);res.writeHead(200,{'Content-Type':'image/svg+xml; charset=utf-8','Content-Disposition':'inline; filename="'+folio+'.svg"'});res.end(await svg(view(c)));return true;}
+      if(c)bump(c);res.writeHead(c?200:404,{'Content-Type':'text/html; charset=utf-8'});res.end(verifyPage(c,folio,full));return true;
     }
     if((x=path.match(/^\/api\/verify\/([A-Za-z0-9-]{1,20})$/))){
       if(req.method!=='GET')throw fail(405,'Método no permitido.');rate('verify:'+ip,60);
       const folio=x[1].toUpperCase(),c=FOLIO.test(folio)?byFolio(folio):null;if(!c){json(res,404,{valid:false,folio,error:'Folio no encontrado.'});return true;}
-      bump(c);json(res,200,{valid:c.status==='issued',certificate:publicView(c)});return true;
+      const code=new URL(req.url,'http://localhost').searchParams.get('code')||'';bump(c);json(res,200,{valid:c.status==='issued',certificate:publicView(c,code===c.verify_code)});return true;
     }
     return false;
   }
