@@ -24,7 +24,7 @@ test('contactos: etiquetas, duplicados, fusión con vista previa y exportación'
   const reg=(username,inviteCode)=>call('/api/auth/register','',{username,name:'Prueba '+username,password,inviteCode});
   const admin=await reg('admin',code),a=await reg('asesor.a'),b=await reg('asesor.b'),client=await reg('cliente');
   for(const [u,name,brandIds] of [[a,'asesor.a',['globalvet']],[b,'asesor.b',['odonteck']]]){const inv=await call('/api/team/invites',admin.cookie,{username:name,brandIds},'POST',201);await call('/api/team/accept',u.cookie,{token:inv.token});}
-  const db=()=>new DatabaseSync(join(dir,'laboratorio.sqlite'));
+  const db=()=>new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});
   const contact=async(brandId,name,phone='',email='',cookie=admin.cookie)=>(await call('/api/crm/contacts',cookie,{brandId,name,phone,email},'POST',201)).id;
   const interest=(contactId,courseId,cookie=admin.cookie)=>call('/api/crm/opportunities',cookie,{contactId,courseId,nextAction:'Llamar',dueAt:Date.now()+3600000},'POST',201);
 

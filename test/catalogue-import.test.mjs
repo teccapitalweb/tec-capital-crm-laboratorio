@@ -32,7 +32,7 @@ test('importación de catálogo: vista previa sin escribir, aplicación idempote
   async function call(path,cookie='',body,method=body===undefined?'GET':'POST',expected=200){const r=await fetch(origin+path,{method,headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const result=await r.json();assert.equal(r.status,expected,path+': '+JSON.stringify(result));return {...result,cookie:r.headers.get('set-cookie')?.split(';')[0]};}
   const admin=await call('/api/auth/register','',{username:'admin',name:'Administración',password,inviteCode:code}),agent=await call('/api/auth/register','',{username:'asesor',name:'Asesor',password});
   const invite=await call('/api/team/invites',admin.cookie,{username:'asesor',brandIds:['globalvet']},'POST',201);await call('/api/team/accept',agent.cookie,{token:invite.token});
-  const db=()=>new DatabaseSync(join(dir,'laboratorio.sqlite'));
+  const db=()=>new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});
   const counts=()=>{const d=db();try{return ['courses','editions','promotions','catalogue_events'].map(n=>d.prepare('SELECT count(*) n FROM '+n).get().n).join('-');}finally{d.close();}};
 
   const header=COLUMNS.join(',');

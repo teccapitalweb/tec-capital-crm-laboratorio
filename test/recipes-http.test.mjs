@@ -17,7 +17,7 @@ test('recetas por API: permisos, simulación sin efectos y ejecución real con p
  const admin=await call('/api/auth/register','',{username:'admin',name:'Administración',password,inviteCode:code}),client=await call('/api/auth/register','',{username:'cliente',name:'Cliente',password});
 
  for(const [file,type] of [['/recipes.js','text/javascript'],['/coordination.js','text/javascript'],['/finance.js','text/javascript'],['/persons.js','text/javascript'],['/certificates.js','text/javascript'],['/content.js','text/javascript'],['/recipes.css','text/css'],['/operations.js','text/javascript'],['/catalogue-import.js','text/javascript'],['/contacts.js','text/javascript'],['/analytics.js','text/javascript'],['/security.js','text/javascript'],['/polish.css','text/css'],['/knowledge.js','text/javascript'],['/simulator.js','text/javascript'],['/payments.js','text/javascript'],['/presentation.js','text/javascript'],['/connectors.js','text/javascript'],['/evaluation.js','text/javascript'],['/analytics.css','text/css']]){const r=await fetch(origin+file);assert.equal(r.status,200,file);assert.match(r.headers.get('content-type'),new RegExp(type));}
- const db=()=>new DatabaseSync(join(dir,'laboratorio.sqlite'));
+ const db=()=>new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});
 
  const conversation=(await call('/api/conversations',client.cookie,{courseId:'aves',channel:'whatsapp'})).conversation;
  await call('/api/conversations/'+conversation.id+'/messages',client.cookie,{text:'Hola',clientRef:randomUUID()},'POST',201);

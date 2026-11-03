@@ -77,7 +77,7 @@ test('operación v0.5: reparto, coordinación privada, objetivos y macros atómi
  await t.test('SLA: lectura y respuestas automáticas no lo satisfacen; alertas deduplicadas',async()=>{
   await call('/api/conversations/'+c1.id+'/messages',client.cookie,{text:'Tengo una duda nueva',clientRef:ref()},'POST',201);let d=await detail(c1.id);assert.ok(d.state.waiting_since);assert.ok(d.state.first_human_at);assert.ok(d.state.due_at>d.state.waiting_since);
   await call('/api/conversations/'+c1.id+'/read',b.cookie,{asAgent:true,upTo:100000});assert.equal((await detail(c1.id)).state.waiting_since,d.state.waiting_since);
-  const db=new DatabaseSync(join(dir,'laboratorio.sqlite'));db.prepare('UPDATE service_state SET due_at=? WHERE conversation_id=?').run(Date.now()-5000,c1.id);db.close();
+  const db=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});db.prepare('UPDATE service_state SET due_at=? WHERE conversation_id=?').run(Date.now()-5000,c1.id);db.close();
   await queue();await queue();const alerts=(await call('/api/operations/notifications',b.cookie)).items.filter(n=>n.kind==='sla'&&n.conversation_id===c1.id);assert.equal(alerts.length,1);
   await call('/api/conversations/'+c1.id+'/messages',b.cookie,{asAgent:true,text:'Esta es la respuesta humana',clientRef:ref()},'POST',201);assert.equal((await detail(c1.id)).state.waiting_since,null);
   const events=await call('/api/operations/conversations/'+c1.id+'/history',b.cookie);assert.ok(events.events.some(e=>e.kind==='response'&&e.details.withinTarget===false));
@@ -104,7 +104,7 @@ test('operación v0.5: reparto, coordinación privada, objetivos y macros atómi
   const attempts=await Promise.all([0,1].map(async()=>fetch(origin+'/api/operations/conversations/'+unassigned.id+'/take',{method:'POST',headers:{Cookie:admin.cookie,Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({expectedRevision:revision,clientRef:ref()})})));assert.deepEqual(attempts.map(r=>r.status).sort(),[200,409]);
  });
  await t.test('avisos con la misma fecha se paginan sin omitir registros',async()=>{
-  const db=new DatabaseSync(join(dir,'laboratorio.sqlite')),time=Date.now(),ids=[];for(let i=0;i<60;i++){const id=randomUUID();ids.push(id);db.prepare('INSERT INTO notifications(id,user_id,brand_id,conversation_id,kind,title,event_key,created_at) VALUES(?,?,?,?,?,?,?,?)').run(id,a.user.id,'globalvet',c1.id,'mention','Aviso de paginación','pagination:'+i,time);}db.close();
+  const db=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000}),time=Date.now(),ids=[];for(let i=0;i<60;i++){const id=randomUUID();ids.push(id);db.prepare('INSERT INTO notifications(id,user_id,brand_id,conversation_id,kind,title,event_key,created_at) VALUES(?,?,?,?,?,?,?,?)').run(id,a.user.id,'globalvet',c1.id,'mention','Aviso de paginación','pagination:'+i,time);}db.close();
   const read=[];let cursor='';do{const r=await call('/api/operations/notifications'+(cursor?'?before='+encodeURIComponent(cursor):''),a.cookie);read.push(...r.items.map(n=>n.id));cursor=r.nextBefore;}while(cursor);assert.equal(new Set(read).size,read.length);assert.equal(ids.filter(id=>read.includes(id)).length,60);
  });
  await t.test('revocar acceso cancela transferencias y oculta menciones; reinicio conserva historial',async()=>{
@@ -112,9 +112,9 @@ test('operación v0.5: reparto, coordinación privada, objetivos y macros atómi
   await call('/api/team/members/'+a.user.id,admin.cookie,{brandIds:['dermalysse'],disabled:false},'PATCH');await queue();assert.equal((await detail(c1.id)).transfers.find(x=>x.id===transfer).status,'cancelled');
   const login=await call('/api/auth/login','',{username:'asesor.a',password});assert.equal((await call('/api/operations/notifications',login.cookie)).items.filter(n=>n.brand_id==='globalvet').length,0);
   const before=(await call('/api/operations/conversations/'+c1.id+'/history',admin.cookie)).events.length;await stop();await start();assert.equal((await call('/api/operations/conversations/'+c1.id+'/history',admin.cookie)).events.length,before);
-  assert.equal((await call('/api/operations/macros/'+macroId+'/history',admin.cookie)).versions.length,2);const db=new DatabaseSync(join(dir,'laboratorio.sqlite'));assert.equal(db.prepare('PRAGMA user_version').get().user_version,23);assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');db.close();assert.equal((await readdir(dir)).includes('laboratorio.sqlite'),true);
+  assert.equal((await call('/api/operations/macros/'+macroId+'/history',admin.cookie)).versions.length,2);const db=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});assert.equal(db.prepare('PRAGMA user_version').get().user_version,23);assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');db.close();assert.equal((await readdir(dir)).includes('laboratorio.sqlite'),true);
  });
  await t.test('conversaciones anteriores recuperan la primera respuesta humana sin reescribir mensajes',async()=>{
-  const db=new DatabaseSync(join(dir,'laboratorio.sqlite')),first=db.prepare("SELECT MIN(created_at) t FROM messages WHERE conversation_id=? AND sender_kind='agent'").get(c1.id).t;db.prepare('DELETE FROM service_state WHERE conversation_id=?').run(c1.id);db.close();assert.equal((await detail(c1.id)).state.first_human_at,first);
+  const db=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000}),first=db.prepare("SELECT MIN(created_at) t FROM messages WHERE conversation_id=? AND sender_kind='agent'").get(c1.id).t;db.prepare('DELETE FROM service_state WHERE conversation_id=?').run(c1.id);db.close();assert.equal((await detail(c1.id)).state.first_human_at,first);
  });
 });
