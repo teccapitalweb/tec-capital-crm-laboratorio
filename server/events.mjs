@@ -103,6 +103,25 @@ export function createEvents({db,crm=null,body,json,audit=()=>{},now=Date.now,lo
       audit(actor,'event.retry',String(seq));return true;
     });
   }
+  // Reproducción: crea entregas pendientes para un suscriptor en todos los eventos que aún no las tienen (p. ej. el
+  // núcleo compartido conectado después de meses de historial). Idempotente: no toca entregas existentes.
+  function replay(subscriber,{fromSeq=1,actor=null}={}){
+    const name=String(subscriber||'');const types=[...subscribers.entries()].filter(([,list])=>list.some(s=>s.name===name)).map(([type])=>type);
+    if(!types.length)throw fail(404,'Suscriptor no registrado.');const ph=types.map(()=>'?').join(',');
+    return transaction(db,()=>{
+      const t=now(),n=db.prepare(`INSERT OR IGNORE INTO domain_deliveries(event_seq,subscriber,state,attempts,next_attempt_at,updated_at) SELECT e.seq,?,'pending',0,?,? FROM domain_events e WHERE e.seq>=? AND e.type IN (${ph}) AND NOT EXISTS (SELECT 1 FROM domain_deliveries d WHERE d.event_seq=e.seq AND d.subscriber=?)`).run(name,t,t,Math.max(1,Number(fromSeq)||1),...types,name).changes;
+      if(actor)audit(actor,'event.replay',name+':'+n);return n;
+    });
+  }
+  // Reintento masivo de las entregas fallidas de un suscriptor.
+  function retryFailed(subscriber,actor=null){
+    const t=now(),n=db.prepare("UPDATE domain_deliveries SET state='pending',attempts=0,error=NULL,next_attempt_at=?,updated_at=? WHERE subscriber=? AND state='failed'").run(t,t,String(subscriber||'')).changes;
+    if(actor)audit(actor,'event.retry-failed',String(subscriber)+':'+n);return n;
+  }
+  function subscriberStats(subscriber){
+    const name=String(subscriber||''),r=db.prepare("SELECT sum(state='pending') pending,sum(state='done') done,sum(state='failed') failed,max(updated_at) last FROM domain_deliveries WHERE subscriber=?").get(name);
+    return {pending:r.pending||0,done:r.done||0,failed:r.failed||0,last:r.last||null,lastError:db.prepare("SELECT error FROM domain_deliveries WHERE subscriber=? AND error IS NOT NULL ORDER BY updated_at DESC LIMIT 1").get(name)?.error||null,events:db.prepare('SELECT count(*) n FROM domain_events').get().n,missing:db.prepare('SELECT count(*) n FROM domain_events e WHERE NOT EXISTS (SELECT 1 FROM domain_deliveries d WHERE d.event_seq=e.seq AND d.subscriber=?)').get(name).n};
+  }
   const deliveriesOf=seq=>db.prepare('SELECT subscriber,state,attempts,error,next_attempt_at,updated_at FROM domain_deliveries WHERE event_seq=? ORDER BY subscriber').all(seq);
 
   // Consulta con alcance por marca. Devuelve los más recientes primero; `before` pagina por seq.
@@ -140,5 +159,5 @@ export function createEvents({db,crm=null,body,json,audit=()=>{},now=Date.now,lo
     if((x=path.match(/^\/api\/events\/(\d+)\/retry$/))&&req.method==='POST'){const e=get(Number(x[1]));if(!e)throw fail(404,'Evento no encontrado.');crm.requireBrand(user,e.brand_id);const input=await body(req);retry(e.seq,String(input.subscriber||''),user);json(res,200,{deliveries:deliveriesOf(e.seq)});return true;}
     throw fail(404,'Ruta de eventos no encontrada.');
   }
-  return {publish,subscribe,tick,retry,list,stats,types,deliveriesOf,csv,handle,get:seq=>{const e=get(seq);return e?view(e):null;}};
+  return {publish,subscribe,tick,retry,replay,retryFailed,subscriberStats,list,stats,types,deliveriesOf,csv,handle,get:seq=>{const e=get(seq);return e?view(e):null;}};
 }

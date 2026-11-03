@@ -57,6 +57,10 @@ En **Catálogo y biblioteca → Evaluación** cada marca tiene casos que dicen q
 
 En **Catálogo y biblioteca → Contenido** cada marca elige qué plantilla aprobada se envía en cada hecho del curso: bienvenida por anuncio, enlace de pago, pago confirmado, recordatorio de sesión, grabación disponible y certificado listo; sin plantilla se conserva el texto fijo del laboratorio. Administración concede las funciones de **diseño** (crear borradores, subir archivos, pedir variantes, generar fichas) y **aprobación** (aprobar, archivar y mapear). Desde cada plantilla se piden **variantes** al adaptador de IA, que se validan y sólo entran como borrador cuando una persona las acepta; desde cada edición se genera una **ficha** SVG con los datos vigentes del catálogo y código QR, guardable como flyer.
 
+## Núcleo compartido (preparado)
+
+El CRM está listo para alimentar un **núcleo de datos único en Postgres/Supabase** (el mismo que usarán la Academia y el IPCIL nuevo): cada hecho del negocio sale como un sobre firmado con el evento y los registros implicados (personas, cursos, ediciones, pagos, inscripciones, certificados), con reintento y reproducción del historial. Sin `CORE_SINK_URL` nada sale del servidor y el panel de Operación → Conectores muestra los sobres simulados. Esquema en `nucleo/esquema-v1.sql`, contrato en [docs/NUCLEO.md](docs/NUCLEO.md).
+
 ## Pagos por sesión y encuestas
 
 Si la edición tiene **precio por sesión** (Catálogo), «Cobrar» ofrece el plan **por sesión**: el primer pago inscribe y cubre la primera sesión; cada sesión siguiente se cobra con su propio enlace desde la ficha de la apertura o junto con el recordatorio, y confirmar ese pago marca la sesión pagada sin crear otra inscripción. Condonar libera una sesión sin cobro. Al marcar una sesión como realizada (o al cerrar la apertura), la **encuesta** llega a cada inscrito por su chat con un enlace propio: responde sin iniciar sesión (contenido, docente, organización, recomendación y comentario) y el equipo ve promedios, NPS, comentarios y CSV en la ficha. Todo apagado por marca hasta que administración lo active; el envío manual funciona siempre.
