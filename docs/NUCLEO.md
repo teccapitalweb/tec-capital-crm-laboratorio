@@ -2,7 +2,7 @@
 
 Fase 2 · bloque 2.7, **ruta 1 («núcleo compartido primero, CRM intacto»)**. El CRM sigue operando en SQLite y envía cada hecho del negocio a un núcleo de datos en Postgres/Supabase, el mismo que leerán la Academia y el IPCIL nuevo. Este documento es el contrato entre el CRM (emisor) y el servicio que reciba los sobres (receptor). El esquema del núcleo está en [`nucleo/esquema-v1.sql`](../nucleo/esquema-v1.sql).
 
-**Estado (3 nov 2026):** preparado y probado en el CRM con un receptor local de pruebas. Falta la decisión 7.1 de la visión (base única en Postgres/Supabase) y el acceso al proyecto de Supabase de la Academia para desplegar el receptor y aplicar el esquema. Sin `CORE_SINK_URL` el outbox es **simulado**: no sale nada del servidor.
+**Estado (3 nov 2026):** preparado, probado con un receptor local de pruebas y **publicado en v0.27.0** (en producción, modo simulado). Falta la decisión 7.1 de la visión (base única en Postgres/Supabase) y el acceso al proyecto de Supabase de la Academia para desplegar el receptor y aplicar el esquema. Sin `CORE_SINK_URL` el outbox es **simulado**: no sale nada del servidor.
 
 ## Cómo funciona
 

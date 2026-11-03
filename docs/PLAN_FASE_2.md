@@ -18,7 +18,7 @@ Escrito el 2 nov 2026 al cerrar la Fase 1 (v0.20.0, siete bloques publicados). D
 | 2.4 | Finanzas: libro de ventas, comisiones, exportación · **publicado en v0.22.0 (2 nov 2026)** | 2.1 | M | Lo que la contadora pide hoy en Excel |
 | 2.5 | Certificación: emisor único con folio y verificación · **publicado en v0.24.0 (3 nov 2026)** | 2.3 | M | Certificado verificable al cerrar la apertura |
 | 2.6 | Contenido: roles, plantillas por evento, fichas, variantes asistidas · **publicado en v0.25.0 (3 nov 2026)** | 2.1, 2.3 | M | Mensajes del ciclo completo sin escribirlos |
-| 2.7 | Núcleo Postgres/Supabase y ruta de migración · **ruta 1 preparada localmente el 3 nov 2026** (esquema SQL, outbox firmado, destino simulado) | decisión 7.1, acceso | L | Una sola base para CRM, Academia e IPCIL nuevo |
+| 2.7 | Núcleo Postgres/Supabase y ruta de migración · **ruta 1 preparada y publicada en v0.27.0 (3 nov 2026)**: esquema SQL, outbox firmado, destino simulado | decisión 7.1, acceso | L | Una sola base para CRM, Academia e IPCIL nuevo |
 | 2.8 | Puente con IPCIL (históricos y roles) | IPCIL nuevo | S | Continuidad con lo que ya existe |
 | 0 | Prueba real de `AI_PROVIDER=claude` y costo por conversación | clave en entorno aislado | S | Cifra real de costo de IA |
 
@@ -103,7 +103,7 @@ S = una sesión de trabajo; M = dos o tres; L = cuatro o más. Son órdenes de m
 
 **Criterios de salida (ruta 1).** Esquema del núcleo versionado y documentado; outbox con reintento y pruebas; un evento de pago del CRM visible en el núcleo; lectura de inscripciones de la Academia en la ficha de persona.
 
-**Estado (3 nov 2026):** los dos primeros criterios están cumplidos en local (rama `feat/nucleo-outbox`, versión 0.27.0): `nucleo/esquema-v1.sql`, outbox `core.outbox` firmado con reintento, reproducción del historial y receptor local de referencia en pruebas; contrato en [NUCLEO.md](NUCLEO.md). Los otros dos (pago visible en el núcleo real y lectura de inscripciones de la Academia) necesitan la decisión 7.1 y el acceso al proyecto de Supabase.
+**Estado (3 nov 2026):** los dos primeros criterios están cumplidos y **publicados en v0.27.0** (en producción el outbox queda simulado hasta definir las variables): `nucleo/esquema-v1.sql`, outbox `core.outbox` firmado con reintento, reproducción del historial y receptor local de referencia en pruebas; contrato en [NUCLEO.md](NUCLEO.md). Los otros dos (pago visible en el núcleo real y lectura de inscripciones de la Academia) necesitan la decisión 7.1 y el acceso al proyecto de Supabase.
 
 ### 2.8 Puente con IPCIL
 
