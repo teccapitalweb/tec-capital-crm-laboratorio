@@ -16,7 +16,7 @@ Escrito el 2 nov 2026 al cerrar la Fase 1 (v0.20.0, siete bloques publicados). D
 | 2.2 | Identidad única de persona · **publicado en v0.23.0 (3 nov 2026)** | 2.1 | M | Un cliente, varias marcas, un historial |
 | 2.3 | Coordinación académica: aperturas, sesiones, inscritos · **arranque publicado en v0.21.0 (2 nov 2026)** | 2.1 | L | La venta entra sola a la apertura |
 | 2.4 | Finanzas: libro de ventas, comisiones, exportación · **publicado en v0.22.0 (2 nov 2026)** | 2.1 | M | Lo que la contadora pide hoy en Excel |
-| 2.5 | Certificación: emisor único con folio y verificación · **hecho localmente el 3 nov 2026** | 2.3 | M | Certificado verificable al cerrar la apertura |
+| 2.5 | Certificación: emisor único con folio y verificación · **publicado en v0.24.0 (3 nov 2026)** | 2.3 | M | Certificado verificable al cerrar la apertura |
 | 2.6 | Contenido: roles, plantillas por evento, fichas, variantes asistidas | 2.1, 2.3 | M | Mensajes del ciclo completo sin escribirlos |
 | 2.7 | Núcleo Postgres/Supabase y ruta de migración | decisión 7.1, acceso | L | Una sola base para CRM, Academia e IPCIL nuevo |
 | 2.8 | Puente con IPCIL (históricos y roles) | IPCIL nuevo | S | Continuidad con lo que ya existe |
@@ -82,7 +82,7 @@ S = una sesión de trabajo; M = dos o tres; L = cuatro o más. Son órdenes de m
 
 **Criterios de salida.** Un alumno inscrito y con asistencia recibe su certificado y el enlace verifica en público; el folio no se repite ni con dos emisiones concurrentes; pruebas y documentación.
 
-**Estado (3 nov 2026):** implementado localmente en la rama `feat/certificacion` (esquema 22, versión 0.24.0, sin publicar); cumple los criterios de salida. Fuera, como estaba previsto: folios históricos de la Academia y firma digital avanzada; el PDF es la impresión del SVG desde el navegador. Detalle en [CONTINUIDAD.md](CONTINUIDAD.md).
+**Estado (3 nov 2026):** implementado y **publicado en v0.24.0** (esquema 22); cumple los criterios de salida. Fuera, como estaba previsto: folios históricos de la Academia y firma digital avanzada; el PDF es la impresión del SVG desde el navegador. Detalle en [CONTINUIDAD.md](CONTINUIDAD.md).
 
 ### 2.6 Contenido
 
