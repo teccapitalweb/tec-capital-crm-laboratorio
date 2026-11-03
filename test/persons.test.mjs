@@ -81,7 +81,7 @@ test('personas por API: dos conversaciones de la misma persona en marcas distint
  const p=all[0];assert.equal(p.name,'Ana Pérez');assert.equal(p.profile,true);assert.deepEqual(p.brands.map(b=>b.id).sort(),['globalvet','odonteck']);assert.equal(p.otherBrands,0);assert.equal(p.opportunities,2);
  // la asesora de GlobalVet ve la persona, pero sólo su marca
  const mine=(await call('/api/persons?brand=all',agent.cookie)).persons;assert.equal(mine.length,1);assert.deepEqual(mine[0].brands.map(b=>b.id),['globalvet']);assert.equal(mine[0].otherBrands,1);assert.equal(mine[0].opportunities,1);
- const dAgent=await call('/api/persons/'+p.id,agent.cookie);assert.equal(dAgent.contacts.length,1);assert.equal(dAgent.opportunities.length,1);assert.equal(dAgent.identities.find(i=>i.kind==='profile').value,'perfil del laboratorio');assert.deepEqual(dAgent.candidates,[]);
+ const dAgent=await call('/api/persons/'+p.id,agent.cookie),gvContact=dAgent.contacts[0];assert.equal(dAgent.contacts.length,1);assert.equal(dAgent.opportunities.length,1);assert.equal(dAgent.identities.find(i=>i.kind==='profile').value,'perfil del laboratorio');assert.deepEqual(dAgent.candidates,[]);
  const dAdmin=await call('/api/persons/'+p.id,admin.cookie);assert.equal(dAdmin.contacts.length,2);assert.equal(dAdmin.opportunities.length,2);
  assert.equal((await call('/api/crm/contacts/'+dAdmin.contacts[0].id,admin.cookie)).contact.persona_id,p.id,'la ficha del contacto enlaza a la persona');
  assert.equal((await call('/api/persons?brand=all&q=perez',agent.cookie)).persons.length,1);assert.equal((await call('/api/persons?brand=all&q=nadie',agent.cookie)).persons.length,0);
@@ -98,6 +98,7 @@ test('personas por API: dos conversaciones de la misma persona en marcas distint
  // la asesora de GlobalVet no ve teléfono, correo ni identidades que sólo respaldan otras marcas; sí el perfil (su contacto lo tiene)
  const redacted=await call('/api/persons/'+p.id,agent.cookie);assert.equal(redacted.person.phone,'');assert.equal(redacted.person.email,'');assert.deepEqual(redacted.identities.map(i=>i.kind),['profile']);
  assert.equal((await call('/api/persons?brand=all',agent.cookie)).persons[0].phone,'');assert.equal((await call('/api/persons/'+p.id,admin.cookie)).person.phone,'+525512345678');
+ assert.equal((await call('/api/persons?brand=all&q=1234',admin.cookie)).persons.length,1);assert.equal((await call('/api/persons?brand=all&q=1234',agent.cookie)).persons.length,0,'la búsqueda no sondea teléfonos de otras marcas');assert.equal((await call('/api/persons?brand=all&q=Ana',agent.cookie)).persons.length,1);
  // mismo nombre completo en otra persona: candidatura para revisar, no unión automática
  const homonimo=(await call('/api/crm/contacts',admin.cookie,{brandId:'globalvet',name:'Ana Pérez',phone:'5599887766'},'POST',201)).id;
  const other=(await call('/api/crm/contacts/'+homonimo,admin.cookie)).contact.persona_id;assert.notEqual(other,p.id);
@@ -125,6 +126,8 @@ test('personas por API: dos conversaciones de la misma persona en marcas distint
  const seen=await call('/api/persons/'+p.id,agent.cookie);assert.equal(seen.consent.status,'opted_out');assert.equal(seen.consent.note,'');assert.equal(seen.consent.redacted,true);
  assert.ok(!JSON.stringify(seen).includes('Baja desde Dermalysse'));assert.ok(seen.consentHistory.some(h=>h.redacted&&h.brand_name===null));assert.ok(seen.consentHistory.some(h=>h.brand_name==='GlobalVet'&&!h.redacted),'lo registrado en su marca sí se ve completo');
  assert.ok(JSON.stringify(await call('/api/persons/'+p.id,admin.cookie)).includes('Baja desde Dermalysse'),'administración ve todo');
+ const gvConsent=await call('/api/crm/contacts/'+gvContact.id+'/consent',agent.cookie);assert.equal(gvConsent.consent.status,'opted_out');assert.equal(gvConsent.consent.source,'person');assert.ok(!JSON.stringify(gvConsent).includes('Dermalysse'),'el contacto de GlobalVet recibe el estado, no la nota de otra marca');assert.equal(gvConsent.consent.actor_id,null);
+ assert.equal((await call('/api/crm/contacts/'+manual+'/consent',admin.cookie)).consent.note,'Baja desde Dermalysse','la marca de origen conserva la nota');
  await call('/api/persons/'+p.id+'/consent',admin.cookie,{status:'opted_in',note:'Reactivada para la prueba de fusión'},'PUT');
 
  // fusión de personas (homónima → Ana): vista previa, token, permisos, resultado

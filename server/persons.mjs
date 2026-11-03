@@ -22,11 +22,20 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
   const visibleBrands=user=>new Set(crm.brandsFor(user).map(b=>b.id));
   // Identidades respaldadas por un conjunto de contactos: lo único de la persona que ve quien no es administración.
   const identitySet=cs=>new Set(cs.flatMap(c=>[c.source_user_id&&'profile:'+c.source_user_id,normalizePhone(c.phone)&&'phone:'+normalizePhone(c.phone),normalizeEmail(c.email)&&'email:'+normalizeEmail(c.email)].filter(Boolean)));
-  // Proyecta el consentimiento vigente de la persona a todos sus contactos (tras fusiones o reasignaciones).
-  function project(personId){const p=get(personId);if(!p||p.consent_status==='unknown')return;for(const c of contactsOf(personId))db.prepare('INSERT INTO contact_consent(contact_id,brand_id,status,source,note,actor_id,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET status=excluded.status,source=excluded.source,note=excluded.note,actor_id=excluded.actor_id,updated_at=excluded.updated_at WHERE excluded.status!=contact_consent.status').run(c.id,c.brand_id,p.consent_status,'person',p.consent_note,p.consent_actor_id,now());}
+  // Lo que ve cada marca del consentimiento de la persona: el estado rige para todas; la nota y el autor sólo en la
+  // marca donde se registró (las demás reciben un texto genérico y origen «person»).
+  const GENERIC={opted_out:'Baja registrada desde otra marca de la empresa',opted_in:'Consentimiento registrado desde otra marca de la empresa',unknown:'Registro actualizado desde otra marca de la empresa'};
+  const projection=(c,status,source,note,actor,originBrand)=>originBrand===null||c.brand_id===originBrand?{source,note,actor}:{source:'person',note:GENERIC[status],actor:null};
+  const upsertContactConsent=(c,status,source,note,actor,t)=>db.prepare('INSERT INTO contact_consent(contact_id,brand_id,status,source,note,actor_id,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET status=excluded.status,source=excluded.source,note=excluded.note,actor_id=excluded.actor_id,updated_at=excluded.updated_at').run(c.id,c.brand_id,status,source,note,actor,t);
+  const originOf=personId=>db.prepare('SELECT brand_id FROM person_consent_events WHERE person_id=? ORDER BY seq DESC LIMIT 1').get(personId)?.brand_id??null;
+  // Proyecta el consentimiento vigente a los contactos que estén por debajo (tras fusiones o reasignaciones); nunca rebaja una baja.
+  function project(personId){
+    const p=get(personId);if(!p||p.consent_status==='unknown')return;const origin=originOf(personId),t=now();
+    for(const c of contactsOf(personId)){const k=db.prepare('SELECT status FROM contact_consent WHERE contact_id=?').get(c.id);if(k&&RANK[p.consent_status]<=RANK[k.status])continue;const v=projection(c,p.consent_status,p.consent_source||'person',p.consent_note,p.consent_actor_id,origin);upsertContactConsent(c,p.consent_status,v.source,v.note,v.actor,t);}
+  }
   function candidate(a,b,reason,detail=''){
     if(!a||!b||a===b)return;const [x,y]=[a,b].sort();
-    db.prepare('INSERT OR IGNORE INTO person_candidates(id,person_a,person_b,reason,detail,status,created_at) VALUES(?,?,?,?,?,\'pending\',?)').run(randomUUID(),x,y,reason,detail.slice(0,200),now());
+    db.prepare("INSERT OR IGNORE INTO person_candidates(id,person_a,person_b,reason,detail,status,created_at) VALUES(?,?,?,?,?,'pending',?)").run(randomUUID(),x,y,reason,detail.slice(0,200),now());
   }
   // Reclama una identidad para la persona; si ya es de otra, deja una candidatura de conflicto y no la mueve.
   function claim(kind,value,personId,source){
@@ -46,7 +55,7 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
     // Mismo nombre completo en otra persona: candidatura para revisar (nunca une sola).
     const n=normalizeName(c.name);if(n.includes(' '))for(const o of db.prepare('SELECT id FROM persons WHERE id!=? AND lower(name)=?').all(pid,c.name.trim().toLowerCase()))candidate(o.id,pid,'name','Mismo nombre «'+c.name.trim()+'»');
     // Proyección del consentimiento de la persona al contacto nuevo.
-    const p=get(pid);if(p.consent_status!=='unknown'){const k=db.prepare('SELECT status FROM contact_consent WHERE contact_id=?').get(c.id);if(!k||RANK[p.consent_status]>RANK[k.status])db.prepare('INSERT INTO contact_consent(contact_id,brand_id,status,source,note,actor_id,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET status=excluded.status,source=excluded.source,note=excluded.note,actor_id=excluded.actor_id,updated_at=excluded.updated_at').run(c.id,c.brand_id,p.consent_status,'person',p.consent_note,p.consent_actor_id,t);}
+    const p=get(pid);if(p.consent_status!=='unknown'){const k=db.prepare('SELECT status FROM contact_consent WHERE contact_id=?').get(c.id);if(!k||RANK[p.consent_status]>RANK[k.status]){const v=projection(c,p.consent_status,p.consent_source||'person',p.consent_note,p.consent_actor_id,originOf(pid));upsertContactConsent(c,p.consent_status,v.source,v.note,v.actor,t);}}
     return pid;
   }
   // ---- consentimiento a nivel persona (lo llaman contacts.setConsent/recordInbound y la ficha de persona)
@@ -57,8 +66,9 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
     db.prepare('UPDATE persons SET consent_status=?,consent_source=?,consent_note=?,consent_actor_id=?,consent_updated_at=?,revision=revision+1,updated_at=? WHERE id=?').run(status,source,note,actor,t,t,personId);
     db.prepare('INSERT INTO person_consent_events(person_id,brand_id,status,source,note,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(personId,brandId,status,source,note,actor,t);
     for(const c of contactsOf(personId)){
-      db.prepare('INSERT INTO contact_consent(contact_id,brand_id,status,source,note,actor_id,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET status=excluded.status,source=excluded.source,note=excluded.note,actor_id=excluded.actor_id,updated_at=excluded.updated_at').run(c.id,c.brand_id,status,source,note,actor,t);
-      db.prepare('INSERT INTO contact_consent_events(contact_id,brand_id,status,source,note,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(c.id,c.brand_id,status,source,note,actor,t);
+      const v=projection(c,status,source,note,actor,brandId);
+      upsertContactConsent(c,status,v.source,v.note,v.actor,t);
+      db.prepare('INSERT INTO contact_consent_events(contact_id,brand_id,status,source,note,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(c.id,c.brand_id,status,v.source,v.note,v.actor,t);
     }
     if(status==='opted_out'){for(const id of conversationsOfPerson(personId))cancelConversationSteps(db,id,'contact_opted_out',t);
       for(const b of new Set(contactsOf(personId).map(c=>c.brand_id)))events?.publish({type:'baja.registrada',brandId:b,entityKind:'person',entityId:personId,payload:{source,note:String(note||'').slice(0,120),originBrand:brandId},actorId:actor||null,source:'consent',dedupeKey:'baja.registrada:'+personId+':'+b+':'+t});}
@@ -79,7 +89,8 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
     const ids=[...allowed].filter(id=>!brand||brand==='all'||id===brand);if(!ids.length)return [];
     const rows=db.prepare(`SELECT DISTINCT p.* FROM persons p JOIN contacts c ON c.persona_id=p.id WHERE c.brand_id IN (${ids.map(()=>'?').join(',')}) ORDER BY p.updated_at DESC LIMIT 2000`).all(...ids);
     const digits=q.replace(/\D/g,'');
-    return rows.filter(p=>!q||normalizeName(p.name).includes(q)||(digits.length>=4&&p.phone.includes(digits))||p.email.includes(q)).slice(0,limit).map(p=>summary(p,allowed,isAdmin));
+    const values=p=>isAdmin?[p.phone,p.email]:contactsOf(p.id).filter(c=>allowed.has(c.brand_id)).flatMap(c=>[normalizePhone(c.phone),normalizeEmail(c.email)]);   // sin sondear teléfonos o correos de otras marcas
+    return rows.filter(p=>!q||normalizeName(p.name).includes(q)||values(p).some(v=>v&&((digits.length>=4&&v.includes(digits))||v.includes(q)))).slice(0,limit).map(p=>summary(p,allowed,isAdmin));
   }
   function detail(id,user){
     requireStaff(user);const p=get(id);if(!p)throw fail(404,'Persona no encontrada.');
