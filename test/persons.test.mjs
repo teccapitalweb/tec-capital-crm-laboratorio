@@ -128,6 +128,7 @@ test('personas por API: dos conversaciones de la misma persona en marcas distint
  assert.ok(JSON.stringify(await call('/api/persons/'+p.id,admin.cookie)).includes('Baja desde Dermalysse'),'administración ve todo');
  const gvConsent=await call('/api/crm/contacts/'+gvContact.id+'/consent',agent.cookie);assert.equal(gvConsent.consent.status,'opted_out');assert.equal(gvConsent.consent.source,'person');assert.ok(!JSON.stringify(gvConsent).includes('Dermalysse'),'el contacto de GlobalVet recibe el estado, no la nota de otra marca');assert.equal(gvConsent.consent.actor_id,null);
  assert.equal((await call('/api/crm/contacts/'+manual+'/consent',admin.cookie)).consent.note,'Baja desde Dermalysse','la marca de origen conserva la nota');
+ const same=(await call('/api/persons/'+p.id+'/consent',agent.cookie,{status:'opted_out',note:'ya estaba'},'PUT')).consent;assert.equal(same.unchanged,true);assert.equal(same.note,'');assert.equal(same.redacted,true,'registrar sin cambio tampoco revela la nota de otra marca');
  await call('/api/persons/'+p.id+'/consent',admin.cookie,{status:'opted_in',note:'Reactivada para la prueba de fusión'},'PUT');
 
  // fusión de personas (homónima → Ana): vista previa, token, permisos, resultado

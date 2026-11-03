@@ -59,6 +59,8 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
   }
   // ---- consentimiento a nivel persona (lo llaman contacts.setConsent/recordInbound y la ficha de persona)
   const consentOf=id=>{const p=get(id);return {status:p.consent_status,source:p.consent_source,note:p.consent_note,actor_id:p.consent_actor_id,brand_id:p.consent_brand_id,updated_at:p.consent_updated_at};};
+  // Lo que cada usuario puede ver del consentimiento vigente: nota, autor y marca sólo si se registró en una marca autorizada (o es administración).
+  const consentFor=(id,user)=>{const c=consentOf(id);const visible=roleOf(user).role==='admin'||(c.brand_id!==null&&visibleBrands(user).has(c.brand_id));return visible?c:{...c,note:'',actor_id:null,brand_id:null,redacted:true};};
   const conversationsOfPerson=id=>db.prepare('SELECT co.conversation_id id FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id JOIN contacts c ON c.id=o.contact_id WHERE c.persona_id=?').all(id).map(r=>r.id);
   function writeConsent(personId,status,source,note,actor,brandId=null){
     const p=get(personId),t=now();if(!p)return;
@@ -101,10 +103,9 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
     const history=db.prepare('SELECT e.status,e.source,e.note,e.created_at,e.brand_id,u.name actor_name,b.name brand_name FROM person_consent_events e LEFT JOIN users u ON u.id=e.actor_id LEFT JOIN brands b ON b.id=e.brand_id WHERE e.person_id=? ORDER BY e.seq DESC LIMIT 30').all(id);
     const canSee=h=>isAdmin||(h.brand_id!==null&&allowed.has(h.brand_id));
     const redact=h=>canSee(h)?h:{status:h.status,source:h.source,note:'',created_at:h.created_at,brand_id:null,actor_name:null,brand_name:null,redacted:true};
-    const current=consentOf(id),currentVisible=isAdmin||(current.brand_id!==null&&allowed.has(current.brand_id));
     const vis=identitySet(mine);
     return {person:summary(p,allowed,isAdmin),identities:db.prepare('SELECT kind,value,source,created_at FROM person_identities WHERE person_id=? ORDER BY kind').all(id).filter(i=>isAdmin||vis.has(i.kind+':'+i.value)).map(i=>i.kind==='profile'?{...i,value:'perfil del laboratorio'}:i),
-      consent:current.status!=='unknown'&&!currentVisible?{...current,note:'',actor_id:null,brand_id:null,redacted:true}:current,consentHistory:history.map(redact),
+      consent:consentFor(id,user),consentHistory:history.map(redact),
       contacts:mine.map(c=>({id:c.id,brand_id:c.brand_id,brand_name:brandName(c.brand_id),name:c.name,phone:c.phone,email:c.email,source:c.source,created_at:c.created_at,tags:db.prepare('SELECT t.name,t.color FROM contact_tag_links l JOIN contact_tags t ON t.id=l.tag_id WHERE l.contact_id=?').all(c.id)})),
       opportunities:db.prepare(`SELECT o.id,o.brand_id,o.stage,o.updated_at,o.created_at,k.title course_title,e.name edition_name,u.name owner_name,(SELECT co.conversation_id FROM conversation_opportunities co WHERE co.opportunity_id=o.id) conversation_id FROM opportunities o JOIN courses k ON k.id=o.course_id LEFT JOIN editions e ON e.id=o.edition_id LEFT JOIN users u ON u.id=o.owner_id WHERE o.contact_id IN (${ph}) ORDER BY o.updated_at DESC`).all(...ids).map(o=>({...o,brand_name:brandName(o.brand_id)})),
       orders:db.prepare(`SELECT o.id,o.brand_id,o.reference,o.amount_cents,o.currency,o.status,o.method,o.paid_at,o.created_at,k.title course_title,e.name edition_name FROM orders o JOIN courses k ON k.id=o.course_id JOIN editions e ON e.id=o.edition_id WHERE o.contact_id IN (${ph}) ORDER BY o.created_at DESC`).all(...ids).map(o=>({...o,brand_name:brandName(o.brand_id)})),
@@ -128,9 +129,9 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
     requireStaff(user);const p=get(id);if(!p)throw fail(404,'Persona no encontrada.');const mine=contactsOf(id).filter(c=>visibleBrands(user).has(c.brand_id));if(!mine.length)throw fail(404,'Persona no encontrada.');
     const status=input.status,note=text(input.note,200);if(!STATUS.includes(status))throw fail(400,'Estado de consentimiento no válido.');
     return transaction(db,()=>{
-      if(p.consent_status===status)return {...consentOf(id),unchanged:true};
+      if(p.consent_status===status)return {...consentFor(id,user),unchanged:true};
       if(p.consent_status==='opted_out'){requireAdmin(user);if(note.length<5)throw fail(400,'Para reactivar a una persona que pidió la baja, administración debe explicar el motivo (mínimo 5 caracteres).');}
-      writeConsent(id,status,'staff',note,user.id,mine[0].brand_id);audit(user,'person.consent',id);for(const b of new Set(contactsOf(id).map(c=>c.brand_id)))broadcast('crm',null,{brandId:b});return consentOf(id);
+      writeConsent(id,status,'staff',note,user.id,mine[0].brand_id);audit(user,'person.consent',id);for(const b of new Set(contactsOf(id).map(c=>c.brand_id)))broadcast('crm',null,{brandId:b});return consentFor(id,user);
     });
   }
   // ---- revisión y fusión (administración)
