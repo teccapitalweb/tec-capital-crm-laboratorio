@@ -15,7 +15,7 @@ export const METHODS={card:'Tarjeta (simulada)',oxxo:'OXXO (simulado)',transfer:
 const money=(cents,currency)=>new Intl.NumberFormat('es-MX',{style:'currency',currency:currency||'MXN'}).format(cents/100);
 const stamp=t=>new Intl.DateTimeFormat('es-MX',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Mexico_City'}).format(t);
 
-export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,now=Date.now,env=process.env}){
+export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events=null,now=Date.now,env=process.env}){
   const defaults=b=>({brand_id:b,enabled:0,link_hours:48,revision:0,updated_by:null,updated_at:null});
   const settings=b=>db.prepare('SELECT * FROM payment_settings WHERE brand_id=?').get(b)||defaults(b);
   const requireAdmin=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||u.role!=='admin')throw fail(403,'La venta con pago la configura un administrador.');};
@@ -24,6 +24,8 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
   const linkFor=o=>(env.APP_ORIGIN||'').replace(/\/$/,'')+'/?pay='+o.id;   // enlace propio y estable; si hay pasarela real, la página /?pay= lleva a su URL de cobro
   let connectorOf=null;const useConnector=fn=>{connectorOf=fn;};
   const event=(orderId,kind,details,actor,t)=>db.prepare('INSERT INTO payment_events(order_id,kind,details,actor_id,created_at) VALUES(?,?,?,?,?)').run(orderId,kind,JSON.stringify(details||{}),actor||null,t);
+  // Evento de dominio (índice común): referencia al pedido, nunca copia del detalle; dentro de la transacción del llamador.
+  const emit=(type,o,payload,actor,dedupeKey)=>events?.publish({type,brandId:o.brand_id,entityKind:'order',entityId:o.id,payload:{reference:o.reference,amountCents:o.amount_cents,currency:o.currency,conversationId:o.conversation_id,contactId:o.contact_id,courseId:o.course_id,editionId:o.edition_id,...payload},actorId:actor?.id||null,source:'payments',dedupeKey});
   const staffOf=brandId=>db.prepare("SELECT id FROM users WHERE role IN ('admin','agent') AND COALESCE(disabled,0)=0 AND (role='admin' OR id IN (SELECT user_id FROM brand_members WHERE brand_id=?))").all(brandId).map(u=>u.id);
   function notifyStaff(c,kind,title,key){const t=now();for(const id of staffOf(c.brand_id))db.prepare('INSERT OR IGNORE INTO notifications(id,user_id,brand_id,conversation_id,kind,title,event_key,created_at) VALUES(?,?,?,?,?,?,?,?)').run(randomUUID(),id,c.brand_id,c.id,kind,title,key,t);}
   const openOrder=cid=>db.prepare("SELECT * FROM orders WHERE conversation_id=? AND status IN ('pending','review') ORDER BY created_at DESC LIMIT 1").get(cid);
@@ -47,6 +49,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     db.prepare('INSERT INTO orders(id,reference,brand_id,contact_id,opportunity_id,conversation_id,course_id,edition_id,promotion_id,amount_cents,currency,status,source,created_by,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
       .run(id,reference,c.brand_id,opp.contact_id,oppId,c.id,c.course_id,ctx.edition.id,ctx.promotion?.id||null,ctx.priceCents,ctx.currency,'pending',source,user?.id||null,t+s.link_hours*3600000,t,t);
     event(id,'created',{source,amountCents:ctx.priceCents,currency:ctx.currency,promotionId:ctx.promotion?.id||null,expiresAt:t+s.link_hours*3600000},user?.id||null,t);
+    emit('pedido.creado',get(id),{source,promotionId:ctx.promotion?.id||null,expiresAt:t+s.link_hours*3600000},user);
     return {order:get(id),created:true};
   }
   // Confirmación de pago (proveedor simulado o persona). Dentro de la transacción del llamador.
@@ -54,16 +57,18 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     const t=now(),c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id),n=names(o);
     // Guarda de estado dentro de la transacción: dos confirmaciones concurrentes (o una tras cancelar) no pueden pasar las dos.
     if(!db.prepare("UPDATE orders SET status='paid',method=?,provider_ref=COALESCE(?,provider_ref),paid_at=?,confirmed_by=?,note=?,revision=revision+1,updated_at=? WHERE id=? AND status IN ('pending','review')").run(method,providerRef,t,actor?.id||null,text(note,500),t,o.id).changes)throw fail(409,'El pedido cambió de estado mientras se confirmaba. Recárgalo.');
-    db.prepare('INSERT INTO enrollments(id,order_id,brand_id,contact_id,opportunity_id,course_id,edition_id,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)').run(randomUUID(),o.id,o.brand_id,o.contact_id,o.opportunity_id,o.course_id,o.edition_id,'enrolled',t);
+    const enrollmentId=randomUUID();db.prepare('INSERT INTO enrollments(id,order_id,brand_id,contact_id,opportunity_id,course_id,edition_id,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)').run(enrollmentId,o.id,o.brand_id,o.contact_id,o.opportunity_id,o.course_id,o.edition_id,'enrolled',t);
     db.prepare('UPDATE editions SET available_seats=available_seats-1,updated_at=? WHERE id=? AND available_seats IS NOT NULL AND available_seats>0').run(t,o.edition_id);
     // La venta la cierra quien confirma; un pago del proveedor simulado queda sin actor (origen «pago»).
     crm.setStage(c,'ganada',actor||{id:null},{});
     event(o.id,'confirmed',{method,providerRef,note:text(note,500)},actor?.id||null,t);
+    emit('pago.confirmado',o,{method,providerRef,enrollmentId,opportunityId:o.opportunity_id,courseTitle:n.course,editionName:n.edition},actor);
+    events?.publish({type:'inscripcion.activada',brandId:o.brand_id,entityKind:'enrollment',entityId:enrollmentId,payload:{orderId:o.id,reference:o.reference,editionId:o.edition_id,courseId:o.course_id,courseTitle:n.course,editionName:n.edition,contactId:o.contact_id},actorId:actor?.id||null,source:'payments'});
     say(c,`Pago confirmado (laboratorio) · ${o.reference}. Quedaste inscrito en ${n.course} · ${n.edition}. El equipo coordinador te enviará los accesos y recordatorios por aquí. No se realizó ningún cobro real.`,'order:'+o.id+':paid');
     notifyStaff(c,'payment','Pago confirmado · '+n.contact+' · '+n.course+' · '+money(o.amount_cents,o.currency),'order:'+o.id+':paid');
     return get(o.id);
   }
-  function expire(o){const t=now();if(db.prepare("UPDATE orders SET status='expired',revision=revision+1,updated_at=? WHERE id=? AND status='pending'").run(t,o.id).changes)event(o.id,'expired',{},null,t);}
+  function expire(o){const t=now();if(db.prepare("UPDATE orders SET status='expired',revision=revision+1,updated_at=? WHERE id=? AND status='pending'").run(t,o.id).changes){event(o.id,'expired',{},null,t);emit('pedido.vencido',o,{},null);}}
   // Proveedor simulado: el cliente paga desde el enlace. Un webhook real de Stripe/Conekta llamaría a confirm() tras verificar la firma.
   function pay(o,user,input){
     const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id);if(!c||c.customer_id!==user.id)throw fail(404,'Pedido no disponible.');
@@ -74,7 +79,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     const out=transaction(db,()=>{
       const fresh=get(o.id);if(fresh.status!=='pending')throw fail(409,'Este pedido ya no admite pago: '+STATUS[fresh.status].toLowerCase()+'.');
       if(approved)return confirm(fresh,{actor:null,method,providerRef});
-      event(o.id,'provider.declined',{method,providerRef},null,now());
+      event(o.id,'provider.declined',{method,providerRef},null,now());emit('pago.rechazado',o,{method,providerRef,provider:'simulated'},null,'pago.rechazado:'+o.id+':'+providerRef);
       say(c,`El pago simulado con ${method==='card'?'tarjeta':'OXXO'} no se completó (${o.reference}). Puedes intentarlo de nuevo desde el enlace o enviar tu comprobante por aquí.`,'order:'+o.id+':declined:'+providerRef);
       return get(o.id);
     });
@@ -87,7 +92,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     const prelecture={status:'simulada',checks:[{name:'Formato admitido (imagen o PDF)',ok:true},{name:'Tamaño razonable',ok:a.size<4*1024*1024},{name:'Pedido vigente al recibirlo',ok:o.expires_at>t},{name:'Importe esperado '+money(o.amount_cents,o.currency),ok:null}],note:'La lectura automática del importe, la fecha y la cuenta llegará con el proveedor de IA; por ahora lo valida una persona.'};
     db.prepare('INSERT INTO receipts(id,order_id,conversation_id,message_id,attachment_id,status,prelecture,created_at) VALUES(?,?,?,?,?,?,?,?)').run(id,o.id,c.id,messageId,attachmentId,'pending',JSON.stringify(prelecture),t);
     db.prepare("UPDATE orders SET status='review',revision=revision+1,updated_at=? WHERE id=?").run(t,o.id);
-    event(o.id,'receipt.received',{receiptId:id,filename:a.filename,mime:a.mime,size:a.size},null,t);
+    event(o.id,'receipt.received',{receiptId:id,filename:a.filename,mime:a.mime,size:a.size},null,t);emit('comprobante.recibido',o,{receiptId:id,filename:a.filename},null,'comprobante.recibido:'+id);
     say(c,`Recibimos tu comprobante del pedido ${o.reference}. Una persona del equipo lo revisa y te confirmamos por aquí. (Laboratorio: no se realizan cobros reales.)`,'order:'+o.id+':receipt:'+id,'service');
     notifyStaff(c,'receipt','Comprobante por revisar · '+n.contact+' · '+o.reference+' · '+money(o.amount_cents,o.currency),'receipt:'+id);
     return id;
@@ -119,7 +124,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     if(!['pending','review'].includes(o.status))throw fail(409,'Sólo se cancela un pedido pendiente o en revisión.');if(reason.length<5)throw fail(400,'Indica el motivo (mínimo 5 caracteres).');
     const t=now(),out=transaction(db,()=>{
       db.prepare("UPDATE receipts SET status='rejected',reviewed_by=?,review_note=?,reviewed_at=? WHERE order_id=? AND status='pending'").run(user.id,'Pedido cancelado: '+reason,t,o.id);
-      if(!db.prepare("UPDATE orders SET status='cancelled',note=?,revision=revision+1,updated_at=? WHERE id=? AND status IN ('pending','review')").run(reason,t,o.id).changes)throw fail(409,'El pedido cambió de estado. Recárgalo.');event(o.id,'cancelled',{reason},user.id,t);
+      if(!db.prepare("UPDATE orders SET status='cancelled',note=?,revision=revision+1,updated_at=? WHERE id=? AND status IN ('pending','review')").run(reason,t,o.id).changes)throw fail(409,'El pedido cambió de estado. Recárgalo.');event(o.id,'cancelled',{reason},user.id,t);emit('pedido.cancelado',o,{reason},user);
       say(c,`El pedido ${o.reference} se canceló: ${reason}. Si quieres continuar, el equipo puede generarte uno nuevo.`,'order:'+o.id+':cancelled');
       return get(o.id);
     });
@@ -147,7 +152,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
       broadcast('conversation',c.id);broadcast('crm',null,{brandId:c.brand_id});return 'aplicado: pedido '+o.reference+' pagado e inscripción registrada';
     }
     if(o.status!=='pending')return 'ignorado: el pedido ya estaba '+STATUS[o.status].toLowerCase();
-    transaction(db,()=>{event(o.id,'provider.declined',{providerRef:d.providerRef||null,reason:d.reason||null,provider},null,now());say(c,`El pago del pedido ${o.reference} no se completó${d.reason?' ('+text(String(d.reason),120)+')':''}. Puedes intentarlo de nuevo desde el enlace o enviar tu comprobante por aquí.`,'order:'+o.id+':declined:'+String(d.providerRef||randomUUID()).slice(0,60));});
+    transaction(db,()=>{event(o.id,'provider.declined',{providerRef:d.providerRef||null,reason:d.reason||null,provider},null,now());emit('pago.rechazado',o,{method:d.method||null,providerRef:d.providerRef||null,reason:d.reason||null,provider},null,'pago.rechazado:'+o.id+':'+(d.providerRef||ev.id||randomUUID()));say(c,`El pago del pedido ${o.reference} no se completó${d.reason?' ('+text(String(d.reason),120)+')':''}. Puedes intentarlo de nuevo desde el enlace o enviar tu comprobante por aquí.`,'order:'+o.id+':declined:'+String(d.providerRef||randomUUID()).slice(0,60));});
     broadcast('conversation',c.id);return 'aplicado: pago rechazado registrado para '+o.reference;
   }
   // Cobro desde el chat por el equipo: pedido (nuevo o vigente) + mensaje con el enlace; el equipo toma la conversación como con una plantilla.

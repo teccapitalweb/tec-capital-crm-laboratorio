@@ -53,6 +53,10 @@ El CRM habla con una **interfaz única** de canal y de pago (`docs/CONECTORES.md
 
 En **Catálogo y biblioteca → Evaluación** cada marca tiene casos que dicen qué escribe un cliente y qué debería hacer el motor (intención, acción, fuente y texto). **Ejecutar** corre la misma simulación que «Probar respuesta», sin enviar nada, con el nivel vigente de la marca, y guarda la puntuación y el detalle de cada caso para comparar antes y después de cambiar conocimiento, nivel o proveedor de IA. Cada marca nace con 17 casos.
 
+## Coordinación académica y bitácora de eventos
+
+En **Operación → Coordinación** cada edición del catálogo es una *apertura*: mínimo de alumnos, inscritos que llegan solos al confirmar un pago, persona responsable, grupo de WhatsApp (enlace registrado), sesiones con enlace de videollamada (simulado en el laboratorio), recordatorios a los inscritos, asistencia, materiales y grabaciones, y estados planeada → abierta → en curso → cerrada. La automatización (abrir al llegar al mínimo y recordar sesiones) está **apagada por marca** hasta que administración la active; lo manual funciona siempre. En **Operación → Eventos** (administración) está la bitácora común de hechos del negocio —conversaciones, etapas, pedidos, pagos, inscripciones, mensajes, bajas, aperturas y sesiones— con filtros, entregas a suscriptores con reintento y exportación CSV.
+
 ## Verificación en dos pasos (equipo)
 
 En **Mi configuración → Acceso y seguridad** el equipo puede activar un código temporal de una app de autenticación (opcional). Al iniciar sesión se pide después de la contraseña; hay 10 códigos de recuperación de un solo uso. Administración ve quién la tiene en **Equipo** y puede restablecerla. Si el administrador queda bloqueado, el procedimiento de emergencia está en `docs/OPERACION_Y_PRUEBAS.md`.

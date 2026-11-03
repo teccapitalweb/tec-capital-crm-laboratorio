@@ -15,7 +15,7 @@ const closed=s=>['ganada','perdida'].includes(s);
 export const csvCell=v=>{let s=v===null||v===undefined?'':String(v);if(/^[=+\-@\t\r]/.test(s))s="'"+s;return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
 export const csvLine=cells=>cells.map(csvCell).join(',');
 
-export function createContacts({db,crm,body,json,audit,broadcast,now=Date.now}){
+export function createContacts({db,crm,body,json,audit,broadcast,events=null,now=Date.now}){
   const requireAdmin=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||u.role!=='admin')throw fail(403,'Esta acción requiere un administrador.');};
   const requireStaff=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||!['admin','agent'].includes(u.role))throw fail(403,'Esta acción es para el equipo de atención.');};
   const contactOf=(id,user)=>{const c=typeof id==='string'?db.prepare('SELECT * FROM contacts WHERE id=?').get(id):null;if(!c)throw fail(404,'Contacto no disponible.');crm.requireBrand(user,c.brand_id);return c;};
@@ -70,7 +70,7 @@ export function createContacts({db,crm,body,json,audit,broadcast,now=Date.now}){
     const t=now();
     db.prepare('INSERT INTO contact_consent(contact_id,brand_id,status,source,note,actor_id,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET status=excluded.status,source=excluded.source,note=excluded.note,actor_id=excluded.actor_id,updated_at=excluded.updated_at').run(c.id,c.brand_id,status,source,note,actor,t);
     db.prepare('INSERT INTO contact_consent_events(contact_id,brand_id,status,source,note,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(c.id,c.brand_id,status,source,note,actor,t);
-    if(status==='opted_out')for(const id of conversationsOf(c.id))cancelConversationSteps(db,id,'contact_opted_out',t);
+    if(status==='opted_out'){for(const id of conversationsOf(c.id))cancelConversationSteps(db,id,'contact_opted_out',t);events?.publish({type:'baja.registrada',brandId:c.brand_id,entityKind:'contact',entityId:c.id,payload:{source,note:String(note||'').slice(0,120)},actorId:actor||null,source:'consent',dedupeKey:'baja.registrada:'+c.id+':'+t});}
   }
   function setConsent(user,contactId,input){
     requireStaff(user);const c=contactOf(contactId,user),status=input.status,note=text(input.note,200);

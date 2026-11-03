@@ -71,6 +71,6 @@ test('banco de evaluación por API: siembra, casos, ejecución con el nivel vige
  await call('/api/evaluation/runs/'+randomUUID(),admin.cookie,undefined,'GET',404);
  const brand=(await call('/api/brands',admin.cookie,{name:'Marca Eval',description:'prueba'},'POST',201)).id;
  assert.equal((await call('/api/evaluation/cases?brand='+brand,admin.cookie)).cases.length,17,'una marca nueva recibe la siembra');
- const d=new DatabaseSync(join(dir,'laboratorio.sqlite'));try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,18);assert.equal(d.prepare('SELECT count(*) n FROM eval_runs').get().n,5);}finally{d.close();}
+ const d=new DatabaseSync(join(dir,'laboratorio.sqlite'));try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,19);assert.equal(d.prepare('SELECT count(*) n FROM eval_runs').get().n,5);}finally{d.close();}
  assert.equal(logs.includes('failed'),false,logs);
 });

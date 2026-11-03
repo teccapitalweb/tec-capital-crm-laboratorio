@@ -75,5 +75,5 @@ test('canal simulado: apagado por omisión, ventana de 24/72 h, estados de entre
  await call(msgs(c2.id),client.cookie,{text:'Hola',clientRef:randomUUID()},'POST',201);
  const bot2=await until(async()=>(await call(msgs(c2.id),client.cookie)).messages.find(x=>x.sender_kind==='automation'));
  assert.ok(bot2);assert.equal(bot2.buttons,null);assert.equal(bot2.delivery_state,'sent');
- const d=db();try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,18);assert.equal(d.prepare("SELECT count(*) n FROM channel_events WHERE message_id=?").get(f1.id).n,3);}finally{d.close();}
+ const d=db();try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,19);assert.equal(d.prepare("SELECT count(*) n FROM channel_events WHERE message_id=?").get(f1.id).n,3);}finally{d.close();}
 });

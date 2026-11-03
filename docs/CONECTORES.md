@@ -114,3 +114,7 @@ Lo que todavía **no** existe y llega con el primer piloto real: el envío real 
 ## 5. Probar el contrato sin proveedores
 
 Con `CONNECTOR_WEBHOOK_SECRET` definido, Operación → Conectores → **Probar un webhook firmado** construye un evento real del laboratorio (estado del último mensaje saliente o pago de un pedido por referencia), lo firma y lo envía a la ruta pública del proveedor simulado; el resultado y el evento quedan en la bitácora. `test/connectors.test.mjs` cubre la firma y traducción de Meta y Stripe, la idempotencia, los estados de mensaje, los pagos por webhook y el respaldo al simulado cuando faltan accesos.
+
+## 6. Calendario y videollamada (pendiente de acceso)
+
+La coordinación académica (Fase 2 · 2.3) genera el enlace de cada sesión por un conector de calendario con la interfaz `{name, createEvent({title,startsAt,durationMin,description}) → {url,providerRef}}` (`coordination.useCalendar`). En el laboratorio lo cumple el simulado (`https://meet.simulado.tec-capital.test/…`, dominio que nunca resuelve). El adaptador de **Google Calendar/Meet** necesitará una cuenta de Google Workspace de la empresa con permiso para crear eventos con Meet (OAuth de servicio o delegación), guardada sólo en el entorno; se añadirá aquí con sus variables cuando dirección lo indique.

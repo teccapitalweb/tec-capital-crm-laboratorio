@@ -47,6 +47,10 @@ Un proceso Node.js 24 atiende HTTP, WebSocket, reglas y reconciliación operativ
 | `server/presentation.mjs`, `public/presentation.js` | Modo presentación (sólo lectura, sin esquema propio): tablero con % sin intervención, tiempos máquina vs humano, ventas por marca, costo estimado por categoría (`MESSAGE_RATES`) y guion de 10 pasos con comprobaciones; ruta `GET /api/presentation` (equipo, alcance por marca) |
 | `server/connectors-schema.mjs`, `server/connectors.mjs`, `public/connectors.js` | Esquema v17 y contrato de conectores: interfaz única de canal y pago, adaptadores simulados/Meta/Stripe/Conekta, webhooks públicos firmados e idempotentes (`/api/webhooks/*`), estado y prueba firmada (`/api/connectors`), pestaña Conectores; ver [CONECTORES.md](CONECTORES.md) |
 | `server/evaluation-schema.mjs`, `server/evaluation.mjs`, `public/evaluation.js` | Esquema v18 y banco de evaluación: casos esperados por marca (siembra de 17), ejecución con la simulación del motor y el nivel vigente, calificación determinista, historial de ejecuciones; rutas `/api/evaluation`; pestaña Evaluación del catálogo |
+| `server/coordination-schema.mjs` | Esquema v19: eventos de dominio con entregas a suscriptores, campos de apertura en `editions`, sesiones, asistencia, recursos y ajustes de coordinación por marca |
+| `server/events.mjs` | Eventos de dominio: catálogo `EVENT_TYPES`, `publish` idempotente dentro de la transacción del llamador, suscriptores en proceso con reintento (`tick`), consulta con alcance, CSV y rutas `/api/events` (admin) |
+| `server/coordination.mjs` | Coordinación académica sobre la edición: apertura (mínimo, estado operativo, responsable), sesiones con conector de calendario (`useCalendar`, simulado), recordatorios `sesion.proxima`, asistencia, recursos, bajas; suscriptores `coordination.sale` y `coordination.reminder`; rutas `/api/coordination` |
+| `public/coordination.js` | Pestañas Coordinación (tarjetas, ficha con inscritos/sesiones/recursos/bitácora, asistencia) y Eventos (filtros, detalle con entregas y reintento, CSV, catálogo de tipos) de Operación |
 | `public/simulator.js` | Pestaña Demo de Operación: formulario de demo, tarjetas con cifras en vivo, archivo y generador de catálogo |
 | `server/ai-provider.mjs` | Adaptador de IA (simulado y Claude), parecido léxico; se llama sólo fuera de transacciones |
 | `server/mfa-schema.mjs`, `server/mfa.mjs` | Esquema v12 y verificación en dos pasos TOTP (secreto cifrado, códigos de recuperación, desafío de acceso, rutas `/api/mfa`) |
@@ -77,7 +81,7 @@ Los archivos son deliberadamente sencillos, con bastante código compacto. Antes
 
 `DATA_DIR` contiene `laboratorio.sqlite`, `uploads/`, `library/` y `backups/`. SQLite usa WAL, claves foráneas y `busy_timeout=5000`. Los adjuntos de mensajes viven en `uploads/`; las piezas propias del catálogo, en `library/`. Los originales demo siguen en el repositorio.
 
-En el arranque se ejecutan `openDatabase`, `migrateCRM`, `migrateFollowup`, `migrateCatalogue` y `migrateOperations`. Si hay usuarios y el esquema es menor que 18, el arranque actual crea antes una copia consistente `backups/before-crm-v18-<timestamp>.sqlite` (hasta v0.5.0 era `before-crm-v6-`) con `VACUUM INTO`. Los prefijos v3/v4/v5 citados en entregas anteriores corresponden al código de aquellas versiones. No se hace un respaldo nuevo en cada arranque de una base ya en v6.
+En el arranque se ejecutan `openDatabase`, `migrateCRM`, `migrateFollowup`, `migrateCatalogue` y `migrateOperations`. Si hay usuarios y el esquema es menor que 19, el arranque actual crea antes una copia consistente `backups/before-crm-v19-<timestamp>.sqlite` (hasta v0.5.0 era `before-crm-v6-`) con `VACUUM INTO`. Los prefijos v3/v4/v5 citados en entregas anteriores corresponden al código de aquellas versiones. No se hace un respaldo nuevo en cada arranque de una base ya en v6.
 
 | Versión de esquema | Incorporación |
 | --- | --- |
@@ -85,6 +89,7 @@ En el arranque se ejecutan `openDatabase`, `migrateCRM`, `migrateFollowup`, `mig
 | 3 | Permisos por marca, invitaciones, recuperación, preferencias, contactos, oportunidades, tareas y notas |
 | 4 | Revisiones e historial comercial; importación del historial de etapas disponible |
 | 5 | Ediciones, promociones, archivos de biblioteca, flyers, plantillas, versiones y snapshots de oferta |
+| 19 | Eventos de dominio y coordinación académica: `domain_events`, `domain_deliveries`, columnas de apertura en `editions` (`min_students`, `run_status`, `coordinator_id`, `group_url`, `run_note`, `run_revision`), `enrollments.cancelled_at/cancel_reason`, `coordination_settings`, `edition_sessions`, `attendance`, `edition_resources` |
 | 18 | Banco de evaluación: `eval_cases`, `eval_runs` (con siembra por marca) |
 | 17 | Conectores: `messages.provider_ref`, `orders.checkout_url`, `connector_events` |
 | 16 | Venta con pago simulado: `payment_settings`, `orders`, `receipts`, `enrollments`, `payment_events` |
@@ -165,6 +170,12 @@ Variables de plantilla implementadas: `nombre`, `marca`, `curso`, `edicion`, `fe
 | `notifications` | Destinatario, marca/chat, tipo, título, lectura y clave de evento; deduplicación por usuario/evento |
 | `macros` y `macro_versions` | Acciones manuales configuradas, activación y versiones inmutables |
 | `operation_requests` | Resultado por actor y `client_ref`, tipo y destino; permite repetir una petición sin duplicar sus efectos |
+| `domain_events` | Índice común de hechos: `seq`, `id`, `type`, marca, `entity_kind`/`entity_id`, `payload` (JSON breve), actor, `source`, `dedupe_key` única, fecha. Referencia al detalle de cada módulo, no copia |
+| `domain_deliveries` | Entrega por evento y suscriptor: estado pendiente/entregada/fallida, intentos, próximo intento, error |
+| `coordination_settings` | Por marca: automatización activa (apagada por omisión), abrir al llegar al mínimo, horas de anticipación del recordatorio, revisión |
+| `edition_sessions` | Sesión de una apertura: número, título, inicio, duración, enlace y proveedor de videollamada, grabación, estado, recordatorio enviado, revisión |
+| `attendance` | Una marca por sesión e inscripción: presente/ausente/retardo/justificado, nota, quién y cuándo |
+| `edition_resources` | Materiales, grabaciones y enlaces de una apertura (o de una sesión), por enlace o archivo de biblioteca |
 
 Los importes se almacenan como centavos enteros. Los instantes se guardan como milisegundos UTC; los horarios laborales se interpretan con la zona IANA de la marca. No uses la zona del dispositivo para interpretar fechas de una edición al guardar.
 
@@ -198,6 +209,8 @@ Todas las rutas `/api` salvo health y autenticación inicial requieren sesión. 
 | Analítica | `GET /api/analytics?days=&brand=&tz=` |
 | Etiquetas y contactos | `GET/POST /api/crm/tags`; `PATCH/DELETE /api/crm/tags/:id` (admin); `PUT /api/crm/contacts/:id/tags`; `GET /api/crm/duplicates?brand=`; `POST /api/crm/contacts/merge-preview`, `/merge` (admin); `GET /api/crm/export/contacts.csv`, `/opportunities.csv` (admin) |
 | Respaldos (admin) | `GET /api/backups`; `POST /api/backups/run` |
+| Coordinación | `GET /api/coordination?brand=&status=`; `PATCH /api/coordination/brands/:id` (admin); `GET/PATCH /api/coordination/editions/:id`; `POST /editions/:id/status|sessions|resources`; `PATCH /api/coordination/sessions/:id`; `POST /sessions/:id/meet|done|cancel`; `PUT /sessions/:id/attendance`; `DELETE /api/coordination/resources/:id`; `POST /api/coordination/enrollments/:id/cancel` |
+| Eventos de dominio (admin) | `GET /api/events?brand=&type=&entity=&entityId=&q=&before=&limit=`; `GET /api/events/types`; `GET /api/events.csv`; `GET /api/events/:seq`; `POST /api/events/:seq/retry` |
 | Importación (admin) | `GET /api/catalogue/import/template`; `POST /api/catalogue/import/preview`, `/apply` |
 | Recetas (admin) | `GET/POST /api/automation/recipes`; `GET/PATCH /recipes/:id`; `POST /recipes/:id/publish|pause|simulate`; `GET /recipes/:id/history|runs` |
 | Compatibilidad y métricas | `POST /api/brands`, `/api/catalog`; `GET /api/metrics` |
@@ -227,6 +240,8 @@ Cuatro temporizadores viven en el proceso (el cuarto, `automation.tick`, cada se
 1. Trabajos de reglas cada 350 ms, hasta 15 vencidos por pasada. Una entrada del cliente suele programar una respuesta unos 700 ms después; cada trabajo corre en `processJob`: plan síncrono del motor v2, llamada opcional al proveedor de IA fuera de la transacción y confirmación con revalidación (un trabajo en vuelo no se vuelve a tomar). `jobs` es durable, y desde 4A reintenta con espera creciente y se cancela tras 5 fallos (`legacy_job_abandoned`); los pasos nuevos usan el motor de `automation.mjs`.
 2. Reconciliación operativa cada segundo. Usa configuración y estado persistidos para reparto, vencimientos y avisos.
 3. Heartbeat y limpieza de sesiones/límites cada 30 segundos. Una conexión TCP abierta no basta: se comprueba la sesión vigente.
+
+Desde la Fase 1 y la Fase 2 hay más relojes: canal simulado (500 ms), pagos (30 s), simulador (1 s), respaldos (10 min), **entregas de eventos de dominio** (`events.tick`, 1 s: llama a los suscriptores fuera de transacción, con reintento) y **coordinación** (`coordination.tick`, 60 s: recordatorios de sesiones que entran en la ventana). Regla de los eventos de dominio: se **publican dentro de la transacción del módulo** (`events.publish` sólo inserta) y se **consumen fuera** (cada suscriptor abre su propia transacción); un suscriptor nunca debe asumir que corre una sola vez, por eso escribe con claves idempotentes (`client_ref`, `INSERT OR IGNORE`, actualizaciones condicionadas).
 
 El reparto requiere modo humano, oportunidad abierta, horario elegible, miembro autorizado/configurado, disponibilidad, presencia y capacidad. Si no hay candidato, el chat espera. El responsable y las tareas del interés deben mantenerse coherentes entre canales.
 

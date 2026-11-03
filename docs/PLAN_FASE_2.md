@@ -12,9 +12,9 @@ Escrito el 2 nov 2026 al cerrar la Fase 1 (v0.20.0, siete bloques publicados). D
 
 | # | Bloque | Depende de | Tamaño | Valor visible en la presentación |
 | --- | --- | --- | --- | --- |
-| 2.1 | Eventos de dominio (la columna vertebral) | nada | S | Bitácora única de hechos del negocio |
+| 2.1 | Eventos de dominio (la columna vertebral) · **hecho localmente el 2 nov 2026** | nada | S | Bitácora única de hechos del negocio |
 | 2.2 | Identidad única de persona | 2.1 | M | Un cliente, varias marcas, un historial |
-| 2.3 | Coordinación académica: aperturas, sesiones, inscritos | 2.1 | L | La venta entra sola a la apertura |
+| 2.3 | Coordinación académica: aperturas, sesiones, inscritos · **arranque hecho localmente el 2 nov 2026** | 2.1 | L | La venta entra sola a la apertura |
 | 2.4 | Finanzas: libro de ventas, comisiones, exportación | 2.1 | M | Lo que la contadora pide hoy en Excel |
 | 2.5 | Certificación: emisor único con folio y verificación | 2.3 | M | Certificado verificable al cerrar la apertura |
 | 2.6 | Contenido: roles, plantillas por evento, fichas, variantes asistidas | 2.1, 2.3 | M | Mensajes del ciclo completo sin escribirlos |
@@ -119,5 +119,7 @@ Con una clave de prueba en un entorno aislado (nunca el de producción): activar
 Las reglas del repositorio: alcance por marca en servidor, precios y fechas sólo del catálogo, `expectedRevision` y `clientRef`, transacciones sin red, migraciones aditivas con respaldo previo, diseño Niebla medible, nada publicado sin instrucción. La Fase 3 (canales reales y piloto) sigue dependiendo de los accesos de las consultoras: conviene **iniciar ya los trámites de Meta** (verificación de empresa, números, plantillas) en paralelo a la Fase 2, porque tardan más que el código.
 
 ## 4. Primer bloque recomendado
+
+**Estado (2 nov 2026):** implementado localmente en la rama `feat/eventos-coordinacion` (esquema 19, versión 0.21.0, sin publicar). Cumple el criterio de cierre: la venta confirmada aparece sola en la apertura, los eventos quedan registrados con idempotencia probada, hay pruebas y el guion de presentación tiene el paso nuevo. De 2.3 quedan encuestas, pagos por sesión, plantillas por evento para los recordatorios (2.6) y la función «coordinador» como etiqueta de usuario (hoy: responsable por apertura). Detalle en [CONTINUIDAD.md](CONTINUIDAD.md).
 
 **2.1 Eventos de dominio + arranque de 2.3 Coordinación académica** en la misma rama: la columna vertebral es pequeña y la coordinación es lo más visible que falta para contar la historia completa (anuncio → chat → pago → inscripción → apertura → sesión → certificado). Criterio de cierre del primer bloque: la venta confirmada aparece sola en la apertura, con eventos registrados, pruebas y un paso nuevo en el guion de presentación.

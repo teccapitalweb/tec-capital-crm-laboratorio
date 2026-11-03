@@ -12,7 +12,7 @@ export const FAILURES=['El número no está disponible en el canal simulado','El
 export const CATEGORIES={service:'Servicio (dentro de la ventana)',utility:'Plantilla de utilidad',marketing:'Plantilla de marketing'};
 const parseReferral=v=>{if(!v)return null;try{const r=JSON.parse(v);return r&&typeof r==='object'?r:null;}catch{return null;}};
 
-export function createChannel({db,crm,body,json,audit,broadcast,accessConversation,now=Date.now}){
+export function createChannel({db,crm,body,json,audit,broadcast,accessConversation,domainEvents=null,now=Date.now}){
   const defaults=b=>({brand_id:b,enabled:0,enforce_window:1,delivery_delay_ms:1500,failure_rate:0,revision:0,updated_by:null,updated_at:null});
   const settings=b=>db.prepare('SELECT * FROM channel_settings WHERE brand_id=?').get(b)||defaults(b);
   let connectorOf=null;const useConnector=fn=>{connectorOf=fn;};   // lo fija connectors.mjs; sin él se simula aquí mismo
@@ -38,6 +38,8 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
     return {category,buttons:list.length?JSON.stringify(list):null};
   }
   const event=(m,state,reason,actor,t)=>db.prepare('INSERT INTO channel_events(message_id,conversation_id,brand_id,state,reason,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(m.id,m.conversation_id,m.brand_id,state,reason||null,actor||null,t);
+  // Índice común: sólo entregado y fallido (los estados intermedios quedan en channel_events).
+  const emit=(m,state,reason,providerRef)=>{if(!domainEvents||!['delivered','failed'].includes(state))return;domainEvents.publish({type:state==='failed'?'mensaje.fallido':'mensaje.entregado',brandId:m.brand_id,entityKind:'message',entityId:m.id,payload:{conversationId:m.conversation_id,category:m.category||null,reason:reason||undefined,providerRef:providerRef||undefined},source:'channel',dedupeKey:(state==='failed'?'mensaje.fallido':'mensaje.entregado')+':'+m.id+':'+(providerRef||'')});};
 
   // Entrega simulada: pasado el retraso de la marca, cada mensaje saliente queda entregado o, según la tasa configurada, fallido.
   // Entrega: pasado el retraso de la marca, cada saliente se manda al conector (fuera de transacción); el resultado
@@ -49,7 +51,7 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
     const connector=connectorOf?connectorOf():null;
     const results=await Promise.all(rows.map(async m=>{try{return {m,r:connector?await connector.send({id:m.id,conversationId:m.conversation_id,brandId:m.brand_id,channel:m.channel,category:m.category,failureRate:m.failure_rate}):simulate(m)};}catch(e){return {m,r:{providerRef:null,state:'failed',reason:String(e?.message||e).slice(0,160)}};}}));
     const touched=new Set(),at=now();
-    transaction(db,()=>{for(const {m,r} of results){const state=r.state==='failed'?'failed':'delivered';if(!db.prepare("UPDATE messages SET delivery_state=?,delivered_at=?,failed_reason=?,provider_ref=COALESCE(?,provider_ref) WHERE id=? AND delivery_state='sent'").run(state,state==='delivered'?at:null,r.reason||null,r.providerRef||null,m.id).changes)continue;event(m,state,r.reason||null,null,at);touched.add(m.conversation_id);}});
+    transaction(db,()=>{for(const {m,r} of results){const state=r.state==='failed'?'failed':'delivered';if(!db.prepare("UPDATE messages SET delivery_state=?,delivered_at=?,failed_reason=?,provider_ref=COALESCE(?,provider_ref) WHERE id=? AND delivery_state='sent'").run(state,state==='delivered'?at:null,r.reason||null,r.providerRef||null,m.id).changes)continue;event(m,state,r.reason||null,null,at);emit(m,state,r.reason,r.providerRef);touched.add(m.conversation_id);}});
     for(const id of touched)broadcast('conversation',id);
     return [...touched];
   }
@@ -62,7 +64,7 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
     if(state==='failed')db.prepare("UPDATE messages SET delivery_state='failed',failed_reason=? WHERE id=?").run(reason||'Fallo reportado por el proveedor',m.id);
     else if(order[state]>order[m.delivery_state]||m.delivery_state==='failed')db.prepare("UPDATE messages SET delivery_state=?,delivered_at=COALESCE(delivered_at,?),failed_reason=NULL WHERE id=?").run(state,state==='sent'?null:t,m.id);
     else return m.delivery_state+' (sin cambio)';
-    event(m,state,reason||null,null,now());broadcast('conversation',m.conversation_id);return state;
+    event(m,state,reason||null,null,now());emit(m,state,reason,providerRef);broadcast('conversation',m.conversation_id);return state;
   }
   // Lectura del cliente: los salientes hasta ese punto pasan a «leído» (si ya estaban entregados o enviados).
   function markRead(conversationId,upTo){db.prepare("UPDATE messages SET delivery_state='read' WHERE conversation_id=? AND seq<=? AND sender_kind IN ('agent','automation') AND delivery_state IN ('sent','delivered')").run(conversationId,upTo);}

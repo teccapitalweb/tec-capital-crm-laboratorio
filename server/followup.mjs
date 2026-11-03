@@ -20,13 +20,14 @@ export function migrateFollowup(db){
   });
 }
 
-export function createFollowup({db,scoped,validOwner,body,json,sendChange,audit,broadcast,beforeAssign}){
+export function createFollowup({db,scoped,validOwner,body,json,sendChange,audit,broadcast,beforeAssign,onStage=()=>{}}){
   function record(id,actor,kind,details){
     db.prepare('INSERT INTO crm_events(opportunity_id,actor_id,kind,details,created_at) VALUES(?,?,?,?,?)').run(id,actor?.id||null,kind,JSON.stringify(details),Date.now());
   }
   function stageEvent(id,actor,from,to,reason='',source=actor?'manual':'automation'){
-    db.prepare('INSERT INTO opportunity_events VALUES(?,?,?,?,?,?)').run(randomUUID(),id,actor?.id||null,from,to,Date.now());
+    const eventId=randomUUID();db.prepare('INSERT INTO opportunity_events VALUES(?,?,?,?,?,?)').run(eventId,id,actor?.id||null,from,to,Date.now());
     record(id,actor,'stage',{from,to,reason,source});
+    onStage({id,eventId,actor,from,to,reason,source});
   }
   function checkRevision(row,input){
     if(own(input,'expectedRevision')&&(!Number.isSafeInteger(Number(input.expectedRevision))||Number(input.expectedRevision)!==row.revision))throw fail(409,'Otra persona cambió este registro. Recarga sus datos antes de guardar.',{code:'STALE_RECORD'});
