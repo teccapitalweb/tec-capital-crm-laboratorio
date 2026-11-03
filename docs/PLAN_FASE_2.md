@@ -17,7 +17,7 @@ Escrito el 2 nov 2026 al cerrar la Fase 1 (v0.20.0, siete bloques publicados). D
 | 2.3 | Coordinación académica: aperturas, sesiones, inscritos · **arranque publicado en v0.21.0 (2 nov 2026)** | 2.1 | L | La venta entra sola a la apertura |
 | 2.4 | Finanzas: libro de ventas, comisiones, exportación · **publicado en v0.22.0 (2 nov 2026)** | 2.1 | M | Lo que la contadora pide hoy en Excel |
 | 2.5 | Certificación: emisor único con folio y verificación · **publicado en v0.24.0 (3 nov 2026)** | 2.3 | M | Certificado verificable al cerrar la apertura |
-| 2.6 | Contenido: roles, plantillas por evento, fichas, variantes asistidas · **hecho localmente el 3 nov 2026** | 2.1, 2.3 | M | Mensajes del ciclo completo sin escribirlos |
+| 2.6 | Contenido: roles, plantillas por evento, fichas, variantes asistidas · **publicado en v0.25.0 (3 nov 2026)** | 2.1, 2.3 | M | Mensajes del ciclo completo sin escribirlos |
 | 2.7 | Núcleo Postgres/Supabase y ruta de migración | decisión 7.1, acceso | L | Una sola base para CRM, Academia e IPCIL nuevo |
 | 2.8 | Puente con IPCIL (históricos y roles) | IPCIL nuevo | S | Continuidad con lo que ya existe |
 | 0 | Prueba real de `AI_PROVIDER=claude` y costo por conversación | clave en entorno aislado | S | Cifra real de costo de IA |
@@ -92,7 +92,7 @@ S = una sesión de trabajo; M = dos o tres; L = cuatro o más. Son órdenes de m
 
 **Criterios de salida.** Un pago confirmado dispara la plantilla de confirmación de la marca; una sesión próxima dispara el recordatorio; nada se envía sin plantilla aprobada; pruebas y documentación.
 
-**Estado (3 nov 2026):** implementado localmente en la rama `feat/contenido` (esquema 23, versión 0.25.0, sin publicar); cumple los criterios de salida con una precisión: los mensajes que ya existían (pago, recordatorio, certificado, bienvenida) conservan su texto fijo cuando la marca no ha mapeado plantilla, para no romper lo publicado; la grabación disponible, que es nueva, sólo se envía con plantilla. Detalle en [CONTINUIDAD.md](CONTINUIDAD.md).
+**Estado (3 nov 2026):** implementado y **publicado en v0.25.0** (esquema 23); cumple los criterios de salida con una precisión: los mensajes que ya existían (pago, recordatorio, certificado, bienvenida) conservan su texto fijo cuando la marca no ha mapeado plantilla, para no romper lo publicado; la grabación disponible, que es nueva, sólo se envía con plantilla. Detalle en [CONTINUIDAD.md](CONTINUIDAD.md).
 
 ### 2.7 Núcleo Postgres/Supabase y ruta de migración
 

@@ -101,6 +101,8 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 Para iterar en un módulo puede ejecutarse, por ejemplo, `node --test test/operations.test.mjs`. Antes de una entrega funcional, ejecutar la suite pertinente y la regresión completa; no ampliar repetidamente las pruebas sin cambios o dudas nuevas.
 
+Cuando una prueba abre su propia conexión `DatabaseSync` sobre la base del servidor temporal para sembrar o inspeccionar filas, debe abrirla con `{timeout:5000}`: el servidor escribe cada segundo desde el tick de eventos y una conexión sin espera falla con `database is locked` (ocurrió una vez en CI, 3 nov 2026). Las conexiones de sólo lectura (`readOnly:true`) no lo necesitan.
+
 Las pruebas automatizadas del repositorio no ejecutan navegador ni demuestran que Railway tenga ese código. La revisión local y la publicada son evidencias diferentes.
 
 ## Recorrido de aceptación en navegador
