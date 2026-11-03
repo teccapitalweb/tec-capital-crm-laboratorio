@@ -18,9 +18,10 @@ import {migratePayments} from '../server/payments-schema.mjs';
 import {migrateConnectors} from '../server/connectors-schema.mjs';
 import {migrateEvaluation} from '../server/evaluation-schema.mjs';
 import {migrateCoordination} from '../server/coordination-schema.mjs';
+import {migrateFinance} from '../server/finance-schema.mjs';
 import {createEvents,EVENT_TYPES,ENTITY_KINDS} from '../server/events.mjs';
 
-const migrate=db=>{migrateCRM(db);migrateFollowup(db);migrateCatalogue(db);migrateOperations(db);migrateAutomation(db);migrateRecipes(db);migrateContacts(db);migrateConsent(db);migrateHolidays(db);migrateMfa(db);migrateReplies(db);migrateSimulator(db);migrateChannel(db);migratePayments(db);migrateConnectors(db);migrateEvaluation(db);migrateCoordination(db);};
+const migrate=db=>{migrateCRM(db);migrateFollowup(db);migrateCatalogue(db);migrateOperations(db);migrateAutomation(db);migrateRecipes(db);migrateContacts(db);migrateConsent(db);migrateHolidays(db);migrateMfa(db);migrateReplies(db);migrateSimulator(db);migrateChannel(db);migratePayments(db);migrateConnectors(db);migrateEvaluation(db);migrateCoordination(db);migrateFinance(db);};
 async function setup(t){
   const dir=await mkdtemp(join(tmpdir(),'crm-events-')),db=openDatabase(dir);migrate(db);
   t.after(async()=>{try{db.close();}catch{}await rm(dir,{recursive:true,force:true});});
@@ -31,12 +32,12 @@ const quiet={error(){}};
 
 test('migración v19: tablas de eventos y coordinación, columnas de apertura, reinicio idempotente',async t=>{
   const {dir,db}=await setup(t);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version,19);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version,20);
   for(const table of ['domain_events','domain_deliveries','coordination_settings','edition_sessions','attendance','edition_resources'])assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table),table);
   const cols=db.prepare('PRAGMA table_info(editions)').all().map(c=>c.name);for(const c of ['min_students','run_status','coordinator_id','group_url','run_note','run_revision'])assert.ok(cols.includes(c),c);
   assert.equal(db.prepare("SELECT count(*) n FROM editions WHERE run_status='planned'").get().n,db.prepare('SELECT count(*) n FROM editions').get().n);
-  db.close();const again=openDatabase(dir);migrate(again);assert.equal(again.prepare('PRAGMA user_version').get().user_version,19);again.close();
-  assert.ok(Object.keys(EVENT_TYPES).length>=20);for(const [,v] of Object.entries(EVENT_TYPES))assert.ok(ENTITY_KINDS[v.entity],v.entity);
+  db.close();const again=openDatabase(dir);migrate(again);assert.equal(again.prepare('PRAGMA user_version').get().user_version,20);again.close();
+  assert.ok(Object.keys(EVENT_TYPES).length>=24);for(const [,v] of Object.entries(EVENT_TYPES))assert.ok(ENTITY_KINDS[v.entity],v.entity);
 });
 
 test('eventos de dominio: publicación idempotente dentro de la transacción, suscriptores con reintento, fallo permanente, reintento manual, consulta con alcance y CSV',async t=>{

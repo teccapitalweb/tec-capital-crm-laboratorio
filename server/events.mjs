@@ -34,8 +34,10 @@ export const EVENT_TYPES={
   'sesion.realizada':{title:'Sesión realizada',entity:'session',payload:'editionId, number, present, absent'},
   'sesion.cancelada':{title:'Sesión cancelada',entity:'session',payload:'editionId, number, reason'},
   'asistencia.registrada':{title:'Asistencia registrada',entity:'session',payload:'editionId, present, absent, late, excused'},
+  'reembolso.registrado':{title:'Reembolso registrado',entity:'order',payload:'reference, amountCents, currency, reason, ledgerId'},
+  'comision.pagada':{title:'Comisión pagada',entity:'payout',payload:'role, userId, totalCents, currency, entries, note'},
 };
-export const ENTITY_KINDS={conversation:'Conversación',opportunity:'Oportunidad',order:'Pedido',enrollment:'Inscripción',message:'Mensaje',contact:'Contacto',edition:'Apertura',session:'Sesión'};
+export const ENTITY_KINDS={conversation:'Conversación',opportunity:'Oportunidad',order:'Pedido',enrollment:'Inscripción',message:'Mensaje',contact:'Contacto',edition:'Apertura',session:'Sesión',payout:'Pago de comisión'};
 
 export function createEvents({db,crm=null,body,json,audit=()=>{},now=Date.now,log=console,baseDelayMs=5_000,capDelayMs=15*60_000,maxAttempts=5,batch=20}){
   const subscribers=new Map();   // tipo -> [{name,handler}]

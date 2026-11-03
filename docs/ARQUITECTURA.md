@@ -47,6 +47,9 @@ Un proceso Node.js 24 atiende HTTP, WebSocket, reglas y reconciliación operativ
 | `server/presentation.mjs`, `public/presentation.js` | Modo presentación (sólo lectura, sin esquema propio): tablero con % sin intervención, tiempos máquina vs humano, ventas por marca, costo estimado por categoría (`MESSAGE_RATES`) y guion de 10 pasos con comprobaciones; ruta `GET /api/presentation` (equipo, alcance por marca) |
 | `server/connectors-schema.mjs`, `server/connectors.mjs`, `public/connectors.js` | Esquema v17 y contrato de conectores: interfaz única de canal y pago, adaptadores simulados/Meta/Stripe/Conekta, webhooks públicos firmados e idempotentes (`/api/webhooks/*`), estado y prueba firmada (`/api/connectors`), pestaña Conectores; ver [CONECTORES.md](CONECTORES.md) |
 | `server/evaluation-schema.mjs`, `server/evaluation.mjs`, `public/evaluation.js` | Esquema v18 y banco de evaluación: casos esperados por marca (siembra de 17), ejecución con la simulación del motor y el nivel vigente, calificación determinista, historial de ejecuciones; rutas `/api/evaluation`; pestaña Evaluación del catálogo |
+| `server/finance-schema.mjs` | Esquema v20: libro de ventas, reglas y líneas de comisión, liquidaciones, acceso de contadora; relleno del libro con los pedidos pagados |
+| `server/finance.mjs` | Finanzas: suscriptor `finance.ledger` (venta por `pago.confirmado`), reembolsos, devengo con la regla vigente, recálculo, liquidaciones, resumen por periodo/marca/curso/vendedor/método, conciliación pedido↔libro, CSV y rutas `/api/finance` |
+| `public/finance.js` | Pestaña Finanzas de Operación: filtros de periodo, KPIs, tablas, libro, comisiones y liquidación, reglas, acceso de contadora, vista imprimible |
 | `server/coordination-schema.mjs` | Esquema v19: eventos de dominio con entregas a suscriptores, campos de apertura en `editions`, sesiones, asistencia, recursos y ajustes de coordinación por marca |
 | `server/events.mjs` | Eventos de dominio: catálogo `EVENT_TYPES`, `publish` idempotente dentro de la transacción del llamador, suscriptores en proceso con reintento (`tick`), consulta con alcance, CSV y rutas `/api/events` (admin) |
 | `server/coordination.mjs` | Coordinación académica sobre la edición: apertura (mínimo, estado operativo, responsable), sesiones con conector de calendario (`useCalendar`, simulado), recordatorios `sesion.proxima`, asistencia, recursos, bajas; suscriptores `coordination.sale` y `coordination.reminder`; rutas `/api/coordination` |
@@ -81,7 +84,7 @@ Los archivos son deliberadamente sencillos, con bastante código compacto. Antes
 
 `DATA_DIR` contiene `laboratorio.sqlite`, `uploads/`, `library/` y `backups/`. SQLite usa WAL, claves foráneas y `busy_timeout=5000`. Los adjuntos de mensajes viven en `uploads/`; las piezas propias del catálogo, en `library/`. Los originales demo siguen en el repositorio.
 
-En el arranque se ejecutan `openDatabase`, `migrateCRM`, `migrateFollowup`, `migrateCatalogue` y `migrateOperations`. Si hay usuarios y el esquema es menor que 19, el arranque actual crea antes una copia consistente `backups/before-crm-v19-<timestamp>.sqlite` (hasta v0.5.0 era `before-crm-v6-`) con `VACUUM INTO`. Los prefijos v3/v4/v5 citados en entregas anteriores corresponden al código de aquellas versiones. No se hace un respaldo nuevo en cada arranque de una base ya en v6.
+En el arranque se ejecutan `openDatabase`, `migrateCRM`, `migrateFollowup`, `migrateCatalogue` y `migrateOperations`. Si hay usuarios y el esquema es menor que 20, el arranque actual crea antes una copia consistente `backups/before-crm-v20-<timestamp>.sqlite` (hasta v0.5.0 era `before-crm-v6-`) con `VACUUM INTO`. Los prefijos v3/v4/v5 citados en entregas anteriores corresponden al código de aquellas versiones. No se hace un respaldo nuevo en cada arranque de una base ya en v6.
 
 | Versión de esquema | Incorporación |
 | --- | --- |
@@ -89,6 +92,7 @@ En el arranque se ejecutan `openDatabase`, `migrateCRM`, `migrateFollowup`, `mig
 | 3 | Permisos por marca, invitaciones, recuperación, preferencias, contactos, oportunidades, tareas y notas |
 | 4 | Revisiones e historial comercial; importación del historial de etapas disponible |
 | 5 | Ediciones, promociones, archivos de biblioteca, flyers, plantillas, versiones y snapshots de oferta |
+| 20 | Finanzas: `ledger_entries` (con relleno desde pedidos pagados), `commission_rules`, `commission_entries`, `commission_payouts`, `finance_access` |
 | 19 | Eventos de dominio y coordinación académica: `domain_events`, `domain_deliveries`, columnas de apertura en `editions` (`min_students`, `run_status`, `coordinator_id`, `group_url`, `run_note`, `run_revision`), `enrollments.cancelled_at/cancel_reason`, `coordination_settings`, `edition_sessions`, `attendance`, `edition_resources` |
 | 18 | Banco de evaluación: `eval_cases`, `eval_runs` (con siembra por marca) |
 | 17 | Conectores: `messages.provider_ref`, `orders.checkout_url`, `connector_events` |
@@ -176,6 +180,11 @@ Variables de plantilla implementadas: `nombre`, `marca`, `curso`, `edicion`, `fe
 | `edition_sessions` | Sesión de una apertura: número, título, inicio, duración, enlace y proveedor de videollamada, grabación, estado, recordatorio enviado, revisión |
 | `attendance` | Una marca por sesión e inscripción: presente/ausente/retardo/justificado, nota, quién y cuándo |
 | `edition_resources` | Materiales, grabaciones y enlaces de una apertura (o de una sesión), por enlace o archivo de biblioteca |
+| `ledger_entries` | Libro de ventas: `sale`/`refund`, marca, pedido, inscripción, cliente, curso, edición, vendedor, importe con signo, método, referencia del proveedor, evento, fecha y día (zona de la empresa), `dedupe_key` única |
+| `commission_rules` | Regla por rol (consultora/vendedor) y marca (o empresa si `brand_id` es nulo): porcentaje en centésimas, cuota fija, revisión |
+| `commission_entries` | Comisión por línea y rol con la regla aplicada (base, porcentaje, cuota), beneficiario, estado devengada/pagada y liquidación |
+| `commission_payouts` | Liquidación: rol, marca, vendedor, total, líneas, nota, quién y cuándo |
+| `finance_access` | Personas del equipo con función de contadora y si pueden marcar comisiones pagadas |
 
 Los importes se almacenan como centavos enteros. Los instantes se guardan como milisegundos UTC; los horarios laborales se interpretan con la zona IANA de la marca. No uses la zona del dispositivo para interpretar fechas de una edición al guardar.
 
@@ -210,6 +219,7 @@ Todas las rutas `/api` salvo health y autenticación inicial requieren sesión. 
 | Etiquetas y contactos | `GET/POST /api/crm/tags`; `PATCH/DELETE /api/crm/tags/:id` (admin); `PUT /api/crm/contacts/:id/tags`; `GET /api/crm/duplicates?brand=`; `POST /api/crm/contacts/merge-preview`, `/merge` (admin); `GET /api/crm/export/contacts.csv`, `/opportunities.csv` (admin) |
 | Respaldos (admin) | `GET /api/backups`; `POST /api/backups/run` |
 | Coordinación | `GET /api/coordination?brand=&status=`; `PATCH /api/coordination/brands/:id` (admin); `GET/PATCH /api/coordination/editions/:id`; `POST /editions/:id/status|sessions|resources`; `PATCH /api/coordination/sessions/:id`; `POST /sessions/:id/meet|done|cancel`; `PUT /sessions/:id/attendance`; `DELETE /api/coordination/resources/:id`; `POST /api/coordination/enrollments/:id/cancel` |
+| Finanzas | `GET /api/finance/me`; `GET /api/finance?from=&to=|days=&brand=&group=`; `GET /api/finance/ledger(.csv)`; `GET /api/finance/commissions(.csv)?status=&role=`; `POST /api/finance/payouts`; `GET /api/finance/rules`; admin: `PUT /api/finance/rules`, `POST /api/finance/commissions/recompute`, `POST /api/finance/refunds`, `GET/PUT /api/finance/access` |
 | Eventos de dominio (admin) | `GET /api/events?brand=&type=&entity=&entityId=&q=&before=&limit=`; `GET /api/events/types`; `GET /api/events.csv`; `GET /api/events/:seq`; `POST /api/events/:seq/retry` |
 | Importación (admin) | `GET /api/catalogue/import/template`; `POST /api/catalogue/import/preview`, `/apply` |
 | Recetas (admin) | `GET/POST /api/automation/recipes`; `GET/PATCH /recipes/:id`; `POST /recipes/:id/publish|pause|simulate`; `GET /recipes/:id/history|runs` |

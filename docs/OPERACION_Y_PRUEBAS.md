@@ -64,7 +64,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta eventos de dominio y coordinación académica son **135** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta Finanzas son **137** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -75,6 +75,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/catalogue.test.mjs` | Ediciones, fechas, centavos, promociones, variables, aprobación, permisos, vistas previas, archivo, snapshots/bytes históricos y reinicio |
 | `test/automation.test.mjs` | Motor 4A: migración v7, idempotencia, reintentos, reinicio, carreras de cancelación y pausas (sin servidor; base temporal) |
 | `test/automation-http.test.mjs` | Rutas `/api/automation`: sólo administración, revisiones, pausa global (servidor temporal) |
+| `test/finance.test.mjs` | Finanzas: comisión y periodos, relleno del libro al migrar, libro por eventos, reglas y recálculo, resumen y conciliación, cruce con Presentación, CSV, función contadora, liquidación y reembolso |
 | `test/events.test.mjs` | Eventos de dominio: migración v19, publicación idempotente dentro de la transacción, suscriptores con reintento/espera creciente/fallo permanente, reintento manual, consulta con alcance y CSV (sin servidor; base temporal) |
 | `test/coordination.test.mjs` | Coordinación académica: cinco ventas simuladas abren la apertura al llegar al mínimo, avisos, sesiones con enlace simulado, recordatorio a inscritos sin duplicados, asistencia, estados, bajas, recursos, bitácora, CSV y permisos |
 | `test/evaluation.test.mjs` | Banco de evaluación: calificación, siembra, ejecución con nivel vigente, caso fallido, revisión, archivo, historial, alcance y permisos |
@@ -119,6 +120,7 @@ Usar perfiles/sesiones separados para un administrador, dos asesores de prueba y
 14. **Presentación:** abrir la vista Presentación, revisar que el guion marque «Listo» en los pasos que se van a mostrar, probar «Ir a la pantalla» y la pantalla completa; el filtro por marca y periodo debe cambiar las cifras sin recargar.
 15. **Conectores (administración):** con `CONNECTOR_WEBHOOK_SECRET` en un entorno de pruebas, enviar un webhook firmado de estado y otro de pago desde la pestaña Conectores y comprobar que el mensaje y el pedido cambian y que repetirlo responde «duplicado». No registrar URLs de webhook en proveedores reales sin instrucción expresa.
 16. **Evaluación:** en Catálogo → Evaluación ejecutar el banco de una marca de pruebas antes y después de cambiar conocimiento o nivel; revisar los casos que fallan y su motivo. Es la forma de comprobar el motor (y el proveedor de IA, cuando haya clave) sin escribir a clientes.
+18. **Finanzas (administración):** fijar una regla de comisión de prueba, devengar pendientes, revisar que la conciliación quede «correcta» y que el total de ventas coincida con el del modo presentación para el mismo periodo; conceder la función de contadora a una persona de prueba y comprobar que ve todas las marcas sin poder cambiar reglas; marcar una liquidación de prueba con nota y registrar un reembolso parcial de un pedido de prueba; descargar los dos CSV e imprimir el resumen. Al terminar, retirar el acceso de prueba y dejar la regla como estaba.
 17. **Coordinación y eventos (administración):** en una marca de pruebas con la venta simulada activa, fijar un mínimo en la apertura de una edición de prueba, activar la automatización de coordinación, confirmar pagos de prueba hasta el mínimo y comprobar que la apertura pasa a «abierta» sola y que la persona responsable recibe el aviso; programar una sesión dentro de la ventana de recordatorio y verificar que cada inscrito de prueba recibe un solo recordatorio; registrar asistencia, marcar la sesión realizada y cerrar la apertura; en Operación → Eventos revisar la bitácora y descargar el CSV. Al terminar, desactivar la automatización y dejar la apertura de prueba cerrada o cancelada.
 
 En producción evitar activar/cambiar políticas de marcas existentes para facilitar QA. Registrar la configuración inicial y comprobar que quedó intacta. Los ensayos destructivos, carga y restauración se hacen en entorno aislado.
@@ -165,7 +167,7 @@ Publicar sólo dentro del alcance autorizado por el usuario. Para el traspaso do
 El health esperado de referencia:
 
 ```json
-{"ok":true,"version":"0.21.0","transport":"websocket","mode":"laboratorio"}
+{"ok":true,"version":"0.22.0","transport":"websocket","mode":"laboratorio"}
 ```
 
 ## Respaldos y recuperación

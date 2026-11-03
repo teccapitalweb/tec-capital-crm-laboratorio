@@ -53,6 +53,10 @@ El CRM habla con una **interfaz única** de canal y de pago (`docs/CONECTORES.md
 
 En **Catálogo y biblioteca → Evaluación** cada marca tiene casos que dicen qué escribe un cliente y qué debería hacer el motor (intención, acción, fuente y texto). **Ejecutar** corre la misma simulación que «Probar respuesta», sin enviar nada, con el nivel vigente de la marca, y guarda la puntuación y el detalle de cada caso para comparar antes y después de cambiar conocimiento, nivel o proveedor de IA. Cada marca nace con 17 casos.
 
+## Finanzas
+
+En **Operación → Finanzas** (administración y personas con función de contadora) está el libro de ventas alimentado por eventos: cada pago confirmado entra una vez, los reembolsos los registra administración, y de ahí salen ingresos por día, semana o mes, por consultora, curso, vendedor y método, con conciliación contra los pedidos. Las comisiones a consultoras y vendedores se devengan con una regla configurable por marca o de la empresa, quedan auditables con la regla aplicada y se liquidan marcándolas como pagadas. Exportación CSV y vista imprimible. Sin cobros, facturación ni nómina reales.
+
 ## Coordinación académica y bitácora de eventos
 
 En **Operación → Coordinación** cada edición del catálogo es una *apertura*: mínimo de alumnos, inscritos que llegan solos al confirmar un pago, persona responsable, grupo de WhatsApp (enlace registrado), sesiones con enlace de videollamada (simulado en el laboratorio), recordatorios a los inscritos, asistencia, materiales y grabaciones, y estados planeada → abierta → en curso → cerrada. La automatización (abrir al llegar al mínimo y recordar sesiones) está **apagada por marca** hasta que administración la active; lo manual funciona siempre. En **Operación → Eventos** (administración) está la bitácora común de hechos del negocio —conversaciones, etapas, pedidos, pagos, inscripciones, mensajes, bajas, aperturas y sesiones— con filtros, entregas a suscriptores con reintento y exportación CSV.

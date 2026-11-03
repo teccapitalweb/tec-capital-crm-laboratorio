@@ -15,7 +15,7 @@ Escrito el 2 nov 2026 al cerrar la Fase 1 (v0.20.0, siete bloques publicados). D
 | 2.1 | Eventos de dominio (la columna vertebral) · **publicado en v0.21.0 (2 nov 2026)** | nada | S | Bitácora única de hechos del negocio |
 | 2.2 | Identidad única de persona | 2.1 | M | Un cliente, varias marcas, un historial |
 | 2.3 | Coordinación académica: aperturas, sesiones, inscritos · **arranque publicado en v0.21.0 (2 nov 2026)** | 2.1 | L | La venta entra sola a la apertura |
-| 2.4 | Finanzas: libro de ventas, comisiones, exportación | 2.1 | M | Lo que la contadora pide hoy en Excel |
+| 2.4 | Finanzas: libro de ventas, comisiones, exportación · **hecho localmente el 2 nov 2026** | 2.1 | M | Lo que la contadora pide hoy en Excel |
 | 2.5 | Certificación: emisor único con folio y verificación | 2.3 | M | Certificado verificable al cerrar la apertura |
 | 2.6 | Contenido: roles, plantillas por evento, fichas, variantes asistidas | 2.1, 2.3 | M | Mensajes del ciclo completo sin escribirlos |
 | 2.7 | Núcleo Postgres/Supabase y ruta de migración | decisión 7.1, acceso | L | Una sola base para CRM, Academia e IPCIL nuevo |
@@ -67,6 +67,8 @@ S = una sesión de trabajo; M = dos o tres; L = cuatro o más. Son órdenes de m
 **Fuera de alcance.** Facturación CFDI, nómina, integración bancaria.
 
 **Criterios de salida.** Cada pago de la Fase 1 aparece una vez en el libro; comisiones calculadas y auditables; exportaciones verificadas en prueba; el total del modo presentación coincide con el libro.
+
+**Estado (2 nov 2026):** implementado localmente en la rama `feat/finanzas` (esquema 20, versión 0.22.0, sin publicar); cumple los criterios de salida (relleno y una línea por pago probados, comisiones con regla guardada, CSV probados, cruce con Presentación en la prueba). Queda fuera, como estaba previsto: CFDI, nómina, banco, conciliación contra Stripe/Conekta (llega con el conector real) y la regla definitiva de comisiones, que es decisión de dirección. Detalle en [CONTINUIDAD.md](CONTINUIDAD.md).
 
 ### 2.5 Certificación
 

@@ -156,7 +156,7 @@ Un libro de ventas alimentado por eventos: pago Stripe confirmado, transferencia
 7. Migrar el CRM a **Postgres** (Supabase, junto a la Academia) y definir el esquema unificado de persona, pago, inscripción, certificado y evento.
 8. **Puente con el panel IPCIL:** el registro de venta del vendedor y la apertura del coordinador se alimentan desde la plataforma; el certificado se emite desde un solo servicio.
 9. **Módulo de coordinación** (aperturas/cohortes, sesiones con Meet por API, materiales, grabaciones, asistencia). *Arranque hecho localmente el 2 nov 2026 junto con los eventos de dominio (bloque 2.1+2.3 de PLAN_FASE_2.md): apertura sobre la edición, inscritos desde el pago, sesiones con enlace simulado, recordatorios, asistencia y recursos; falta la API real de Google Calendar/Meet.*
-10. **Módulo de finanzas** (libro de ventas, comisiones, conciliación Stripe, PDF/Excel).
+10. **Módulo de finanzas** (libro de ventas, comisiones, conciliación Stripe, PDF/Excel). *Hecho localmente el 2 nov 2026 (bloque 2.4 de PLAN_FASE_2.md): libro por eventos, comisiones con regla configurable y liquidación, reembolsos, función contadora, CSV y vista imprimible; la conciliación contra Stripe/Conekta llega con el conector real.*
 11. **Contenido:** roles de diseño/aprobación, plantillas por evento, generador de fichas, variantes asistidas por IA.
 
 ### Fase 3 (cuando lleguen accesos): canales reales y piloto
