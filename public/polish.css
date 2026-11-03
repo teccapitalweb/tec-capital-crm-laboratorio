@@ -5,10 +5,10 @@
   --shadow-1:0 1px 2px #1a1a2a0a,0 1px 1px #1a1a2a05;
   --shadow-2:0 8px 20px -10px #1a1a2a2e,0 2px 5px #1a1a2a0a;
   --ease:cubic-bezier(.2,.7,.2,1);
-  --ring:#3b414c;
+  --ring:var(--accent);
 }
 html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;-webkit-text-size-adjust:100%}
-::selection{background:#dde1ec;color:var(--ink)}
+::selection{background:#d3e4ed;color:var(--ink)}
 *{scrollbar-width:thin;scrollbar-color:#cfd3dd transparent}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -26,14 +26,14 @@ p,.crm-hint,.muted{text-wrap:pretty}
 .btn,.cat-tabs button,.nav button,.mode-picker button,.source-tab,.thread,.crm-list-row,.contact-link,.opportunity-card,.ops-stat,input,select,textarea{transition:background-color .16s var(--ease),border-color .16s var(--ease),box-shadow .2s var(--ease),transform .16s var(--ease),color .16s var(--ease)}
 .btn:hover{border-color:#d7dae4}
 .btn:active{transform:translateY(1px) scale(.985)}
-.btn.primary:hover{filter:brightness(1.18)}
+.btn.primary:hover{filter:none}
 .btn[disabled],.btn:disabled{opacity:.55;cursor:not-allowed}
 .opportunity-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-2);border-color:#dadde7}
 .opportunity-card:active{transform:none;box-shadow:var(--shadow-1)}
 .ops-stat:hover{border-color:#d3d7e2}
 .nav button:active{transform:scale(.985)}
 input:hover,select:hover,textarea:hover{border-color:#d5d9e3}
-input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid #3b414c2e;outline-offset:1px;border-color:#9aa2b5}
+input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid #2f6f8f33;outline-offset:1px;border-color:var(--accent)}
 button:focus-visible,a:focus-visible,[role=button]:focus-visible,summary:focus-visible{outline:2px solid var(--ring);outline-offset:2px;border-radius:10px}
 
 /* Movimiento: sólo al navegar y al abrir diálogos (nunca en las actualizaciones en vivo, para que nada parpadee) */
@@ -73,3 +73,29 @@ dialog::backdrop{animation:niebla-fade .2s ease}
   .mode-picker button{min-height:36px}
   .search input,.crm-toolbar input{min-height:24px}
 }
+
+/* Acento sobrio (nov 2026): un azul petróleo para lo que debe reconocerse de un vistazo (acción principal, elemento activo,
+   enlaces, eyebrows, foco) y tres tonos de estado (bien, alerta, urgente) con fondos tintados. Los tokens viven en styles.css. */
+a:not([class]){color:var(--accent);text-decoration-color:#2f6f8f66;text-underline-offset:3px}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
+.content-page{background:radial-gradient(ellipse at 100% 0,#d9e7ef66,transparent 55%),var(--bg)}
+.crm-panel,.day-stat,.an-kpi,.cat-course,.cat-panel,.cat-template,.cat-flyer,.ops-stat,.ops-row,.ops-notification,.co-row,.co-event,.ct-event,.rcp-brand,.opportunity-card,.pr-step{border-color:var(--line)}
+.crm-panel{background:#fff}
+.ops-stat{background:#fff}
+.panel-title h2::before,.crm-panel>h2::before{content:"";display:inline-block;width:3px;height:12px;border-radius:3px;background:var(--accent);margin-right:9px;vertical-align:-1px}
+.page-heading h1{color:#1f2a33}
+.cat-tabs button:hover{color:var(--accent-strong)}
+.task-check:hover{border-color:var(--accent);color:var(--accent)}
+.icon-btn:hover,.quick-replies button:hover,.meta-action:hover,button.msg-button:hover{background:var(--accent-soft);color:var(--accent-strong);border-color:var(--accent-line)}
+.btn:hover{border-color:var(--accent-line);background:var(--accent-tint)}
+.btn.ghost:hover{background:var(--accent-soft)}
+.pill{background:var(--soft);color:var(--text-2)}
+.ops-chip,.co-sp-cell,.cat-badge,.channel-chip{border-color:var(--line)}
+.lab-label{color:var(--accent-strong);border-color:var(--accent-line);background:var(--accent-tint)}
+.connection{color:var(--text-2)}
+.topbar{background:#ffffffd6}
+.cat-date{background:var(--accent-tint);border-color:var(--accent-line)}.cat-date strong{color:var(--accent-strong)}
+.sim-persona:has(input:checked),.rcp-checks label:has(input:checked){color:var(--accent-strong)}
+.crm-task.done .task-check{background:var(--ok-soft);border-color:var(--ok-line);color:var(--ok)}
+.crm-page button:focus-visible,.crm-page a:focus-visible{outline-color:var(--accent)}
+@media(max-width:680px){.sidebar{background:#ffffffe6}}
