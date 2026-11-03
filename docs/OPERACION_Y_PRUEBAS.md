@@ -48,6 +48,9 @@ Para una prueba nueva usa un directorio de datos vacío e independiente. No cone
 | `AI_PROVIDER` | vacío o `simulated` | `claude` activa el SDK oficial; requiere credenciales. Sin él, el nivel autónomo usa el simulador local |
 | `AI_MODEL` | `claude-opus-5-5` | Modelo del proveedor; `claude-haiku-5-5` es la opción económica para volumen |
 | `ANTHROPIC_API_KEY` | No usar en local salvo prueba aislada | Credencial del proveedor; sólo en el entorno del servidor, nunca en Git |
+| `CHANNEL_CONNECTOR` / `PAYMENT_CONNECTOR` | `simulated` | `meta` / `stripe` o `conekta` cuando haya accesos; sin ellos el CRM sigue con el simulado y lo avisa. Ver [CONECTORES.md](CONECTORES.md) |
+| `CONNECTOR_WEBHOOK_SECRET` | Opcional | Firma de los webhooks de prueba del simulado y del botón «Probar webhook»; sin él esas rutas responden 404 |
+| `META_*`, `STRIPE_*`, `CONEKTA_*` | No usar en local | Accesos de cada proveedor, sólo en el entorno del servidor; la lista exacta está en Operación → Conectores y en CONECTORES.md |
 | `MESSAGE_RATES` | vacío (0,80 / 0,16 / 0) | Tarifas orientativas MXN por mensaje saliente para el costo estimado del modo presentación: `marketing=0.80,utility=0.16,service=0`. Nunca es una factura |
 | `SIMULATOR_DISABLED` | vacío | `1` oculta el simulador de clientes: `/api/simulator` responde 404 y el barrido no corre. Úsalo en un entorno con clientes reales |
 | `MFA_KEY` | Opcional | Clave para cifrar los secretos de la verificación en dos pasos; si falta se usa `DATA_DIR/mfa.key`. Guárdala aparte; sin ella, los 2FA no se pueden verificar tras una restauración |
@@ -61,7 +64,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta el modo presentación son **126** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta el contrato de conectores son **129** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -72,6 +75,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/catalogue.test.mjs` | Ediciones, fechas, centavos, promociones, variables, aprobación, permisos, vistas previas, archivo, snapshots/bytes históricos y reinicio |
 | `test/automation.test.mjs` | Motor 4A: migración v7, idempotencia, reintentos, reinicio, carreras de cancelación y pausas (sin servidor; base temporal) |
 | `test/automation-http.test.mjs` | Rutas `/api/automation`: sólo administración, revisiones, pausa global (servidor temporal) |
+| `test/connectors.test.mjs` | Conectores: adaptadores Meta/Stripe sin red, webhooks firmados e idempotentes, estados de mensaje y pagos por webhook, prueba desde la interfaz, respaldo al simulado sin accesos |
 | `test/presentation.test.mjs` | Modo presentación: tarifas por entorno, cifras (sin intervención, tiempos, ventas, categorías y costo), guion con comprobaciones, alcance por marca, permisos |
 | `test/payments.test.mjs` | Venta con pago simulado: apagada por omisión, cobro desde el chat, pago simulado con inscripción y etapa ganada, pedido del motor, comprobantes en cola (rechazo/aceptación), cancelación, vencimiento, permisos |
 | `test/channel.test.mjs` | Canal simulado: apagado por omisión, permisos, ventana 24/72 h, estados de entrega, fallo y reintento con bitácora, botones, anuncio, plantillas vs texto libre |
@@ -110,6 +114,7 @@ Usar perfiles/sesiones separados para un administrador, dos asesores de prueba y
 12. **Canal simulado (administración):** activarlo sólo en una marca de pruebas; comprobar botones en la vista del cliente, estados enviado/entregado/leído, cierre de ventana (texto libre bloqueado, plantilla permitida), fallo y reintento, y un enlace de anuncio desde un flyer aprobado. Desactivarlo al terminar si la marca atiende clientes reales.
 13. **Venta con pago simulado (administración):** activarla en una marca de pruebas; «Cobrar» desde el chat, pagar desde el enlace como cliente de prueba, enviar un adjunto con pedido vigente y aceptarlo o rechazarlo en Pagos; comprobar inscripción, etapa ganada y aviso. Cancelar o dejar vencer los pedidos de prueba al terminar.
 14. **Presentación:** abrir la vista Presentación, revisar que el guion marque «Listo» en los pasos que se van a mostrar, probar «Ir a la pantalla» y la pantalla completa; el filtro por marca y periodo debe cambiar las cifras sin recargar.
+15. **Conectores (administración):** con `CONNECTOR_WEBHOOK_SECRET` en un entorno de pruebas, enviar un webhook firmado de estado y otro de pago desde la pestaña Conectores y comprobar que el mensaje y el pedido cambian y que repetirlo responde «duplicado». No registrar URLs de webhook en proveedores reales sin instrucción expresa.
 
 En producción evitar activar/cambiar políticas de marcas existentes para facilitar QA. Registrar la configuración inicial y comprobar que quedó intacta. Los ensayos destructivos, carga y restauración se hacen en entorno aislado.
 
@@ -155,7 +160,7 @@ Publicar sólo dentro del alcance autorizado por el usuario. Para el traspaso do
 El health esperado de referencia:
 
 ```json
-{"ok":true,"version":"0.18.0","transport":"websocket","mode":"laboratorio"}
+{"ok":true,"version":"0.19.0","transport":"websocket","mode":"laboratorio"}
 ```
 
 ## Respaldos y recuperación

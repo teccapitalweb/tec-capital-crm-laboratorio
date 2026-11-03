@@ -15,6 +15,7 @@ const parseReferral=v=>{if(!v)return null;try{const r=JSON.parse(v);return r&&ty
 export function createChannel({db,crm,body,json,audit,broadcast,accessConversation,now=Date.now}){
   const defaults=b=>({brand_id:b,enabled:0,enforce_window:1,delivery_delay_ms:1500,failure_rate:0,revision:0,updated_by:null,updated_at:null});
   const settings=b=>db.prepare('SELECT * FROM channel_settings WHERE brand_id=?').get(b)||defaults(b);
+  let connectorOf=null;const useConnector=fn=>{connectorOf=fn;};   // lo fija connectors.mjs; sin él se simula aquí mismo
   const requireAdmin=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||u.role!=='admin')throw fail(403,'El canal simulado lo configura un administrador.');};
 
   // Ventana de servicio: 24 h desde el último mensaje del cliente; si llegó por anuncio, además 72 h desde su primer mensaje.
@@ -39,14 +40,29 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
   const event=(m,state,reason,actor,t)=>db.prepare('INSERT INTO channel_events(message_id,conversation_id,brand_id,state,reason,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(m.id,m.conversation_id,m.brand_id,state,reason||null,actor||null,t);
 
   // Entrega simulada: pasado el retraso de la marca, cada mensaje saliente queda entregado o, según la tasa configurada, fallido.
-  function tick(){
+  // Entrega: pasado el retraso de la marca, cada saliente se manda al conector (fuera de transacción); el resultado
+  // (entregado o fallido, con referencia del proveedor) se aplica después en una sola transacción.
+  async function tick(){
     const t=now();
-    const rows=db.prepare("SELECT m.id,m.conversation_id,c.brand_id,s.failure_rate FROM messages m JOIN conversations c ON c.id=m.conversation_id JOIN channel_settings s ON s.brand_id=c.brand_id WHERE s.enabled=1 AND m.delivery_state='sent' AND m.sender_kind IN ('agent','automation') AND m.created_at<=?-s.delivery_delay_ms ORDER BY m.seq LIMIT 100").all(t);
+    const rows=db.prepare("SELECT m.id,m.conversation_id,c.brand_id,c.channel,m.category,s.failure_rate FROM messages m JOIN conversations c ON c.id=m.conversation_id JOIN channel_settings s ON s.brand_id=c.brand_id WHERE s.enabled=1 AND m.delivery_state='sent' AND m.sender_kind IN ('agent','automation') AND m.created_at<=?-s.delivery_delay_ms ORDER BY m.seq LIMIT 100").all(t);
     if(!rows.length)return [];
-    const touched=new Set();
-    transaction(db,()=>{for(const m of rows){const failed=Math.random()*100<m.failure_rate,state=failed?'failed':'delivered',reason=failed?FAILURES[Math.floor(Math.random()*FAILURES.length)]:null;if(!db.prepare("UPDATE messages SET delivery_state=?,delivered_at=?,failed_reason=? WHERE id=? AND delivery_state='sent'").run(state,failed?null:t,reason,m.id).changes)continue;event(m,state,reason,null,t);touched.add(m.conversation_id);}});
+    const connector=connectorOf?connectorOf():null;
+    const results=await Promise.all(rows.map(async m=>{try{return {m,r:connector?await connector.send({id:m.id,conversationId:m.conversation_id,brandId:m.brand_id,channel:m.channel,category:m.category,failureRate:m.failure_rate}):simulate(m)};}catch(e){return {m,r:{providerRef:null,state:'failed',reason:String(e?.message||e).slice(0,160)}};}}));
+    const touched=new Set(),at=now();
+    transaction(db,()=>{for(const {m,r} of results){const state=r.state==='failed'?'failed':'delivered';if(!db.prepare("UPDATE messages SET delivery_state=?,delivered_at=?,failed_reason=?,provider_ref=COALESCE(?,provider_ref) WHERE id=? AND delivery_state='sent'").run(state,state==='delivered'?at:null,r.reason||null,r.providerRef||null,m.id).changes)continue;event(m,state,r.reason||null,null,at);touched.add(m.conversation_id);}});
     for(const id of touched)broadcast('conversation',id);
     return [...touched];
+  }
+  const simulate=m=>{const failed=Math.random()*100<m.failure_rate;return {providerRef:'simch_'+Math.random().toString(16).slice(2,14),state:failed?'failed':'delivered',reason:failed?FAILURES[Math.floor(Math.random()*FAILURES.length)]:null};};
+  // Estado reportado por el proveedor (webhook ya verificado): se localiza el mensaje por su referencia y se avanza sin retroceder.
+  function applyStatus({providerRef,state,reason=null,at=null}){
+    const m=providerRef?db.prepare('SELECT m.id,m.conversation_id,m.delivery_state,c.brand_id FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.provider_ref=?').get(String(providerRef)):null;if(!m)return null;
+    const order={sent:0,delivered:1,read:2,failed:3};if(order[state]===undefined)return null;
+    const t=at&&Number.isFinite(Number(at))?Number(at):now();
+    if(state==='failed')db.prepare("UPDATE messages SET delivery_state='failed',failed_reason=? WHERE id=?").run(reason||'Fallo reportado por el proveedor',m.id);
+    else if(order[state]>order[m.delivery_state]||m.delivery_state==='failed')db.prepare("UPDATE messages SET delivery_state=?,delivered_at=COALESCE(delivered_at,?),failed_reason=NULL WHERE id=?").run(state,state==='sent'?null:t,m.id);
+    else return m.delivery_state+' (sin cambio)';
+    event(m,state,reason||null,null,now());broadcast('conversation',m.conversation_id);return state;
   }
   // Lectura del cliente: los salientes hasta ese punto pasan a «leído» (si ya estaban entregados o enviados).
   function markRead(conversationId,upTo){db.prepare("UPDATE messages SET delivery_state='read' WHERE conversation_id=? AND seq<=? AND sender_kind IN ('agent','automation') AND delivery_state IN ('sent','delivered')").run(conversationId,upTo);}
@@ -92,5 +108,5 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
     }
     return false;
   }
-  return {settings,windowOf,decorate,categoryOf,before,tick,markRead,retry,events,setSettings,referralInput,handle};
+  return {settings,windowOf,decorate,categoryOf,before,tick,markRead,retry,events,setSettings,referralInput,handle,useConnector,applyStatus};
 }

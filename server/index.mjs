@@ -35,12 +35,14 @@ import {createChannel} from './channel.mjs';
 import {migratePayments} from './payments-schema.mjs';
 import {createPayments} from './payments.mjs';
 import {createPresentation} from './presentation.mjs';
+import {migrateConnectors} from './connectors-schema.mjs';
+import {createConnectors} from './connectors.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<16&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v16-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<17&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v17-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -55,6 +57,7 @@ migrateReplies(db);
 migrateSimulator(db);
 migrateChannel(db);
 migratePayments(db);
+migrateConnectors(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -113,11 +116,13 @@ const operations=createOperations({db,crm,catalogue,body,json,audit,broadcast,on
 // Venta con pago simulado (server/payments.mjs): pedidos, enlace de prueba, comprobantes en cola, inscripción; apagada por marca por omisión.
 const payments=createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation});
 const presentation=createPresentation({db,crm,json});
+// Contrato de conectores (server/connectors.mjs): proveedor de canal y de pago por entorno, simulados por omisión; webhooks firmados.
+const connectors=createConnectors({db,channel,payments,body,json,audit,rate,selfOrigin:()=>'http://127.0.0.1:'+server.address().port});
 const aiProvider=createAiProvider();
 const replies=createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider:aiProvider,payments});
 const automation=createAutomation({db,onChange:step=>{if(step.conversation_id)broadcast('conversation',step.conversation_id);broadcast('crm',null,{brandId:step.brand_id});}});
 const backupHours=process.env.BACKUP_INTERVAL_HOURS===undefined?(process.env.NODE_ENV==='test'?0:24):Number(process.env.BACKUP_INTERVAL_HOURS);
-const backups=createBackups({db,dataDir,version:'0.18.0',intervalMs:Number.isFinite(backupHours)&&backupHours>0?backupHours*3600000:0,keep:Math.max(1,Number(process.env.BACKUP_KEEP)||7)});
+const backups=createBackups({db,dataDir,version:'0.19.0',intervalMs:Number.isFinite(backupHours)&&backupHours>0?backupHours*3600000:0,keep:Math.max(1,Number(process.env.BACKUP_KEEP)||7)});
 const backupHandle=backupRoutes(backups);
 const recipes=createRecipes({db,catalogue,automation,insertMessage,broadcast,body,json,audit});
 // Simulador de clientes: habla con la propia API por loopback (nunca dentro de una transacción). SIMULATOR_DISABLED=1 lo oculta.
@@ -208,7 +213,8 @@ function flyer(course,brand){
 const server=http.createServer(async(req,res)=>{
   security(res);const url=new URL(req.url,'http://localhost'),path=url.pathname;
   try{
-    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.18.0',transport:'websocket',mode:'laboratorio'});}
+    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.19.0',transport:'websocket',mode:'laboratorio'});}
+    if(await connectors.handlePublic(req,res,path,url,req.socket.remoteAddress||'unknown'))return;   // webhooks de proveedores: firma propia, sin sesión ni Origin
     if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!originAllowed(req))throw fail(403,'Origen no permitido.');
     const ip=req.socket.remoteAddress||'unknown';
     if(req.method==='POST'&&path==='/api/auth/recover'){rate('recovery:'+ip,12,900000);await crm.recover(await body(req));return json(res,200,{ok:true});}
@@ -238,6 +244,7 @@ const server=http.createServer(async(req,res)=>{
     }
     if(path.startsWith('/api/')){
       const user=requireUser(req);
+      if(await connectors.handle(req,res,path,user))return;
       if(await payments.handle(req,res,path,user))return;
       if(await channel.handle(req,res,path,user))return;
       if(await simulator.handle(req,res,path,user))return;
@@ -351,7 +358,7 @@ const server=http.createServer(async(req,res)=>{
       throw fail(404,'Ruta no disponible.');
     }
     if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'Método no permitido.');
-    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/knowledge.js':['public/knowledge.js','text/javascript; charset=utf-8'],'/simulator.js':['public/simulator.js','text/javascript; charset=utf-8'],'/payments.js':['public/payments.js','text/javascript; charset=utf-8'],'/presentation.js':['public/presentation.js','text/javascript; charset=utf-8'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/polish.css':['public/polish.css','text/css; charset=utf-8'],'/security.js':['public/security.js','text/javascript; charset=utf-8'],'/analytics.js':['public/analytics.js','text/javascript; charset=utf-8'],'/analytics.css':['public/analytics.css','text/css; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/knowledge.js':['public/knowledge.js','text/javascript; charset=utf-8'],'/simulator.js':['public/simulator.js','text/javascript; charset=utf-8'],'/payments.js':['public/payments.js','text/javascript; charset=utf-8'],'/presentation.js':['public/presentation.js','text/javascript; charset=utf-8'],'/connectors.js':['public/connectors.js','text/javascript; charset=utf-8'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/polish.css':['public/polish.css','text/css; charset=utf-8'],'/security.js':['public/security.js','text/javascript; charset=utf-8'],'/analytics.js':['public/analytics.js','text/javascript; charset=utf-8'],'/analytics.css':['public/analytics.css','text/css; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
     const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.',...(error.status&&error.code?{code:error.code}:{}),...(error.status&&error.activeOpportunityId?{activeOpportunityId:error.activeOpportunityId}:{})});}
 });
@@ -369,8 +376,8 @@ server.on('upgrade',(req,socket,head)=>{
 const jobsTimer=setInterval(processJobs,350);
 const operationsTimer=setInterval(()=>{try{operations.reconcile();}catch(e){console.error('Operations tick failed:',e.name,e.message);}},1000);
 const automationTimer=setInterval(()=>{try{recipes.scan();}catch(e){console.error('Recipe scan failed:',e.name);}automation.tick().catch(e=>console.error('Automation tick failed:',e.name));},1000);
-const paymentsTimer=setInterval(()=>{try{payments.tick();}catch(e){console.error('Payments tick failed:',e.name);}},30000);
-const channelTimer=setInterval(()=>{try{channel.tick();}catch(e){console.error('Channel tick failed:',e.name);}},500);
+const paymentsTimer=setInterval(()=>{payments.tick().catch(e=>console.error('Payments tick failed:',e.name));},30000);setTimeout(()=>payments.tick().catch(()=>{}),3000).unref();
+const channelTimer=setInterval(()=>{channel.tick().catch(e=>console.error('Channel tick failed:',e.name));},500);
 const simulatorTimer=setInterval(()=>simulator.tick().catch(e=>console.error('Simulator tick failed:',e.name)),1000);
 const backupTimer=setInterval(()=>backups.tick(),10*60*1000);setTimeout(()=>backups.tick(),5000).unref();
 const heartbeat=setInterval(()=>{for(const [ws,user]of sessions){if(!ws.isAlive||user.expires_at<Date.now()||!db.prepare('SELECT token_hash FROM sessions WHERE token_hash=?').get(user.token_hash)){ws.terminate();continue;}ws.isAlive=false;ws.ping();}const now=Date.now();for(const [key,value]of limits)if(value.end<now)limits.delete(key);db.prepare('DELETE FROM sessions WHERE expires_at<?').run(now);},30000);

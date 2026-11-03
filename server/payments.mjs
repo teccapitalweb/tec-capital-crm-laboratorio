@@ -21,7 +21,8 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
   const requireAdmin=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||u.role!=='admin')throw fail(403,'La venta con pago la configura un administrador.');};
   const requireStaff=user=>{if(user.role==='customer')throw fail(403,'Esta acción es para el equipo de atención.');};
   const get=id=>db.prepare('SELECT * FROM orders WHERE id=?').get(id);
-  const linkFor=o=>(env.APP_ORIGIN||'').replace(/\/$/,'')+'/?pay='+o.id;
+  const linkFor=o=>(env.APP_ORIGIN||'').replace(/\/$/,'')+'/?pay='+o.id;   // enlace propio y estable; si hay pasarela real, la página /?pay= lleva a su URL de cobro
+  let connectorOf=null;const useConnector=fn=>{connectorOf=fn;};
   const event=(orderId,kind,details,actor,t)=>db.prepare('INSERT INTO payment_events(order_id,kind,details,actor_id,created_at) VALUES(?,?,?,?,?)').run(orderId,kind,JSON.stringify(details||{}),actor||null,t);
   const staffOf=brandId=>db.prepare("SELECT id FROM users WHERE role IN ('admin','agent') AND COALESCE(disabled,0)=0 AND (role='admin' OR id IN (SELECT user_id FROM brand_members WHERE brand_id=?))").all(brandId).map(u=>u.id);
   function notifyStaff(c,kind,title,key){const t=now();for(const id of staffOf(c.brand_id))db.prepare('INSERT OR IGNORE INTO notifications(id,user_id,brand_id,conversation_id,kind,title,event_key,created_at) VALUES(?,?,?,?,?,?,?,?)').run(randomUUID(),id,c.brand_id,c.id,kind,title,key,t);}
@@ -124,9 +125,30 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     });
     audit(user,'payment.order.cancel',o.id);broadcast('conversation',c.id);broadcast('crm',null,{brandId:c.brand_id});return out;
   }
-  function tick(){
-    const rows=db.prepare("SELECT * FROM orders WHERE status='pending' AND expires_at<=? LIMIT 100").all(now());if(!rows.length)return;
-    transaction(db,()=>{for(const o of rows)expire(o);});for(const b of new Set(rows.map(o=>o.brand_id)))broadcast('crm',null,{brandId:b});
+  async function tick(){
+    const expired=db.prepare("SELECT * FROM orders WHERE status='pending' AND expires_at<=? LIMIT 100").all(now());
+    if(expired.length){transaction(db,()=>{for(const o of expired)expire(o);});for(const b of new Set(expired.map(o=>o.brand_id)))broadcast('crm',null,{brandId:b});}
+    // Sesión de pago del proveedor (fuera de transacción): el simulado devuelve nuestro propio enlace; uno real devolvería su URL de cobro.
+    const connector=connectorOf?connectorOf():null;if(!connector?.prepareCheckout)return;
+    for(const o of db.prepare("SELECT * FROM orders WHERE status='pending' AND provider_ref IS NULL ORDER BY created_at LIMIT 20").all()){
+      try{const r=await connector.prepareCheckout(o);db.prepare("UPDATE orders SET provider_ref=?,checkout_url=?,updated_at=? WHERE id=? AND provider_ref IS NULL").run(r.providerRef||null,r.url||null,now(),o.id);}
+      catch(e){console.error('Checkout preparation failed:',String(e?.message||e).slice(0,120));break;}
+    }
+  }
+  // Evento de pago del proveedor (webhook ya verificado y normalizado por connectors.mjs). Devuelve un resultado legible.
+  function providerEvent(ev,provider='simulated'){
+    const d=ev.data||{},o=d.orderId?get(String(d.orderId)):d.reference?db.prepare('SELECT * FROM orders WHERE reference=?').get(String(d.reference).toUpperCase()):null;
+    if(!o)return 'ignorado: pedido no encontrado ('+(d.orderId||d.reference||'sin referencia')+')';
+    if(d.amountCents!==undefined&&d.amountCents!==null&&Number(d.amountCents)!==o.amount_cents)return 'rechazado: el importe del proveedor ('+d.amountCents+') no coincide con el pedido ('+o.amount_cents+')';
+    const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id);
+    if(ev.type==='payment.succeeded'){
+      if(!['pending','review'].includes(o.status))return 'ignorado: el pedido ya estaba '+STATUS[o.status].toLowerCase();
+      transaction(db,()=>confirm(o,{actor:null,method:['card','oxxo','transfer'].includes(d.method)?d.method:'card',providerRef:d.providerRef?String(d.providerRef).slice(0,120):null,note:'Confirmado por webhook de '+provider}));
+      broadcast('conversation',c.id);broadcast('crm',null,{brandId:c.brand_id});return 'aplicado: pedido '+o.reference+' pagado e inscripción registrada';
+    }
+    if(o.status!=='pending')return 'ignorado: el pedido ya estaba '+STATUS[o.status].toLowerCase();
+    transaction(db,()=>{event(o.id,'provider.declined',{providerRef:d.providerRef||null,reason:d.reason||null,provider},null,now());say(c,`El pago del pedido ${o.reference} no se completó${d.reason?' ('+text(String(d.reason),120)+')':''}. Puedes intentarlo de nuevo desde el enlace o enviar tu comprobante por aquí.`,'order:'+o.id+':declined:'+String(d.providerRef||randomUUID()).slice(0,60));});
+    broadcast('conversation',c.id);return 'aplicado: pago rechazado registrado para '+o.reference;
   }
   // Cobro desde el chat por el equipo: pedido (nuevo o vigente) + mensaje con el enlace; el equipo toma la conversación como con una plantilla.
   function sendLink(c,user,{resend=false}={}){
@@ -162,7 +184,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id);if(!c||c.customer_id!==user.id)throw fail(404,'Pedido no disponible.');
     const n=names(o),brand=db.prepare('SELECT name FROM brands WHERE id=?').get(o.brand_id);
     if(o.status==='pending'&&o.expires_at<=now())transaction(db,()=>expire(o));
-    const fresh=get(o.id);return {id:o.id,reference:o.reference,status:fresh.status,statusLabel:STATUS[fresh.status],amountLabel:money(o.amount_cents,o.currency),course:n.course,edition:n.edition,promotion:n.promotion,brand:brand?.name,expiresAt:o.expires_at,conversationId:o.conversation_id,methods:Object.entries(METHODS).map(([id,label])=>({id,label}))};
+    const fresh=get(o.id);return {id:o.id,reference:o.reference,status:fresh.status,statusLabel:STATUS[fresh.status],amountLabel:money(o.amount_cents,o.currency),course:n.course,edition:n.edition,promotion:n.promotion,brand:brand?.name,expiresAt:o.expires_at,conversationId:o.conversation_id,checkoutUrl:fresh.checkout_url&&!fresh.checkout_url.includes('/?pay=')?fresh.checkout_url:null,methods:Object.entries(METHODS).map(([id,label])=>({id,label}))};
   }
   function setSettings(brandId,input,user){
     requireAdmin(user);if(!db.prepare('SELECT 1 FROM brands WHERE id=?').get(brandId))throw fail(404,'Marca no encontrada.');
@@ -200,5 +222,5 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     }
     throw fail(404,'Ruta de pagos no encontrada.');
   }
-  return {handle,settings,createOrder,linkMessage,confirm,attachReceipt,tick,openOrder,view,list};
+  return {handle,settings,createOrder,linkMessage,confirm,attachReceipt,tick,openOrder,view,list,useConnector,providerEvent};
 }

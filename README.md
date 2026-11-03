@@ -45,6 +45,10 @@ Por marca y apagada por omisión (**Operación → Pagos**). Activa, el equipo p
 
 La vista **Presentación** del equipo reúne, en vivo y por marca, lo que la plataforma ya hace: conversaciones (y cuántas llegaron por anuncio), **% resueltas sin intervención humana**, primera respuesta **automática vs humana**, ventas de práctica y cobrado por marca, mensajes por categoría con **costo estimado** (tarifas orientativas, editables con `MESSAGE_RATES`) y un **guion de 10 pasos** que indica si cada pantalla está lista, qué decir y un botón para ir a ella. Tiene pantalla completa para proyectar.
 
+## Conectores: así se enchufarán Meta y la pasarela
+
+El CRM habla con una **interfaz única** de canal y de pago (`docs/CONECTORES.md`). Hoy la cumplen adaptadores simulados; mañana Meta (WhatsApp, Instagram, Messenger) y Stripe o Conekta, cambiando sólo variables de entorno. Los webhooks entran por rutas públicas con **firma verificada** y se aplican **una sola vez**; un proveedor real sin accesos no interrumpe nada: el CRM sigue con el simulado y lo dice. En **Operación → Conectores** (administración) se ve el estado, lo que cada consultora debe entregar y se puede enviar un webhook firmado de prueba.
+
 ## Verificación en dos pasos (equipo)
 
 En **Mi configuración → Acceso y seguridad** el equipo puede activar un código temporal de una app de autenticación (opcional). Al iniciar sesión se pide después de la contraseña; hay 10 códigos de recuperación de un solo uso. Administración ve quién la tiene en **Equipo** y puede restablecerla. Si el administrador queda bloqueado, el procedimiento de emergencia está en `docs/OPERACION_Y_PRUEBAS.md`.
