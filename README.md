@@ -49,6 +49,10 @@ La vista **Presentación** del equipo reúne, en vivo y por marca, lo que la pla
 
 El CRM habla con una **interfaz única** de canal y de pago (`docs/CONECTORES.md`). Hoy la cumplen adaptadores simulados; mañana Meta (WhatsApp, Instagram, Messenger) y Stripe o Conekta, cambiando sólo variables de entorno. Los webhooks entran por rutas públicas con **firma verificada** y se aplican **una sola vez**; un proveedor real sin accesos no interrumpe nada: el CRM sigue con el simulado y lo dice. En **Operación → Conectores** (administración) se ve el estado, lo que cada consultora debe entregar y se puede enviar un webhook firmado de prueba.
 
+## Banco de evaluación del motor
+
+En **Catálogo y biblioteca → Evaluación** cada marca tiene casos que dicen qué escribe un cliente y qué debería hacer el motor (intención, acción, fuente y texto). **Ejecutar** corre la misma simulación que «Probar respuesta», sin enviar nada, con el nivel vigente de la marca, y guarda la puntuación y el detalle de cada caso para comparar antes y después de cambiar conocimiento, nivel o proveedor de IA. Cada marca nace con 17 casos.
+
 ## Verificación en dos pasos (equipo)
 
 En **Mi configuración → Acceso y seguridad** el equipo puede activar un código temporal de una app de autenticación (opcional). Al iniciar sesión se pide después de la contraseña; hay 10 códigos de recuperación de un solo uso. Administración ve quién la tiene en **Equipo** y puede restablecerla. Si el administrador queda bloqueado, el procedimiento de emergencia está en `docs/OPERACION_Y_PRUEBAS.md`.

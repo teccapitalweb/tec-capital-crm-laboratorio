@@ -141,6 +141,8 @@ Un libro de ventas alimentado por eventos: pago Stripe confirmado, transferencia
 ## 6. Plan por fases
 
 ### Fase 1 (ahora, sin depender de nadie): simulación convincente y contrato de integración
+
+*Estado 2 nov 2026: los seis puntos siguientes están hechos y publicados (v0.15–v0.19); el banco de evaluación de respuestas (bloque 7) está hecho localmente. Con él la Fase 1 queda completa.*
 1. **Motor de respuestas v2** en el CRM: conocimiento aprobado por marca/curso, intenciones, niveles 0–3 por marca, explicación de cada respuesta. Adaptador de IA con Claude y modo «simulado» para demos sin costo.
 2. **Simulador de clientes** con guiones (curioso, precio, listo para pagar, molesto, baja) y velocidad ajustable, más **datos de demostración a escala** (15 marcas, 8 cursos cada una, semanas de historial) con botón de reinicio. *Hecho localmente el 31 oct 2026 (guiones, ritmo, métricas en vivo, detener/archivar, catálogo 15×8 idempotente); falta el historial retroactivo de semanas.*
 3. **Canal simulado realista:** estados enviado/entregado/leído/fallido, ventana de 24 h, plantillas de marketing vs servicio, botones, y **referral de anuncio** simulado (el clic al flyer dispara la bienvenida del curso correcto). *Hecho localmente el 31 oct 2026 (estados, ventana 24/72 h, categorías, botones, referral y enlace de anuncio por flyer; sin costos de proveedor todavía).*

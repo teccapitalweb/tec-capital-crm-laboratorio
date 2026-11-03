@@ -13,6 +13,8 @@ const PATTERNS=[
   ['refund',/\b(reembolso|devolucion|devolver|queja|molest|pesimo|fraude|engan)/,.9],
   ['enroll',/\b(inscrib|registr|apuntar|quiero el curso|me anoto|como me inscribo)/,.85],
   ['payment',/\b(comprobante|pague|pago|transferencia|deposito|tarjeta|oxxo|spei|factura|meses sin intereses)\b/,.85],
+  // Duración va antes que precio: «¿cuánto dura?» no es una pregunta de precio.
+  ['duration',/\b(duracion|cuanto dura|cuantas (horas|sesiones|clases)|cuanto tiempo)\b/,.8],
   ['price',/\b(precio|cuesta|costo|cuanto|promocion|descuento|oferta|vale)\b/,.85],
   ['schedule',/\b(fecha|horario|cuando|dia|empieza|inicia|calendario)\b/,.8],
   ['syllabus',/\b(temario|incluye|temas?|contenido|que voy a aprender|programa)\b/,.8],
@@ -20,7 +22,6 @@ const PATTERNS=[
   ['requirements',/\b(requisito|conocimientos previos|necesito saber|que necesito)\b/,.8],
   ['modality',/\b(modalidad|en linea|online|presencial|virtual|zoom|meet|donde es|donde se imparte)\b/,.8],
   ['recording',/\b(grabaci|grabad|no puedo asistir|repeticion|ver despues)/,.8],
-  ['duration',/\b(duracion|cuanto dura|cuantas (horas|sesiones|clases)|cuanto tiempo)\b/,.8],
   ['greeting',/\b(hola|buen[oa]s?|informacion|info|flyer|imagen|me interesa|saludos)\b/,.6],
   ['thanks',/\b(gracias|perfecto|ok|vale|listo|entendido)\b/,.5],
 ];
@@ -101,7 +102,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const course=input.courseId?db.prepare('SELECT * FROM courses WHERE id=? AND brand_id=?').get(input.courseId,brandId):db.prepare('SELECT * FROM courses WHERE brand_id=? AND active=1 ORDER BY title LIMIT 1').get(brandId);
     if(!course)throw fail(400,'La marca no tiene cursos activos para simular.');
     const message=text(input.text,2000);if(!message)throw fail(400,'Escribe el mensaje del cliente.');
-    const fake={id:'simulacion',customer_id:user.id,brand_id:brandId,course_id:course.id,edition_id:input.editionId||null,status:'open',bot_enabled:1,assigned_to:null},trigger={id:'simulacion',text:message,created_at:now()};
+    const fake={id:'simulacion',customer_id:user.id,brand_id:brandId,course_id:course.id,edition_id:input.editionId||null,channel:['whatsapp','instagram','facebook'].includes(input.channel)?input.channel:'whatsapp',status:'open',bot_enabled:1,assigned_to:null},trigger={id:'simulacion',text:message,created_at:now()};
     const p=plan(fake,trigger);let draft=null;
     if(p.needsProvider||(input.forceProvider&&p.intent==='unknown'&&p.knowledge.length)){const ctx=catalogue.info(course.id,fake.edition_id);draft=await provider.draft({brand:ctx.brand,course:ctx.course,edition:{name:ctx.edition.name,dateLabel:ctx.dateLabel,priceLabel:(ctx.priceCents/100).toFixed(2)+' '+ctx.currency},question:message,knowledge:p.knowledge,history:[]});}
     const v=draft?validateDraft(draft,p.knowledge):null,reply=(v?.ok?v.text:p.reply).replace('{{pedido}}','[aquí iría el pedido con su enlace de pago de prueba]');

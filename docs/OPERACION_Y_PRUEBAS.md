@@ -64,7 +64,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta el contrato de conectores son **129** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta el banco de evaluación son **131** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -75,6 +75,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/catalogue.test.mjs` | Ediciones, fechas, centavos, promociones, variables, aprobación, permisos, vistas previas, archivo, snapshots/bytes históricos y reinicio |
 | `test/automation.test.mjs` | Motor 4A: migración v7, idempotencia, reintentos, reinicio, carreras de cancelación y pausas (sin servidor; base temporal) |
 | `test/automation-http.test.mjs` | Rutas `/api/automation`: sólo administración, revisiones, pausa global (servidor temporal) |
+| `test/evaluation.test.mjs` | Banco de evaluación: calificación, siembra, ejecución con nivel vigente, caso fallido, revisión, archivo, historial, alcance y permisos |
 | `test/connectors.test.mjs` | Conectores: adaptadores Meta/Stripe sin red, webhooks firmados e idempotentes, estados de mensaje y pagos por webhook, prueba desde la interfaz, respaldo al simulado sin accesos |
 | `test/presentation.test.mjs` | Modo presentación: tarifas por entorno, cifras (sin intervención, tiempos, ventas, categorías y costo), guion con comprobaciones, alcance por marca, permisos |
 | `test/payments.test.mjs` | Venta con pago simulado: apagada por omisión, cobro desde el chat, pago simulado con inscripción y etapa ganada, pedido del motor, comprobantes en cola (rechazo/aceptación), cancelación, vencimiento, permisos |
@@ -115,6 +116,7 @@ Usar perfiles/sesiones separados para un administrador, dos asesores de prueba y
 13. **Venta con pago simulado (administración):** activarla en una marca de pruebas; «Cobrar» desde el chat, pagar desde el enlace como cliente de prueba, enviar un adjunto con pedido vigente y aceptarlo o rechazarlo en Pagos; comprobar inscripción, etapa ganada y aviso. Cancelar o dejar vencer los pedidos de prueba al terminar.
 14. **Presentación:** abrir la vista Presentación, revisar que el guion marque «Listo» en los pasos que se van a mostrar, probar «Ir a la pantalla» y la pantalla completa; el filtro por marca y periodo debe cambiar las cifras sin recargar.
 15. **Conectores (administración):** con `CONNECTOR_WEBHOOK_SECRET` en un entorno de pruebas, enviar un webhook firmado de estado y otro de pago desde la pestaña Conectores y comprobar que el mensaje y el pedido cambian y que repetirlo responde «duplicado». No registrar URLs de webhook en proveedores reales sin instrucción expresa.
+16. **Evaluación:** en Catálogo → Evaluación ejecutar el banco de una marca de pruebas antes y después de cambiar conocimiento o nivel; revisar los casos que fallan y su motivo. Es la forma de comprobar el motor (y el proveedor de IA, cuando haya clave) sin escribir a clientes.
 
 En producción evitar activar/cambiar políticas de marcas existentes para facilitar QA. Registrar la configuración inicial y comprobar que quedó intacta. Los ensayos destructivos, carga y restauración se hacen en entorno aislado.
 
@@ -160,7 +162,7 @@ Publicar sólo dentro del alcance autorizado por el usuario. Para el traspaso do
 El health esperado de referencia:
 
 ```json
-{"ok":true,"version":"0.19.0","transport":"websocket","mode":"laboratorio"}
+{"ok":true,"version":"0.20.0","transport":"websocket","mode":"laboratorio"}
 ```
 
 ## Respaldos y recuperación
