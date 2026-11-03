@@ -151,6 +151,8 @@ Un libro de ventas alimentado por eventos: pago Stripe confirmado, transferencia
 6. **Modo presentación:** tablero con % de chats resueltos sin intervención, tiempo de respuesta máquina vs humano, ventas por marca, y guion guiado. *Hecho localmente el 2 nov 2026 (vista Presentación con tablero, costo estimado por categoría y guion de 10 pasos con comprobaciones).*
 
 ### Fase 2 (3–6 meses): núcleo único e integración con lo existente
+
+*Plan detallado por bloques, dependencias y criterios de salida: [PLAN_FASE_2.md](PLAN_FASE_2.md) (2 nov 2026).*
 7. Migrar el CRM a **Postgres** (Supabase, junto a la Academia) y definir el esquema unificado de persona, pago, inscripción, certificado y evento.
 8. **Puente con el panel IPCIL:** el registro de venta del vendedor y la apertura del coordinador se alimentan desde la plataforma; el certificado se emite desde un solo servicio.
 9. **Módulo de coordinación** (aperturas/cohortes, sesiones con Meet por API, materiales, grabaciones, asistencia).
