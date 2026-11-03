@@ -14,7 +14,7 @@ Escrito el 2 nov 2026 al cerrar la Fase 1 (v0.20.0, siete bloques publicados). D
 | --- | --- | --- | --- | --- |
 | 2.1 | Eventos de dominio (la columna vertebral) · **publicado en v0.21.0 (2 nov 2026)** | nada | S | Bitácora única de hechos del negocio |
 | 2.2 | Identidad única de persona · **publicado en v0.23.0 (3 nov 2026)** | 2.1 | M | Un cliente, varias marcas, un historial |
-| 2.3 | Coordinación académica: aperturas, sesiones, inscritos · **arranque publicado en v0.21.0 (2 nov 2026)** | 2.1 | L | La venta entra sola a la apertura |
+| 2.3 | Coordinación académica: aperturas, sesiones, inscritos · **arranque publicado en v0.21.0 (2 nov 2026)** · **resto (pagos por sesión y encuestas) hecho localmente el 3 nov 2026** | 2.1 | L | La venta entra sola a la apertura |
 | 2.4 | Finanzas: libro de ventas, comisiones, exportación · **publicado en v0.22.0 (2 nov 2026)** | 2.1 | M | Lo que la contadora pide hoy en Excel |
 | 2.5 | Certificación: emisor único con folio y verificación · **publicado en v0.24.0 (3 nov 2026)** | 2.3 | M | Certificado verificable al cerrar la apertura |
 | 2.6 | Contenido: roles, plantillas por evento, fichas, variantes asistidas · **publicado en v0.25.0 (3 nov 2026)** | 2.1, 2.3 | M | Mensajes del ciclo completo sin escribirlos |
@@ -129,5 +129,7 @@ Las reglas del repositorio: alcance por marca en servidor, precios y fechas sól
 ## 4. Primer bloque recomendado
 
 **Estado (2 nov 2026):** implementado y **publicado en v0.21.0** (esquema 19). Cumple el criterio de cierre: la venta confirmada aparece sola en la apertura, los eventos quedan registrados con idempotencia probada, hay pruebas y el guion de presentación tiene el paso nuevo. De 2.3 quedan encuestas, pagos por sesión, plantillas por evento para los recordatorios (2.6) y la función «coordinador» como etiqueta de usuario (hoy: responsable por apertura). Detalle en [CONTINUIDAD.md](CONTINUIDAD.md).
+
+**Estado (3 nov 2026):** el resto de 2.3 (pagos por sesión y encuestas) está implementado localmente en la rama `feat/encuestas-pagos-sesion` (esquema 24, versión 0.26.0, 146 pruebas), sin publicar: precio por sesión en la edición, inscripción por sesión que cubre la primera sesión, cobro por sesión manual o con el recordatorio, condonación y cascadas; encuesta por sesión o apertura con token por inscrito, respuesta pública y resultados. La función «coordinador» como etiqueta queda fuera salvo que haga falta.
 
 **2.1 Eventos de dominio + arranque de 2.3 Coordinación académica** en la misma rama: la columna vertebral es pequeña y la coordinación es lo más visible que falta para contar la historia completa (anuncio → chat → pago → inscripción → apertura → sesión → certificado). Criterio de cierre del primer bloque: la venta confirmada aparece sola en la apertura, con eventos registrados, pruebas y un paso nuevo en el guion de presentación.

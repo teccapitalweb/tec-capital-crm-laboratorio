@@ -18,7 +18,7 @@ export const EVENT_TYPES={
   'pedido.cancelado':{title:'Pedido cancelado',entity:'order',payload:'reference, reason'},
   'pedido.vencido':{title:'Pedido vencido',entity:'order',payload:'reference'},
   'comprobante.recibido':{title:'Comprobante recibido',entity:'order',payload:'receiptId, reference, filename'},
-  'pago.confirmado':{title:'Pago confirmado',entity:'order',payload:'reference, amountCents, currency, method, enrollmentId, editionId, courseId, contactId, conversationId'},
+  'pago.confirmado':{title:'Pago confirmado',entity:'order',payload:'reference, amountCents, currency, method, kind, plan, sessionId, enrollmentId, editionId, courseId, contactId, conversationId'},
   'pago.rechazado':{title:'Pago rechazado',entity:'order',payload:'reference, method, reason, provider'},
   'inscripcion.activada':{title:'Inscripción activada',entity:'enrollment',payload:'orderId, editionId, courseId, contactId'},
   'inscripcion.cancelada':{title:'Inscripción cancelada',entity:'enrollment',payload:'editionId, reason'},
@@ -40,8 +40,11 @@ export const EVENT_TYPES={
   'asistencia.registrada':{title:'Asistencia registrada',entity:'session',payload:'editionId, present, absent, late, excused'},
   'reembolso.registrado':{title:'Reembolso registrado',entity:'order',payload:'reference, amountCents, currency, reason, ledgerId'},
   'comision.pagada':{title:'Comisión pagada',entity:'payout',payload:'role, userId, totalCents, currency, entries, note'},
+  'pago.condonado':{title:'Pago de sesión condonado',entity:'session',payload:'editionId, enrollmentId, number, amountCents, currency, note'},
+  'encuesta.enviada':{title:'Encuesta enviada',entity:'survey',payload:'editionId, sessionId, kind, title, invited, skipped'},
+  'encuesta.respondida':{title:'Encuesta respondida',entity:'survey',payload:'editionId, sessionId, title, contentScore, instructorScore, organizationScore, nps, comment'},
 };
-export const ENTITY_KINDS={conversation:'Conversación',opportunity:'Oportunidad',order:'Pedido',enrollment:'Inscripción',message:'Mensaje',contact:'Contacto',edition:'Apertura',session:'Sesión',payout:'Pago de comisión',person:'Persona',certificate:'Certificado',resource:'Recurso de apertura'};
+export const ENTITY_KINDS={conversation:'Conversación',opportunity:'Oportunidad',order:'Pedido',enrollment:'Inscripción',message:'Mensaje',contact:'Contacto',edition:'Apertura',session:'Sesión',payout:'Pago de comisión',person:'Persona',certificate:'Certificado',resource:'Recurso de apertura',survey:'Encuesta'};
 
 export function createEvents({db,crm=null,body,json,audit=()=>{},now=Date.now,log=console,baseDelayMs=5_000,capDelayMs=15*60_000,maxAttempts=5,batch=20}){
   const subscribers=new Map();   // tipo -> [{name,handler}]

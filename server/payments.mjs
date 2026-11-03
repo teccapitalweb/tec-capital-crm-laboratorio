@@ -31,26 +31,37 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
   const openOrder=cid=>db.prepare("SELECT * FROM orders WHERE conversation_id=? AND status IN ('pending','review') ORDER BY created_at DESC LIMIT 1").get(cid);
   const names=o=>({course:db.prepare('SELECT title FROM courses WHERE id=?').get(o.course_id)?.title||'curso',edition:db.prepare('SELECT name FROM editions WHERE id=?').get(o.edition_id)?.name||'',promotion:o.promotion_id?db.prepare('SELECT name FROM promotions WHERE id=?').get(o.promotion_id)?.name:null,contact:db.prepare('SELECT name FROM contacts WHERE id=?').get(o.contact_id)?.name||'Cliente'});
   const say=(c,textOut,ref,category='utility')=>insertMessage(c,null,textOut,'automation',ref,null,null,null,{category});
+  const sessionOf=o=>o.session_id?db.prepare('SELECT * FROM edition_sessions WHERE id=?').get(o.session_id):null;
+  const planLabel=o=>o.plan==='per_session'?'Por sesión':'Curso completo';
 
   // Texto del enlace de pago que recibe el cliente (lo envía el equipo o el motor de respuestas).
   function linkMessage(o){
     const n=names(o);
-    const t=content?.render('payment_pending',o.brand_id,{courseId:o.course_id,editionId:o.edition_id,name:n.contact.split(' ')[0],extra:{pedido:o.reference,importe:money(o.amount_cents,o.currency),enlace_pago:linkFor(o),vigencia_pago:stamp(o.expires_at)}});if(t)return t.text;
-    return `Pedido de práctica ${o.reference}: ${n.course} · ${n.edition} por ${money(o.amount_cents,o.currency)}${n.promotion?' ('+n.promotion+')':''}.\nPaga aquí (simulado): ${linkFor(o)}\nVigente hasta ${stamp(o.expires_at)}. También puedes enviar tu comprobante de transferencia por este chat y una persona lo valida.\nLaboratorio: no se realizan cobros reales.`;
+    const t=content?.render('payment_pending',o.brand_id,{courseId:o.course_id,editionId:o.edition_id,name:n.contact.split(' ')[0],extra:{pedido:o.reference,importe:money(o.amount_cents,o.currency),enlace_pago:linkFor(o),vigencia_pago:stamp(o.expires_at),plan_pago:planLabel(o)}});if(t)return t.text;
+    return `Pedido de práctica ${o.reference}: ${n.course} · ${n.edition} por ${money(o.amount_cents,o.currency)}${o.plan==='per_session'?' (plan por sesión: este pago cubre tu primera sesión; las siguientes se cobran antes de cada clase)':n.promotion?' ('+n.promotion+')':''}.\nPaga aquí (simulado): ${linkFor(o)}\nVigente hasta ${stamp(o.expires_at)}. También puedes enviar tu comprobante de transferencia por este chat y una persona lo valida.\nLaboratorio: no se realizan cobros reales.`;
+  }
+  // Enlace de pago de una sesión (plan por sesión): mismo recorrido de cobro, un pedido por sesión e inscripción.
+  function sessionLinkMessage(o){
+    const n=names(o),s=sessionOf(o);
+    const t=content?.render('session_payment',o.brand_id,{courseId:o.course_id,editionId:o.edition_id,name:n.contact.split(' ')[0],extra:{sesion:s.number+'. '+s.title,fecha_sesion:stamp(s.starts_at),importe:money(o.amount_cents,o.currency),enlace_pago:linkFor(o),vigencia_pago:stamp(o.expires_at)}});if(t)return t.text;
+    return `Pago de la sesión ${s.number} (${s.title}) · ${n.course} · ${stamp(s.starts_at)}: ${money(o.amount_cents,o.currency)}.\nPedido ${o.reference}. Paga aquí (simulado): ${linkFor(o)}\nVigente hasta ${stamp(o.expires_at)}. También puedes enviar tu comprobante de transferencia por este chat.\nLaboratorio: no se realizan cobros reales.`;
   }
   // Crea el pedido dentro de la transacción del llamador. Si ya hay uno vigente en la conversación, lo devuelve.
-  function createOrder(c,{user=null,source}){
+  // plan='per_session': el importe es el precio por sesión de la edición y el pago cubre la primera sesión disponible.
+  function createOrder(c,{user=null,source,plan='full'}){
     const s=settings(c.brand_id);if(!s.enabled)throw fail(409,'La venta con pago simulado está apagada para esta marca. Actívala en Operación → Pagos.');
     if(c.status==='resolved')throw fail(409,'La conversación está cerrada.');
     const existing=openOrder(c.id);if(existing)return {order:existing,created:false};
     const ctx=catalogue.info(c.course_id,c.edition_id);if(ctx.reason)throw fail(409,ctx.reason+'. Elige otra edición antes de cobrar.');
+    const perSession=plan==='per_session';if(perSession&&!(ctx.edition.session_price_cents>0))throw fail(409,'Esta edición no tiene precio por sesión. Defínelo en Catálogo o cobra el curso completo.');
+    const amount=perSession?ctx.edition.session_price_cents:ctx.priceCents,promoId=perSession?null:ctx.promotion?.id||null;
     const oppId=crm.syncConversation(c),opp=db.prepare('SELECT * FROM opportunities WHERE id=?').get(oppId);
     if(['ganada','perdida'].includes(opp.stage))throw fail(409,'La oportunidad ya está cerrada ('+opp.stage+'). Abre una nueva conversación para otra venta.');
     const t=now(),id=randomUUID();let reference;do{reference='TC-'+randomBytes(3).toString('hex').toUpperCase();}while(db.prepare('SELECT 1 FROM orders WHERE reference=?').get(reference));
-    db.prepare('INSERT INTO orders(id,reference,brand_id,contact_id,opportunity_id,conversation_id,course_id,edition_id,promotion_id,amount_cents,currency,status,source,created_by,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-      .run(id,reference,c.brand_id,opp.contact_id,oppId,c.id,c.course_id,ctx.edition.id,ctx.promotion?.id||null,ctx.priceCents,ctx.currency,'pending',source,user?.id||null,t+s.link_hours*3600000,t,t);
-    event(id,'created',{source,amountCents:ctx.priceCents,currency:ctx.currency,promotionId:ctx.promotion?.id||null,expiresAt:t+s.link_hours*3600000},user?.id||null,t);
-    emit('pedido.creado',get(id),{source,promotionId:ctx.promotion?.id||null,expiresAt:t+s.link_hours*3600000},user);
+    db.prepare('INSERT INTO orders(id,reference,brand_id,contact_id,opportunity_id,conversation_id,course_id,edition_id,promotion_id,amount_cents,currency,status,source,created_by,expires_at,created_at,updated_at,plan) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(id,reference,c.brand_id,opp.contact_id,oppId,c.id,c.course_id,ctx.edition.id,promoId,amount,ctx.currency,'pending',source,user?.id||null,t+s.link_hours*3600000,t,t,perSession?'per_session':'full');
+    event(id,'created',{source,amountCents:amount,currency:ctx.currency,promotionId:promoId,plan:perSession?'per_session':'full',expiresAt:t+s.link_hours*3600000},user?.id||null,t);
+    emit('pedido.creado',get(id),{source,promotionId:promoId,kind:'course',plan:perSession?'per_session':'full',expiresAt:t+s.link_hours*3600000},user);
     return {order:get(id),created:true};
   }
   // Confirmación de pago (proveedor simulado o persona). Dentro de la transacción del llamador.
@@ -58,15 +69,25 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     const t=now(),c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id),n=names(o);
     // Guarda de estado dentro de la transacción: dos confirmaciones concurrentes (o una tras cancelar) no pueden pasar las dos.
     if(!db.prepare("UPDATE orders SET status='paid',method=?,provider_ref=COALESCE(?,provider_ref),paid_at=?,confirmed_by=?,note=?,revision=revision+1,updated_at=? WHERE id=? AND status IN ('pending','review')").run(method,providerRef,t,actor?.id||null,text(note,500),t,o.id).changes)throw fail(409,'El pedido cambió de estado mientras se confirmaba. Recárgalo.');
-    const enrollmentId=randomUUID();db.prepare('INSERT INTO enrollments(id,order_id,brand_id,contact_id,opportunity_id,course_id,edition_id,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)').run(enrollmentId,o.id,o.brand_id,o.contact_id,o.opportunity_id,o.course_id,o.edition_id,'enrolled',t);
+    if(o.kind==='session'){   // pago de una sesión (plan por sesión): no inscribe ni mueve la oportunidad; marca la sesión pagada
+      const s=sessionOf(o);
+      db.prepare("UPDATE session_payments SET status='paid',order_id=?,paid_at=?,updated_at=? WHERE session_id=? AND enrollment_id=? AND status!='paid'").run(o.id,t,t,o.session_id,o.enrollment_id);
+      event(o.id,'confirmed',{method,providerRef,note:text(note,500),sessionId:o.session_id,sessionNumber:s?.number},actor?.id||null,t);
+      emit('pago.confirmado',o,{method,providerRef,kind:'session',plan:'per_session',sessionId:o.session_id,sessionNumber:s?.number,enrollmentId:o.enrollment_id,opportunityId:o.opportunity_id,courseTitle:n.course,editionName:n.edition},actor);
+      say(c,`Pago de la sesión ${s?.number||''} confirmado (laboratorio) · ${o.reference} · ${money(o.amount_cents,o.currency)}. ¡Nos vemos en clase! No se realizó ningún cobro real.`,'order:'+o.id+':paid');
+      notifyStaff(c,'payment','Pago de sesión '+(s?.number||'')+' · '+n.contact+' · '+n.course+' · '+money(o.amount_cents,o.currency),'order:'+o.id+':paid');
+      return get(o.id);
+    }
+    const plan=o.plan==='per_session'?'per_session':'full',covered=plan==='per_session'?db.prepare("SELECT id FROM edition_sessions WHERE edition_id=? AND status='scheduled' AND starts_at+duration_min*60000>? ORDER BY starts_at LIMIT 1").get(o.edition_id,t)?.id||null:null;
+    const enrollmentId=randomUUID();db.prepare('INSERT INTO enrollments(id,order_id,brand_id,contact_id,opportunity_id,course_id,edition_id,status,created_at,payment_plan,covered_session_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(enrollmentId,o.id,o.brand_id,o.contact_id,o.opportunity_id,o.course_id,o.edition_id,'enrolled',t,plan,covered);
     db.prepare('UPDATE editions SET available_seats=available_seats-1,updated_at=? WHERE id=? AND available_seats IS NOT NULL AND available_seats>0').run(t,o.edition_id);
     // La venta la cierra quien confirma; un pago del proveedor simulado queda sin actor (origen «pago»).
     crm.setStage(c,'ganada',actor||{id:null},{});
     event(o.id,'confirmed',{method,providerRef,note:text(note,500)},actor?.id||null,t);
-    emit('pago.confirmado',o,{method,providerRef,enrollmentId,opportunityId:o.opportunity_id,courseTitle:n.course,editionName:n.edition},actor);
-    events?.publish({type:'inscripcion.activada',brandId:o.brand_id,entityKind:'enrollment',entityId:enrollmentId,payload:{orderId:o.id,reference:o.reference,editionId:o.edition_id,courseId:o.course_id,courseTitle:n.course,editionName:n.edition,contactId:o.contact_id},actorId:actor?.id||null,source:'payments'});
-    const tpl=content?.render('payment_confirmed',o.brand_id,{courseId:o.course_id,editionId:o.edition_id,name:n.contact.split(' ')[0],extra:{pedido:o.reference,importe:money(o.amount_cents,o.currency)}});
-    say(c,tpl?tpl.text:`Pago confirmado (laboratorio) · ${o.reference}. Quedaste inscrito en ${n.course} · ${n.edition}. El equipo coordinador te enviará los accesos y recordatorios por aquí. No se realizó ningún cobro real.`,'order:'+o.id+':paid');
+    emit('pago.confirmado',o,{method,providerRef,kind:'course',plan,enrollmentId,opportunityId:o.opportunity_id,courseTitle:n.course,editionName:n.edition},actor);
+    events?.publish({type:'inscripcion.activada',brandId:o.brand_id,entityKind:'enrollment',entityId:enrollmentId,payload:{orderId:o.id,reference:o.reference,editionId:o.edition_id,courseId:o.course_id,courseTitle:n.course,editionName:n.edition,contactId:o.contact_id,plan},actorId:actor?.id||null,source:'payments'});
+    const tpl=content?.render('payment_confirmed',o.brand_id,{courseId:o.course_id,editionId:o.edition_id,name:n.contact.split(' ')[0],extra:{pedido:o.reference,importe:money(o.amount_cents,o.currency),plan_pago:planLabel(o)}});
+    say(c,tpl?tpl.text:`Pago confirmado (laboratorio) · ${o.reference}. Quedaste inscrito en ${n.course} · ${n.edition}${plan==='per_session'?' con plan por sesión: este pago cubre tu primera sesión y el enlace de pago de cada sesión siguiente llegará por aquí antes de la clase':''}. El equipo coordinador te enviará los accesos y recordatorios por aquí. No se realizó ningún cobro real.`,'order:'+o.id+':paid');
     notifyStaff(c,'payment','Pago confirmado · '+n.contact+' · '+n.course+' · '+money(o.amount_cents,o.currency),'order:'+o.id+':paid');
     return get(o.id);
   }
@@ -158,20 +179,56 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     broadcast('conversation',c.id);return 'aplicado: pago rechazado registrado para '+o.reference;
   }
   // Cobro desde el chat por el equipo: pedido (nuevo o vigente) + mensaje con el enlace; el equipo toma la conversación como con una plantilla.
-  function sendLink(c,user,{resend=false}={}){
+  function sendLink(c,user,{resend=false,plan='full'}={}){
     crm.requireBrand(user,c.brand_id);if(c.status==='resolved')throw fail(409,'La conversación está cerrada.');
     let made;transaction(db,()=>{
-      made=createOrder(c,{user,source:'agent'});
+      made=createOrder(c,{user,source:'agent',plan});
       if(made.created||resend){crm.assignConversation(c,user.id);insertMessage(c,user,linkMessage(made.order),'agent','order:'+made.order.id+':link:'+randomUUID().slice(0,8),null,null,null,{category:'utility'});db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);cancelConversationSteps(db,c.id,'human_takeover');event(made.order.id,'link.sent',{by:user.id},user.id,now());}
     });
     audit(user,'payment.order.link',made.order.id);broadcast('conversation',c.id);broadcast('crm',null,{brandId:c.brand_id});return made;
   }
+  // ---- pedidos por sesión (plan por sesión). Dentro de la transacción del llamador.
+  function createSessionOrder(s,en,{user=null,source}){
+    const st=settings(en.brand_id);if(!st.enabled)throw fail(409,'La venta con pago simulado está apagada para esta marca. Actívala en Operación → Pagos.');
+    if(en.status!=='enrolled'||en.payment_plan!=='per_session')throw fail(409,'La inscripción no tiene plan por sesión.');
+    if(s.status!=='scheduled')throw fail(409,'La sesión ya no está programada.');
+    const sp=db.prepare('SELECT * FROM session_payments WHERE session_id=? AND enrollment_id=?').get(s.id,en.id);
+    if(!sp||sp.status!=='pending')throw fail(409,sp?.status==='paid'?'Esta sesión ya está pagada.':sp?.status==='waived'?'Esta sesión fue condonada.':'La sesión no tiene cobro pendiente para esta inscripción.');
+    const existing=db.prepare("SELECT * FROM orders WHERE session_id=? AND enrollment_id=? AND status IN ('pending','review') LIMIT 1").get(s.id,en.id);if(existing)return {order:existing,created:false};
+    let amount=sp.amount_cents;if(!(amount>0)){amount=db.prepare('SELECT session_price_cents FROM editions WHERE id=?').get(en.edition_id)?.session_price_cents||0;if(!(amount>0))throw fail(409,'La sesión no tiene importe: define el precio por sesión de la edición en Catálogo.');db.prepare('UPDATE session_payments SET amount_cents=?,updated_at=? WHERE session_id=? AND enrollment_id=?').run(amount,now(),s.id,en.id);}
+    const base=get(en.order_id),c=db.prepare('SELECT * FROM conversations WHERE id=?').get(base.conversation_id);if(!c)throw fail(409,'La conversación de la inscripción no está disponible.');
+    const t=now(),id=randomUUID(),expires=Math.max(t+3600000,Math.min(t+st.link_hours*3600000,s.starts_at+s.duration_min*60000));let reference;do{reference='TC-'+randomBytes(3).toString('hex').toUpperCase();}while(db.prepare('SELECT 1 FROM orders WHERE reference=?').get(reference));
+    db.prepare("INSERT INTO orders(id,reference,brand_id,contact_id,opportunity_id,conversation_id,course_id,edition_id,promotion_id,amount_cents,currency,status,source,created_by,expires_at,created_at,updated_at,kind,plan,session_id,enrollment_id) VALUES(?,?,?,?,?,?,?,?,NULL,?,?,'pending',?,?,?,?,?,'session','per_session',?,?)").run(id,reference,en.brand_id,en.contact_id,en.opportunity_id,c.id,en.course_id,en.edition_id,amount,sp.currency,source,user?.id||null,expires,t,t,s.id,en.id);
+    event(id,'created',{source,amountCents:amount,currency:sp.currency,sessionId:s.id,sessionNumber:s.number,expiresAt:expires},user?.id||null,t);
+    emit('pedido.creado',get(id),{source,kind:'session',plan:'per_session',sessionId:s.id,sessionNumber:s.number,enrollmentId:en.id,expiresAt:expires},user);
+    return {order:get(id),created:true,conversation:c};
+  }
+  // Pedido de sesión + mensaje con el enlace por el chat del alumno (equipo o automatización). Si ya había pedido vigente y
+  // lo pide la automatización, no repite el aviso.
+  function sendSessionLink(s,en,{user=null,source}){
+    const made=createSessionOrder(s,en,{user,source});const c=made.conversation||db.prepare('SELECT * FROM conversations WHERE id=?').get(made.order.conversation_id);
+    if(!made.created&&!user)return {...made,conversation:c};
+    if(c.status==='resolved')throw fail(409,'La conversación está cerrada.');
+    insertMessage(c,user,sessionLinkMessage(made.order),user?'agent':'automation','order:'+made.order.id+':link:'+(user?randomUUID().slice(0,8):'auto'),null,null,null,{category:'utility'});
+    event(made.order.id,'link.sent',{by:user?.id||null,auto:!user},user?.id||null,now());
+    return {...made,conversation:c};
+  }
+  // Cancela los pedidos de sesión vigentes de una sesión, inscripción o apertura (sesión cancelada, baja, condonación).
+  function voidSessionOrders({sessionId=null,enrollmentId=null,editionId=null},reason,actor=null){
+    const rows=db.prepare("SELECT * FROM orders WHERE kind='session' AND status IN ('pending','review') AND (?1 IS NULL OR session_id=?1) AND (?2 IS NULL OR enrollment_id=?2) AND (?3 IS NULL OR edition_id=?3)").all(sessionId,enrollmentId,editionId),t=now();
+    for(const o of rows){
+      db.prepare("UPDATE receipts SET status='rejected',reviewed_by=?,review_note=?,reviewed_at=? WHERE order_id=? AND status='pending'").run(actor?.id||null,'Pedido cancelado: '+reason,t,o.id);
+      db.prepare("UPDATE orders SET status='cancelled',note=?,revision=revision+1,updated_at=? WHERE id=?").run(text(reason,500),t,o.id);event(o.id,'cancelled',{reason},actor?.id||null,t);emit('pedido.cancelado',o,{reason},actor);
+      const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id);if(c&&c.status!=='resolved')say(c,`El pedido ${o.reference} se canceló: ${reason}.`,'order:'+o.id+':cancelled');
+    }
+    return rows.length;
+  }
   function preview(c,user){
     crm.requireBrand(user,c.brand_id);const s=settings(c.brand_id),ctx=catalogue.info(c.course_id,c.edition_id),existing=openOrder(c.id);
-    return {enabled:Boolean(s.enabled),reason:ctx.reason||null,course:ctx.course.title,edition:ctx.edition.name,promotion:ctx.promotion?.name||null,amountCents:ctx.priceCents,amountLabel:money(ctx.priceCents,ctx.currency),currency:ctx.currency,linkHours:s.link_hours,existing:existing?view(existing):null};
+    return {enabled:Boolean(s.enabled),reason:ctx.reason||null,course:ctx.course.title,edition:ctx.edition.name,promotion:ctx.promotion?.name||null,amountCents:ctx.priceCents,amountLabel:money(ctx.priceCents,ctx.currency),currency:ctx.currency,linkHours:s.link_hours,sessionPriceCents:ctx.edition.session_price_cents>0?ctx.edition.session_price_cents:null,sessionPriceLabel:ctx.edition.session_price_cents>0?money(ctx.edition.session_price_cents,ctx.currency):null,existing:existing?view(existing):null};
   }
 
-  const view=o=>{const n=names(o);return {...o,courseTitle:n.course,editionName:n.edition,promotionName:n.promotion,contactName:n.contact,amountLabel:money(o.amount_cents,o.currency),statusLabel:STATUS[o.status],methodLabel:o.method?METHODS[o.method]:null,link:linkFor(o),pendingReceipts:db.prepare("SELECT count(*) n FROM receipts WHERE order_id=? AND status='pending'").get(o.id).n};};
+  const view=o=>{const n=names(o),s=sessionOf(o);return {...o,courseTitle:n.course,editionName:n.edition,promotionName:n.promotion,contactName:n.contact,amountLabel:money(o.amount_cents,o.currency),statusLabel:STATUS[o.status],methodLabel:o.method?METHODS[o.method]:null,planLabel:planLabel(o),sessionNumber:s?.number||null,sessionTitle:s?.title||null,link:linkFor(o),pendingReceipts:db.prepare("SELECT count(*) n FROM receipts WHERE order_id=? AND status='pending'").get(o.id).n};};
   function list(user,{brand,status}){
     const ids=crm.brandsFor(user).map(b=>b.id).filter(id=>!brand||brand==='all'||id===brand);if(!ids.length)return {orders:[],stats:emptyStats()};
     const ph=ids.map(()=>'?').join(',');
@@ -191,7 +248,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id);if(!c||c.customer_id!==user.id)throw fail(404,'Pedido no disponible.');
     const n=names(o),brand=db.prepare('SELECT name FROM brands WHERE id=?').get(o.brand_id);
     if(o.status==='pending'&&o.expires_at<=now())transaction(db,()=>expire(o));
-    const fresh=get(o.id);return {id:o.id,reference:o.reference,status:fresh.status,statusLabel:STATUS[fresh.status],amountLabel:money(o.amount_cents,o.currency),course:n.course,edition:n.edition,promotion:n.promotion,brand:brand?.name,expiresAt:o.expires_at,conversationId:o.conversation_id,checkoutUrl:fresh.checkout_url&&!fresh.checkout_url.includes('/?pay=')?fresh.checkout_url:null,methods:Object.entries(METHODS).map(([id,label])=>({id,label}))};
+    const fresh=get(o.id),s=sessionOf(o);return {id:o.id,reference:o.reference,status:fresh.status,statusLabel:STATUS[fresh.status],amountLabel:money(o.amount_cents,o.currency),course:n.course,edition:n.edition,promotion:n.promotion,brand:brand?.name,kind:o.kind,plan:o.plan,planLabel:planLabel(o),session:s?{number:s.number,title:s.title,startsAt:s.starts_at}:null,expiresAt:o.expires_at,conversationId:o.conversation_id,checkoutUrl:fresh.checkout_url&&!fresh.checkout_url.includes('/?pay=')?fresh.checkout_url:null,methods:Object.entries(METHODS).map(([id,label])=>({id,label}))};
   }
   function setSettings(brandId,input,user){
     requireAdmin(user);if(!db.prepare('SELECT 1 FROM brands WHERE id=?').get(brandId))throw fail(404,'Marca no encontrada.');
@@ -207,7 +264,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     if((x=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/orders(?:\/(preview))?$/))){
       requireStaff(user);const c=accessConversation(x[1],user);
       if(x[2]==='preview'&&req.method==='GET'){json(res,200,preview(c,user));return true;}
-      if(!x[2]&&req.method==='POST'){const input=await body(req),made=sendLink(c,user,{resend:Boolean(input.resend)});json(res,made.created?201:200,{order:view(made.order),created:made.created});return true;}
+      if(!x[2]&&req.method==='POST'){const input=await body(req),made=sendLink(c,user,{resend:Boolean(input.resend),plan:input.plan==='per_session'?'per_session':'full'});json(res,made.created?201:200,{order:view(made.order),created:made.created});return true;}
       throw fail(405,'Método no permitido.');
     }
     if(!path.startsWith('/api/payments'))return false;
@@ -229,5 +286,5 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     }
     throw fail(404,'Ruta de pagos no encontrada.');
   }
-  return {handle,settings,createOrder,linkMessage,confirm,attachReceipt,tick,openOrder,view,list,useConnector,providerEvent};
+  return {handle,settings,createOrder,linkMessage,confirm,attachReceipt,tick,openOrder,view,list,useConnector,providerEvent,createSessionOrder,sendSessionLink,voidSessionOrders};
 }

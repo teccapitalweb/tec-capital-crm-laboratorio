@@ -50,12 +50,14 @@ import {migrateCertificates} from './certificates-schema.mjs';
 import {createCertificates} from './certificates.mjs';
 import {migrateContent} from './content-schema.mjs';
 import {createContent} from './content.mjs';
+import {migrateAcademics} from './academics-schema.mjs';
+import {createSurveys} from './surveys.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<23&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v23-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<24&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v24-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -77,6 +79,7 @@ migrateFinance(db);
 migratePersons(db);
 migrateCertificates(db);
 migrateContent(db);
+migrateAcademics(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -132,6 +135,8 @@ crm.setStageHook(({id,eventId,actor,from,to,reason,source})=>{const o=db.prepare
 const catalogue=createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer});
 // Contenido (server/content.mjs): plantillas por evento, funciones de diseño/aprobación, variantes por IA y fichas SVG. El proveedor de IA se resuelve al usarse.
 const content=createContent({db,crm,catalogue,events,insertMessage,provider:()=>aiProvider,body,json,audit,broadcast,dataDir});
+// Encuestas (server/surveys.mjs): invitación por chat con token propio, respuesta pública en /encuesta/<token>, resultados por apertura; envío automático por marca apagado.
+const surveys=createSurveys({db,crm,events,insertMessage,content,body,json,audit,broadcast,rate});
 catalogue.setContentGate(content.gate);
 // Canal simulado (server/channel.mjs): estados de entrega, ventana de 24 h, categorías, botones y anuncio; apagado por marca por omisión.
 const channel=createChannel({db,crm,body,json,audit,broadcast,accessConversation,domainEvents:events});
@@ -144,7 +149,7 @@ const operations=createOperations({db,crm,catalogue,body,json,audit,broadcast,on
 // Venta con pago simulado (server/payments.mjs): pedidos, enlace de prueba, comprobantes en cola, inscripción; apagada por marca por omisión.
 const payments=createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events,content});
 // Coordinación académica (server/coordination.mjs): aperturas sobre la edición, sesiones, asistencia y recursos; la venta confirmada entra por evento.
-const coordination=createCoordination({db,crm,events,insertMessage,body,json,audit,broadcast,content});
+const coordination=createCoordination({db,crm,events,insertMessage,body,json,audit,broadcast,content,payments,surveys});
 // Finanzas (server/finance.mjs): libro de ventas por eventos, comisiones con regla configurable, liquidaciones, función contadora.
 const finance=createFinance({db,crm,events,body,json,audit,broadcast});
 // Certificación (server/certificates.mjs): folio secuencial, SVG con QR, verificación pública /verificar/<folio>, emisión automática al cerrar (apagada por marca).
@@ -158,7 +163,7 @@ const replies=createReplies({db,catalogue,crm,contacts,operations,insertMessage,
 const evaluation=createEvaluation({db,crm,replies,provider:aiProvider,body,json,audit});
 const automation=createAutomation({db,onChange:step=>{if(step.conversation_id)broadcast('conversation',step.conversation_id);broadcast('crm',null,{brandId:step.brand_id});}});
 const backupHours=process.env.BACKUP_INTERVAL_HOURS===undefined?(process.env.NODE_ENV==='test'?0:24):Number(process.env.BACKUP_INTERVAL_HOURS);
-const backups=createBackups({db,dataDir,version:'0.25.0',intervalMs:Number.isFinite(backupHours)&&backupHours>0?backupHours*3600000:0,keep:Math.max(1,Number(process.env.BACKUP_KEEP)||7)});
+const backups=createBackups({db,dataDir,version:'0.26.0',intervalMs:Number.isFinite(backupHours)&&backupHours>0?backupHours*3600000:0,keep:Math.max(1,Number(process.env.BACKUP_KEEP)||7)});
 const backupHandle=backupRoutes(backups);
 const recipes=createRecipes({db,catalogue,automation,insertMessage,broadcast,body,json,audit});
 // Simulador de clientes: habla con la propia API por loopback (nunca dentro de una transacción). SIMULATOR_DISABLED=1 lo oculta.
@@ -249,9 +254,10 @@ function flyer(course,brand){
 const server=http.createServer(async(req,res)=>{
   security(res);const url=new URL(req.url,'http://localhost'),path=url.pathname;
   try{
-    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.25.0',transport:'websocket',mode:'laboratorio'});}
+    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.26.0',transport:'websocket',mode:'laboratorio'});}
     if(await connectors.handlePublic(req,res,path,url,req.socket.remoteAddress||'unknown'))return;   // webhooks de proveedores: firma propia, sin sesión ni Origin
     if(await certificates.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // verificación pública de certificados por folio, con límite por IP
+    if(await surveys.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // encuestas por token (/encuesta/<token>, /api/survey/<token>), sin sesión, con límite por IP
     if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!originAllowed(req))throw fail(403,'Origen no permitido.');
     const ip=req.socket.remoteAddress||'unknown';
     if(req.method==='POST'&&path==='/api/auth/recover'){rate('recovery:'+ip,12,900000);await crm.recover(await body(req));return json(res,200,{ok:true});}
@@ -287,6 +293,7 @@ const server=http.createServer(async(req,res)=>{
       if(await persons.handle(req,res,path,user))return;
       if(await certificates.handle(req,res,path,user))return;
       if(await content.handle(req,res,path,user))return;
+      if(await surveys.handle(req,res,path,user))return;
       if(await events.handle(req,res,path,user))return;
       if(await payments.handle(req,res,path,user))return;
       if(await channel.handle(req,res,path,user))return;

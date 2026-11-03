@@ -19,11 +19,13 @@ const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const EVENTS={
   ad_welcome:{title:'Bienvenida por anuncio',when:'Primer mensaje de un cliente que llegó desde un anuncio; sustituye a la bienvenida del curso y se envía con el flyer del anuncio.',category:'marketing',vars:['nombre','marca','curso','edicion','fecha','precio','promocion']},
-  payment_pending:{title:'Pago pendiente (enlace de pago)',when:'Al crear el pedido y enviar el enlace de pago al cliente.',category:'utility',vars:['pedido','importe','enlace_pago','vigencia_pago']},
-  payment_confirmed:{title:'Pago confirmado',when:'Al confirmar el pago e inscribir al alumno.',category:'utility',vars:['pedido','importe']},
+  payment_pending:{title:'Pago pendiente (enlace de pago)',when:'Al crear el pedido y enviar el enlace de pago al cliente.',category:'utility',vars:['pedido','importe','enlace_pago','vigencia_pago','plan_pago']},
+  payment_confirmed:{title:'Pago confirmado',when:'Al confirmar el pago e inscribir al alumno.',category:'utility',vars:['pedido','importe','plan_pago']},
   session_reminder:{title:'Recordatorio de sesión',when:'Cuando una sesión entra en la ventana de recordatorio de la marca (Coordinación).',category:'utility',vars:['sesion','fecha_sesion','enlace_sesion','grupo']},
   recording_available:{title:'Grabación disponible',when:'Al registrar la grabación de una sesión en Coordinación; sin plantilla mapeada no se avisa.',category:'utility',vars:['sesion','grabacion']},
   certificate_ready:{title:'Certificado listo',when:'Al emitir el certificado del alumno.',category:'utility',vars:['folio','enlace_certificado','asistencia']},
+  session_payment:{title:'Pago de sesión (enlace de pago)',when:'Al cobrar una sesión a un alumno con plan por sesión, desde Coordinación o con el recordatorio automático.',category:'utility',vars:['sesion','fecha_sesion','importe','enlace_pago','vigencia_pago']},
+  survey_request:{title:'Invitación a encuesta',when:'Al enviar la encuesta de una sesión realizada o de la apertura a cada inscrito.',category:'utility',vars:['sesion','enlace_encuesta']},
 };
 export const TONES={formal:'Formal',cercano:'Cercano',breve:'Breve'};
 const PRICE_RE=/(\$\s?\d|\d[\d.,]*\s?(pesos|mxn|usd)\b)/i;
