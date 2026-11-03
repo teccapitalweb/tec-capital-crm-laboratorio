@@ -9,7 +9,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {csvCell,csvLine} from '../server/contacts.mjs';
 
 test('CSV: escapa comillas y saltos y neutraliza fórmulas de hoja de cálculo',()=>{
-  assert.equal(csvCell('a,b'),'"a,b"');assert.equal(csvCell('di "hola"'),'"di ""hola"""');assert.equal(csvCell('uno\ndos'),'"uno\ndos"');
+  assert.equal(csvCell('a,b'),'"a,b"');assert.equal(csvCell('di "hola"'),'"di ""hola"""');assert.equal(csvCell('uno\ndos'),'"uno\ndos"');assert.equal(csvCell('a;=b'),'"a;=b"');assert.equal(csvCell('a\tb'),'"a\tb"');
   for(const f of ['=1+1','+52 55','-2','@SUMA(A1)'])assert.ok(csvCell(f).startsWith("'"),f);
   assert.equal(csvCell(null),'');assert.equal(csvCell(0),'0');assert.equal(csvLine(['x',1,'=y']),"x,1,'=y");
 });

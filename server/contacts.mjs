@@ -12,7 +12,7 @@ const phoneKey=v=>{const d=digits(v);return d.length>=7?d.slice(-10):'';};
 const closed=s=>['ganada','perdida'].includes(s);
 
 // Neutraliza fórmulas de hoja de cálculo (=, +, -, @) y escapa comillas, comas y saltos de línea.
-export const csvCell=v=>{let s=v===null||v===undefined?'':String(v);if(/^[=+\-@\t\r]/.test(s))s="'"+s;return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+export const csvCell=v=>{let s=v===null||v===undefined?'':String(v);if(/^[=+\-@\t\r]/.test(s))s="'"+s;return /[",;\t\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};   // ; y tabulador también fuerzan comillas: una hoja con otro separador no debe partir la celda
 export const csvLine=cells=>cells.map(csvCell).join(',');
 
 export function createContacts({db,crm,body,json,audit,broadcast,events=null,now=Date.now}){
