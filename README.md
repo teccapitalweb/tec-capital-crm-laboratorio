@@ -53,6 +53,10 @@ El CRM habla con una **interfaz única** de canal y de pago (`docs/CONECTORES.md
 
 En **Catálogo y biblioteca → Evaluación** cada marca tiene casos que dicen qué escribe un cliente y qué debería hacer el motor (intención, acción, fuente y texto). **Ejecutar** corre la misma simulación que «Probar respuesta», sin enviar nada, con el nivel vigente de la marca, y guarda la puntuación y el detalle de cada caso para comparar antes y después de cambiar conocimiento, nivel o proveedor de IA. Cada marca nace con 17 casos.
 
+## Personas: una identidad entre marcas
+
+En **Contactos → Personas** cada cliente es una sola persona aunque tenga contactos en varias marcas: se unen solos por perfil del laboratorio, teléfono (normalizado a formato internacional, México por omisión) o correo; cuando sólo coincide el nombre, administración revisa la fusión antes de confirmarla. La ficha de persona reúne marcas, oportunidades, pedidos e inscripciones, siempre dentro de las marcas a las que tienes acceso. El consentimiento es de la persona: una baja vale para toda la empresa y queda con historial.
+
 ## Finanzas
 
 En **Operación → Finanzas** (administración y personas con función de contadora) está el libro de ventas alimentado por eventos: cada pago confirmado entra una vez, los reembolsos los registra administración, y de ahí salen ingresos por día, semana o mes, por consultora, curso, vendedor y método, con conciliación contra los pedidos. Las comisiones a consultoras y vendedores se devengan con una regla configurable por marca o de la empresa, quedan auditables con la regla aplicada y se liquidan marcándolas como pagadas. Exportación CSV y vista imprimible. Sin cobros, facturación ni nómina reales.

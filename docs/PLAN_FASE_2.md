@@ -13,7 +13,7 @@ Escrito el 2 nov 2026 al cerrar la Fase 1 (v0.20.0, siete bloques publicados). D
 | # | Bloque | Depende de | Tamaño | Valor visible en la presentación |
 | --- | --- | --- | --- | --- |
 | 2.1 | Eventos de dominio (la columna vertebral) · **publicado en v0.21.0 (2 nov 2026)** | nada | S | Bitácora única de hechos del negocio |
-| 2.2 | Identidad única de persona | 2.1 | M | Un cliente, varias marcas, un historial |
+| 2.2 | Identidad única de persona · **hecho localmente el 3 nov 2026** | 2.1 | M | Un cliente, varias marcas, un historial |
 | 2.3 | Coordinación académica: aperturas, sesiones, inscritos · **arranque publicado en v0.21.0 (2 nov 2026)** | 2.1 | L | La venta entra sola a la apertura |
 | 2.4 | Finanzas: libro de ventas, comisiones, exportación · **publicado en v0.22.0 (2 nov 2026)** | 2.1 | M | Lo que la contadora pide hoy en Excel |
 | 2.5 | Certificación: emisor único con folio y verificación | 2.3 | M | Certificado verificable al cerrar la apertura |
@@ -45,6 +45,8 @@ S = una sesión de trabajo; M = dos o tres; L = cuatro o más. Son órdenes de m
 **Fuera de alcance.** Verificación del teléfono (llega con Meta), importación masiva de personas (puede ir en 2.8 o con la importación CSV).
 
 **Criterios de salida.** Dos conversaciones de la misma persona en marcas distintas comparten ficha; el simulador respeta identidades; pruebas de normalización y de alcance; exportación de contactos incluye el identificador de persona.
+
+**Estado (3 nov 2026):** implementado localmente en la rama `feat/identidad-persona` (esquema 21, versión 0.23.0, sin publicar); cumple los criterios de salida (probado por API). Fuera, como estaba previsto: verificación del teléfono e importación masiva. Detalle en [CONTINUIDAD.md](CONTINUIDAD.md).
 
 **Riesgos.** Los clientes de prueba no tienen teléfono real: usar el número de prueba como teléfono hasta que exista el canal real.
 

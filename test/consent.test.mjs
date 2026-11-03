@@ -111,6 +111,6 @@ test('consentimiento por API: permisos, reactivación sólo por administración,
 
   // exportación
   const csv=await (await raw('/api/crm/export/contacts.csv?brand=globalvet',admin.cookie)).text();
-  assert.match(csv.split('\r\n')[0],/,consentimiento$/);assert.ok(csv.split('\r\n').some(l=>l.startsWith('GlobalVet,Principal Sin Registro')&&l.endsWith(',no_desea')));assert.ok(csv.split('\r\n').some(l=>l.startsWith('GlobalVet,Con Consentimiento')&&l.endsWith(',acepta')));
+  assert.match(csv.split('\r\n')[0],/,consentimiento,persona$/);assert.ok(csv.split('\r\n').some(l=>l.startsWith('GlobalVet,Principal Sin Registro')&&/,no_desea,[a-f0-9-]{36}$/.test(l)));assert.ok(csv.split('\r\n').some(l=>l.startsWith('GlobalVet,Con Consentimiento')&&/,acepta,[a-f0-9-]{36}$/.test(l)));
   const d=new DatabaseSync(join(dir,'laboratorio.sqlite'));try{assert.equal(d.prepare("SELECT count(*) n FROM contact_consent WHERE contact_id=?").get(dup).n,0);}finally{d.close();}
 });

@@ -20,3 +20,5 @@
 .sec-steps{padding-left:18px;display:grid;gap:12px;font-size:13px;line-height:1.5;margin:0 0 14px}.sec-secret{display:block;margin:8px 0;padding:11px 13px;border:1px solid #e3e6ee;border-radius:12px;background:#f7f8fb;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15px;letter-spacing:.06em;overflow-wrap:anywhere;user-select:all}
 .sec-code-list{margin:10px 0;padding:12px 14px;border:1px solid #e3e6ee;border-radius:12px;background:#f7f8fb;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;line-height:1.8;columns:2;column-gap:24px;user-select:all}.sec-codes,.sec-setup{display:grid;gap:12px;min-width:0}
 @media(max-width:650px){.sec-code-list{columns:1}}
+.prs-row .prs-side,.prs-side{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.prs-detail .ctc-dup{margin-bottom:6px}.prs-detail .modal-section-title{margin-top:18px}.prs-detail .cat-form-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+@media(max-width:650px){.prs-side{justify-content:flex-start}}

@@ -13,7 +13,7 @@ window.createContactsUI=function({state,api,esc,icon,showModal,toast,getData,rer
 
   function toolbar(){
     const tags=scopedTags();if(tagFilter&&!tags.some(t=>t.id===tagFilter))tagFilter='';
-    return `<div class="ctc-toolbar"><label class="ctc-filter">Etiqueta<select id="ctc-tag-filter"><option value="">Todas</option>${tags.map(t=>`<option value="${t.id}" ${t.id===tagFilter?'selected':''}>${esc(state.brand==='all'?brandName(t.brand_id)+' · '+t.name:t.name)}</option>`).join('')}</select></label><button type="button" class="btn" data-action="ctc-duplicates">${icon('copy')} Duplicados</button>${admin()?`<button type="button" class="btn" data-action="ctc-export">${icon('download')} Exportar</button>`:''}</div>`;
+    return `<div class="ctc-toolbar"><label class="ctc-filter">Etiqueta<select id="ctc-tag-filter"><option value="">Todas</option>${tags.map(t=>`<option value="${t.id}" ${t.id===tagFilter?'selected':''}>${esc(state.brand==='all'?brandName(t.brand_id)+' · '+t.name:t.name)}</option>`).join('')}</select></label><button type="button" class="btn" data-action="prs-list">${icon('users')} Personas</button><button type="button" class="btn" data-action="ctc-duplicates">${icon('copy')} Duplicados</button>${admin()?`<button type="button" class="btn" data-action="ctc-export">${icon('download')} Exportar</button>`:''}</div>`;
   }
 
   function tagBlock(c){

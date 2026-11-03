@@ -41,7 +41,7 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
   const scoped=(table,id,user)=>{const r=db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);if(!r)throw fail(404,'Registro no disponible.');requireBrand(user,r.brand_id);return r;};
   const sendChange=brand=>broadcast('crm',null,{brandId:brand});
   let assignmentGuard=()=>{};
-  let stageHook=()=>{};
+  let stageHook=()=>{},contactHook=()=>{};   // contactHook: identidad única de persona (persons.attach)
   const followup=createFollowup({db,scoped,validOwner,body,json,sendChange,audit,broadcast,beforeAssign:(id,owner)=>assignmentGuard(id,owner),onStage:e=>stageHook(e)});
   const inviteFor=(token,username)=>{
     const row=db.prepare('SELECT * FROM team_invites WHERE token_hash=? AND username=? AND used_by IS NULL AND revoked_at IS NULL AND expires_at>?').get(tokenHash(text(token,200)),username,Date.now());
@@ -64,7 +64,7 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
     if(existing)return existing.opportunity_id;
     const now=Date.now(),person=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id);
     let contact=db.prepare('SELECT * FROM contacts WHERE source_user_id=? AND brand_id=?').get(c.customer_id,c.brand_id);
-    if(!contact){const id=randomUUID();db.prepare('INSERT INTO contacts(id,brand_id,source_user_id,name,source,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,c.brand_id,c.customer_id,person.name,'laboratorio',now,now);contact={id};}
+    if(!contact){const id=randomUUID();db.prepare('INSERT INTO contacts(id,brand_id,source_user_id,name,source,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,c.brand_id,c.customer_id,person.name,'laboratorio',now,now);contact={id};contactHook(db.prepare('SELECT * FROM contacts WHERE id=?').get(id));}
     let opportunity=db.prepare("SELECT * FROM opportunities WHERE contact_id=? AND course_id=? AND edition_id=? AND stage NOT IN ('ganada','perdida')").get(contact.id,c.course_id,c.edition_id);
     if(!opportunity){
       const id=randomUUID(),stage=c.stage==='inscrito'?'ganada':c.stage,owner=c.assigned_to&&canBrand(db.prepare('SELECT * FROM users WHERE id=?').get(c.assigned_to),c.brand_id)?c.assigned_to:null;
@@ -153,13 +153,13 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
     }
     if(path==='/api/crm/contacts'&&req.method==='POST'){
       const input=await body(req);requireBrand(user,input.brandId);const name=text(input.name,100);if(name.length<2)throw fail(400,'Escribe el nombre del contacto.');
-      const id=randomUUID(),now=Date.now();db.prepare('INSERT INTO contacts(id,brand_id,name,phone,email,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,input.brandId,name,text(input.phone,40),text(input.email,150),now,now);audit(user,'contact.created',id);sendChange(input.brandId);json(res,201,{id});return true;
+      const id=randomUUID(),now=Date.now();transaction(db,()=>{db.prepare('INSERT INTO contacts(id,brand_id,name,phone,email,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,input.brandId,name,text(input.phone,40),text(input.email,150),now,now);contactHook(db.prepare('SELECT * FROM contacts WHERE id=?').get(id));});audit(user,'contact.created',id);sendChange(input.brandId);json(res,201,{id});return true;
     }
     const contact=path.match(/^\/api\/crm\/contacts\/([a-f0-9-]+)$/);
     if(contact){
       const c=scoped('contacts',contact[1],user);
       if(req.method==='GET'){json(res,200,{contact:c,notes:db.prepare('SELECT n.*,u.name author_name FROM internal_notes n JOIN users u ON u.id=n.author_id WHERE n.contact_id=? ORDER BY n.created_at DESC LIMIT 100').all(c.id)});return true;}
-      if(req.method==='PATCH'){const input=await body(req),name=text(input.name,100);requireBrand(user,c.brand_id);if(name.length<2)throw fail(400,'Escribe el nombre del contacto.');db.prepare('UPDATE contacts SET name=?,phone=?,email=?,updated_at=? WHERE id=?').run(name,text(input.phone,40),text(input.email,150),Date.now(),c.id);audit(user,'contact.updated',c.id);sendChange(c.brand_id);json(res,200,{ok:true});return true;}
+      if(req.method==='PATCH'){const input=await body(req),name=text(input.name,100);requireBrand(user,c.brand_id);if(name.length<2)throw fail(400,'Escribe el nombre del contacto.');transaction(db,()=>{db.prepare('UPDATE contacts SET name=?,phone=?,email=?,updated_at=? WHERE id=?').run(name,text(input.phone,40),text(input.email,150),Date.now(),c.id);contactHook(db.prepare('SELECT * FROM contacts WHERE id=?').get(c.id));});audit(user,'contact.updated',c.id);sendChange(c.brand_id);json(res,200,{ok:true});return true;}
     }
     const notes=path.match(/^\/api\/crm\/contacts\/([a-f0-9-]+)\/notes$/);
     if(notes&&req.method==='POST'){const c=scoped('contacts',notes[1],user),input=await body(req),value=text(input.text,4000);requireBrand(user,c.brand_id);if(!value)throw fail(400,'Escribe una nota.');db.prepare('INSERT INTO internal_notes VALUES(?,?,?,?,?,?)').run(randomUUID(),c.id,c.brand_id,user.id,value,Date.now());audit(user,'note.created',c.id);sendChange(c.brand_id);json(res,201,{ok:true});return true;}
@@ -185,5 +185,5 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
     let id;
     transaction(db,()=>{const row=db.prepare('SELECT r.*,u.disabled FROM recovery_tokens r JOIN users u ON u.id=r.user_id WHERE r.token_hash=? AND r.used_at IS NULL AND r.expires_at>? AND u.username=?').get(tokenHash(token),Date.now(),username);if(!row||row.disabled)throw fail(400,'El código no es válido, venció o ya fue utilizado.');id=row.user_id;db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(value,id);db.prepare('UPDATE recovery_tokens SET used_at=? WHERE id=?').run(Date.now(),row.id);db.prepare('DELETE FROM sessions WHERE user_id=?').run(id);audit(null,'recovery.completed',id);});disconnect(id);
   }
-  return {handle,canBrand,requireBrand,brandsFor,syncConversation,assignConversation,setStage,inviteFor,acceptInvite,recover,setAssignmentGuard:guard=>{assignmentGuard=guard;},setStageHook:fn=>{stageHook=fn;}};
+  return {handle,canBrand,requireBrand,brandsFor,syncConversation,assignConversation,setStage,inviteFor,acceptInvite,recover,setAssignmentGuard:guard=>{assignmentGuard=guard;},setStageHook:fn=>{stageHook=fn;},setContactHook:fn=>{contactHook=fn;}};
 }

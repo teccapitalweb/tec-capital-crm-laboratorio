@@ -102,5 +102,5 @@ test('venta con pago simulado: apagada por omisión, cobro desde el chat, pago s
  assert.equal((await call('/api/payments/orders/'+o4.id+'/customer',other.cookie)).order.status,'expired');
  await call('/api/payments/orders/'+o4.id+'/pay',other.cookie,{method:'card'},'POST',409);
  await call('/api/payments/orders/'+randomUUID(),admin.cookie,undefined,'GET',404);
- const d=db();try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,20);assert.equal(d.prepare("SELECT count(*) n FROM payment_events WHERE kind='expired'").get().n,1);}finally{d.close();}
+ const d=db();try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,21);assert.equal(d.prepare("SELECT count(*) n FROM payment_events WHERE kind='expired'").get().n,1);}finally{d.close();}
 });

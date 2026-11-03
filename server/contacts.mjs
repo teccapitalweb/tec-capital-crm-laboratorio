@@ -15,7 +15,7 @@ const closed=s=>['ganada','perdida'].includes(s);
 export const csvCell=v=>{let s=v===null||v===undefined?'':String(v);if(/^[=+\-@\t\r]/.test(s))s="'"+s;return /[",;\t\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};   // ; y tabulador también fuerzan comillas: una hoja con otro separador no debe partir la celda
 export const csvLine=cells=>cells.map(csvCell).join(',');
 
-export function createContacts({db,crm,body,json,audit,broadcast,events=null,now=Date.now}){
+export function createContacts({db,crm,body,json,audit,broadcast,events=null,persons=null,now=Date.now}){
   const requireAdmin=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||u.role!=='admin')throw fail(403,'Esta acción requiere un administrador.');};
   const requireStaff=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||!['admin','agent'].includes(u.role))throw fail(403,'Esta acción es para el equipo de atención.');};
   const contactOf=(id,user)=>{const c=typeof id==='string'?db.prepare('SELECT * FROM contacts WHERE id=?').get(id):null;if(!c)throw fail(404,'Contacto no disponible.');crm.requireBrand(user,c.brand_id);return c;};
@@ -66,12 +66,15 @@ export function createContacts({db,crm,body,json,audit,broadcast,events=null,now
   const STATUS=['unknown','opted_in','opted_out'];
   const consentOf=id=>db.prepare('SELECT status,source,note,actor_id,updated_at FROM contact_consent WHERE contact_id=?').get(id)||{status:'unknown',source:null,note:'',actor_id:null,updated_at:null};
   const conversationsOf=id=>db.prepare('SELECT co.conversation_id id FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id WHERE o.contact_id=?').all(id).map(r=>r.id);
-  function writeConsent(c,status,source,note,actor){
+  // El consentimiento es de la persona (bloque 2.2): se escribe en la persona y se proyecta a todos sus contactos.
+  // Sin módulo de personas (pruebas unitarias con esquema parcial) se conserva el registro por contacto.
+  function localConsent(c,status,source,note,actor){
     const t=now();
     db.prepare('INSERT INTO contact_consent(contact_id,brand_id,status,source,note,actor_id,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET status=excluded.status,source=excluded.source,note=excluded.note,actor_id=excluded.actor_id,updated_at=excluded.updated_at').run(c.id,c.brand_id,status,source,note,actor,t);
     db.prepare('INSERT INTO contact_consent_events(contact_id,brand_id,status,source,note,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(c.id,c.brand_id,status,source,note,actor,t);
     if(status==='opted_out'){for(const id of conversationsOf(c.id))cancelConversationSteps(db,id,'contact_opted_out',t);events?.publish({type:'baja.registrada',brandId:c.brand_id,entityKind:'contact',entityId:c.id,payload:{source,note:String(note||'').slice(0,120)},actorId:actor||null,source:'consent',dedupeKey:'baja.registrada:'+c.id+':'+t});}
   }
+  const writeConsent=(c,status,source,note,actor)=>persons?persons.setConsentForContact(c,status,source,note,actor):localConsent(c,status,source,note,actor);
   function setConsent(user,contactId,input){
     requireStaff(user);const c=contactOf(contactId,user),status=input.status,note=text(input.note,200);
     if(!STATUS.includes(status))throw fail(400,'Estado de consentimiento no válido.');
@@ -139,6 +142,7 @@ export function createContacts({db,crm,body,json,audit,broadcast,events=null,now
       db.prepare('UPDATE contact_consent_events SET contact_id=? WHERE contact_id=?').run(p.keep.id,p.merge.id);
       db.prepare('DELETE FROM contact_consent WHERE contact_id=?').run(p.merge.id);
       db.prepare('DELETE FROM contacts WHERE id=?').run(p.merge.id);
+      persons?.afterContactMerge(db.prepare('SELECT * FROM contacts WHERE id=?').get(p.keep.id),p.merge.persona_id,user);
       return {keepId:p.keep.id,mergedId:p.merge.id,moved};
     });
   }
@@ -153,7 +157,7 @@ export function createContacts({db,crm,body,json,audit,broadcast,events=null,now
       const tag=params.get('tag'),filter=tag?' AND c.id IN (SELECT contact_id FROM contact_tag_links WHERE tag_id=?)':'';
       if(tag&&!db.prepare(`SELECT 1 FROM contact_tags WHERE id=? AND brand_id IN (${q})`).get(tag,...ids))throw fail(404,'Etiqueta no disponible.');
       const rows=db.prepare(`SELECT c.*,b.name brand_name,(SELECT group_concat(t.name,'; ') FROM contact_tag_links l JOIN contact_tags t ON t.id=l.tag_id WHERE l.contact_id=c.id) tags,(SELECT count(*) FROM opportunities o WHERE o.contact_id=c.id AND o.stage NOT IN ('ganada','perdida')) active,(SELECT status FROM contact_consent k WHERE k.contact_id=c.id) consent FROM contacts c JOIN brands b ON b.id=c.brand_id WHERE c.brand_id IN (${q})${filter} ORDER BY b.name,c.name LIMIT ${MAX_EXPORT}`).all(...ids,...(tag?[tag]:[]));
-      count=rows.length;lines=[csvLine(['marca','nombre','telefono','correo','origen','etiquetas','intereses_activos','creado','actualizado','consentimiento']),...rows.map(r=>csvLine([r.brand_name,r.name,r.phone,r.email,r.source_user_id?'perfil':'manual',r.tags,r.active,new Date(r.created_at).toISOString(),new Date(r.updated_at).toISOString(),consentLabel[r.consent||'unknown']]))];
+      count=rows.length;lines=[csvLine(['marca','nombre','telefono','correo','origen','etiquetas','intereses_activos','creado','actualizado','consentimiento','persona']),...rows.map(r=>csvLine([r.brand_name,r.name,r.phone,r.email,r.source_user_id?'perfil':'manual',r.tags,r.active,new Date(r.created_at).toISOString(),new Date(r.updated_at).toISOString(),consentLabel[r.consent||'unknown'],r.persona_id||'']))];
     }else{
       const rows=db.prepare(`SELECT o.*,b.name brand_name,c.name contact_name,k.title course_title,e.name edition_name,e.price_cents,e.currency,u.name owner_name FROM opportunities o JOIN contacts c ON c.id=o.contact_id JOIN brands b ON b.id=o.brand_id JOIN courses k ON k.id=o.course_id LEFT JOIN editions e ON e.id=o.edition_id LEFT JOIN users u ON u.id=o.owner_id WHERE o.brand_id IN (${q}) ORDER BY b.name,o.updated_at DESC LIMIT ${MAX_EXPORT}`).all(...ids);
       count=rows.length;lines=[csvLine(['marca','contacto','curso','edicion','etapa','responsable','precio','moneda','motivo_perdida','creada','actualizada']),...rows.map(r=>csvLine([r.brand_name,r.contact_name,r.course_title,r.edition_name,r.stage,r.owner_name,r.price_cents===null||r.price_cents===undefined?'':(r.price_cents/100).toFixed(2),r.currency,r.lost_reason,new Date(r.created_at).toISOString(),new Date(r.updated_at).toISOString()]))];
