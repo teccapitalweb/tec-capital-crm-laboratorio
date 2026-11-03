@@ -146,7 +146,8 @@ test('coordinación académica por API: la venta confirmada entra sola a la aper
  assert.equal((await eventsOf('inscripcion.cancelada')).length,1);assert.equal(count("SELECT count(*) n FROM enrollments WHERE status='cancelled'"),1);
 
  // bitácora: alcance, filtros, detalle, CSV, catálogo de tipos
- const all=await call('/api/events?brand=all',admin.cookie);assert.ok(all.stats.total>=30);assert.equal(all.stats.failed,0);assert.equal(all.stats.pending,0);assert.equal(all.events[0].seq,all.stats.total);
+ const all=await until(async()=>{const r=await call('/api/events?brand=all',admin.cookie);return r.stats.pending===0?r:null;});   // el reloj de entregas corre cada segundo: se espera a que no quede nada pendiente
+ assert.ok(all,'todas las entregas a suscriptores terminaron');assert.ok(all.stats.total>=30);assert.equal(all.stats.failed,0);assert.equal(all.events[0].seq,all.stats.total);
  assert.equal((await call('/api/events?brand=odonteck',admin.cookie)).stats.total,0);
  await call('/api/events?brand=inexistente',admin.cookie,undefined,'GET',404);
  const ref=d1.enrollments[1].reference;const byRef=(await call('/api/events?brand=all&entityId='+ref,admin.cookie)).events;assert.ok(byRef.length>=2);assert.ok(byRef.every(e=>JSON.stringify(e.payload).includes(ref)));
