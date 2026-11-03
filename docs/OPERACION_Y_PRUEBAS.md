@@ -64,7 +64,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta identidad de persona son **140** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta certificación son **142** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -75,6 +75,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/catalogue.test.mjs` | Ediciones, fechas, centavos, promociones, variables, aprobación, permisos, vistas previas, archivo, snapshots/bytes históricos y reinicio |
 | `test/automation.test.mjs` | Motor 4A: migración v7, idempotencia, reintentos, reinicio, carreras de cancelación y pausas (sin servidor; base temporal) |
 | `test/automation-http.test.mjs` | Rutas `/api/automation`: sólo administración, revisiones, pausa global (servidor temporal) |
+| `test/certificates.test.mjs` | Certificación: QR, elegibilidad por asistencia, emisión automática al cerrar y manual, folios consecutivos, verificación pública (HTML, JSON, SVG), revocación y re-emisión, créditos, aviso al alumno, límite de peticiones |
 | `test/persons.test.mjs` | Identidad de persona: normalización, migración v21 con relleno y consentimiento proyectado, misma clienta en dos marcas, alcance, unión por teléfono/correo, candidaturas, baja a nivel persona, fusiones y CSV |
 | `test/finance.test.mjs` | Finanzas: comisión y periodos, relleno del libro al migrar, libro por eventos, reglas y recálculo, resumen y conciliación, cruce con Presentación, CSV, función contadora, liquidación y reembolso |
 | `test/events.test.mjs` | Eventos de dominio: migración v19, publicación idempotente dentro de la transacción, suscriptores con reintento/espera creciente/fallo permanente, reintento manual, consulta con alcance y CSV (sin servidor; base temporal) |
@@ -121,6 +122,7 @@ Usar perfiles/sesiones separados para un administrador, dos asesores de prueba y
 14. **Presentación:** abrir la vista Presentación, revisar que el guion marque «Listo» en los pasos que se van a mostrar, probar «Ir a la pantalla» y la pantalla completa; el filtro por marca y periodo debe cambiar las cifras sin recargar.
 15. **Conectores (administración):** con `CONNECTOR_WEBHOOK_SECRET` en un entorno de pruebas, enviar un webhook firmado de estado y otro de pago desde la pestaña Conectores y comprobar que el mensaje y el pedido cambian y que repetirlo responde «duplicado». No registrar URLs de webhook en proveedores reales sin instrucción expresa.
 16. **Evaluación:** en Catálogo → Evaluación ejecutar el banco de una marca de pruebas antes y después de cambiar conocimiento o nivel; revisar los casos que fallan y su motivo. Es la forma de comprobar el motor (y el proveedor de IA, cuando haya clave) sin escribir a clientes.
+20. **Certificados (administración o responsable):** en una apertura de prueba en curso con una sesión realizada y asistencia registrada, emitir desde la ficha de apertura; abrir el enlace de verificación en una ventana sin sesión y comprobar nombre, curso y estado; abrir el SVG y escanear el QR con un teléfono; revocar con motivo y volver a verificar; probar la emisión automática activándola sólo en la marca de pruebas y cerrando la apertura. Desactivar la emisión automática al terminar.
 19. **Personas:** en Contactos → Personas buscar a un cliente de prueba que haya escrito a dos marcas y comprobar que una sola ficha reúne ambas; con una sesión de asesora de una sola marca, comprobar que la ficha enseña sólo esa marca; registrar una baja desde la persona y verificar que el contacto de la otra marca queda sin mensajes; como administración revisar «Por revisar» con dos contactos manuales de prueba con el mismo nombre y fusionarlos tras la vista previa. Dejar los registros de prueba identificados.
 18. **Finanzas (administración):** fijar una regla de comisión de prueba, devengar pendientes, revisar que la conciliación quede «correcta» y que el total de ventas coincida con el del modo presentación para el mismo periodo; conceder la función de contadora a una persona de prueba y comprobar que ve todas las marcas sin poder cambiar reglas; marcar una liquidación de prueba con nota y registrar un reembolso parcial de un pedido de prueba; descargar los dos CSV e imprimir el resumen. Al terminar, retirar el acceso de prueba y dejar la regla como estaba.
 17. **Coordinación y eventos (administración):** en una marca de pruebas con la venta simulada activa, fijar un mínimo en la apertura de una edición de prueba, activar la automatización de coordinación, confirmar pagos de prueba hasta el mínimo y comprobar que la apertura pasa a «abierta» sola y que la persona responsable recibe el aviso; programar una sesión dentro de la ventana de recordatorio y verificar que cada inscrito de prueba recibe un solo recordatorio; registrar asistencia, marcar la sesión realizada y cerrar la apertura; en Operación → Eventos revisar la bitácora y descargar el CSV. Al terminar, desactivar la automatización y dejar la apertura de prueba cerrada o cancelada.
@@ -169,7 +171,7 @@ Publicar sólo dentro del alcance autorizado por el usuario. Para el traspaso do
 El health esperado de referencia:
 
 ```json
-{"ok":true,"version":"0.23.0","transport":"websocket","mode":"laboratorio"}
+{"ok":true,"version":"0.24.0","transport":"websocket","mode":"laboratorio"}
 ```
 
 ## Respaldos y recuperación

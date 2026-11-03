@@ -53,6 +53,10 @@ El CRM habla con una **interfaz única** de canal y de pago (`docs/CONECTORES.md
 
 En **Catálogo y biblioteca → Evaluación** cada marca tiene casos que dicen qué escribe un cliente y qué debería hacer el motor (intención, acción, fuente y texto). **Ejecutar** corre la misma simulación que «Probar respuesta», sin enviar nada, con el nivel vigente de la marca, y guarda la puntuación y el detalle de cada caso para comparar antes y después de cambiar conocimiento, nivel o proveedor de IA. Cada marca nace con 17 casos.
 
+## Certificados verificables
+
+Al cerrar una apertura, cada inscrito con la asistencia mínima recibe su certificado con folio secuencial IPCI y código QR; también se emite a mano desde la ficha de apertura. Cualquiera puede verificarlo en `/verificar/<folio>` sin iniciar sesión (y descargar el SVG); el alumno recibe el enlace por su chat. Ajustes por marca en **Operación → Certificados**: emisión automática (apagada por omisión), asistencia mínima, firma, logotipo y créditos por consultora. Certificados de práctica, sin validez oficial.
+
 ## Personas: una identidad entre marcas
 
 En **Contactos → Personas** cada cliente es una sola persona aunque tenga contactos en varias marcas: se unen solos por perfil del laboratorio, teléfono (normalizado a formato internacional, México por omisión) o correo; cuando sólo coincide el nombre, administración revisa la fusión antes de confirmarla. La ficha de persona reúne marcas, oportunidades, pedidos e inscripciones, siempre dentro de las marcas a las que tienes acceso. El consentimiento es de la persona: una baja vale para toda la empresa y queda con historial.

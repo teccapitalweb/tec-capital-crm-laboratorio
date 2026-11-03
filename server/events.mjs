@@ -26,6 +26,8 @@ export const EVENT_TYPES={
   'mensaje.fallido':{title:'Mensaje fallido',entity:'message',payload:'conversationId, category, reason'},
   'baja.registrada':{title:'Baja de mensajes registrada',entity:'person',payload:'source, note, originBrand'},
   'persona.fusionada':{title:'Personas fusionadas',entity:'person',payload:'mergedId, mergedName, contacts'},
+  'certificado.emitido':{title:'Certificado emitido',entity:'certificate',payload:'folio, enrollmentId, personId, courseId, editionId, holder, attendancePct, source'},
+  'certificado.revocado':{title:'Certificado revocado',entity:'certificate',payload:'folio, reason, holder'},
   'apertura.abierta':{title:'Apertura confirmada',entity:'edition',payload:'courseId, enrolled, minStudents, auto'},
   'apertura.en_curso':{title:'Apertura en curso',entity:'edition',payload:'courseId'},
   'apertura.cerrada':{title:'Apertura cerrada',entity:'edition',payload:'courseId, enrolled, sessions'},
@@ -38,7 +40,7 @@ export const EVENT_TYPES={
   'reembolso.registrado':{title:'Reembolso registrado',entity:'order',payload:'reference, amountCents, currency, reason, ledgerId'},
   'comision.pagada':{title:'Comisión pagada',entity:'payout',payload:'role, userId, totalCents, currency, entries, note'},
 };
-export const ENTITY_KINDS={conversation:'Conversación',opportunity:'Oportunidad',order:'Pedido',enrollment:'Inscripción',message:'Mensaje',contact:'Contacto',edition:'Apertura',session:'Sesión',payout:'Pago de comisión',person:'Persona'};
+export const ENTITY_KINDS={conversation:'Conversación',opportunity:'Oportunidad',order:'Pedido',enrollment:'Inscripción',message:'Mensaje',contact:'Contacto',edition:'Apertura',session:'Sesión',payout:'Pago de comisión',person:'Persona',certificate:'Certificado'};
 
 export function createEvents({db,crm=null,body,json,audit=()=>{},now=Date.now,log=console,baseDelayMs=5_000,capDelayMs=15*60_000,maxAttempts=5,batch=20}){
   const subscribers=new Map();   // tipo -> [{name,handler}]

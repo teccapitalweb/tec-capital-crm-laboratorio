@@ -101,7 +101,7 @@ test('coordinación académica por API: la venta confirmada entra sola a la aper
  assert.ok(s2b.reminder_sent_at,'al mover la sesión dentro de la ventana se recuerda');assert.equal((await eventsOf('sesion.proxima')).length,2);
  await call('/api/coordination/sessions/'+s2.id,admin.cookie,{title:'x',expectedRevision:s2.revision},'PATCH',409);
  const meet2=(await call('/api/coordination/sessions/'+s2.id+'/meet',admin.cookie,{})).session;assert.equal(meet2.meet_provider,'simulated');
- const pres=await call('/api/presentation?brand=globalvet',admin.cookie);assert.equal(pres.script.length,11);const step=pres.script.find(s=>s.id==='coordinacion');assert.equal(step.ready,true);assert.match(step.detail,/1 aperturas abiertas/);assert.equal(pres.coordination.upcoming,2);
+ const pres=await call('/api/presentation?brand=globalvet',admin.cookie);assert.equal(pres.script.length,12);const step=pres.script.find(s=>s.id==='coordinacion');assert.equal(step.ready,true);assert.match(step.detail,/1 aperturas abiertas/);assert.equal(pres.coordination.upcoming,2);
 
  // asistencia y sesión realizada
  const ids=d1.enrollments.map(r=>r.id);
@@ -158,5 +158,5 @@ test('coordinación académica por API: la venta confirmada entra sola a la aper
  await call('/api/events/999999',admin.cookie,undefined,'GET',404);await call('/api/events/1/retry',admin.cookie,{subscriber:'nadie'},'POST',404);
  assert.equal((await fetch(origin+'/api/events.csv',{headers:{Cookie:clients[0].cookie,Origin:origin}})).status,403);
 
- const d=db();try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,21);assert.equal(d.prepare('SELECT count(*) n FROM domain_deliveries WHERE state!=\'done\'').get().n,0);assert.equal(d.prepare("SELECT count(*) n FROM edition_sessions WHERE edition_id='edition-aves'").get().n,2);}finally{d.close();}
+ const d=db();try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,22);assert.equal(d.prepare('SELECT count(*) n FROM domain_deliveries WHERE state!=\'done\'').get().n,0);assert.equal(d.prepare("SELECT count(*) n FROM edition_sessions WHERE edition_id='edition-aves'").get().n,2);}finally{d.close();}
 });

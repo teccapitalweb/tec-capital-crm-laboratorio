@@ -20,9 +20,10 @@ import {migrateEvaluation} from '../server/evaluation-schema.mjs';
 import {migrateCoordination} from '../server/coordination-schema.mjs';
 import {migrateFinance} from '../server/finance-schema.mjs';
 import {migratePersons} from '../server/persons-schema.mjs';
+import {migrateCertificates} from '../server/certificates-schema.mjs';
 import {createEvents,EVENT_TYPES,ENTITY_KINDS} from '../server/events.mjs';
 
-const migrate=db=>{migrateCRM(db);migrateFollowup(db);migrateCatalogue(db);migrateOperations(db);migrateAutomation(db);migrateRecipes(db);migrateContacts(db);migrateConsent(db);migrateHolidays(db);migrateMfa(db);migrateReplies(db);migrateSimulator(db);migrateChannel(db);migratePayments(db);migrateConnectors(db);migrateEvaluation(db);migrateCoordination(db);migrateFinance(db);migratePersons(db);};
+const migrate=db=>{migrateCRM(db);migrateFollowup(db);migrateCatalogue(db);migrateOperations(db);migrateAutomation(db);migrateRecipes(db);migrateContacts(db);migrateConsent(db);migrateHolidays(db);migrateMfa(db);migrateReplies(db);migrateSimulator(db);migrateChannel(db);migratePayments(db);migrateConnectors(db);migrateEvaluation(db);migrateCoordination(db);migrateFinance(db);migratePersons(db);migrateCertificates(db);};
 async function setup(t){
   const dir=await mkdtemp(join(tmpdir(),'crm-events-')),db=openDatabase(dir);migrate(db);
   t.after(async()=>{try{db.close();}catch{}await rm(dir,{recursive:true,force:true});});
@@ -33,11 +34,11 @@ const quiet={error(){}};
 
 test('migración v19: tablas de eventos y coordinación, columnas de apertura, reinicio idempotente',async t=>{
   const {dir,db}=await setup(t);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version,21);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version,22);
   for(const table of ['domain_events','domain_deliveries','coordination_settings','edition_sessions','attendance','edition_resources'])assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table),table);
   const cols=db.prepare('PRAGMA table_info(editions)').all().map(c=>c.name);for(const c of ['min_students','run_status','coordinator_id','group_url','run_note','run_revision'])assert.ok(cols.includes(c),c);
   assert.equal(db.prepare("SELECT count(*) n FROM editions WHERE run_status='planned'").get().n,db.prepare('SELECT count(*) n FROM editions').get().n);
-  db.close();const again=openDatabase(dir);migrate(again);assert.equal(again.prepare('PRAGMA user_version').get().user_version,21);again.close();
+  db.close();const again=openDatabase(dir);migrate(again);assert.equal(again.prepare('PRAGMA user_version').get().user_version,22);again.close();
   assert.ok(Object.keys(EVENT_TYPES).length>=24);for(const [,v] of Object.entries(EVENT_TYPES))assert.ok(ENTITY_KINDS[v.entity],v.entity);
 });
 
