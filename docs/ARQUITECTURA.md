@@ -189,7 +189,7 @@ Variables de plantilla implementadas: `nombre`, `marca`, `curso`, `edicion`, `fe
 | `commission_entries` | Comisión por línea y rol con la regla aplicada (base, porcentaje, cuota), beneficiario, estado devengada/pagada y liquidación |
 | `commission_payouts` | Liquidación: rol, marca, vendedor, total, líneas, nota, quién y cuándo |
 | `finance_access` | Personas del equipo con función de contadora y si pueden marcar comisiones pagadas |
-| `persons` | Persona única: nombre, teléfono E.164, correo, perfil del laboratorio, consentimiento vigente (estado, origen, nota, actor, fecha), revisión |
+| `persons` | Persona única: nombre, teléfono E.164, correo, perfil del laboratorio, consentimiento vigente (estado, origen, nota, actor, marca donde se registró, fecha), revisión |
 | `person_identities` | Identidad única en la empresa (`profile`/`phone`/`email` + valor) → persona |
 | `person_consent_events` | Historial de consentimiento de la persona con la marca donde se registró |
 | `person_candidates` | Pares de personas por revisar (mismo nombre o identidad en conflicto): pendiente, descartada o fusionada |

@@ -51,9 +51,9 @@ test('migración v21: relleno de personas por perfil, teléfono y correo; consen
   assert.ok(pid('c-gv-ana'));assert.equal(pid('c-gv-ana'),pid('c-od-ana'),'mismo perfil → misma persona');assert.equal(pid('c-od-ana'),pid('c-de-ana'),'mismo teléfono → misma persona');
   assert.equal(pid('c-gv-luis'),pid('c-od-luis'),'mismo correo → misma persona');assert.notEqual(pid('c-gv-sola'),pid('c-gv-ana'));
   assert.equal(db.prepare('SELECT count(*) n FROM persons').get().n,3);
-  const ana=db.prepare('SELECT * FROM persons WHERE id=?').get(pid('c-gv-ana'));assert.equal(ana.source_user_id,'u-ana');assert.equal(ana.phone,'+525512345678');assert.equal(ana.email,'ana@mail.com');assert.equal(ana.consent_status,'opted_out','el consentimiento de la persona es el más estricto');
+  const ana=db.prepare('SELECT * FROM persons WHERE id=?').get(pid('c-gv-ana'));assert.equal(ana.source_user_id,'u-ana');assert.equal(ana.consent_brand_id,'odonteck');assert.equal(ana.phone,'+525512345678');assert.equal(ana.email,'ana@mail.com');assert.equal(ana.consent_status,'opted_out','el consentimiento de la persona es el más estricto');
   assert.deepEqual(db.prepare('SELECT kind,value FROM person_identities WHERE person_id=? ORDER BY kind').all(ana.id).map(r=>({kind:r.kind,value:r.value})),[{kind:'email',value:'ana@mail.com'},{kind:'phone',value:'+525512345678'},{kind:'profile',value:'u-ana'}]);
-  assert.equal(db.prepare("SELECT status FROM contact_consent WHERE contact_id='c-gv-ana'").get().status,'opted_out','la baja se proyecta a los demás contactos de la persona');
+  const gv=db.prepare("SELECT status,note,actor_id FROM contact_consent WHERE contact_id='c-gv-ana'").get();assert.equal(gv.status,'opted_out','la baja se proyecta a los demás contactos de la persona');assert.notEqual(gv.note,'Pidió la baja','la nota se queda en la marca de origen');assert.equal(db.prepare("SELECT note FROM contact_consent WHERE contact_id='c-od-ana'").get().note,'Pidió la baja');
   assert.equal(db.prepare("SELECT status FROM contact_consent WHERE contact_id='c-od-luis'").get().status,'opted_in');
   assert.equal(db.prepare('SELECT count(*) n FROM person_consent_events').get().n,2);
   db.close();const again=openDatabase(dir);upTo20(again);migratePersons(again);assert.equal(again.prepare('SELECT count(*) n FROM persons').get().n,3);again.close();
@@ -150,6 +150,7 @@ test('personas por API: dos conversaciones de la misma persona en marcas distint
  const pl=(await call('/api/persons/merge-preview',admin.cookie,{keepId:pa,mergeId:pb},'POST')).plan;assert.equal(pl.canMerge,true);assert.equal(pl.moves.contacts,1);assert.equal(pl.moves.fill.email,true);assert.equal(pl.moves.consent,null);
  await call('/api/persons/merge',admin.cookie,{keepId:pa,mergeId:pb,previewToken:'viejo'},'POST',409);
  const merged=await call('/api/persons/merge',admin.cookie,{keepId:pa,mergeId:pb,previewToken:pl.previewToken});assert.equal(merged.keepId,pa);
+ const carlosOther=await call('/api/crm/contacts/'+x2+'/consent',admin.cookie);assert.equal(carlosOther.consent.source,'person');assert.ok(!carlosOther.consent.note.includes('Carlos pidió'),'la nota de la marca de origen no viaja a la otra marca');
  const carlos=await call('/api/persons/'+pa,admin.cookie);assert.equal(carlos.contacts.length,2);assert.equal(carlos.person.email,'carlos@mail.com');assert.equal(carlos.person.phone,'+525511112222');
  assert.equal((await call('/api/crm/contacts/'+x2+'/consent',admin.cookie)).consent.status,'opted_out','el contacto que llega hereda la baja de la persona conservada');
  assert.equal((await call('/api/persons/candidates',admin.cookie)).candidates.length,0);

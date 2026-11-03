@@ -25,12 +25,11 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
   // Lo que ve cada marca del consentimiento de la persona: el estado rige para todas; la nota y el autor sólo en la
   // marca donde se registró (las demás reciben un texto genérico y origen «person»).
   const GENERIC={opted_out:'Baja registrada desde otra marca de la empresa',opted_in:'Consentimiento registrado desde otra marca de la empresa',unknown:'Registro actualizado desde otra marca de la empresa'};
-  const projection=(c,status,source,note,actor,originBrand)=>originBrand===null||c.brand_id===originBrand?{source,note,actor}:{source:'person',note:GENERIC[status],actor:null};
+  const projection=(c,status,source,note,actor,originBrand)=>originBrand!==null&&c.brand_id===originBrand?{source,note,actor}:{source:'person',note:GENERIC[status],actor:null};   // origen nulo (fusión, relleno) → genérico para todas
   const upsertContactConsent=(c,status,source,note,actor,t)=>db.prepare('INSERT INTO contact_consent(contact_id,brand_id,status,source,note,actor_id,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET status=excluded.status,source=excluded.source,note=excluded.note,actor_id=excluded.actor_id,updated_at=excluded.updated_at').run(c.id,c.brand_id,status,source,note,actor,t);
-  const originOf=personId=>db.prepare('SELECT brand_id FROM person_consent_events WHERE person_id=? ORDER BY seq DESC LIMIT 1').get(personId)?.brand_id??null;
   // Proyecta el consentimiento vigente a los contactos que estén por debajo (tras fusiones o reasignaciones); nunca rebaja una baja.
   function project(personId){
-    const p=get(personId);if(!p||p.consent_status==='unknown')return;const origin=originOf(personId),t=now();
+    const p=get(personId);if(!p||p.consent_status==='unknown')return;const origin=p.consent_brand_id,t=now();   // la marca de origen viaja con el consentimiento vigente
     for(const c of contactsOf(personId)){const k=db.prepare('SELECT status FROM contact_consent WHERE contact_id=?').get(c.id);if(k&&RANK[p.consent_status]<=RANK[k.status])continue;const v=projection(c,p.consent_status,p.consent_source||'person',p.consent_note,p.consent_actor_id,origin);upsertContactConsent(c,p.consent_status,v.source,v.note,v.actor,t);}
   }
   function candidate(a,b,reason,detail=''){
@@ -55,15 +54,15 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
     // Mismo nombre completo en otra persona: candidatura para revisar (nunca une sola).
     const n=normalizeName(c.name);if(n.includes(' '))for(const o of db.prepare('SELECT id FROM persons WHERE id!=? AND lower(name)=?').all(pid,c.name.trim().toLowerCase()))candidate(o.id,pid,'name','Mismo nombre «'+c.name.trim()+'»');
     // Proyección del consentimiento de la persona al contacto nuevo.
-    const p=get(pid);if(p.consent_status!=='unknown'){const k=db.prepare('SELECT status FROM contact_consent WHERE contact_id=?').get(c.id);if(!k||RANK[p.consent_status]>RANK[k.status]){const v=projection(c,p.consent_status,p.consent_source||'person',p.consent_note,p.consent_actor_id,originOf(pid));upsertContactConsent(c,p.consent_status,v.source,v.note,v.actor,t);}}
+    const p=get(pid);if(p.consent_status!=='unknown'){const k=db.prepare('SELECT status FROM contact_consent WHERE contact_id=?').get(c.id);if(!k||RANK[p.consent_status]>RANK[k.status]){const v=projection(c,p.consent_status,p.consent_source||'person',p.consent_note,p.consent_actor_id,p.consent_brand_id);upsertContactConsent(c,p.consent_status,v.source,v.note,v.actor,t);}}
     return pid;
   }
   // ---- consentimiento a nivel persona (lo llaman contacts.setConsent/recordInbound y la ficha de persona)
-  const consentOf=id=>{const p=get(id);return {status:p.consent_status,source:p.consent_source,note:p.consent_note,actor_id:p.consent_actor_id,updated_at:p.consent_updated_at};};
+  const consentOf=id=>{const p=get(id);return {status:p.consent_status,source:p.consent_source,note:p.consent_note,actor_id:p.consent_actor_id,brand_id:p.consent_brand_id,updated_at:p.consent_updated_at};};
   const conversationsOfPerson=id=>db.prepare('SELECT co.conversation_id id FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id JOIN contacts c ON c.id=o.contact_id WHERE c.persona_id=?').all(id).map(r=>r.id);
   function writeConsent(personId,status,source,note,actor,brandId=null){
     const p=get(personId),t=now();if(!p)return;
-    db.prepare('UPDATE persons SET consent_status=?,consent_source=?,consent_note=?,consent_actor_id=?,consent_updated_at=?,revision=revision+1,updated_at=? WHERE id=?').run(status,source,note,actor,t,t,personId);
+    db.prepare('UPDATE persons SET consent_status=?,consent_source=?,consent_note=?,consent_actor_id=?,consent_brand_id=?,consent_updated_at=?,revision=revision+1,updated_at=? WHERE id=?').run(status,source,note,actor,brandId,t,t,personId);
     db.prepare('INSERT INTO person_consent_events(person_id,brand_id,status,source,note,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(personId,brandId,status,source,note,actor,t);
     for(const c of contactsOf(personId)){
       const v=projection(c,status,source,note,actor,brandId);
@@ -102,10 +101,10 @@ export function createPersons({db,crm,events=null,body,json,audit,broadcast,now=
     const history=db.prepare('SELECT e.status,e.source,e.note,e.created_at,e.brand_id,u.name actor_name,b.name brand_name FROM person_consent_events e LEFT JOIN users u ON u.id=e.actor_id LEFT JOIN brands b ON b.id=e.brand_id WHERE e.person_id=? ORDER BY e.seq DESC LIMIT 30').all(id);
     const canSee=h=>isAdmin||(h.brand_id!==null&&allowed.has(h.brand_id));
     const redact=h=>canSee(h)?h:{status:h.status,source:h.source,note:'',created_at:h.created_at,brand_id:null,actor_name:null,brand_name:null,redacted:true};
-    const current=consentOf(id),lastEvent=history[0];
+    const current=consentOf(id),currentVisible=isAdmin||(current.brand_id!==null&&allowed.has(current.brand_id));
     const vis=identitySet(mine);
     return {person:summary(p,allowed,isAdmin),identities:db.prepare('SELECT kind,value,source,created_at FROM person_identities WHERE person_id=? ORDER BY kind').all(id).filter(i=>isAdmin||vis.has(i.kind+':'+i.value)).map(i=>i.kind==='profile'?{...i,value:'perfil del laboratorio'}:i),
-      consent:lastEvent&&!canSee(lastEvent)?{...current,note:'',actor_id:null,redacted:true}:current,consentHistory:history.map(redact),
+      consent:current.status!=='unknown'&&!currentVisible?{...current,note:'',actor_id:null,brand_id:null,redacted:true}:current,consentHistory:history.map(redact),
       contacts:mine.map(c=>({id:c.id,brand_id:c.brand_id,brand_name:brandName(c.brand_id),name:c.name,phone:c.phone,email:c.email,source:c.source,created_at:c.created_at,tags:db.prepare('SELECT t.name,t.color FROM contact_tag_links l JOIN contact_tags t ON t.id=l.tag_id WHERE l.contact_id=?').all(c.id)})),
       opportunities:db.prepare(`SELECT o.id,o.brand_id,o.stage,o.updated_at,o.created_at,k.title course_title,e.name edition_name,u.name owner_name,(SELECT co.conversation_id FROM conversation_opportunities co WHERE co.opportunity_id=o.id) conversation_id FROM opportunities o JOIN courses k ON k.id=o.course_id LEFT JOIN editions e ON e.id=o.edition_id LEFT JOIN users u ON u.id=o.owner_id WHERE o.contact_id IN (${ph}) ORDER BY o.updated_at DESC`).all(...ids).map(o=>({...o,brand_name:brandName(o.brand_id)})),
       orders:db.prepare(`SELECT o.id,o.brand_id,o.reference,o.amount_cents,o.currency,o.status,o.method,o.paid_at,o.created_at,k.title course_title,e.name edition_name FROM orders o JOIN courses k ON k.id=o.course_id JOIN editions e ON e.id=o.edition_id WHERE o.contact_id IN (${ph}) ORDER BY o.created_at DESC`).all(...ids).map(o=>({...o,brand_name:brandName(o.brand_id)})),

@@ -26,7 +26,7 @@ export function migratePersons(db){
   if(db.prepare('PRAGMA user_version').get().user_version>=21)return;
   transaction(db,()=>{
     db.exec(`
-    CREATE TABLE persons(id TEXT PRIMARY KEY,name TEXT NOT NULL,phone TEXT NOT NULL DEFAULT '',email TEXT NOT NULL DEFAULT '',source_user_id TEXT REFERENCES users(id),consent_status TEXT NOT NULL DEFAULT 'unknown' CHECK(consent_status IN ('unknown','opted_in','opted_out')),consent_source TEXT,consent_note TEXT NOT NULL DEFAULT '',consent_actor_id TEXT REFERENCES users(id),consent_updated_at INTEGER,revision INTEGER NOT NULL DEFAULT 1,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+    CREATE TABLE persons(id TEXT PRIMARY KEY,name TEXT NOT NULL,phone TEXT NOT NULL DEFAULT '',email TEXT NOT NULL DEFAULT '',source_user_id TEXT REFERENCES users(id),consent_status TEXT NOT NULL DEFAULT 'unknown' CHECK(consent_status IN ('unknown','opted_in','opted_out')),consent_source TEXT,consent_note TEXT NOT NULL DEFAULT '',consent_actor_id TEXT REFERENCES users(id),consent_brand_id TEXT REFERENCES brands(id),consent_updated_at INTEGER,revision INTEGER NOT NULL DEFAULT 1,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
     CREATE UNIQUE INDEX persons_profile ON persons(source_user_id) WHERE source_user_id IS NOT NULL;
     CREATE TABLE person_identities(kind TEXT NOT NULL CHECK(kind IN ('profile','phone','email')),value TEXT NOT NULL,person_id TEXT NOT NULL REFERENCES persons(id),source TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(kind,value));
     CREATE INDEX person_identities_person ON person_identities(person_id);
@@ -60,8 +60,8 @@ export function backfill(db){
     const rows=db.prepare('SELECT k.* FROM contact_consent k JOIN contacts c ON c.id=k.contact_id WHERE c.persona_id=? ORDER BY k.updated_at').all(p.id);
     if(!rows.length)continue;
     const top=rows.reduce((a,b)=>RANK[b.status]>=RANK[a.status]?b:a);
-    db.prepare('UPDATE persons SET consent_status=?,consent_source=?,consent_note=?,consent_actor_id=?,consent_updated_at=? WHERE id=?').run(top.status,top.source,top.note,top.actor_id,top.updated_at,p.id);
+    db.prepare('UPDATE persons SET consent_status=?,consent_source=?,consent_note=?,consent_actor_id=?,consent_brand_id=?,consent_updated_at=? WHERE id=?').run(top.status,top.source,top.note,top.actor_id,top.brand_id,top.updated_at,p.id);
     db.prepare('INSERT INTO person_consent_events(person_id,brand_id,status,source,note,actor_id,created_at) VALUES(?,?,?,?,?,?,?)').run(p.id,top.brand_id,top.status,top.source,top.note,top.actor_id,top.updated_at);
-    if(top.status!=='unknown')for(const c of db.prepare('SELECT id,brand_id FROM contacts WHERE persona_id=?').all(p.id))db.prepare('INSERT INTO contact_consent(contact_id,brand_id,status,source,note,actor_id,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET status=excluded.status,source=excluded.source,note=excluded.note,actor_id=excluded.actor_id,updated_at=excluded.updated_at WHERE excluded.status!=contact_consent.status').run(c.id,c.brand_id,top.status,'person',top.note,top.actor_id,top.updated_at);
+    if(top.status!=='unknown')for(const c of db.prepare('SELECT id,brand_id FROM contacts WHERE persona_id=?').all(p.id)){const same=c.brand_id===top.brand_id;db.prepare('INSERT INTO contact_consent(contact_id,brand_id,status,source,note,actor_id,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET status=excluded.status,source=excluded.source,note=excluded.note,actor_id=excluded.actor_id,updated_at=excluded.updated_at WHERE excluded.status!=contact_consent.status').run(c.id,c.brand_id,top.status,'person',same?top.note:'Registro actualizado desde otra marca de la empresa',same?top.actor_id:null,top.updated_at);}
   }
 }
