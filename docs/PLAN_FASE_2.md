@@ -19,7 +19,7 @@ Escrito el 2 nov 2026 al cerrar la Fase 1 (v0.20.0, siete bloques publicados). D
 | 2.5 | Certificación: emisor único con folio y verificación · **publicado en v0.24.0 (3 nov 2026)** | 2.3 | M | Certificado verificable al cerrar la apertura |
 | 2.6 | Contenido: roles, plantillas por evento, fichas, variantes asistidas · **publicado en v0.25.0 (3 nov 2026)** | 2.1, 2.3 | M | Mensajes del ciclo completo sin escribirlos |
 | 2.7 | Núcleo Postgres/Supabase y ruta de migración · **ruta 1 preparada y publicada en v0.27.0 (3 nov 2026)**: esquema SQL, outbox firmado, destino simulado | decisión 7.1, acceso | L | Una sola base para CRM, Academia e IPCIL nuevo |
-| 2.8 | Puente con IPCIL (históricos y roles) · **históricos hechos localmente el 3 nov 2026** | IPCIL nuevo | S | Continuidad con lo que ya existe |
+| 2.8 | Puente con IPCIL (históricos y roles) · **históricos publicados en v0.28.0 (3 nov 2026)** | IPCIL nuevo | S | Continuidad con lo que ya existe |
 | 0 | Prueba real de `AI_PROVIDER=claude` y costo por conversación | clave en entorno aislado | S | Cifra real de costo de IA |
 
 S = una sesión de trabajo; M = dos o tres; L = cuatro o más. Son órdenes de magnitud, no compromisos.
@@ -109,7 +109,7 @@ S = una sesión de trabajo; M = dos o tres; L = cuatro o más. Son órdenes de m
 
 Hasta que exista el IPCIL nuevo: sólo lectura de históricos (alumnos, aperturas, certificados) a la ficha de persona y al libro de finanzas mediante importación CSV/JSON; el panel actual en Firebase se toma como referencia de roles (vendedor, coordinador, admin, trafiquer, rh, validar) para las **funciones** de usuario de 2.3 y 2.4. Sin adaptadores en vivo a Firestore.
 
-**Estado (3 nov 2026):** la parte de históricos está implementada localmente (rama `feat/historicos-ipcil`, esquema 25, versión 0.28.0): importación JSON/CSV con los campos del panel actual, alumnos ligados a la persona única, ventas y certificados en la ficha de persona y en Finanzas, lotes idempotentes. Los roles del panel siguen siendo referencia; la función «coordinador» como etiqueta queda fuera salvo necesidad. Lo que falta de 2.8 llega con el IPCIL nuevo y el núcleo compartido.
+**Estado (3 nov 2026):** la parte de históricos está implementada y **publicada en v0.28.0** (esquema 25): importación JSON/CSV con los campos del panel actual, alumnos ligados a la persona única, ventas y certificados en la ficha de persona y en Finanzas, lotes idempotentes. Los roles del panel siguen siendo referencia; la función «coordinador» como etiqueta queda fuera salvo necesidad. Lo que falta de 2.8 llega con el IPCIL nuevo y el núcleo compartido.
 
 ### 0. Prueba real del proveedor de IA
 
