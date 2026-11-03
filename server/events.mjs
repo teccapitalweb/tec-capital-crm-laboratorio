@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {transaction} from './database.mjs';
 import {backoff} from './automation.mjs';
+import {csvCell} from './contacts.mjs';
 
 // Eventos de dominio (Fase 2 · bloque 2.1). Cada hecho relevante del negocio queda registrado UNA sola vez en
 // domain_events (tipo, marca, entidad, carga breve, actor, origen, clave de idempotencia). Los módulos lo publican dentro
@@ -114,7 +115,7 @@ export function createEvents({db,crm=null,body,json,audit=()=>{},now=Date.now,lo
       failed:db.prepare(`SELECT count(*) n FROM domain_deliveries d JOIN domain_events e ON e.seq=d.event_seq WHERE d.state='failed' AND e.brand_id IN (${ph})`).get(...brandIds).n,pending:db.prepare(`SELECT count(*) n FROM domain_deliveries d JOIN domain_events e ON e.seq=d.event_seq WHERE d.state='pending' AND e.brand_id IN (${ph})`).get(...brandIds).n,
       byType:db.prepare(`SELECT type,count(*) n FROM domain_events WHERE brand_id IN (${ph}) GROUP BY type ORDER BY n DESC`).all(...brandIds)};
   }
-  const csvCell=v=>{const s=v===null||v===undefined?'':String(v);return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  // Misma neutralización de fórmulas que la exportación de contactos (celdas que empiezan con = + - @).
   const csv=rows=>['﻿seq,fecha,tipo,marca,entidad,id_entidad,origen,actor,carga',...rows.map(e=>[e.seq,new Date(e.created_at).toISOString(),e.type,e.brand_name,e.entity_kind,e.entity_id,e.source,e.actor_name||'',JSON.stringify(e.payload)].map(csvCell).join(','))].join('\n');
 
   const requireAdmin=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||u.role!=='admin')throw fail(403,'La bitácora de eventos es para administración.');};

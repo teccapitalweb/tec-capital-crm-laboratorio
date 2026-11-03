@@ -84,6 +84,8 @@ export function createCoordination({db,crm,events,insertMessage,body,json,audit,
     const min=input.minStudents===undefined?e.min_students:Number(input.minStudents);if(!Number.isInteger(min)||min<0||min>500)throw fail(400,'El mínimo de alumnos va de 0 a 500.');
     let coordinator=input.coordinatorId===undefined?e.coordinator_id:(text(input.coordinatorId,60)||null);
     if(coordinator&&!staffOf(e.brand_id).some(u=>u.id===coordinator))throw fail(400,'La persona responsable debe tener acceso a la marca.');
+    // Quien es responsable puede cerrar, cancelar y dar bajas: la designación la hace administración (o la responsable actual al delegar), no cualquier integrante.
+    if(coordinator!==e.coordinator_id){const u=roleOf(user);if(u.role!=='admin'&&(!e.coordinator_id||e.coordinator_id!==user.id))throw fail(403,'Sólo administración o la persona responsable actual puede cambiar la responsable de la apertura.');}
     const group=input.groupUrl===undefined?e.group_url:url(input.groupUrl),note=input.note===undefined?e.run_note:text(input.note,1000),t=now();
     db.prepare('UPDATE editions SET min_students=?,coordinator_id=?,group_url=?,run_note=?,run_revision=run_revision+1,run_updated_at=? WHERE id=?').run(min,coordinator,group,note,t,e.id);
     audit(user,'coordination.edition.update',e.id);broadcast('crm',null,{brandId:e.brand_id});return summary(edition(e.id));
@@ -230,16 +232,18 @@ export function createCoordination({db,crm,events,insertMessage,body,json,audit,
   function onSessionDue(ev){
     const s=db.prepare('SELECT * FROM edition_sessions WHERE id=?').get(ev.entity_id);if(!s||s.status!=='scheduled')return;
     const e=edition(s.edition_id),c=courseOf(e);
-    const rows=db.prepare("SELECT en.id enrollment_id,o.conversation_id FROM enrollments en JOIN orders o ON o.id=en.order_id WHERE en.edition_id=? AND en.status='enrolled'").all(e.id);
-    let sent=0;
+    const rows=db.prepare("SELECT en.id enrollment_id,o.conversation_id,(SELECT status FROM contact_consent k WHERE k.contact_id=en.contact_id) consent FROM enrollments en JOIN orders o ON o.id=en.order_id WHERE en.edition_id=? AND en.status='enrolled'").all(e.id);
+    let sent=0,skipped=0;
     for(const r of rows){
+      if(r.consent==='opted_out'){skipped++;continue;}   // la baja de mensajes se respeta también en recordatorios; la persona coordinadora avisa por otro medio
       const ref='session:'+s.id+':reminder:'+r.enrollment_id;if(db.prepare('SELECT 1 FROM messages WHERE client_ref=?').get(ref))continue;
       const conv=db.prepare('SELECT * FROM conversations WHERE id=?').get(r.conversation_id);if(!conv||conv.status==='resolved')continue;
       const body=`Recordatorio de clase · ${c.title} · ${e.name}\nSesión ${s.number}: ${s.title}\n${stamp(s.starts_at,e.timezone)} (${s.duration_min} min)\n${s.meet_url?'Enlace: '+s.meet_url:'El enlace de la videollamada se enviará por aquí.'}${e.group_url?'\nGrupo del curso: '+e.group_url:''}\nLaboratorio: aviso de práctica.`;
       try{transaction(db,()=>insertMessage(conv,null,body,'automation',ref,null,null,null,{category:'utility'}));sent++;broadcast('conversation',conv.id);}
       catch(err){if(err?.status!==409)throw err;}
     }
-    return sent;
+    if(skipped)notify(e,'coordination','Recordatorio de «'+s.title+'»: '+skipped+(skipped===1?' inscrito pidió':' inscritos pidieron')+' no recibir mensajes; avísales por otro medio','session:'+s.id+':reminder-skipped');
+    return {sent,skipped};
   }
   async function tick(){
     const t=now(),due=db.prepare("SELECT s.id,s.edition_id FROM edition_sessions s JOIN editions e ON e.id=s.edition_id JOIN coordination_settings cs ON cs.brand_id=s.brand_id WHERE cs.enabled=1 AND s.status='scheduled' AND s.reminder_sent_at IS NULL AND e.run_status IN ('open','running') AND s.starts_at>? AND s.starts_at<=?+cs.reminder_hours*3600000 LIMIT 50").all(t,t);

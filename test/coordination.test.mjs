@@ -47,10 +47,13 @@ test('coordinación académica por API: la venta confirmada entra sola a la aper
  await call('/api/coordination/editions/edition-aves',admin.cookie,{minStudents:5,expectedRevision:7},'PATCH',409);
  await call('/api/coordination/editions/edition-aves',admin.cookie,{groupUrl:'ftp://x',expectedRevision:1},'PATCH',400);
  await call('/api/coordination/editions/edition-aves',admin.cookie,{coordinatorId:clients[0].user.id,expectedRevision:1},'PATCH',400);
- const run=(await call('/api/coordination/editions/edition-aves',admin.cookie,{minStudents:5,coordinatorId:admin.user.id,groupUrl:'https://chat.whatsapp.com/prueba',note:'Grupo de prueba',expectedRevision:1},'PATCH')).edition;
- assert.equal(run.min_students,5);assert.equal(run.coordinatorName,'Administración');assert.equal(run.run_revision,2);assert.equal(run.progress,0);
- await call('/api/coordination/editions/edition-aves/status',admin.cookie,{to:'closed',expectedRevision:2},'POST',409);   // de planeada no se cierra
- await call('/api/coordination/editions/edition-aves/status',admin.cookie,{to:'running',expectedRevision:2},'POST',409);
+ await call('/api/coordination/editions/edition-aves',agent.cookie,{coordinatorId:agent.user.id,expectedRevision:1},'PATCH',403);   // una asesora no se nombra responsable a sí misma
+ assert.equal((await call('/api/coordination/editions/edition-aves',agent.cookie,{minStudents:3,expectedRevision:1},'PATCH')).edition.min_students,3,'sí puede ajustar mínimo, grupo y notas');
+ const run=(await call('/api/coordination/editions/edition-aves',admin.cookie,{minStudents:5,coordinatorId:admin.user.id,groupUrl:'https://chat.whatsapp.com/prueba',note:'Grupo de prueba',expectedRevision:2},'PATCH')).edition;
+ assert.equal(run.min_students,5);assert.equal(run.coordinatorName,'Administración');assert.equal(run.run_revision,3);assert.equal(run.progress,0);
+ await call('/api/coordination/editions/edition-aves',agent.cookie,{coordinatorId:null,expectedRevision:3},'PATCH',403);   // ni quitar a la responsable
+ await call('/api/coordination/editions/edition-aves/status',admin.cookie,{to:'closed',expectedRevision:3},'POST',409);   // de planeada no se cierra
+ await call('/api/coordination/editions/edition-aves/status',admin.cookie,{to:'running',expectedRevision:3},'POST',409);
 
  // cinco ventas confirmadas: cada una entra sola a la apertura; al llegar al mínimo la apertura se abre
  const convs=[];
@@ -76,7 +79,12 @@ test('coordinación académica por API: la venta confirmada entra sola a la aper
  assert.equal((await call('/api/coordination/editions/edition-aves',agent.cookie)).canClose,false,'la asesora no es responsable');
  assert.ok(d1.events.some(e=>e.type==='apertura.abierta'),'la bitácora de la apertura muestra sus eventos');
 
- // sesiones: validación, enlace simulado, recordatorio inmediato a los cinco inscritos (dentro de la ventana de 48 h)
+ // el cuarto alumno pide la baja de mensajes: sigue inscrito, pero no recibe recordatorios
+ await call(msgs(convs[3].id),clients[3].cookie,{text:'BAJA',clientRef:randomUUID()},'POST',201);
+ assert.ok(await until(async()=>count("SELECT count(*) n FROM contact_consent WHERE status='opted_out'")===1),'baja registrada');
+ assert.equal((await eventsOf('baja.registrada')).length,1);
+
+ // sesiones: validación, enlace simulado, recordatorio inmediato a los inscritos (dentro de la ventana de 48 h), salvo quien pidió la baja
  await call('/api/coordination/editions/edition-aves/sessions',admin.cookie,{title:'Sin fecha'},'POST',400);
  await call('/api/coordination/editions/edition-aves/sessions',admin.cookie,{startsAt:Date.now()+7200000,durationMin:5},'POST',400);
  const soon=Date.now()+7200000,s1=(await call('/api/coordination/editions/edition-aves/sessions',agent.cookie,{title:'Bienvenida',startsAt:soon,durationMin:60,createMeet:true},'POST',201)).session;
@@ -86,7 +94,9 @@ test('coordinación académica por API: la venta confirmada entra sola a la aper
  assert.equal((await eventsOf('sesion.programada')).length,2);assert.equal((await eventsOf('sesion.proxima')).length,1);
  const reminded=await until(async()=>{const m=(await call(msgs(convs[4].id),clients[4].cookie)).messages.at(-1);return /Recordatorio de clase/.test(m.text)?m:null;});
  assert.ok(reminded,'cada inscrito recibe el recordatorio por su chat');assert.match(reminded.text,/Bienvenida/);assert.match(reminded.text,/meet\.simulado/);assert.match(reminded.text,/chat\.whatsapp\.com\/prueba/);assert.equal(reminded.category,'utility');assert.equal(reminded.sender_kind,'automation');
- await sleep(2500);assert.equal(count("SELECT count(*) n FROM messages WHERE client_ref LIKE 'session:%:reminder:%'"),5,'un recordatorio por inscrito, sin duplicados');
+ await sleep(2500);assert.equal(count("SELECT count(*) n FROM messages WHERE client_ref LIKE 'session:%:reminder:%'"),4,'un recordatorio por inscrito que acepta mensajes, sin duplicados');
+ assert.ok(!(await call(msgs(convs[3].id),clients[3].cookie)).messages.some(m=>/Recordatorio de clase/.test(m.text)),'quien pidió la baja no recibe el recordatorio');
+ assert.equal(count("SELECT count(*) n FROM notifications WHERE event_key LIKE 'session:%:reminder-skipped'"),1,'la responsable sabe a quién avisar por otro medio');
  const s2b=(await call('/api/coordination/sessions/'+s2.id,admin.cookie,{startsAt:Date.now()+3600000,expectedRevision:s2.revision},'PATCH')).session;
  assert.ok(s2b.reminder_sent_at,'al mover la sesión dentro de la ventana se recuerda');assert.equal((await eventsOf('sesion.proxima')).length,2);
  await call('/api/coordination/sessions/'+s2.id,admin.cookie,{title:'x',expectedRevision:s2.revision},'PATCH',409);
