@@ -61,6 +61,10 @@ En **Catálogo y biblioteca → Contenido** cada marca elige qué plantilla apro
 
 Mientras llega el IPCIL nuevo, administración importa en **Operación → Históricos** un JSON o CSV exportado del panel actual (alumnos con sus pagos, cursos, aperturas, certificados) con los mismos nombres de campo del panel. Cada alumno queda ligado a la persona única del CRM; sus pagos y certificados se ven en la ficha de persona y en Finanzas como históricos, fuera del libro de ventas y sin comisiones. Repetir un archivo no duplica y un lote se puede quitar. No hay conexión en vivo con Firebase.
 
+## Mis resultados: portal por roles
+
+Cada persona del equipo tiene en el menú **Mis resultados**: sus ventas y comisiones (del libro de Finanzas), su cartera de oportunidades y tareas, y las aperturas que coordina con avisos de atención (faltan inscritos para el mínimo, sin sesiones, sin enlace de videollamada, sesión sin asistencia, apertura cerrada sin certificados). Ve sólo lo suyo y de sus marcas; administración puede elegir a otra persona con «Ver a». Es el primer paso del IPCIL nuevo dentro del CRM, de sólo lectura. Plan y roles pendientes: [docs/PLAN_PORTAL_ROLES.md](docs/PLAN_PORTAL_ROLES.md).
+
 ## Campañas y envíos segmentados
 
 En **Operación → Campañas** (administración) se envía una plantilla aprobada a un segmento —etapa, curso, canal, etiquetas, días sin responder—, ahora o programada. La vista previa dice cuántas personas la recibirían, **a quiénes excluye y por qué** (baja, sin consentimiento, atiende una persona, otra campaña reciente…), cómo se ve el mensaje con la oferta vigente y el costo estimado; programar exige confirmar el número de destinatarios. El detalle muestra enviados, entregados, leídos, respuestas y bajas. Todo apagado por marca por omisión y sobre el canal simulado. Plan y reglas: [docs/PLAN_CAMPANAS.md](docs/PLAN_CAMPANAS.md).
