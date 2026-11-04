@@ -1,6 +1,6 @@
 # Plan: chat más rápido (Fase 5, bloque 5)
 
-Estado: **implementado localmente** en la rama `feat/chat-rapido` (4 nov 2026, v0.33.0, esquema 28, 158 pruebas), **sin publicar**. Pedido del usuario: «métele más cosas para facilitar» el trabajo en el chat. Lo que más usa un asesor de WhatsApp, Instagram o Facebook a diario es contestar rápido lo mismo de siempre y no olvidarse de retomar un chat; ninguna de las dos cosas tenía atajo.
+Estado: **publicado en v0.33.0** (4 nov 2026, esquema 28, 158 pruebas). Pedido del usuario: «métele más cosas para facilitar» el trabajo en el chat. Lo que más usa un asesor de WhatsApp, Instagram o Facebook a diario es contestar rápido lo mismo de siempre y no olvidarse de retomar un chat; ninguna de las dos cosas tenía atajo.
 
 ## Qué trae
 
@@ -31,4 +31,4 @@ Respuestas con imágenes o adjuntos, atajos que envíen sin revisar, variables c
 
 ## Criterios de salida
 
-Migración 28 aditiva con respaldo previo; pruebas de permisos, validación, visibilidad, variables, revisiones, archivado y reutilización del atajo; revisión en navegador local (menú, teclado, botón, Recordarme y administración) en escritorio y 375 px con la auditoría de diseño; documentación y versión 0.33.0. **No se publica sin «Sí, publicar».**
+Migración 28 aditiva con respaldo previo; pruebas de permisos, validación, visibilidad, variables, revisiones, archivado y reutilización del atajo; revisión en navegador local (menú, teclado, botón, Recordarme y administración) en escritorio y 375 px con la auditoría de diseño; documentación y versión 0.33.0. Publicado por instrucción expresa del usuario.
