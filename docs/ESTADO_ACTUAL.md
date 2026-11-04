@@ -7,10 +7,10 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | Dato | Valor |
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
-| Versión publicada | **0.31.0** en `main` (rendimiento del equipo en «Mis resultados»). `/api/health` de producción devuelve `0.31.0` |
-| Pendiente de publicar | **0.32.0** (notificaciones push y app instalable), rama `feat/push-pwa`, sin publicar |
-| Esquema SQLite | **26** publicado (campañas); **27** en la rama pendiente (push). Respaldo previo al migrar: `backups/before-crm-v<N>-*` |
-| Pruebas | 154 publicadas; 156 en la rama pendiente (`npm test`); `npm run check` limpio |
+| Versión publicada | **0.32.0** en `main` (notificaciones push y app instalable). `/api/health` de producción devuelve `0.32.0` |
+| Pendiente de publicar | Nada |
+| Esquema SQLite | **27** (último cambio: push). Respaldo previo al migrar: `backups/before-crm-v27-*` |
+| Pruebas | 156 aprobadas (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |
 | Experiencia del cliente | <https://crm-laboratorio-production.up.railway.app/> |
 | Repositorio | <https://github.com/teccapitalweb/tec-capital-crm-laboratorio>, rama `main` (público: nada de secretos) |
@@ -33,7 +33,7 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | Certificados | Folio IPCI secuencial, QR, verificación pública, revocación, créditos opcionales | Operación → Certificados, `/verificar/<folio>` | README |
 | Finanzas | Libro de ventas por eventos, comisiones con regla, liquidaciones, reembolsos, CSV, vista imprimible | Operación → Finanzas | README |
 | Personas y consentimiento | Una identidad entre marcas, baja y consentimiento a nivel persona, fusión con vista previa | Contactos → Personas | README |
-| Notificaciones push y app instalable (rama pendiente) | Los avisos del equipo llegan al celular o escritorio, cifrados, sólo si cada persona los activa; manifiesto, service worker e iconos para instalar | Mi configuración → Notificaciones en este dispositivo | [PLAN_PUSH.md](PLAN_PUSH.md) |
+| Notificaciones push y app instalable | Los avisos del equipo llegan al celular o escritorio, cifrados, sólo si cada persona los activa; manifiesto, service worker e iconos para instalar | Mi configuración → Notificaciones en este dispositivo | [PLAN_PUSH.md](PLAN_PUSH.md) |
 | Campañas | Plantilla aprobada a un segmento, vista previa con exclusiones, programación, resultados | Operación → Campañas | [PLAN_CAMPANAS.md](PLAN_CAMPANAS.md) |
 | Portal por roles | «Mis resultados»: ventas, comisiones, cartera, aperturas y avisos; administración ve a otra persona y el rendimiento del equipo | Menú → Mis resultados | [PLAN_PORTAL_ROLES.md](PLAN_PORTAL_ROLES.md) |
 | Analítica y presentación | Embudo, tiempos, atención; tablero en vivo y guion de 13 pasos | Analítica, Modo presentación | README |
@@ -56,7 +56,7 @@ Ninguna función por marca está encendida en producción. Apagar un interruptor
 | Coordinación automatizada | Coordinación → «Automatización por marca»: Automatización activa, Abrir al llegar al mínimo, Cobrar sesiones con el recordatorio, encuesta | Las aperturas se gestionan a mano |
 | Emisión de certificados | Certificados → «Emisión por marca»: Emitir al cerrar la apertura, créditos | Sólo emisión manual |
 | Campañas | Campañas → Encender / Apagar y Ajustes (separación, ritmo, público máximo) | No se puede programar ni se envía |
-| Notificaciones push (rama pendiente) | Mi configuración → «Notificaciones en este dispositivo» → Activar (cada persona y dispositivo); `PUSH_DISABLED=1` las apaga en el entorno | Los avisos sólo se ven dentro de la aplicación |
+| Notificaciones push | Mi configuración → «Notificaciones en este dispositivo» → Activar (cada persona y dispositivo); `PUSH_DISABLED=1` las apaga en el entorno | Los avisos sólo se ven dentro de la aplicación |
 | Simulador de clientes | Operación → Demo; `SIMULATOR_DISABLED=1` lo oculta | Sin clientes ficticios |
 | Función de contadora | Finanzas → Acceso (administración) | Sólo administración ve Finanzas |
 | Funciones de diseño y aprobación | Catálogo → Contenido (administración) | Sólo administración diseña y aprueba |
@@ -108,7 +108,7 @@ Variables y respaldos: [OPERACION_Y_PRUEBAS.md](OPERACION_Y_PRUEBAS.md). Secreto
 | 0.29 | Campañas y envíos segmentados (esquema 26) |
 | 0.30 | Portal por roles «Mis resultados» (sin esquema) |
 | 0.31 | Rendimiento del equipo para administración y documentación de punta a punta (sin esquema) |
-| 0.32 (pendiente) | Notificaciones push y app instalable (esquema 27) |
+| 0.32 | Notificaciones push y app instalable (esquema 27) |
 
 El detalle de cada entrega, con evidencia, está en [CONTINUIDAD.md](CONTINUIDAD.md).
 

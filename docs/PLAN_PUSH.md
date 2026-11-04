@@ -1,6 +1,6 @@
 # Plan: notificaciones push y app instalable (Fase 5, bloque 4)
 
-Estado: **implementado localmente** en la rama `feat/push-pwa` (4 nov 2026, v0.32.0, esquema 27, 156 pruebas), **sin publicar**. Pedido por el usuario tras comparar con CRM de WhatsApp: los asesores de la competencia reciben aviso en el celular cuando les asignan un chat o un cliente responde; aquí los avisos sólo se veían con la aplicación abierta.
+Estado: **publicado en v0.32.0** (4 nov 2026, esquema 27, 156 pruebas); la entrega real a un teléfono sigue sin probarse. Pedido por el usuario tras comparar con CRM de WhatsApp: los asesores de la competencia reciben aviso en el celular cuando les asignan un chat o un cliente responde; aquí los avisos sólo se veían con la aplicación abierta.
 
 ## Principio
 
@@ -43,4 +43,4 @@ Notificaciones para clientes, push de campañas, sonidos o acciones dentro de la
 
 ## Criterios de salida
 
-Migración 27 aditiva con respaldo previo, pruebas verdes, auditoría de diseño en escritorio y celular, documentación y versión 0.32.0. **No se publica sin «Sí, publicar».**
+Migración 27 aditiva con respaldo previo, pruebas verdes, auditoría de diseño en escritorio y celular, documentación y versión 0.32.0. Publicado por instrucción expresa del usuario.
