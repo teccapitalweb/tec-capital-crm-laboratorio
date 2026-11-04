@@ -1,5 +1,19 @@
 # De laboratorio a CRM de 15 marcas
 
+**Estado real al 4 nov 2026** (el detalle vigente está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)):
+
+| Fase | Estado |
+| --- | --- |
+| 1. Laboratorio funcional | Hecha y ampliada: canales simulados con estados de entrega, simulador de clientes, modo presentación |
+| 2. Catálogo de las 15 marcas | Base hecha (cursos, ediciones, promociones, biblioteca, importación CSV). **Falta cargar** las marcas y los ~120 cursos oficiales |
+| 3. Operación del equipo | Hecha (v0.5) y ampliada: coordinación académica, certificados, finanzas, persona única, campañas y portal por roles |
+| 4. Automatización e IA supervisada | Motor durable, recetas, respuestas v2, conocimiento aprobado y banco de evaluación hechos. **Falta probar la IA real** con clave en un entorno aislado |
+| 5. Canales oficiales de Meta | Contrato de conectores y canal simulado hechos. **Faltan accesos** de las consultoras |
+| 6. Inscripciones y pagos | Pedido, pago simulado, inscripción, pagos por sesión, libro y comisiones hechos. **Falta la pasarela real** y la base única (núcleo Postgres, hoy outbox simulado) |
+| 7. Piloto comercial | **Pendiente**: requiere catálogo oficial, accesos, verificación autenticada en producción ([runbook](docs/ACTIVACION_Y_VERIFICACION.md)) y respaldos ensayados |
+
+Las secciones de abajo son el plan original y se conservan como referencia.
+
 ## 1. Laboratorio funcional — primera entrega
 
 Perfiles, tres canales simulados, mensajes en tiempo real, adjuntos, flyers de ejemplo, catálogo, reglas por curso, atención humana y persistencia. Validar con al menos siete personas en teléfonos y computadoras. Registrar problemas con hora, usuario de prueba, curso y comportamiento esperado; nunca contraseñas.

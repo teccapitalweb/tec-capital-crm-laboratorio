@@ -82,6 +82,33 @@ export function createPortal({db,crm,json,now=Date.now}){
     return {editions,alerts};
   }
 
+  // Atención de la persona: respuestas humanas registradas en la bitácora de operación (primera respuesta y siguientes).
+  function service(person,ids,p){
+    const empty={responses:0,medianMs:null,withinTargetPct:null,messages:0};if(!ids.length)return empty;
+    const rows=db.prepare(`SELECT details FROM operation_events WHERE kind='response' AND actor_id=? AND brand_id IN (${ph(ids)}) AND created_at>=? AND created_at<?`).all(person.id,...ids,p.from,p.to).map(r=>JSON.parse(r.details));
+    const first=rows.filter(r=>r.kind==='first'&&r.respondedAt&&r.waitingSince).map(r=>Math.max(0,r.respondedAt-r.waitingSince)).sort((a,b)=>a-b);
+    const judged=rows.filter(r=>r.withinTarget===true||r.withinTarget===false);
+    const messages=db.prepare(`SELECT count(*) n FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.sender_id=? AND m.sender_kind='agent' AND c.brand_id IN (${ph(ids)}) AND m.created_at>=? AND m.created_at<?`).get(person.id,...ids,p.from,p.to).n;
+    return {responses:rows.length,medianMs:first.length?first[Math.floor((first.length-1)/2)]:null,withinTargetPct:judged.length?Math.round(judged.filter(r=>r.withinTarget).length*1000/judged.length)/10:null,messages};
+  }
+  // Rendimiento del equipo (sólo administración): una fila por persona con las mismas definiciones que el portal personal.
+  function team(user,params){
+    const me=staffRow(user.id);if(!isStaff(me)||me.role!=='admin')throw fail(403,'El rendimiento del equipo es para administración.');
+    const p=period(params),brand=params.get('brand');let scope=db.prepare('SELECT id FROM brands').all().map(b=>b.id);
+    if(brand&&brand!=='all'){if(!scope.includes(brand))throw fail(404,'Marca o registro no disponible.');scope=[brand];}
+    const rows=db.prepare("SELECT id,name,role FROM users WHERE role IN ('agent','admin') AND disabled=0 ORDER BY name").all().map(person=>{
+      const ids=brandsOf(person).filter(id=>scope.includes(id));if(!ids.length)return null;
+      const s=sales(person,ids,p),c=commissions(person,ids,p),pl=pipeline(person,ids,p),co=coordination(person,ids),sv=service(person,ids,p);
+      return {id:person.id,name:person.name,role:person.role,brands:ids.map(brandName),
+        sales:{count:s.count,netCents:s.netCents,netLabel:s.netLabel,avgTicketLabel:s.avgTicketLabel},commissionPendingCents:c.pendingCents,commissionPendingLabel:c.pendingLabel,
+        pipeline:{openTotal:pl.openTotal,won:pl.won,lost:pl.lost,winRate:pl.winRate,tasksOpen:pl.tasksOpen,tasksOverdue:pl.tasksOverdue,chats:pl.chats,waiting:pl.waiting},service:sv,
+        coordination:{editions:co.editions.length,alerts:co.alerts.length,urgent:co.alerts.filter(a=>a.level==='urgent').length}};
+    }).filter(Boolean).sort((a,b)=>b.sales.netCents-a.sales.netCents||a.name.localeCompare(b.name,'es'));
+    const net=rows.reduce((n,r)=>n+r.sales.netCents,0);
+    return {period:{days:p.days,from:p.from,to:p.to},scope:{brands:scope.map(id=>({id,name:brandName(id)}))},rows,totals:{people:rows.length,sales:rows.reduce((n,r)=>n+r.sales.count,0),netCents:net,netLabel:money(net),tasksOverdue:rows.reduce((n,r)=>n+r.pipeline.tasksOverdue,0),alerts:rows.reduce((n,r)=>n+r.coordination.alerts,0)},
+      notes:['Cada fila usa las mismas definiciones que «Mis resultados» de esa persona. Las ventas se atribuyen a quien tenía la oportunidad al confirmarse el pago; las ventas del motor de respuestas no tienen vendedor.']};
+  }
+
   function overview(user,params){
     const {me,person}=subject(user,params),p=period(params),brand=params.get('brand');
     let ids=brandsOf(person);if(brand&&brand!=='all'){if(!ids.includes(brand)||(me.role!=='admin'&&!crm.canBrand(user,brand)))throw fail(404,'Marca o registro no disponible.');ids=[brand];}
@@ -93,9 +120,10 @@ export function createPortal({db,crm,json,now=Date.now}){
   }
 
   async function handle(req,res,path,user){
-    if(path!=='/api/portal/me')return false;
+    if(path!=='/api/portal/me'&&path!=='/api/portal/team')return false;
     if(req.method!=='GET')throw fail(405,'Método no permitido.');
-    json(res,200,overview(user,new URL(req.url,'http://localhost').searchParams));return true;
+    const params=new URL(req.url,'http://localhost').searchParams;
+    json(res,200,path==='/api/portal/team'?team(user,params):overview(user,params));return true;
   }
-  return {handle,overview};
+  return {handle,overview,team};
 }

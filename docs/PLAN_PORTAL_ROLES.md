@@ -1,6 +1,6 @@
 # Plan: portal por roles, el IPCIL nuevo dentro del CRM (Fase 5, bloque 2)
 
-Estado: **publicado en v0.30.0** (4 nov 2026, 154 pruebas, sin esquema nuevo). Decisión del usuario: el IPCIL nuevo no se hace como aplicación aparte ni en el repositorio original; se construye como **portal por roles dentro del CRM**, hablando con el resto sólo por datos y eventos del núcleo ([NUCLEO.md](NUCLEO.md)), de modo que pueda separarse después sin migrar datos.
+Estado: **publicado en v0.30.0** (4 nov 2026, 154 pruebas, sin esquema nuevo). El **rendimiento del equipo** para administración (v0.31.0) está en la rama `feat/rendimiento-equipo`, sin publicar. Decisión del usuario: el IPCIL nuevo no se hace como aplicación aparte ni en el repositorio original; se construye como **portal por roles dentro del CRM**, hablando con el resto sólo por datos y eventos del núcleo ([NUCLEO.md](NUCLEO.md)), de modo que pueda separarse después sin migrar datos.
 
 ## Principio
 
@@ -21,6 +21,7 @@ Cada persona del equipo ve **su** trabajo: lo que vendió y cuánto le toca, su 
 - **Ventas y comisiones** (periodo 7/30/90/365 días): ventas, reembolsos, neto, ticket promedio, por marca y por curso, últimas ventas; comisión devengada y pagada en el periodo, pendiente acumulada y últimas liquidaciones.
 - **Mi cartera:** oportunidades abiertas por etapa, ganadas y perdidas del periodo con % de cierre, tareas abiertas y vencidas, chats a mi cargo y los que esperan.
 - **Mis aperturas:** aperturas que coordino que no están cerradas o canceladas (y las cerradas en los últimos 60 días): estado, fecha, inscritos frente al mínimo, próxima sesión, sesiones realizadas, certificados emitidos y satisfacción de la encuesta.
+- **Rendimiento del equipo** (sólo administración, `GET /api/portal/team`): una fila por persona con ventas netas, cierre, abiertas, tareas vencidas, tiempo mediano de primera respuesta, % dentro de objetivo y avisos de aperturas; «Ver» abre el portal de esa persona.
 - **Avisos de coordinación:** faltan inscritos para el mínimo con el inicio a menos de 7 días; abierta o en curso sin sesiones programadas; sesión realizada sin asistencia registrada; sesión en menos de 48 h sin enlace; apertura cerrada con inscritos y sin certificados.
 
 ## Reglas de acceso

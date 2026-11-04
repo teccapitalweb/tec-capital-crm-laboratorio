@@ -175,7 +175,7 @@ const replies=createReplies({db,catalogue,crm,contacts,operations,insertMessage,
 const evaluation=createEvaluation({db,crm,replies,provider:aiProvider,body,json,audit});
 const automation=createAutomation({db,onChange:step=>{if(step.conversation_id)broadcast('conversation',step.conversation_id);broadcast('crm',null,{brandId:step.brand_id});}});
 const backupHours=process.env.BACKUP_INTERVAL_HOURS===undefined?(process.env.NODE_ENV==='test'?0:24):Number(process.env.BACKUP_INTERVAL_HOURS);
-const backups=createBackups({db,dataDir,version:'0.30.0',intervalMs:Number.isFinite(backupHours)&&backupHours>0?backupHours*3600000:0,keep:Math.max(1,Number(process.env.BACKUP_KEEP)||7)});
+const backups=createBackups({db,dataDir,version:'0.31.0',intervalMs:Number.isFinite(backupHours)&&backupHours>0?backupHours*3600000:0,keep:Math.max(1,Number(process.env.BACKUP_KEEP)||7)});
 const backupHandle=backupRoutes(backups);
 const recipes=createRecipes({db,catalogue,automation,insertMessage,broadcast,body,json,audit});
 const campaigns=createCampaigns({db,crm,catalogue,automation,insertMessage,broadcast,body,json,audit});
@@ -268,7 +268,7 @@ function flyer(course,brand){
 const server=http.createServer(async(req,res)=>{
   security(res);const url=new URL(req.url,'http://localhost'),path=url.pathname;
   try{
-    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.30.0',transport:'websocket',mode:'laboratorio'});}
+    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.31.0',transport:'websocket',mode:'laboratorio'});}
     if(await connectors.handlePublic(req,res,path,url,req.socket.remoteAddress||'unknown'))return;   // webhooks de proveedores: firma propia, sin sesión ni Origin
     if(await certificates.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // verificación pública de certificados por folio, con límite por IP
     if(await surveys.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // encuestas por token (/encuesta/<token>, /api/survey/<token>), sin sesión, con límite por IP

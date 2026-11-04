@@ -74,6 +74,16 @@ test('portal por roles por API: cada persona ve lo suyo, administración ve a ot
  run("UPDATE editions SET run_status='closed',run_updated_at=? WHERE id='edition-aves'",t0-90*DAY);assert.equal((await call('/api/portal/me',vende.cookie)).coordination.editions.length,0);
  run("UPDATE editions SET run_updated_at=? WHERE id='edition-aves'",t0-5*DAY);assert.equal((await call('/api/portal/me',vende.cookie)).coordination.editions.length,1);
 
+ // rendimiento del equipo (sólo administración): mismas definiciones que el portal personal
+ run("INSERT INTO operation_events(brand_id,conversation_id,actor_id,kind,details,created_at) VALUES('globalvet',?,?,'response',?,?)",conv.id,vendeId,JSON.stringify({kind:'first',waitingSince:t0-600000,respondedAt:t0,withinTarget:true}),t0-1000);
+ run("INSERT INTO operation_events(brand_id,conversation_id,actor_id,kind,details,created_at) VALUES('globalvet',?,?,'response',?,?)",conv.id,vendeId,JSON.stringify({kind:'next',waitingSince:t0-300000,respondedAt:t0,withinTarget:false}),t0-500);
+ await call('/api/portal/team','',undefined,'GET',401);await call('/api/portal/team',vende.cookie,undefined,'GET',403);await call('/api/portal/team',ana.cookie,undefined,'GET',403);
+ const tm=await call('/api/portal/team',admin.cookie);
+ assert.deepEqual(tm.rows.map(r=>r.name),['Vera Vendedora','Omar Otro','Administración'],'ordenado por ventas netas');
+ const vr=tm.rows[0];assert.equal(vr.sales.netCents,200000);assert.equal(vr.service.responses,2);assert.equal(vr.service.medianMs,600000);assert.equal(vr.service.withinTargetPct,50);assert.equal(vr.pipeline.openTotal,1);assert.equal(vr.coordination.editions,1);assert.deepEqual(vr.brands,['GlobalVet']);
+ assert.equal(tm.totals.people,3);assert.equal(tm.totals.netCents,280000);assert.equal(tm.totals.sales,3);
+ assert.deepEqual((await call('/api/portal/team?brand=odonteck',admin.cookie)).rows.map(r=>r.name),['Omar Otro','Administración'],'Vera no tiene acceso a esa marca');
+ await call('/api/portal/team?brand=nope',admin.cookie,undefined,'GET',404);await call('/api/portal/team?days=0',admin.cookie,undefined,'GET',400);await call('/api/portal/team',admin.cookie,{},'POST',405);
  // sólo lectura y sin esquema nuevo
  await call('/api/portal/me',vende.cookie,{},'POST',405);
  assert.equal(one('PRAGMA user_version').user_version,26);

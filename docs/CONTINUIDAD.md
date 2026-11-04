@@ -1,6 +1,6 @@
 # Estado del proyecto y decisiones
 
-Documento de entrega para continuar el CRM sin depender del historial del chat. Corte: **30 de octubre de 2026, America/Mexico_City**; el despliegue de referencia ocurrió el 31 de octubre en UTC.
+Documento de entrega para continuar el CRM sin depender del historial del chat. Corte original: **30 de octubre de 2026, America/Mexico_City**; se ha ido ampliando con cada bloque. **Lo vigente en una página: [ESTADO_ACTUAL.md](ESTADO_ACTUAL.md).** Este documento es el registro por bloque, con decisiones y evidencia; las secciones más antiguas describen el estado en su fecha.
 
 ## Producto y alcance acordado
 
@@ -12,7 +12,7 @@ El sitio ya está en Railway. Publicar el código en GitHub no reemplaza el serv
 
 La intención futura es conectar WhatsApp, Instagram y Messenger oficiales, responder con plantillas, compartir flyers y usar IA con información comercial vigente. **Ninguna conexión de Meta ni IA está habilitada actualmente.** No conviertas un WhatsApp personal ni migres números como parte de este traspaso documental.
 
-## Identificación de la versión publicada
+## Identificación de la versión de referencia v0.5 (histórica; la vigente está en ESTADO_ACTUAL.md)
 
 | Dato | Referencia verificada |
 | --- | --- |
@@ -465,18 +465,24 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Evidencia:** 152 pruebas aprobadas; en el demo local, pestaña Históricos con vista previa e importación del ejemplo, ficha de persona con la sección y Finanzas con el bloque, en escritorio y celular.
 - **Publicado en v0.28.0** (ver abajo).
 
-## Fase 5 · Bloque 1: campañas y envíos segmentados (rama `feat/campanas`, local, 4 nov 2026)
+## Fase 5 · Bloque 1: campañas y envíos segmentados (rama `feat/campanas`, publicado en v0.29.0, 4 nov 2026)
 
 - **Qué se hizo:** por petición del usuario tras comparar con CRM de WhatsApp para academias, esquema **26** aditivo (`server/campaigns-schema.mjs`: `campaign_settings`, `campaigns`, `campaign_recipients`, `campaign_events`) y módulo `server/campaigns.mjs`: campaña = plantilla aprobada + segmento + fecha. Vista previa sin efectos con motivos de exclusión, mensaje renderizado y costo; programar exige `confirmAudience` igual al número de la vista previa; un escaneo por segundo lanza las vencidas y encola **un paso durable `campaign.send` por destinatario** (clave `campaign:<id>:<contacto>`, espaciados `pace_seconds`), de modo que reintentos y reinicios no duplican. Las reglas (baja, consentimiento, chat controlado por una persona, separación mínima entre campañas, tope de recetas, plantilla vigente) se evalúan en la vista previa, al lanzar y justo antes de cada envío. Resultados calculados desde pasos, mensajes y consentimiento (enviados, entregados, leídos, respuestas a 7 días, bajas, omitidos por motivo). Pestaña **Campañas** en Operación, paso 13 del guion de presentación, `public/campaigns.js`. Controles de modal a 40 px en celular. Versión **0.29.0**.
 - **Decisiones y límites:** apagado por marca por omisión, y además exige la automatización de la marca encendida (hereda la pausa global como interruptor de emergencia). Sólo llega a conversaciones **abiertas**: reabrir conversaciones cerradas para reactivar a quien ya no escribe queda para un bloque posterior (hay que decidir cómo se reabre sin saltarse la ventana de servicio). Sin pausa por campaña (se cancela, o se pausa la marca), sin A/B, recurrencia ni segmentos guardados, sin envío real por Meta.
 - **Evidencia:** 153 pruebas aprobadas; en el demo local se creó, vista previa y programó una campaña a tres clientes de práctica desde la interfaz (3 enviados, cola vacía, bitácora completa), con auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin fallos de contraste fuera de las excepciones y sin desbordamiento. **Publicado** (ver abajo).
 
-## Fase 5 · Bloque 2: portal por roles, el IPCIL nuevo dentro del CRM (rama `feat/portal-roles`, local, 4 nov 2026)
+## Fase 5 · Bloque 2: portal por roles, el IPCIL nuevo dentro del CRM (rama `feat/portal-roles`, publicado en v0.30.0, 4 nov 2026)
 
 - **Decisión del usuario («Sí, portal por roles»):** el IPCIL nuevo no se hace como aplicación aparte ni en el repositorio original; se construye dentro del CRM como portal por roles, hablando con el resto sólo por datos y eventos del núcleo para poder separarlo después sin migrar datos.
 - **Qué se hizo:** vista **Mis resultados** en el menú del equipo (`public/portal.js`) y `GET /api/portal/me` (`server/portal.mjs`), **sin migración** (esquema sigue en 26) y de sólo lectura: ventas, reembolsos, neto, ticket, por marca y curso y últimas ventas desde `ledger_entries` por `seller_id`; comisión del periodo, pendiente y liquidaciones de vendedor; cartera (abiertas por etapa, ganadas y perdidas con % de cierre, tareas, chats a cargo); aperturas que la persona coordina con avisos (faltan inscritos con el inicio a menos de 7 días, sin sesiones, sesión en menos de 48 h sin enlace, sesión realizada sin asistencia, cerrada con inscritos y sin certificados). Cada persona ve lo suyo y de sus marcas; administración elige a otra persona con «Ver a». Versión **0.30.0**.
 - **Pendiente de reglas del usuario:** roles **trafiquer** y **RH** del panel actual (qué ve y decide cada uno), reglas de comisión por persona y registro de venta manual con comprobante desde el portal. Sólo se leyeron las páginas públicas del panel IPCIL; no se tocó su repositorio ni su Firebase.
 - **Evidencia:** 154 pruebas aprobadas; en el demo local, con ventas y una apertura asignadas a la persona de prueba, la vista muestra cifras, avisos y aperturas, con auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin fallos de contraste fuera de las excepciones y sin desbordamiento. **Publicado** (ver abajo).
+
+## Fase 5 · Bloque 3: rendimiento del equipo y documentación de punta a punta (rama `feat/rendimiento-equipo`, local, 4 nov 2026)
+
+- **Qué se hizo:** `GET /api/portal/team` (sólo administración, `days` y `brand`) y el panel **Rendimiento del equipo** al final de «Mis resultados»: una fila por persona del equipo con ventas netas y número de ventas, cierre (ganadas y perdidas), oportunidades abiertas, tareas vencidas, tiempo mediano de primera respuesta y % dentro de objetivo (de la bitácora de operación), y avisos de aperturas; el botón **Ver** abre el portal de esa persona. Usa las mismas definiciones que el portal personal, sin esquema nuevo. Versión **0.31.0**.
+- **Documentación:** nueva página [ESTADO_ACTUAL.md](ESTADO_ACTUAL.md) (identificación, qué existe, tabla de interruptores, límites, decisiones pendientes, historial de versiones y cómo retomar), [GUIA_DE_USO.md](GUIA_DE_USO.md) (qué hace cada rol) y [ACTIVACION_Y_VERIFICACION.md](ACTIVACION_Y_VERIFICACION.md) (runbook para una marca de pruebas con 14 pasos, cierre y qué hacer si algo sale mal); puestos al día [CLAUDE.md](../CLAUDE.md), [README](../README.md), [ROADMAP](../ROADMAP.md) y la cabecera de este documento, que seguían describiendo v0.5.
+- **Evidencia:** 154 pruebas aprobadas (la del portal cubre ahora el equipo: orden por ventas, filtro por marca, permisos y definiciones); en el demo local el panel muestra la fila con cifras y avisos, con auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin fallos de contraste fuera de las excepciones y sin desbordamiento. **Sin publicar.**
 
 ## Publicación v0.30.0 (4 nov 2026) · Fase 5, bloque 2
 

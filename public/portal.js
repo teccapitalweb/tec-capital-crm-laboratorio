@@ -10,7 +10,9 @@ window.createPortalUI=function({state,api,esc,icon,icons,toast}){
   const STAGE={nuevo:'Nuevo interés',interesado:'Interesado',inscripcion:'Inscripción solicitada'};
   const RUN={planned:['Planeada',''],open:['Abierta','good'],running:['En curso','good'],closed:['Cerrada','ok'],cancelled:['Cancelada','warn']};
   const METHOD={card:'Tarjeta',oxxo:'OXXO',transfer:'Transferencia'};
-  let days=30,person='',data=null,version=0;
+  const dur=ms=>{if(ms===null||ms===undefined)return '—';const s=Math.round(ms/1000);if(s<60)return s+' s';const m=Math.round(s/60);if(m<60)return m+' min';const h=Math.floor(m/60),r=m%60;if(h<48)return h+' h'+(r?' '+r+' min':'');return Math.round(h/24)+' d';};
+  const pct=v=>v===null||v===undefined?'—':String(v).replace('.',',')+' %';
+  let days=30,person='',data=null,team=null,version=0;
   const nav=()=>`<button data-view="results" class="${state.view==='results'?'active':''}" aria-label="Mis resultados">${icon('trending-up')}<span class="nav-label-text">Mis resultados</span></button>`;
 
   function alertsPanel(d){
@@ -42,24 +44,34 @@ window.createPortalUI=function({state,api,esc,icon,icons,toast}){
   function coordinationPanel(d){
     return `<section class="crm-panel"><div class="panel-title"><h2>Mis aperturas</h2></div>${d.coordination.editions.length?`<div class="rcp-grid">${d.coordination.editions.map(editionCard).join('')}</div>`:'<p class="crm-hint">No coordinas ninguna apertura activa. Administración te designa como responsable desde Operación → Coordinación.</p>'}</section>`;
   }
+  // Rendimiento del equipo (sólo administración): una fila por persona, con las mismas definiciones que su portal personal.
+  function teamPanel(){
+    if(!team)return '';
+    const t=team.totals;
+    return `<section class="crm-panel"><div class="panel-title"><h2>Rendimiento del equipo</h2>${chip(team.period.days+' días')}</div>
+      <div class="an-kpis">${kpi('Personas',num(t.people))}${kpi('Ventas netas',t.netLabel,t.sales+(t.sales===1?' venta':' ventas'))}${kpi('Tareas vencidas',num(t.tasksOverdue),'en todo el equipo')}${kpi('Avisos de aperturas',num(t.alerts),'por revisar')}</div>
+      <div class="fin-table-wrap"><table class="leg-table pt-team"><thead><tr><th>Persona</th><th>Ventas netas</th><th>Cierre</th><th>Abiertas</th><th>Tareas vencidas</th><th>1.ª respuesta</th><th>En objetivo</th><th>Aperturas</th><th></th></tr></thead><tbody>${team.rows.map(r=>`<tr><td><strong>${esc(r.name)}</strong><br><small>${esc(r.role==='admin'?'Administración':'Asesor')} · ${esc(r.brands.join(', '))}</small></td><td>${esc(r.sales.netLabel)}<br><small>${r.sales.count} ${r.sales.count===1?'venta':'ventas'}</small></td><td>${pct(r.pipeline.winRate)}<br><small>${r.pipeline.won} gan. / ${r.pipeline.lost} perd.</small></td><td>${r.pipeline.openTotal}</td><td>${r.pipeline.tasksOverdue?chip(String(r.pipeline.tasksOverdue),'urgent'):'0'}</td><td>${dur(r.service.medianMs)}<br><small>${r.service.responses} ${r.service.responses===1?'respuesta':'respuestas'}</small></td><td>${pct(r.service.withinTargetPct)}</td><td>${r.coordination.editions}${r.coordination.alerts?'<br>'+chip(r.coordination.alerts+(r.coordination.alerts===1?' aviso':' avisos'),r.coordination.urgent?'urgent':'high'):''}</td><td><button type="button" class="btn" data-action="pt-view" data-id="${esc(r.id)}">Ver</button></td></tr>`).join('')||'<tr><td colspan="9">Sin personas con acceso a las marcas elegidas.</td></tr>'}</tbody></table></div>
+      <p class="crm-hint">${team.notes.map(esc).join(' ')}</p></section>`;
+  }
   function view(){
     const d=data,who=d.person.self?'Mis resultados':'Resultados de '+d.person.name;
     return `<div class="content-page an-page pt-page"><div class="page-heading"><div><span class="eyebrow">Tu trabajo · ${esc(d.scope.brands.map(b=>b.name).join(', ')||'sin marcas')}</span><h1>${esc(who)}</h1><p>Ventas, comisiones, cartera y aperturas en un solo lugar. Cifras del laboratorio.</p></div></div>
       <div class="an-controls"><label>Periodo<select id="pt-days">${[7,30,90,365].map(n=>`<option value="${n}" ${days===n?'selected':''}>${n===365?'Último año':'Últimos '+n+' días'}</option>`).join('')}</select></label>
         ${d.people.length?`<label>Ver a<select id="pt-person"><option value="">Yo (${esc(state.user.name)})</option>${d.people.filter(p=>p.id!==state.user.id).map(p=>`<option value="${esc(p.id)}" ${person===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label>`:''}
         <button class="btn" data-action="pt-reload">${icon('refresh-cw')} Actualizar</button></div>
-      ${alertsPanel(d)}${salesPanel(d)}${pipelinePanel(d)}${coordinationPanel(d)}<p class="crm-hint an-notes">${d.notes.map(esc).join(' ')}</p></div>`;
+      ${alertsPanel(d)}${salesPanel(d)}${pipelinePanel(d)}${coordinationPanel(d)}${teamPanel()}<p class="crm-hint an-notes">${d.notes.map(esc).join(' ')}</p></div>`;
   }
   async function render(){
     const mine=++version;
     if(!$('.pt-page'))$('#page').innerHTML='<div class="content-page"><div class="loading-message">Calculando tus resultados…</div></div>';
     try{
       const params=new URLSearchParams({days});if(state.brand&&state.brand!=='all')params.set('brand',state.brand);if(person)params.set('person',person);
-      const result=await api('/api/portal/me?'+params);if(mine!==version||state.view!=='results')return;
-      data=result;const scrolled=$('#page .content-page')?.scrollTop||0;$('#page').innerHTML=view();icons();const box=$('#page .content-page');if(box)box.scrollTop=scrolled;
+      const teamParams=new URLSearchParams({days});if(state.brand&&state.brand!=='all')teamParams.set('brand',state.brand);
+      const [result,teamResult]=await Promise.all([api('/api/portal/me?'+params),state.user.role==='admin'?api('/api/portal/team?'+teamParams):null]);if(mine!==version||state.view!=='results')return;
+      data=result;team=teamResult;const scrolled=$('#page .content-page')?.scrollTop||0;$('#page').innerHTML=view();icons();const box=$('#page .content-page');if(box)box.scrollTop=scrolled;
     }catch(e){if(state.view==='results'){$('#page').innerHTML=`<div class="content-page"><div class="crm-empty">${icon('trending-up')}<h3>No pudimos calcular tus resultados</h3><p>${esc(e.message)}</p><button class="btn" data-action="pt-reload">Volver a intentar</button></div></div>`;icons();}toast(e.message);}
   }
-  async function action(name){if(name==='pt-reload'){await render();return true;}return false;}
+  async function action(name,el){if(name==='pt-reload'){await render();return true;}if(name==='pt-view'){person=el.dataset.id===state.user.id?'':el.dataset.id;await render();$('#page .content-page')?.scrollTo({top:0});return true;}return false;}
   async function change(el){
     if(el.id==='pt-days'){days=Number(el.value);await render();return true;}
     if(el.id==='pt-person'){person=el.value;await render();return true;}

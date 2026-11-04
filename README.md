@@ -6,7 +6,7 @@ Aplicación de pruebas multicanal: los participantes crean perfiles y envían me
 
 ## Continuar el desarrollo
 
-Empieza por [CLAUDE.md](CLAUDE.md). La guía incluye [estado y decisiones](docs/CONTINUIDAD.md), [arquitectura y contratos](docs/ARQUITECTURA.md), [operación y pruebas](docs/OPERACION_Y_PRUEBAS.md) y [plan detallado de la fase 4](docs/PLAN_FASE_4.md). Distingue la versión funcional publicada v0.5 de las funciones todavía propuestas y no contiene credenciales.
+Empieza por [CLAUDE.md](CLAUDE.md) y por el **[estado actual](docs/ESTADO_ACTUAL.md)** (una página con la versión publicada, los interruptores, los límites y lo pendiente). Para usar el CRM: [guía de uso por rol](docs/GUIA_DE_USO.md) y [activación y verificación en producción](docs/ACTIVACION_Y_VERIFICACION.md). Para continuar el desarrollo: [estado y decisiones por bloque](docs/CONTINUIDAD.md), [arquitectura y contratos](docs/ARQUITECTURA.md), [operación y pruebas](docs/OPERACION_Y_PRUEBAS.md), [diseño y auditoría](docs/DISENO_Y_AUDITORIA.md), la [visión de la plataforma](docs/VISION_PLATAFORMA.md) y los planes de [campañas](docs/PLAN_CAMPANAS.md) y [portal por roles](docs/PLAN_PORTAL_ROLES.md). La documentación no contiene credenciales.
 
 ## Operación del equipo · v0.5
 
@@ -63,7 +63,7 @@ Mientras llega el IPCIL nuevo, administración importa en **Operación → Hist�
 
 ## Mis resultados: portal por roles
 
-Cada persona del equipo tiene en el menú **Mis resultados**: sus ventas y comisiones (del libro de Finanzas), su cartera de oportunidades y tareas, y las aperturas que coordina con avisos de atención (faltan inscritos para el mínimo, sin sesiones, sin enlace de videollamada, sesión sin asistencia, apertura cerrada sin certificados). Ve sólo lo suyo y de sus marcas; administración puede elegir a otra persona con «Ver a». Es el primer paso del IPCIL nuevo dentro del CRM, de sólo lectura. Plan y roles pendientes: [docs/PLAN_PORTAL_ROLES.md](docs/PLAN_PORTAL_ROLES.md).
+Cada persona del equipo tiene en el menú **Mis resultados**: sus ventas y comisiones (del libro de Finanzas), su cartera de oportunidades y tareas, y las aperturas que coordina con avisos de atención (faltan inscritos para el mínimo, sin sesiones, sin enlace de videollamada, sesión sin asistencia, apertura cerrada sin certificados). Ve sólo lo suyo y de sus marcas; administración puede elegir a otra persona con «Ver a». Es el primer paso del IPCIL nuevo dentro del CRM, de sólo lectura. Administración ve además el **Rendimiento del equipo**: una fila por persona con ventas netas, cierre, tareas vencidas, tiempo de primera respuesta y avisos de aperturas, y el botón **Ver** abre su portal. Plan y roles pendientes: [docs/PLAN_PORTAL_ROLES.md](docs/PLAN_PORTAL_ROLES.md).
 
 ## Campañas y envíos segmentados
 
