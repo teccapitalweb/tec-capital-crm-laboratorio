@@ -20,7 +20,8 @@ Los avisos que el equipo ya recibe en **Operación → Mis avisos** (asignación
 
 - **Es la única salida real a internet del laboratorio** y por eso es opt-in por dispositivo y se puede apagar en el entorno con `PUSH_DISABLED=1`.
 - El mensaje va **cifrado de extremo a extremo** (RFC 8291, `aes128gcm`) y firmado con VAPID (RFC 8292, ES256): el servicio de push (Google, Mozilla, Apple, Microsoft) sólo ve bytes cifrados que únicamente el navegador de esa persona puede leer.
-- El servidor sólo contacta **servicios de push conocidos** (lista cerrada de dominios, https, sin puerto): una suscripción falsa no puede usarse para que el servidor llegue a otras direcciones.
+- El servidor sólo contacta **servicios de push conocidos** (lista cerrada de dominios, https, sin puerto): una suscripción falsa no puede usarse para que el servidor llegue a otras direcciones. **Las redirecciones nunca se siguen** (`redirect: manual`): cualquier 3xx cuenta como fallo, de modo que un destino permitido no puede reenviar al servidor a otra dirección.
+- **El acceso se revalida en cada envío**, con la misma regla que al activar: si la persona ya no es del equipo o está deshabilitada, no se manda y se borran sus dispositivos (también en cada barrido); si perdió el acceso a la marca del aviso, ese aviso no se manda (el dispositivo se conserva para los de sus otras marcas).
 - Las claves VAPID se generan una sola vez y se guardan en la base (`push_keys`); la clave privada **nunca** sale por la API ni va al repositorio. Se incluyen en los respaldos de la base, que son privados.
 - `PUSH_SUBJECT` (opcional) es el contacto que el estándar exige en la firma; por omisión se usa la dirección pública del CRM, nunca un correo personal.
 - Sin dependencias nuevas: todo con `node:crypto`.
@@ -29,6 +30,7 @@ Los avisos que el equipo ya recibe en **Operación → Mis avisos** (asignación
 
 - El cifrado reproduce **byte a byte el vector de prueba oficial del RFC 8291** (apéndice A), que es lo que producen los navegadores y las librerías de referencia; además hay prueba de ida y vuelta, de claves ajenas y de límites.
 - Prueba por API con un receptor local: permisos, suscripción validada, firma VAPID comprobada con la clave pública publicada, contenido descifrado como lo haría el navegador, un solo envío por aviso, grupos, avisos leídos, historial no reenviado, prueba manual y su límite, dispositivo caído eliminado, cada persona sólo ve y quita lo suyo.
+- Una revisión de seguridad automática señaló dos puntos de esta entrega —seguir redirecciones y no revalidar el acceso al enviar— y ambos se corrigieron con prueba propia antes de publicar.
 - Revisión en navegador local: el service worker se registra con alcance `/`, el manifiesto se enlaza, el navegador ofrece **Instalar app**, el panel se ve bien en escritorio y 375 px.
 
 ## Lo que no se pudo comprobar

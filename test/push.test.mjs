@@ -36,7 +36,7 @@ test('push: cifrado aes128gcm de ida y vuelta, formato del registro, destinos pe
 
 test('push por API: permisos, claves VAPID firmadas, suscripción validada, envío cifrado e idempotente, grupos, lectura previa, prueba, limpieza de dispositivos caídos y sin reenvío del historial',async t=>{
   const dir=await mkdtemp(join(tmpdir(),'crm-push-')),code=randomUUID(),password='Password-push-2026!';let logs='';
-  const received=[],receiver=createServer((req,res)=>{const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>{received.push({url:req.url,headers:req.headers,body:Buffer.concat(chunks)});res.statusCode=req.url.includes('/gone')?410:201;res.end();});});
+  const received=[],receiver=createServer((req,res)=>{const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>{received.push({url:req.url,headers:req.headers,body:Buffer.concat(chunks)});res.statusCode=req.url.includes('/gone')?410:req.url.includes('/redirect')?302:201;if(res.statusCode===302)res.setHeader('Location','/push/landed');res.end();});});
   await new Promise(r=>receiver.listen(0,'127.0.0.1',r));const sink='http://127.0.0.1:'+receiver.address().port;
   const server=spawn(process.execPath,['server/index.mjs'],{env:{...process.env,HOST:'127.0.0.1',PORT:'0',DATA_DIR:dir,ADMIN_INVITE_CODE:code,APP_ORIGIN:'',NODE_ENV:'test',PUSH_DELAY_MS:'0'},stdio:['ignore','pipe','pipe']});
   const origin=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error(logs)),10000);server.stderr.on('data',b=>logs+=b);server.stdout.on('data',b=>{const m=String(b).match(/http:\/\/127.0.0.1:\d+/);if(m){clearTimeout(timer);resolve(m[0]);}});server.once('exit',()=>{clearTimeout(timer);reject(Error(logs));});});
@@ -107,9 +107,19 @@ test('push por API: permisos, claves VAPID firmadas, suscripción validada, env�
   await sleep(5200);const t1=await call('/api/push/test',admin.cookie,{});assert.equal(t1.results.length,2);assert.equal(t1.results.find(r=>r.status===410).ok,false);
   const afterGone=await call('/api/push/config',admin.cookie);assert.deepEqual(afterGone.devices.map(d=>d.endpoint),[sink+'/push/admin'],'el dispositivo que responde 410 se elimina solo');
 
+  // una redirección del servicio de push no se sigue: es un fallo y nada llega al destino al que apunta
+  const redirectDevice=receiverKeys();await call('/api/push/subscribe',admin.cookie,sub('/push/redirect',redirectDevice));await sleep(5200);
+  const rd=await call('/api/push/test',admin.cookie,{});const redirected=rd.results.find(r=>r.status===302);assert.ok(redirected,'el 302 se informó');assert.equal(redirected.ok,false);
+  assert.equal(received.some(r=>r.url==='/push/landed'),false,'el servidor no siguió la redirección');
+  assert.equal((await call('/api/push/unsubscribe',admin.cookie,{endpoint:sink+'/push/redirect'})).removed,1);
   // cada persona sólo ve y quita lo suyo
   assert.equal((await call('/api/push/config',agent.cookie)).devices.length,1);assert.equal((await call('/api/push/unsubscribe',agent.cookie,{endpoint:sink+'/push/admin'})).removed,0);
   assert.equal((await call('/api/push/unsubscribe',admin.cookie,{endpoint:sink+'/push/admin'})).removed,1);assert.deepEqual((await call('/api/push/config',admin.cookie)).devices,[]);
+  // revocación al enviar: sin acceso a la marca no se manda (el dispositivo se conserva) y una cuenta deshabilitada pierde sus dispositivos
+  const base=received.length;run('DELETE FROM brand_members WHERE user_id=?',agentId);notify('R1',agentId,'assignment','Sin acceso a la marca');await sleep(6500);
+  assert.equal(received.length,base,'no se envía un aviso de una marca a la que ya no tiene acceso');assert.equal(one('SELECT count(*) n FROM push_subscriptions WHERE user_id=?',agentId).n,1);
+  run('UPDATE users SET disabled=1 WHERE id=?',agentId);await sleep(5500);
+  assert.equal(one('SELECT count(*) n FROM push_subscriptions WHERE user_id=?',agentId).n,0,'una cuenta deshabilitada pierde sus dispositivos');
   assert.equal(one('PRAGMA user_version').user_version,27);
   assert.ok(one("SELECT count(*) n FROM audit WHERE action IN ('push.subscribe','push.unsubscribe')").n>=3);
 });

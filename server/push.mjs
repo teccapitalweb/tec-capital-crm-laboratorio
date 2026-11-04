@@ -72,7 +72,7 @@ export function createPush({db,crm,body,json,audit,now=Date.now,env=process.env,
   async function sendTo(sub,payload,{ttl=3600,urgency='normal'}={}){
     let status=0,error=null;
     try{
-      const res=await fetchFn(sub.endpoint,{method:'POST',headers:{'Content-Encoding':'aes128gcm','Content-Type':'application/octet-stream',TTL:String(ttl),Urgency:urgency,Authorization:vapid(sub.endpoint)},body:encryptPayload(JSON.stringify(payload),sub),signal:AbortSignal.timeout(10000)});
+      const res=await fetchFn(sub.endpoint,{method:'POST',headers:{'Content-Encoding':'aes128gcm','Content-Type':'application/octet-stream',TTL:String(ttl),Urgency:urgency,Authorization:vapid(sub.endpoint)},body:encryptPayload(JSON.stringify(payload),sub),redirect:'manual',signal:AbortSignal.timeout(10000)});   // jamás se sigue una redirección: el destino permitido no puede reenviar al servidor a otra dirección
       status=res.status;if(!(status>=200&&status<300))error='HTTP '+status;
     }catch(e){error=String(e?.message||e).slice(0,160);}
     const t=now();
@@ -88,9 +88,12 @@ export function createPush({db,crm,body,json,audit,now=Date.now,env=process.env,
     try{
       const t=now();
       db.prepare('UPDATE notifications SET pushed_at=? WHERE pushed_at IS NULL AND read_at IS NOT NULL').run(t);   // lo que ya se leyó no se manda
+      db.prepare("DELETE FROM push_subscriptions WHERE user_id IN (SELECT id FROM users WHERE disabled=1 OR role NOT IN ('agent','admin'))").run();   // cuentas deshabilitadas o que dejaron el equipo pierden sus dispositivos
       const rows=db.prepare('SELECT n.* FROM notifications n WHERE n.pushed_at IS NULL AND n.created_at<=? AND EXISTS(SELECT 1 FROM push_subscriptions s WHERE s.user_id=n.user_id) ORDER BY n.created_at LIMIT 20').all(t-DELAY);
       for(const n of rows){
         const mark=db.prepare('UPDATE notifications SET pushed_at=? WHERE id=? AND pushed_at IS NULL').run(now(),n.id);if(!mark.changes)continue;   // un solo envío por aviso
+        const person=staffRow(n.user_id);if(!person||person.disabled||!['agent','admin'].includes(person.role))continue;   // misma regla de acceso que al activar: sigue siendo equipo
+        if(!crm.canBrand({id:n.user_id},n.brand_id))continue;   // y sigue teniendo acceso a la marca del aviso
         if(!groupsOf(n.user_id).includes(groupOf(n.kind)))continue;
         const brand=db.prepare('SELECT name FROM brands WHERE id=?').get(n.brand_id)?.name||'';
         const payload={title:'TEC Capital'+(brand?' · '+brand:''),body:String(n.title).slice(0,200),tag:n.id,url:'/crm',kind:n.kind};
