@@ -1,6 +1,6 @@
 # Plan: portal por roles, el IPCIL nuevo dentro del CRM (Fase 5, bloque 2)
 
-Estado: **implementado localmente** en la rama `feat/portal-roles` (4 nov 2026, v0.30.0, 154 pruebas), **sin publicar**. Decisión del usuario: el IPCIL nuevo no se hace como aplicación aparte ni en el repositorio original; se construye como **portal por roles dentro del CRM**, hablando con el resto sólo por datos y eventos del núcleo ([NUCLEO.md](NUCLEO.md)), de modo que pueda separarse después sin migrar datos.
+Estado: **publicado en v0.30.0** (4 nov 2026, 154 pruebas, sin esquema nuevo). Decisión del usuario: el IPCIL nuevo no se hace como aplicación aparte ni en el repositorio original; se construye como **portal por roles dentro del CRM**, hablando con el resto sólo por datos y eventos del núcleo ([NUCLEO.md](NUCLEO.md)), de modo que pueda separarse después sin migrar datos.
 
 ## Principio
 
