@@ -51,12 +51,14 @@ Cada paso termina con un **resultado esperado**; si no ocurre, detenerse y anota
 13. **Modo presentación.** *Esperado:* el guion de 13 pasos marca «Listo» en lo que se acaba de probar y «Preparar» en lo que siga apagado.
 14. **Móvil.** Repetir 1, 9 y 11 en un teléfono (o 375 px). *Esperado:* sin desplazamiento horizontal de la página y botones tocables.
 
+15. **Notificaciones push (en un teléfono real).** Con la cuenta de prueba, Mi configuración → Activar → Enviar prueba. Desde otra cuenta asignar un chat a esa persona y, sin abrir el CRM en el teléfono, esperar unos 20 s. *Esperado:* llega la notificación con la marca y el texto del aviso; tocarla abre o enfoca el CRM; al desactivar el dispositivo deja de llegar. **Es la única parte que el laboratorio no pudo probar**: aquí se confirma la entrega real.
+
 ## D. Cierre y limpieza
 
 1. Cancelar toda campaña de prueba que siga programada o enviando.
 2. Cerrar las conversaciones y tareas de prueba; archivar o pausar plantillas, recetas y materiales «PRUEBA ·».
 3. Revocar los certificados de prueba (Operación → Certificados) para que su verificación pública diga «revocado».
-4. **Apagar** en orden inverso al de la sección B todo lo que se encendió y quitar la regla de comisión de prueba.
+4. **Apagar** en orden inverso al de la sección B todo lo que se encendió, quitar la regla de comisión de prueba y desactivar las notificaciones push del dispositivo de prueba.
 5. Anotar en [CONTINUIDAD.md](CONTINUIDAD.md) la fecha, quién verificó, qué pasos pasaron y cuáles fallaron, con el resultado de `/api/health` y la versión.
 
 No se borran datos: los registros de prueba quedan identificados y apagados.

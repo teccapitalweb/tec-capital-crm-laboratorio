@@ -72,6 +72,18 @@ Administración concede estas funciones en Catálogo → Contenido. Diseño crea
 
 No se interrumpe a quien atiende una persona, no se escribe a quien pidió la baja y hay una separación mínima entre campañas para la misma persona (por omisión 72 h).
 
+## Notificaciones en el celular y app instalable (equipo)
+
+Cada persona del equipo decide si quiere recibir los avisos de **Mis avisos** (chat asignado, menciones, transferencias, objetivos de respuesta, pagos y comprobantes, aperturas) como notificación aunque tenga el CRM cerrado.
+
+1. **Mi configuración → Notificaciones en este dispositivo → Activar.** El navegador pide permiso; si lo bloqueaste antes, se desbloquea en la configuración del sitio (candado junto a la dirección).
+2. **Enviar prueba** confirma que llega. Cada dispositivo se activa por separado (hasta 10 por persona) y se desactiva desde la misma pantalla.
+3. Elige qué grupos quieres: chats, objetivos de respuesta, pagos y comprobantes, o aperturas, certificados y seguimientos.
+4. Sólo se manda lo que sigue sin leer unos 15 segundos después; si ya lo viste en el CRM, no suena.
+5. **Instalar app** (en el mismo panel o en la barra del navegador) deja TEC Capital como aplicación en el escritorio o en la pantalla de inicio. **En iPhone o iPad** (iOS 16.4 o superior) las notificaciones sólo funcionan con la app instalada: Compartir → Añadir a pantalla de inicio, y se activan desde ese icono.
+
+Los clientes no reciben notificaciones push.
+
 ## Glosario
 
 - **Marca / consultora:** cada una de las 15 empresas con sus cursos.

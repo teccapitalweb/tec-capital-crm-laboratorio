@@ -58,12 +58,14 @@ import {createLegacy} from './legacy.mjs';
 import {migrateCampaigns} from './campaigns-schema.mjs';
 import {createCampaigns} from './campaigns.mjs';
 import {createPortal} from './portal.mjs';
+import {migratePush} from './push-schema.mjs';
+import {createPush} from './push.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<26&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v26-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<27&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v27-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -88,6 +90,7 @@ migrateContent(db);
 migrateAcademics(db);
 migrateLegacy(db);
 migrateCampaigns(db);
+migratePush(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -175,11 +178,12 @@ const replies=createReplies({db,catalogue,crm,contacts,operations,insertMessage,
 const evaluation=createEvaluation({db,crm,replies,provider:aiProvider,body,json,audit});
 const automation=createAutomation({db,onChange:step=>{if(step.conversation_id)broadcast('conversation',step.conversation_id);broadcast('crm',null,{brandId:step.brand_id});}});
 const backupHours=process.env.BACKUP_INTERVAL_HOURS===undefined?(process.env.NODE_ENV==='test'?0:24):Number(process.env.BACKUP_INTERVAL_HOURS);
-const backups=createBackups({db,dataDir,version:'0.31.0',intervalMs:Number.isFinite(backupHours)&&backupHours>0?backupHours*3600000:0,keep:Math.max(1,Number(process.env.BACKUP_KEEP)||7)});
+const backups=createBackups({db,dataDir,version:'0.32.0',intervalMs:Number.isFinite(backupHours)&&backupHours>0?backupHours*3600000:0,keep:Math.max(1,Number(process.env.BACKUP_KEEP)||7)});
 const backupHandle=backupRoutes(backups);
 const recipes=createRecipes({db,catalogue,automation,insertMessage,broadcast,body,json,audit});
 const campaigns=createCampaigns({db,crm,catalogue,automation,insertMessage,broadcast,body,json,audit});
 const portal=createPortal({db,crm,json});
+const push=createPush({db,crm,body,json,audit});
 // Simulador de clientes: habla con la propia API por loopback (nunca dentro de una transacción). SIMULATOR_DISABLED=1 lo oculta.
 const simulator=createSimulator({db,catalogue,crm,operations,catalogueImport,body,json,audit,broadcast,issueSession,selfOrigin:()=>'http://127.0.0.1:'+server.address().port,enabled:process.env.SIMULATOR_DISABLED!=='1'});
 async function body(req){
@@ -268,7 +272,7 @@ function flyer(course,brand){
 const server=http.createServer(async(req,res)=>{
   security(res);const url=new URL(req.url,'http://localhost'),path=url.pathname;
   try{
-    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.31.0',transport:'websocket',mode:'laboratorio'});}
+    if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.32.0',transport:'websocket',mode:'laboratorio'});}
     if(await connectors.handlePublic(req,res,path,url,req.socket.remoteAddress||'unknown'))return;   // webhooks de proveedores: firma propia, sin sesión ni Origin
     if(await certificates.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // verificación pública de certificados por folio, con límite por IP
     if(await surveys.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // encuestas por token (/encuesta/<token>, /api/survey/<token>), sin sesión, con límite por IP
@@ -319,6 +323,7 @@ const server=http.createServer(async(req,res)=>{
       if(await recipes.handle(req,res,path,user))return;
       if(await campaigns.handle(req,res,path,user))return;
       if(await portal.handle(req,res,path,user))return;
+      if(await push.handle(req,res,path,user))return;
       if(await automation.handle(req,res,path,user,{body,json,audit}))return;
       if(await catalogueImport.handle(req,res,path,user))return;
       if(await catalogue.handle(req,res,path,user))return;
@@ -427,7 +432,7 @@ const server=http.createServer(async(req,res)=>{
       throw fail(404,'Ruta no disponible.');
     }
     if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'Método no permitido.');
-    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/knowledge.js':['public/knowledge.js','text/javascript; charset=utf-8'],'/simulator.js':['public/simulator.js','text/javascript; charset=utf-8'],'/payments.js':['public/payments.js','text/javascript; charset=utf-8'],'/presentation.js':['public/presentation.js','text/javascript; charset=utf-8'],'/connectors.js':['public/connectors.js','text/javascript; charset=utf-8'],'/evaluation.js':['public/evaluation.js','text/javascript; charset=utf-8'],'/coordination.js':['public/coordination.js','text/javascript; charset=utf-8'],'/finance.js':['public/finance.js','text/javascript; charset=utf-8'],'/persons.js':['public/persons.js','text/javascript; charset=utf-8'],'/certificates.js':['public/certificates.js','text/javascript; charset=utf-8'],'/content.js':['public/content.js','text/javascript; charset=utf-8'],'/legacy.js':['public/legacy.js','text/javascript; charset=utf-8'],'/campaigns.js':['public/campaigns.js','text/javascript; charset=utf-8'],'/portal.js':['public/portal.js','text/javascript; charset=utf-8'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/polish.css':['public/polish.css','text/css; charset=utf-8'],'/security.js':['public/security.js','text/javascript; charset=utf-8'],'/analytics.js':['public/analytics.js','text/javascript; charset=utf-8'],'/analytics.css':['public/analytics.css','text/css; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/knowledge.js':['public/knowledge.js','text/javascript; charset=utf-8'],'/simulator.js':['public/simulator.js','text/javascript; charset=utf-8'],'/payments.js':['public/payments.js','text/javascript; charset=utf-8'],'/presentation.js':['public/presentation.js','text/javascript; charset=utf-8'],'/connectors.js':['public/connectors.js','text/javascript; charset=utf-8'],'/evaluation.js':['public/evaluation.js','text/javascript; charset=utf-8'],'/coordination.js':['public/coordination.js','text/javascript; charset=utf-8'],'/finance.js':['public/finance.js','text/javascript; charset=utf-8'],'/persons.js':['public/persons.js','text/javascript; charset=utf-8'],'/certificates.js':['public/certificates.js','text/javascript; charset=utf-8'],'/content.js':['public/content.js','text/javascript; charset=utf-8'],'/legacy.js':['public/legacy.js','text/javascript; charset=utf-8'],'/campaigns.js':['public/campaigns.js','text/javascript; charset=utf-8'],'/portal.js':['public/portal.js','text/javascript; charset=utf-8'],'/push.js':['public/push.js','text/javascript; charset=utf-8'],'/sw.js':['public/sw.js','text/javascript; charset=utf-8'],'/manifest.webmanifest':['public/manifest.webmanifest','application/manifest+json; charset=utf-8'],'/icon-192.png':['public/icon-192.png','image/png'],'/icon-512.png':['public/icon-512.png','image/png'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/polish.css':['public/polish.css','text/css; charset=utf-8'],'/security.js':['public/security.js','text/javascript; charset=utf-8'],'/analytics.js':['public/analytics.js','text/javascript; charset=utf-8'],'/analytics.css':['public/analytics.css','text/css; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
     const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operación. Vuelve a intentarlo.',...(error.status&&error.code?{code:error.code}:{}),...(error.status&&error.activeOpportunityId?{activeOpportunityId:error.activeOpportunityId}:{})});}
 });
@@ -446,6 +451,7 @@ const jobsTimer=setInterval(processJobs,350);
 const operationsTimer=setInterval(()=>{try{operations.reconcile();}catch(e){console.error('Operations tick failed:',e.name,e.message);}},1000);
 const automationTimer=setInterval(()=>{try{recipes.scan();}catch(e){console.error('Recipe scan failed:',e.name);}try{campaigns.scan();}catch(e){console.error('Campaign scan failed:',e.name);}automation.tick().catch(e=>console.error('Automation tick failed:',e.name));},1000);
 const paymentsTimer=setInterval(()=>{payments.tick().catch(e=>console.error('Payments tick failed:',e.name));},30000);setTimeout(()=>payments.tick().catch(()=>{}),3000).unref();
+const pushTimer=setInterval(()=>{push.tick().catch(e=>console.error('Push tick failed:',e.name));},5000);
 const channelTimer=setInterval(()=>{channel.tick().catch(e=>console.error('Channel tick failed:',e.name));},500);
 const eventsTimer=setInterval(()=>{events.tick().catch(e=>console.error('Events tick failed:',e.name));},1000);
 const coordinationTimer=setInterval(()=>{coordination.tick().catch(e=>console.error('Coordination tick failed:',e.name));},process.env.NODE_ENV==='test'?5000:60000);setTimeout(()=>coordination.tick().catch(()=>{}),4000).unref();

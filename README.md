@@ -61,6 +61,10 @@ En **Catálogo y biblioteca → Contenido** cada marca elige qué plantilla apro
 
 Mientras llega el IPCIL nuevo, administración importa en **Operación → Históricos** un JSON o CSV exportado del panel actual (alumnos con sus pagos, cursos, aperturas, certificados) con los mismos nombres de campo del panel. Cada alumno queda ligado a la persona única del CRM; sus pagos y certificados se ven en la ficha de persona y en Finanzas como históricos, fuera del libro de ventas y sin comisiones. Repetir un archivo no duplica y un lote se puede quitar. No hay conexión en vivo con Firebase.
 
+## Notificaciones push y app instalable
+
+El equipo puede recibir los avisos de **Mis avisos** (chat asignado, menciones, objetivos de respuesta, pagos, aperturas) como notificación en el celular o el escritorio aunque el CRM esté cerrado: **Mi configuración → Notificaciones en este dispositivo → Activar**, por dispositivo y con grupos a elegir. El mensaje viaja cifrado de extremo a extremo y el servidor sólo contacta servicios de push conocidos; `PUSH_DISABLED=1` las apaga. El CRM también se puede **instalar como app** (manifiesto, iconos y service worker). Plan, seguridad y lo que falta probar en un teléfono real: [docs/PLAN_PUSH.md](docs/PLAN_PUSH.md).
+
 ## Mis resultados: portal por roles
 
 Cada persona del equipo tiene en el menú **Mis resultados**: sus ventas y comisiones (del libro de Finanzas), su cartera de oportunidades y tareas, y las aperturas que coordina con avisos de atención (faltan inscritos para el mínimo, sin sesiones, sin enlace de videollamada, sesión sin asistencia, apertura cerrada sin certificados). Ve sólo lo suyo y de sus marcas; administración puede elegir a otra persona con «Ver a». Es el primer paso del IPCIL nuevo dentro del CRM, de sólo lectura. Administración ve además el **Rendimiento del equipo**: una fila por persona con ventas netas, cierre, tareas vencidas, tiempo de primera respuesta y avisos de aperturas, y el botón **Ver** abre su portal. Plan y roles pendientes: [docs/PLAN_PORTAL_ROLES.md](docs/PLAN_PORTAL_ROLES.md).
