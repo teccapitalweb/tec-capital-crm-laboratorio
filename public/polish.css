@@ -73,6 +73,7 @@ dialog::backdrop{animation:niebla-fade .2s ease}
   .modal-inner .btn,.modal-inner .icon-btn{min-height:40px}
   .modal-inner .icon-btn{min-width:40px}
   .mode-picker button{min-height:36px}
+  .quick-replies button{min-height:40px}
   .search input,.crm-toolbar input{min-height:24px}
 }
 
@@ -101,3 +102,5 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
 .crm-task.done .task-check{background:var(--ok-soft);border-color:var(--ok-line);color:var(--ok)}
 .crm-page button:focus-visible,.crm-page a:focus-visible{outline-color:var(--accent)}
 @media(max-width:680px){.sidebar{background:#ffffffe6}}
+/* El nombre del canal en el encabezado del chat usa un tono más oscuro del color de WhatsApp para cumplir AA (3,7:1 → 5,5:1); el distintivo sigue siendo el verde de siempre. */
+.chat-head[data-channel=whatsapp] .chat-person .channel-name{color:#04794a}

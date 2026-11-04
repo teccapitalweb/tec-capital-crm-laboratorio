@@ -53,6 +53,8 @@ Cada paso termina con un **resultado esperado**; si no ocurre, detenerse y anota
 
 15. **Notificaciones push (en un teléfono real).** Con la cuenta de prueba, Mi configuración → Activar → Enviar prueba. Desde otra cuenta asignar un chat a esa persona y, sin abrir el CRM en el teléfono, esperar unos 20 s. *Esperado:* llega la notificación con la marca y el texto del aviso; tocarla abre o enfoca el CRM; al desactivar el dispositivo deja de llegar. **Es la única parte que el laboratorio no pudo probar**: aquí se confirma la entrega real.
 
+16. **Respuestas rápidas y Recordarme.** Con la cuenta de prueba, crear la respuesta personal `/gracias` con `{{nombre}}` y `{{curso}}`; en un chat de la marca de pruebas escribir `/gr` y elegirla con Enter. *Esperado:* el texto queda en el compositor con el nombre del cliente de prueba y **no se envía**; **Recordarme → En 1 hora** crea una tarea que aparece en Mi día. Como administración, crear una respuesta compartida de la marca y comprobar que otra persona de esa marca la ve. Archivar las respuestas de prueba al terminar.
+
 ## D. Cierre y limpieza
 
 1. Cancelar toda campaña de prueba que siga programada o enviando.

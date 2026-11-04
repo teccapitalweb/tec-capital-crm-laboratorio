@@ -61,6 +61,10 @@ En **Catálogo y biblioteca → Contenido** cada marca elige qué plantilla apro
 
 Mientras llega el IPCIL nuevo, administración importa en **Operación → Históricos** un JSON o CSV exportado del panel actual (alumnos con sus pagos, cursos, aperturas, certificados) con los mismos nombres de campo del panel. Cada alumno queda ligado a la persona única del CRM; sus pagos y certificados se ven en la ficha de persona y en Finanzas como históricos, fuera del libro de ventas y sin comisiones. Repetir un archivo no duplica y un lote se puede quitar. No hay conexión en vivo con Firebase.
 
+## Chat más rápido: respuestas con «/» y Recordarme
+
+En el chat, escribe **/** y el atajo para insertar una respuesta rápida —personal o compartida por marca— con el nombre del cliente y el curso ya puestos; **no se envía hasta que tú lo envíes**. Las administras en **Mi configuración → Respuestas rápidas**. El botón **Recordarme** deja una tarea de seguimiento en la oportunidad del chat en un clic. Precios y fechas siguen saliendo de las plantillas aprobadas, no de textos escritos a mano. Plan y límites: [docs/PLAN_CHAT_RAPIDO.md](docs/PLAN_CHAT_RAPIDO.md).
+
 ## Notificaciones push y app instalable
 
 El equipo puede recibir los avisos de **Mis avisos** (chat asignado, menciones, objetivos de respuesta, pagos, aperturas) como notificación en el celular o el escritorio aunque el CRM esté cerrado: **Mi configuración → Notificaciones en este dispositivo → Activar**, por dispositivo y con grupos a elegir. El mensaje viaja cifrado de extremo a extremo y el servidor sólo contacta servicios de push conocidos; `PUSH_DISABLED=1` las apaga. El CRM también se puede **instalar como app** (manifiesto, iconos y service worker). Plan, seguridad y lo que falta probar en un teléfono real: [docs/PLAN_PUSH.md](docs/PLAN_PUSH.md).
