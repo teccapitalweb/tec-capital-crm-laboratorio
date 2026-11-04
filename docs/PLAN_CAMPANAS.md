@@ -1,6 +1,6 @@
 # Plan: campañas y envíos segmentados (Fase 5, bloque 1)
 
-Estado: **implementado localmente** en la rama `feat/campanas` (4 nov 2026, v0.29.0, esquema 26, 153 pruebas), **sin publicar**. Pedido por el usuario tras comparar con CRM de WhatsApp para academias (Kommo, Leadsales, Callbell, Respond.io, Wati, Clientify): lo que más falta es mandar una plantilla aprobada a un segmento, programada, con resultados. Todo sigue sobre el canal **simulado**; no se conecta ningún proveedor.
+Estado: **publicado en v0.29.0** (4 nov 2026, esquema 26, 153 pruebas). Pedido por el usuario tras comparar con CRM de WhatsApp para academias (Kommo, Leadsales, Callbell, Respond.io, Wati, Clientify): lo que más falta es mandar una plantilla aprobada a un segmento, programada, con resultados. Todo sigue sobre el canal **simulado**; no se conecta ningún proveedor.
 
 ## Principio
 
