@@ -129,8 +129,8 @@ test('certificación por API: emisión al cerrar con asistencia mínima, folio s
  assert.ok(cr,'la emisión automática descontó el crédito');assert.ok(cr.history.some(h=>h.delta===-1&&/Emisión IPCI-/.test(h.reason)));
  const all=await call('/api/certificates?brand=all&q=IPCI',admin.cookie);assert.equal(all.stats.issued,3);assert.equal(all.stats.revoked,1);assert.equal(all.stats.lastFolio,4);
  assert.equal((await call('/api/certificates?brand=all&status=revoked',admin.cookie)).certificates.length,1);
- const pres=await call('/api/presentation?brand=globalvet',admin.cookie);assert.equal(pres.script.length,12);assert.equal(pres.script.find(s=>s.id==='certificado').ready,true);assert.equal(pres.certificates.issued,3);
+ const pres=await call('/api/presentation?brand=globalvet',admin.cookie);assert.equal(pres.script.length,13);assert.equal(pres.script.find(s=>s.id==='certificado').ready,true);assert.equal(pres.certificates.issued,3);
  // límite de peticiones públicas por IP
  let limited=0;for(let i=0;i<70;i++){if((await fetch(origin+'/api/verify/IPCI-2026-00009')).status===429)limited++;}assert.ok(limited>0,'la verificación pública tiene límite de peticiones');
- const d=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,25);assert.equal(d.prepare('SELECT count(*) n FROM certificates').get().n,4);assert.equal(d.prepare('SELECT count(DISTINCT folio) n FROM certificates').get().n,4);assert.equal(d.prepare("SELECT count(*) n FROM certificates WHERE status='issued' AND enrollment_id=?").get(ids['Ana Pérez']).n,1);}finally{d.close();}
+ const d=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,26);assert.equal(d.prepare('SELECT count(*) n FROM certificates').get().n,4);assert.equal(d.prepare('SELECT count(DISTINCT folio) n FROM certificates').get().n,4);assert.equal(d.prepare("SELECT count(*) n FROM certificates WHERE status='issued' AND enrollment_id=?").get(ids['Ana Pérez']).n,1);}finally{d.close();}
 });

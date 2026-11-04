@@ -61,6 +61,10 @@ En **Catálogo y biblioteca → Contenido** cada marca elige qué plantilla apro
 
 Mientras llega el IPCIL nuevo, administración importa en **Operación → Históricos** un JSON o CSV exportado del panel actual (alumnos con sus pagos, cursos, aperturas, certificados) con los mismos nombres de campo del panel. Cada alumno queda ligado a la persona única del CRM; sus pagos y certificados se ven en la ficha de persona y en Finanzas como históricos, fuera del libro de ventas y sin comisiones. Repetir un archivo no duplica y un lote se puede quitar. No hay conexión en vivo con Firebase.
 
+## Campañas y envíos segmentados
+
+En **Operación → Campañas** (administración) se envía una plantilla aprobada a un segmento —etapa, curso, canal, etiquetas, días sin responder—, ahora o programada. La vista previa dice cuántas personas la recibirían, **a quiénes excluye y por qué** (baja, sin consentimiento, atiende una persona, otra campaña reciente…), cómo se ve el mensaje con la oferta vigente y el costo estimado; programar exige confirmar el número de destinatarios. El detalle muestra enviados, entregados, leídos, respuestas y bajas. Todo apagado por marca por omisión y sobre el canal simulado. Plan y reglas: [docs/PLAN_CAMPANAS.md](docs/PLAN_CAMPANAS.md).
+
 ## Núcleo compartido (preparado)
 
 El CRM está listo para alimentar un **núcleo de datos único en Postgres/Supabase** (el mismo que usarán la Academia y el IPCIL nuevo): cada hecho del negocio sale como un sobre firmado con el evento y los registros implicados (personas, cursos, ediciones, pagos, inscripciones, certificados), con reintento y reproducción del historial. Sin `CORE_SINK_URL` nada sale del servidor y el panel de Operación → Conectores muestra los sobres simulados. Esquema en `nucleo/esquema-v1.sql`, contrato en [docs/NUCLEO.md](docs/NUCLEO.md).

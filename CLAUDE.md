@@ -23,6 +23,7 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 4d. [Plan de la Fase 2](docs/PLAN_FASE_2.md): bloques, dependencias, decisiones y criterios de salida para el núcleo único e integración.
 4c. [Contrato de conectores](docs/CONECTORES.md): interfaz de canal y pago, webhooks firmados y requisitos por consultora para Meta y la pasarela.
 4e. [Núcleo compartido](docs/NUCLEO.md): contrato del outbox del CRM hacia Postgres/Supabase (sobre firmado, proyección de registros, reproducción) y el esquema `nucleo/esquema-v1.sql`.
+4f. [Plan de campañas](docs/PLAN_CAMPANAS.md): campañas y envíos segmentados (Fase 5, bloque 1), implementado localmente en `feat/campanas` (v0.29.0, esquema 26), sin publicar.
 4b. [Visión de la plataforma](docs/VISION_PLATAFORMA.md): el CRM como módulo de la plataforma de toda la empresa (IPCIL, Academia, finanzas, canales reales); diagnóstico, arquitectura objetivo y fases.
 5. [README](README.md) y [ROADMAP](ROADMAP.md): recorridos del producto y planificación general.
 

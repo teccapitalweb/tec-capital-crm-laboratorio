@@ -10,4 +10,11 @@
 @media(max-width:650px){.rcp-grid{grid-template-columns:1fr}.rcp-brands{grid-template-columns:1fr}.rcp-card .actions .btn{flex:1 1 auto}}
 .rcp-consent{display:flex;gap:8px;align-items:center;font-size:13px;margin:2px 0}
 .rcp-silence-only[hidden]{display:none!important}
+/* Campañas */
+.cmp-brands{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;margin:12px 0 0}.cmp-brands .rcp-brand{align-items:flex-start;flex-wrap:wrap}.cmp-brands .rcp-brand .actions{display:flex;gap:6px;flex-wrap:wrap}
+.cmp-mini{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--text-2);margin:8px 0}.cmp-mini strong{font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}
+.cmp-block{margin:18px 0 0;padding-top:14px;border-top:1px solid var(--line)}.cmp-block h3{font-size:14px;margin:0 0 6px}.cmp-detail .co-timeline{padding-left:0}
+.cmp-preview{margin-top:8px}.cmp-message{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.6 inherit;background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:12px;padding:12px 14px;margin:6px 0;color:var(--ink)}
+.cmp-detail .leg-table td small{color:var(--text-3)}.cmp-card .actions{flex-wrap:wrap}
+@media(max-width:650px){.cmp-brands{grid-template-columns:1fr}}
 .rcp-channel{flex-wrap:wrap}.rcp-channel-fields{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:flex-end}.rcp-channel-fields .field{margin:0;min-width:120px;font-size:12px}.rcp-channel-fields .field input{width:120px}.rcp-channel-fields .checkbox-field{min-height:40px;display:flex;align-items:center}

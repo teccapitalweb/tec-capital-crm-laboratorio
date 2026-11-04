@@ -70,6 +70,8 @@ dialog::backdrop{animation:niebla-fade .2s ease}
   .sidebar .nav button{min-width:40px;min-height:40px}
   .text-link,.cat-tabs button,.source-tab{position:relative}
   .text-link::after,.cat-tabs button::after{content:"";position:absolute;inset:-10px -6px}
+  .modal-inner .btn,.modal-inner .icon-btn{min-height:40px}
+  .modal-inner .icon-btn{min-width:40px}
   .mode-picker button{min-height:36px}
   .search input,.crm-toolbar input{min-height:24px}
 }

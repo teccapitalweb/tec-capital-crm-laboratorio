@@ -176,7 +176,7 @@ test('pagos por sesión y encuestas por API: precio por sesión en catálogo, in
  await call('/api/coordination/enrollments/'+r1.id+'/cancel',admin.cookie,{reason:'Cambió de ciudad'});
  d=await call('/api/coordination/editions/edition-aves',admin.cookie);assert.equal(d.sessionPayments.find(p=>p.session_id===s5.id&&p.enrollment_id===r1.id).status,'waived');assert.equal(d.sessionPayments.filter(p=>p.status==='paid').length,2);
 
- const pres=await call('/api/presentation?brand=globalvet',admin.cookie);assert.equal(pres.script.length,12);
+ const pres=await call('/api/presentation?brand=globalvet',admin.cookie);assert.equal(pres.script.length,13);
  const all=await until(async()=>{const r=await call('/api/events?brand=all',admin.cookie);return r.stats.pending===0?r:null;});assert.ok(all);assert.equal(all.stats.failed,0);
- const x=db();try{assert.equal(x.prepare('PRAGMA user_version').get().user_version,25);assert.equal(x.prepare('SELECT count(*) n FROM session_payments').get().n,5);assert.equal(x.prepare('SELECT count(*) n FROM survey_answers').get().n,2);assert.equal(x.prepare("SELECT count(*) n FROM orders WHERE kind='session'").get().n,3);}finally{x.close();}
+ const x=db();try{assert.equal(x.prepare('PRAGMA user_version').get().user_version,26);assert.equal(x.prepare('SELECT count(*) n FROM session_payments').get().n,5);assert.equal(x.prepare('SELECT count(*) n FROM survey_answers').get().n,2);assert.equal(x.prepare("SELECT count(*) n FROM orders WHERE kind='session'").get().n,3);}finally{x.close();}
 });

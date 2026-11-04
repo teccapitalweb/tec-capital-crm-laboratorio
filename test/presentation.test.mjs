@@ -26,7 +26,7 @@ test('modo presentación por API: cifras del laboratorio, guion con comprobacion
 
  // vacío: sin conversaciones, guion con pasos siempre listos y pasos por preparar
  const empty=await call('/api/presentation',admin.cookie);
- assert.equal(empty.totals.conversations,0);assert.equal(empty.totals.autoRate,null);assert.equal(empty.script.length,12);assert.equal(empty.script.find(s=>s.id==='certificado').ready,false);assert.equal(empty.script.find(s=>s.id==='coordinacion').ready,false);
+ assert.equal(empty.totals.conversations,0);assert.equal(empty.totals.autoRate,null);assert.equal(empty.script.length,13);assert.equal(empty.script.find(s=>s.id==='campanas').ready,false);assert.equal(empty.script.find(s=>s.id==='certificado').ready,false);assert.equal(empty.script.find(s=>s.id==='coordinacion').ready,false);
  assert.equal(empty.script.find(s=>s.id==='cliente').ready,true);assert.equal(empty.script.find(s=>s.id==='conocimiento').ready,true);assert.equal(empty.script.find(s=>s.id==='venta').ready,false);assert.equal(empty.script.find(s=>s.id==='pagos').ready,false);
  await call('/api/presentation',client.cookie,undefined,'GET',403);await call('/api/presentation','',undefined,'GET',401);
  await call('/api/presentation?days=0',admin.cookie,undefined,'GET',400);await call('/api/presentation?brand=no-existe',admin.cookie,undefined,'GET',404);
