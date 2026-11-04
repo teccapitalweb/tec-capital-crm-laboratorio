@@ -7,8 +7,8 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | Dato | Valor |
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
-| Versión publicada | **0.30.0** en `main` (portal por roles). `/api/health` de producción devuelve `0.30.0` |
-| Pendiente de publicar | **0.31.0** (rendimiento del equipo en «Mis resultados»), rama `feat/rendimiento-equipo`, sin publicar |
+| Versión publicada | **0.31.0** en `main` (rendimiento del equipo en «Mis resultados»). `/api/health` de producción devuelve `0.31.0` |
+| Pendiente de publicar | Nada |
 | Esquema SQLite | **26** (último cambio: campañas). Respaldo previo al migrar: `backups/before-crm-v26-*` |
 | Pruebas | 154 aprobadas (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |
@@ -104,6 +104,7 @@ Variables y respaldos: [OPERACION_Y_PRUEBAS.md](OPERACION_Y_PRUEBAS.md). Secreto
 | (sin versión) | Ajuste visual «color sobrio»: acento petróleo en toda la aplicación |
 | 0.29 | Campañas y envíos segmentados (esquema 26) |
 | 0.30 | Portal por roles «Mis resultados» (sin esquema) |
+| 0.31 | Rendimiento del equipo para administración y documentación de punta a punta (sin esquema) |
 
 El detalle de cada entrega, con evidencia, está en [CONTINUIDAD.md](CONTINUIDAD.md).
 

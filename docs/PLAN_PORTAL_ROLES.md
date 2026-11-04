@@ -1,6 +1,6 @@
 # Plan: portal por roles, el IPCIL nuevo dentro del CRM (Fase 5, bloque 2)
 
-Estado: **publicado en v0.30.0** (4 nov 2026, 154 pruebas, sin esquema nuevo). El **rendimiento del equipo** para administración (v0.31.0) está en la rama `feat/rendimiento-equipo`, sin publicar. Decisión del usuario: el IPCIL nuevo no se hace como aplicación aparte ni en el repositorio original; se construye como **portal por roles dentro del CRM**, hablando con el resto sólo por datos y eventos del núcleo ([NUCLEO.md](NUCLEO.md)), de modo que pueda separarse después sin migrar datos.
+Estado: **publicado en v0.30.0** (4 nov 2026, 154 pruebas, sin esquema nuevo). El **rendimiento del equipo** para administración está publicado en v0.31.0. Decisión del usuario: el IPCIL nuevo no se hace como aplicación aparte ni en el repositorio original; se construye como **portal por roles dentro del CRM**, hablando con el resto sólo por datos y eventos del núcleo ([NUCLEO.md](NUCLEO.md)), de modo que pueda separarse después sin migrar datos.
 
 ## Principio
 
