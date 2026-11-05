@@ -502,6 +502,12 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Corrección: el botón Cobrar no hacía nada (rama `fix/clases-pago`, 5 nov 2026)
+
+- **Qué pasaba:** el formulario de Cobrar se llamaba `pay-link-form`; `operations.js` entrega a Pagos todo formulario cuyo id empiece con `pay-`, que no lo conocía y devolvía sin hacer nada. Al pulsar «Crear pedido y enviar enlace» no se creaba el pedido, no había aviso y la ventana seguía abierta. Lo reportó el usuario con una captura en producción.
+- **Qué se hizo:** el formulario ahora es `order-link-form`, y la prueba `test/form-ids.test.mjs` falla si un formulario de `app.js` usa un prefijo que reclama un módulo. Además se renombraron las clases del pago simulado de `co-` a `pg-`: `.co-row` de checkout.css chocaba con Coordinación y Certificados.
+- **Evidencia:** en el demo local, Cobrar crea el pedido, cierra la ventana y envía el enlace al chat; 160 pruebas. **Sin publicar.**
+
 ## Mejora de uso: pago simulado con aspecto de pasarela (rama `feat/pago-estilo-stripe`, 5 nov 2026)
 
 - **Por qué:** el usuario quiso ver cómo se sentiría pagar con una pasarela como Stripe. Los pagos reales necesitan cuentas de las consultoras, así que se hizo una simulación fiel al orden de un checkout.
