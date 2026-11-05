@@ -500,7 +500,11 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 
 - **Qué se hizo:** sin esquema nuevo. `conversationPage` devuelve al equipo `contact_id` y `tags` de cada hilo y acepta `tag=<id>` (sólo etiquetas de la marca de la conversación; valores inválidos se ignoran; el cliente no recibe nada de esto). `public/inboxtags.js`: chips en la bandeja y en el encabezado del chat, selector «Todas las etiquetas» bajo los filtros (se combina con canal, marca, estado y búsqueda; cambiar de marca lo limpia) y botón **Etiquetas** del chat para poner, quitar y crear etiquetas con la API de Contactos. Versión **0.34.0**. Plan: [PLAN_ETIQUETAS_BANDEJA.md](PLAN_ETIQUETAS_BANDEJA.md).
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
-- **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Sin publicar.**
+- **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
+
+## Publicación v0.34.0 (5 nov 2026) · Fase 5, bloque 6
+
+Publicado por instrucción expresa del usuario: `main` avanzó de `af2e2b2` a `680efe8` con avance rápido (etiquetas en la bandeja; **sin cambio de esquema**, sigue en 28, por lo que no se crea respaldo nuevo). `/api/health` devuelve `0.34.0`; los 29 archivos de interfaz comparados, `inboxtags.js`, `app.js`, `crm.css`, `polish.css` e `index.html` son idénticos al commit; `/api/conversations`, `/api/quick-replies` y el arranque de sesión responden 401 sin sesión; CI [42048612298](https://github.com/teccapitalweb/tec-capital-crm-laboratorio/actions/runs/42048612298): correcto, 159 pruebas. **No se inició sesión en producción**: la verificación autenticada (runbook, pasos 1–17) y la prueba de push en un teléfono siguen pendientes.
 
 ## Publicación v0.33.0 (4 nov 2026) · Fase 5, bloque 5
 

@@ -1,6 +1,6 @@
 # Plan: etiquetas en la bandeja (Fase 5, bloque 6)
 
-Estado: **implementado localmente** en la rama `feat/etiquetas-bandeja` (5 nov 2026, v0.34.0, **sin esquema nuevo**, 159 pruebas), **sin publicar**. Seguimiento natural del chat más rápido: las etiquetas de Contactos (por ejemplo «VIP», «Pidió beca», «Lista de espera») sólo se veían en la ficha del contacto; con muchas conversaciones, el equipo necesita verlas y filtrar por ellas desde la bandeja.
+Estado: **publicado en v0.34.0** (5 nov 2026, **sin esquema nuevo**, 159 pruebas). Seguimiento natural del chat más rápido: las etiquetas de Contactos (por ejemplo «VIP», «Pidió beca», «Lista de espera») sólo se veían en la ficha del contacto; con muchas conversaciones, el equipo necesita verlas y filtrar por ellas desde la bandeja.
 
 ## Qué trae
 
@@ -22,4 +22,4 @@ Filtrar por varias etiquetas a la vez o por «sin etiqueta», etiquetas automát
 
 ## Criterios de salida
 
-Prueba por API de etiquetas por hilo, filtro con alcance por marca, combinación con otros filtros, valor inválido ignorado y que el cliente no reciba nada; revisión en navegador local (chips, filtro, etiquetar desde el chat) en escritorio y 375 px con la auditoría de diseño; documentación y versión 0.34.0. **No se publica sin «Sí, publicar».**
+Prueba por API de etiquetas por hilo, filtro con alcance por marca, combinación con otros filtros, valor inválido ignorado y que el cliente no reciba nada; revisión en navegador local (chips, filtro, etiquetar desde el chat) en escritorio y 375 px con la auditoría de diseño; documentación y versión 0.34.0. Publicado por instrucción expresa del usuario.
