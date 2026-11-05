@@ -502,6 +502,13 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Mejora de uso: pago simulado con aspecto de pasarela (rama `feat/pago-estilo-stripe`, 5 nov 2026)
+
+- **Por qué:** el usuario quiso ver cómo se sentiría pagar con una pasarela como Stripe. Los pagos reales necesitan cuentas de las consultoras, así que se hizo una simulación fiel al orden de un checkout.
+- **Qué se hizo:** `public/checkout.js` y `public/checkout.css` (nuevos), enlazados en `index.html` y `server/index.mjs`; `openPayment` en `app.js` la usa para pedidos pendientes. Resumen del pedido, pestañas Tarjeta y OXXO, validación sólo con tarjetas de prueba (los datos nunca salen del navegador), referencia y código de barras de ejemplo en OXXO. Sin esquema, sin servidor nuevo, sin versión nueva. Plan: [PLAN_PAGO_SIMULADO.md](PLAN_PAGO_SIMULADO.md).
+- **Decisiones:** no se usa nombre, logotipo ni colores de ningún proveedor; SPEI queda fuera porque el motor sólo admite tarjeta y OXXO simulados.
+- **Evidencia:** en el demo local, un pedido pendiente abre la pantalla, un número no permitido se rechaza, la tarjeta que rechaza deja el pedido pendiente, OXXO lo deja pagado; 375 px sin desbordamiento, letra de 11 px, controles de 40 px y contraste AA. **Sin publicar.**
+
 ## Corrección de uso: el adjuntador de archivos era invisible (rama `feat/adjuntador-visible`, 5 nov 2026)
 
 - **Qué pasaba:** `styles.css` oculta todos los `input[type=file]` (el clip del chat usa su propio botón), pero tres formularios con etiqueta dependían del campo nativo: el flyer del Catálogo, la importación CSV y Históricos. En esos formularios no se veía dónde adjuntar. Lo reportó el usuario con una captura.

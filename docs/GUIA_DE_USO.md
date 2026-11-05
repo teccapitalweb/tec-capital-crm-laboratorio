@@ -13,7 +13,7 @@ Para quien va a **usar** el CRM, no a programarlo. Todo es un laboratorio: los d
 
 1. **Explorar cursos:** ve los cursos y ediciones vigentes con precio y fecha.
 2. **Nueva conversación:** elige curso, edición y canal simulado (WhatsApp, Instagram o Facebook). La atención automática responde con datos del catálogo; si no sabe, avisa a una persona.
-3. Puede adjuntar imágenes, pedir un asesor y, si el equipo lo cobra, pagar con tarjeta u OXXO simulados desde el enlace o mandar su comprobante.
+3. Puede adjuntar imágenes, pedir un asesor y, si el equipo lo cobra, pagar desde el enlace en una pantalla con el orden de un pago real (resumen, **Tarjeta** u **OXXO**; tarjetas de prueba 4242… que aprueba y 4000 0000 0000 0002 que rechaza; nada se cobra y no se aceptan tarjetas reales) o mandar su comprobante. Detalle: [PLAN_PAGO_SIMULADO.md](PLAN_PAGO_SIMULADO.md).
 4. Si escribe «baja» (u otra frase clara de baja), deja de recibir mensajes automáticos y campañas.
 5. Después de una sesión puede recibir una encuesta corta, y al terminar su certificado con un enlace público para verificarlo.
 

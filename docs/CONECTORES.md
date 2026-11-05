@@ -32,7 +32,7 @@ La entrega corre **fuera de las transacciones de SQLite**: el barrido del canal 
 | `verifyWebhook(headers, rawBody)` | Firma del proveedor | HMAC con `CONNECTOR_WEBHOOK_SECRET` | Stripe: `Stripe-Signature` (`t=`, `v1=`, tolerancia 5 min). Conekta: se confirma con su documentación al activar |
 | `parseWebhook(body)` | Traducción a eventos | Ya normalizados | Stripe: `checkout.session.completed` → `payment.succeeded`; `*_failed` → `payment.failed`. Conekta: `order.paid`, `order.expired`, `charge.declined` |
 
-El enlace que recibe el cliente es **siempre el nuestro** (`/?pay=<pedido>`): es estable, no caduca con la sesión del proveedor y permite mostrar el estado del pedido. Con una pasarela real, esa página ofrecerá «Ir a pagar» hacia `checkout_url`. Un pago se confirma **únicamente** por webhook verificado (o por una persona que acepta un comprobante), nunca por el regreso del navegador. Si el webhook trae importe, debe coincidir con el del pedido; si no, se rechaza y queda registrado.
+Hoy esa página de pago ya tiene el orden de un checkout real, con tarjeta y OXXO simulados ([PLAN_PAGO_SIMULADO.md](PLAN_PAGO_SIMULADO.md)). El enlace que recibe el cliente es **siempre el nuestro** (`/?pay=<pedido>`): es estable, no caduca con la sesión del proveedor y permite mostrar el estado del pedido. Con una pasarela real, esa página ofrecerá «Ir a pagar» hacia `checkout_url`. Un pago se confirma **únicamente** por webhook verificado (o por una persona que acepta un comprobante), nunca por el regreso del navegador. Si el webhook trae importe, debe coincidir con el del pedido; si no, se rechaza y queda registrado.
 
 ### 2.3 Eventos normalizados
 
