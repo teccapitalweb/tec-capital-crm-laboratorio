@@ -502,6 +502,12 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Corrección de uso: el adjuntador de archivos era invisible (rama `feat/adjuntador-visible`, 5 nov 2026)
+
+- **Qué pasaba:** `styles.css` oculta todos los `input[type=file]` (el clip del chat usa su propio botón), pero tres formularios con etiqueta dependían del campo nativo: el flyer del Catálogo, la importación CSV y Históricos. En esos formularios no se veía dónde adjuntar. Lo reportó el usuario con una captura.
+- **Qué se hizo:** una regla en `polish.css` (`label.field input[type=file]`) los muestra como una zona con borde punteado y un botón «Elegir archivo» de 40 px que muestra el nombre elegido; el flyer pide «Elige la imagen o el PDF del flyer». Sin servidor, esquema ni versión nuevos. El clip del chat no cambia.
+- **Evidencia:** en el demo local el campo mide lo mismo que los demás (477 px en escritorio, 287 px a 375 px), sin desbordamiento; al elegir un archivo se ve su nombre y la vista previa; la importación CSV también lo muestra. **Sin publicar.**
+
 ## Mejora de uso: imagen del curso desde su ficha (rama `feat/imagen-curso`, 5 nov 2026)
 
 - **Por qué:** en producción una persona intentó poner una imagen en la ventana del curso y no había dónde; la imagen vive en un flyer de la edición. Se mantiene esa regla (sin saltarse la aprobación) pero se hace visible.

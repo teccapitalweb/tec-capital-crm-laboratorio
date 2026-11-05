@@ -105,3 +105,5 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
 @media(max-width:680px){.sidebar{background:#ffffffe6}}
 /* El nombre del canal en el encabezado del chat usa un tono más oscuro del color de WhatsApp para cumplir AA (3,7:1 → 5,5:1); el distintivo sigue siendo el verde de siempre. */
 .chat-head[data-channel=whatsapp] .chat-person .channel-name{color:#04794a}
+/* Elegir archivo: el estilo global oculta los campos de archivo (el chat usa su propio botón de clip); en los formularios con etiqueta se muestran como una zona clara con botón, para que se vea dónde adjuntar. */
+label.field input[type=file]{display:block;width:100%;min-height:64px;padding:11px;border:1.5px dashed var(--accent-line);border-radius:12px;background:var(--accent-tint);color:var(--text-2);font-size:12px;cursor:pointer}label.field input[type=file]:hover,label.field input[type=file]:focus-visible{border-color:var(--accent);background:var(--accent-soft)}label.field input[type=file]::file-selector-button{min-height:40px;margin-right:14px;padding:0 18px;border:0;border-radius:10px;background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer}
