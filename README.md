@@ -61,6 +61,10 @@ En **Catálogo y biblioteca → Contenido** cada marca elige qué plantilla apro
 
 Mientras llega el IPCIL nuevo, administración importa en **Operación → Históricos** un JSON o CSV exportado del panel actual (alumnos con sus pagos, cursos, aperturas, certificados) con los mismos nombres de campo del panel. Cada alumno queda ligado a la persona única del CRM; sus pagos y certificados se ven en la ficha de persona y en Finanzas como históricos, fuera del libro de ventas y sin comisiones. Repetir un archivo no duplica y un lote se puede quitar. No hay conexión en vivo con Firebase.
 
+## Base de pruebas local
+
+`npm run demo` crea en tu computadora una base nueva con un usuario de cada tipo (administración, asesores de dos marcas, contadora, coordinador y clientes) y datos de ejemplo, y arranca el servidor; `npm run demo:reset` la recrea. Las contraseñas se generan al azar y quedan en `data-demo/CREDENCIALES.txt` (ignorado por Git). Detalle: [docs/BASE_DE_PRUEBAS.md](docs/BASE_DE_PRUEBAS.md).
+
 ## Etiquetas en la bandeja
 
 Las etiquetas de Contactos (VIP, Pidió beca, Lista de espera…) se ven en cada hilo de la bandeja, se puede **filtrar por etiqueta** y se etiqueta desde el botón **Etiquetas** del chat, creando etiquetas nuevas al momento. Sólo para el equipo y dentro de sus marcas. Plan: [docs/PLAN_ETIQUETAS_BANDEJA.md](docs/PLAN_ETIQUETAS_BANDEJA.md).

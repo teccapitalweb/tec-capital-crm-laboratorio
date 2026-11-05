@@ -118,6 +118,8 @@ Las pruebas automatizadas del repositorio no ejecutan navegador ni demuestran qu
 
 ## Recorrido de aceptación en navegador
 
+Para probar sin tocar producción, `npm run demo` crea en `data-demo/` una base local con ocho cuentas (administración, dos asesores, contadora, coordinador y tres clientes), la marca GlobalVet con todo encendido y datos de ejemplo; `npm run demo:reset` la recrea. Detalle y credenciales: [BASE_DE_PRUEBAS.md](BASE_DE_PRUEBAS.md).
+
 Para dejar una marca de pruebas funcionando de punta a punta, con orden de encendido, 14 pasos y cierre, usa el runbook [ACTIVACION_Y_VERIFICACION.md](ACTIVACION_Y_VERIFICACION.md); la lista de abajo es la comprobación por módulo.
 
 Usar perfiles/sesiones separados para un administrador, dos asesores de prueba y un cliente. Una pestaña adicional normalmente comparte cookies; usar contextos separados o perfiles distintos. Mantener los datos identificables como prueba.

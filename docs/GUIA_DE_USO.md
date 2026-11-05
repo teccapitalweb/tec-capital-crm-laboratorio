@@ -1,6 +1,6 @@
 # Guía de uso por rol
 
-Para quien va a **usar** el CRM, no a programarlo. Todo es un laboratorio: los datos, los pagos y los canales son de práctica. Qué está encendido y qué no: [ESTADO_ACTUAL.md](ESTADO_ACTUAL.md). Cómo prender una marca de pruebas y verificar todo: [ACTIVACION_Y_VERIFICACION.md](ACTIVACION_Y_VERIFICACION.md).
+Para quien va a **usar** el CRM, no a programarlo. Todo es un laboratorio: los datos, los pagos y los canales son de práctica. Qué está encendido y qué no: [ESTADO_ACTUAL.md](ESTADO_ACTUAL.md). Cómo prender una marca de pruebas y verificar todo: [ACTIVACION_Y_VERIFICACION.md](ACTIVACION_Y_VERIFICACION.md). **Para probar en tu computadora con un usuario de cada tipo** (administración, asesores, contadora, coordinador y clientes) y datos de ejemplo: `npm run demo` ([BASE_DE_PRUEBAS.md](BASE_DE_PRUEBAS.md)).
 
 ## Entrada
 
