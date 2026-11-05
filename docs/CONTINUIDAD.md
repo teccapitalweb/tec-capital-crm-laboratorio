@@ -502,6 +502,14 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Barrido de uso: pagos y respuestas rápidas más claros (rama `fix/barrido-interfaz`, 5 nov 2026)
+
+- **Barrido:** se recorrieron como administración las 13 vistas, las 14 pestañas de Operación, las 8 de Catálogo, las ventanas de 36 botones y los 17 botones del chat; como cliente, explorar cursos, abrir una conversación, escribir y recibir la respuesta automática. Sin errores de red ni de script. Los formularios (71) se revisaron por prefijo de id: ninguno cae en otro módulo.
+- **Cobrar:** al crear o reenviar el pedido ahora sale una ventana con la referencia, el importe y el enlace con **Copiar enlace** (antes sólo un aviso). Si ya no se puede cobrar (conversación cerrada o venta ganada/perdida) el aviso sale **antes** de abrir la ventana (`preview` devuelve `reason`) y no al intentar enviar; prueba nueva en `test/payments.test.mjs`.
+- **Pagos (administración):** botón **Ver cómo paga el cliente** con la pantalla de pago en modo vista previa (botones de pagar desactivados), para mostrarla sin crear un pedido.
+- **Respuestas rápidas:** el menú «/» vacío ofrece **Crear mi primera respuesta** (o «otra»), que lleva a Mi configuración con el formulario abierto.
+- **Evidencia:** 160 pruebas; comprobado en el demo local. **Sin publicar.**
+
 ## Corrección: el botón Cobrar no hacía nada (rama `fix/clases-pago`, 5 nov 2026)
 
 - **Qué pasaba:** el formulario de Cobrar se llamaba `pay-link-form`; `operations.js` entrega a Pagos todo formulario cuyo id empiece con `pay-`, que no lo conocía y devolvía sin hacer nada. Al pulsar «Crear pedido y enviar enlace» no se creaba el pedido, no había aviso y la ventana seguía abierta. Lo reportó el usuario con una captura en producción.

@@ -225,7 +225,10 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
   }
   function preview(c,user){
     crm.requireBrand(user,c.brand_id);const s=settings(c.brand_id),ctx=catalogue.info(c.course_id,c.edition_id),existing=openOrder(c.id);
-    return {enabled:Boolean(s.enabled),reason:ctx.reason||null,course:ctx.course.title,edition:ctx.edition.name,promotion:ctx.promotion?.name||null,amountCents:ctx.priceCents,amountLabel:money(ctx.priceCents,ctx.currency),currency:ctx.currency,linkHours:s.link_hours,sessionPriceCents:ctx.edition.session_price_cents>0?ctx.edition.session_price_cents:null,sessionPriceLabel:ctx.edition.session_price_cents>0?money(ctx.edition.session_price_cents,ctx.currency):null,existing:existing?view(existing):null};
+    // Si ya no se puede cobrar (conversación o venta cerradas), se avisa antes de abrir la ventana en lugar de fallar al enviarla.
+    const stage=db.prepare('SELECT o.stage FROM opportunities o JOIN conversation_opportunities co ON co.opportunity_id=o.id WHERE co.conversation_id=?').get(c.id)?.stage;
+    const closed=existing?null:c.status==='resolved'?'La conversación está cerrada':['ganada','perdida'].includes(stage)?'La oportunidad ya está cerrada ('+stage+'). Abre una nueva conversación para otra venta':null;
+    return {enabled:Boolean(s.enabled),reason:ctx.reason||closed||null,course:ctx.course.title,edition:ctx.edition.name,promotion:ctx.promotion?.name||null,amountCents:ctx.priceCents,amountLabel:money(ctx.priceCents,ctx.currency),currency:ctx.currency,linkHours:s.link_hours,sessionPriceCents:ctx.edition.session_price_cents>0?ctx.edition.session_price_cents:null,sessionPriceLabel:ctx.edition.session_price_cents>0?money(ctx.edition.session_price_cents,ctx.currency):null,existing:existing?view(existing):null};
   }
 
   const view=o=>{const n=names(o),s=sessionOf(o);return {...o,courseTitle:n.course,editionName:n.edition,promotionName:n.promotion,contactName:n.contact,amountLabel:money(o.amount_cents,o.currency),statusLabel:STATUS[o.status],methodLabel:o.method?METHODS[o.method]:null,planLabel:planLabel(o),sessionNumber:s?.number||null,sessionTitle:s?.title||null,link:linkFor(o),pendingReceipts:db.prepare("SELECT count(*) n FROM receipts WHERE order_id=? AND status='pending'").get(o.id).n};};

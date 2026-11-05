@@ -20,7 +20,7 @@ window.createPaymentsUI=function({state,api,esc,icon,showModal,toast}){
   function html(){
     if(!data)return '<div class="loading-message">Cargando…</div>';
     const s=data.stats,tiles=[['review','Comprobantes por revisar',s.review],['pending','Pendientes de pago',s.pending],['paid','Pagados',s.paid],['all','Cobrado (práctica)',s.paidAmountLabel]];
-    return `${settingsBox()}<div class="ops-stats">${tiles.map(([id,t,v])=>`<button data-action="pay-filter" data-id="${id}" class="ops-stat ${filter===id?'active':''}"><strong>${esc(String(v))}</strong><span>${t}</span></button>`).join('')}</div><div class="crm-toolbar"><p>${filter==='all'?'Todos los pedidos':'Filtro: '+({review:'comprobantes por revisar',pending:'pendientes de pago',paid:'pagados'}[filter]||filter)} · cobrado hoy ${esc(s.paidTodayLabel)}</p>${btn('reload',icon('refresh-cw')+' Actualizar')}</div><div class="ops-queue">${data.orders.map(row).join('')||`<div class="crm-empty">${icon('credit-card')}<h3>Sin pedidos</h3><p>Genera uno desde el chat con «Cobrar» o deja que el motor lo haga cuando un cliente pida inscribirse.</p></div>`}</div>${note('Los importes salen del catálogo al crear el pedido y no cambian después. Un comprobante nunca se valida solo: lo acepta o rechaza una persona con acceso a la marca.')}`;
+    return `${settingsBox()}<div class="ops-stats">${tiles.map(([id,t,v])=>`<button data-action="pay-filter" data-id="${id}" class="ops-stat ${filter===id?'active':''}"><strong>${esc(String(v))}</strong><span>${t}</span></button>`).join('')}</div><div class="crm-toolbar"><p>${filter==='all'?'Todos los pedidos':'Filtro: '+({review:'comprobantes por revisar',pending:'pendientes de pago',paid:'pagados'}[filter]||filter)} · cobrado hoy ${esc(s.paidTodayLabel)}</p>${btn('preview',icon('eye')+' Ver cómo paga el cliente')}${btn('reload',icon('refresh-cw')+' Actualizar')}</div><div class="ops-queue">${data.orders.map(row).join('')||`<div class="crm-empty">${icon('credit-card')}<h3>Sin pedidos</h3><p>Genera uno desde el chat con «Cobrar» o deja que el motor lo haga cuando un cliente pida inscribirse.</p></div>`}</div>${note('Los importes salen del catálogo al crear el pedido y no cambian después. Un comprobante nunca se valida solo: lo acepta o rechaza una persona con acceso a la marca.')}`;
   }
   async function detail(id){
     const d=await api('/api/payments/orders/'+id),o=d.order;
@@ -32,6 +32,7 @@ window.createPaymentsUI=function({state,api,esc,icon,showModal,toast}){
   async function action(name,el){
     const id=el.dataset.id;
     if(name==='pay-reload')return 'reload';
+    if(name==='pay-preview'){const b=state.brands.find(x=>x.id===brandId());showModal('Así paga el cliente',window.simCheckout.html({id:'00000000-0000-4000-8000-000000000000',brand:b?.name||'Tu marca',course:'Nombre del curso',edition:'Edición general',amountLabel:'$1,990.00 MXN',reference:'TC-EJEMPLO',expiresAt:Date.now()+48*3600e3,kind:'course',plan:'full'},{esc,icon,preview:true}));return true;}
     if(name==='pay-filter'){filter=id;return 'reload';}
     if(name==='pay-detail'){await detail(id);return true;}
     return false;

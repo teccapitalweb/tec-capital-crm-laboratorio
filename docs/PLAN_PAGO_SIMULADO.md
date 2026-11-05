@@ -20,6 +20,11 @@ Para ver cómo se sentirá pagar cuando haya una pasarela real (Stripe o Conekta
 - No usa el nombre, el logotipo ni los colores de ningún proveedor: es el orden de un checkout, con el diseño Niebla.
 - Archivos: `public/checkout.js` (la pantalla y su validación), `public/checkout.css`, y su registro en `server/index.mjs` e `index.html`. `openPayment` en `app.js` la usa cuando el pedido está pendiente; en los demás estados (pagado, en revisión, vencido) se ve lo de siempre.
 
+## Para el equipo
+
+- **Cobrar** (chat): crea o reenvía el pedido y muestra una ventana con referencia, importe y enlace con **Copiar enlace**. Si la conversación o la venta ya están cerradas lo avisa antes de abrir la ventana.
+- **Operación → Pagos → Ver cómo paga el cliente:** la misma pantalla en modo vista previa, sin pedido y con los botones de pagar desactivados, para enseñarla a otras personas.
+
 ## Cuando haya pasarela real
 
 La ficha de **resumen** y la lista de métodos se conservan; en lugar de los campos de tarjeta, el botón **Pagar** llevará a la página de pago de la pasarela (el CRM crea la sesión de pago con la referencia del pedido y sólo confirma con el aviso firmado). El CRM nunca verá números de tarjeta reales. Requisitos por consultora: [CONECTORES.md](CONECTORES.md).

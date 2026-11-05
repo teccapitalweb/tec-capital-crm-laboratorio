@@ -13,11 +13,11 @@ window.simCheckout=(()=>{
     for(let i=0;i<46;i++){const w=1+((d[i%d.length]+i*3)%4),gap=1+((d[(i+5)%d.length]+i)%3);if(i%2===0)out+=`<rect x="${x}" y="0" width="${w}" height="40"/>`;x+=w+(i%2?gap:1);}
     return `<svg class="pg-bars" viewBox="0 0 ${x} 40" preserveAspectRatio="none" role="img" aria-label="Código de barras de ejemplo" fill="currentColor">${out}</svg>`;
   }
-  function html(o,{esc,icon}){
+  function html(o,{esc,icon,preview=false}){
     const line=o.kind==='session'&&o.session?`Sesión ${o.session.number}. ${esc(o.session.title)}`:o.plan==='per_session'?'Plan por sesión · este pago cubre tu primera sesión':'';
     const until=new Date(o.expiresAt).toLocaleString('es-MX',{dateStyle:'medium',timeStyle:'short'});
     return `<div class="pg">
-      <div class="info-box pg-sim"><strong>Simulación.</strong> No se cobra nada y no se guarda ninguna tarjeta. Así se verá el pago cuando haya una pasarela real.</div>
+      <div class="info-box pg-sim">${preview?'<strong>Vista previa para el equipo.</strong> Así verá el cliente su pantalla de pago. Aquí los botones de pagar no hacen nada.':'<strong>Simulación.</strong> No se cobra nada y no se guarda ninguna tarjeta. Así se verá el pago cuando haya una pasarela real.'}</div>
       <section class="pg-summary" aria-label="Resumen del pedido">
         <span class="pg-brand">${esc(o.brand)}</span>
         <h3>${esc(o.course)} · ${esc(o.edition)}</h3>
@@ -38,7 +38,7 @@ window.simCheckout=(()=>{
         </div>
         <div class="pg-fill"><span>Tarjetas de prueba:</span><button type="button" class="btn" data-pg-fill="ok">Una que aprueba</button><button type="button" class="btn" data-pg-fill="declined">Una que rechaza</button></div>
         <div id="pg-error" role="alert"></div>
-        <button type="button" class="btn primary wide pg-pay" data-action="pay-sim" data-id="${esc(o.id)}" data-method="card">${icon('lock')} Pagar ${esc(o.amountLabel)}</button>
+        <button type="button" class="btn primary wide ${preview?'':'pg-pay'}" ${preview?'disabled':`data-action="pay-sim" data-id="${esc(o.id)}" data-method="card"`}>${icon('lock')} Pagar ${esc(o.amountLabel)}</button>
       </div>
       <div class="pg-panel" data-pg-panel="oxxo" role="tabpanel" hidden>
         <div class="pg-voucher">
@@ -47,7 +47,7 @@ window.simCheckout=(()=>{
           ${bars(oxxoRef(o.id))}
           <p>Paga ${esc(o.amountLabel)} en cualquier tienda OXXO antes del ${esc(until)}. En esta simulación no hay tienda: pulsa el botón para confirmar que ya pagaste.</p>
         </div>
-        <button type="button" class="btn primary wide" data-action="pay-sim" data-id="${esc(o.id)}" data-method="oxxo">Simular que ya pagué en OXXO</button>
+        <button type="button" class="btn primary wide" ${preview?'disabled':`data-action="pay-sim" data-id="${esc(o.id)}" data-method="oxxo"`}>Simular que ya pagué en OXXO</button>
       </div>
       <button type="button" class="btn wide" data-action="close-modal">Enviaré mi comprobante por el chat</button>
       <p class="pg-foot">Pasarela simulada del laboratorio. Los pagos reales llegarán cuando cada consultora conecte su cuenta.</p>

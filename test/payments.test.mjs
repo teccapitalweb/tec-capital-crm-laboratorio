@@ -53,6 +53,7 @@ test('venta con pago simulado: apagada por omisión, cobro desde el chat, pago s
  {const d=db();try{assert.equal(d.prepare('SELECT count(*) n FROM enrollments WHERE order_id=?').get(made.order.id).n,1);assert.equal(d.prepare("SELECT count(*) n FROM notifications WHERE kind='payment' AND event_key=?").get('order:'+made.order.id+':paid').n,1);}finally{d.close();}}
  await call('/api/payments/orders/'+made.order.id+'/pay',client.cookie,{method:'card'},'POST',409);
  await call('/api/conversations/'+conv.id+'/orders',admin.cookie,{},'POST',409);   // la oportunidad ya está ganada
+ assert.match((await call('/api/conversations/'+conv.id+'/orders/preview',admin.cookie)).reason,/oportunidad ya está cerrada/);   // el aviso llega antes de abrir la ventana de Cobrar
  const list=await call('/api/payments/orders?brand=all',admin.cookie);assert.equal(list.stats.paid,1);assert.equal(list.stats.paidAmountCents,37900);assert.equal(list.orders[0].statusLabel,'Pagado');
  assert.deepEqual((await call('/api/payments/orders/'+made.order.id,admin.cookie)).events.map(e=>e.kind),['created','link.sent','link.sent','provider.declined','confirmed']);
 

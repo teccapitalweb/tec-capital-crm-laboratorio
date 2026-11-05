@@ -26,7 +26,7 @@ window.createQuickRepliesUI=function({state,api,esc,icon,showModal,toast}){
     $('#slash-menu')?.remove();
     const body=menu.items.length
       ?menu.items.map((r,i)=>`<button type="button" class="slash-item ${i===menu.index?'active':''}" role="option" aria-selected="${i===menu.index}" data-qr="${esc(r.id)}"><span class="slash-key">/${esc(r.shortcut)}</span><span class="slash-copy"><strong>${esc(r.title)}</strong><small>${esc(r.body.replace(/\s+/g,' ').slice(0,90))}</small></span>${r.scope==='brand'?chip('Marca'):''}</button>`).join('')
-      :`<div class="slash-empty">${data?.quickReplies?.length?'Ninguna respuesta coincide con «/'+esc(query)+'».':'Todavía no tienes respuestas rápidas.'} Créalas en <strong>Mi configuración → Respuestas rápidas</strong>.</div>`;
+      :`<div class="slash-empty">${data?.quickReplies?.length?'Ninguna respuesta coincide con «/'+esc(query)+'».':'Todavía no tienes respuestas rápidas.'} Créalas en <strong>Mi configuración → Respuestas rápidas</strong>. <button type="button" class="btn" data-action="qr-go-settings">${data?.quickReplies?.length?'Crear otra respuesta':'Crear mi primera respuesta'}</button></div>`;
     form.insertAdjacentHTML('afterbegin',`<div id="slash-menu" class="slash-menu" role="listbox" aria-label="Respuestas rápidas">${body}</div>`);
   }
   async function update(textarea){
@@ -104,6 +104,7 @@ window.createQuickRepliesUI=function({state,api,esc,icon,showModal,toast}){
         if(!TOKEN.test(before)){const lead=before&&!/\s$/.test(before)?' /':'/';t.value=before+lead+t.value.slice(caret);const pos=before.length+lead.length;t.setSelectionRange(pos,pos);}
         t.dispatchEvent(new Event('input',{bubbles:true}));return true;
       }
+      if(name==='qr-go-settings'){close();document.querySelector('[data-view="settings"]')?.click();for(let i=0;i<30&&!document.querySelector('[data-action="qr-new"]');i++)await new Promise(r=>setTimeout(r,100));document.querySelector('[data-action="qr-new"]')?.click();return true;}
       if(name==='qr-remind'){remind();return true;}
       if(name==='qr-remind-at'){await remindAt(el);return true;}
       if(name==='qr-new'){await ensure();form(null);const s=$('#qr-scope');if(s)s.addEventListener('change',()=>{$('#qr-brand-field').hidden=s.value!=='brand';});return true;}
