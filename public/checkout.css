@@ -1,27 +1,27 @@
 /* Pago simulado con aspecto de pasarela (public/checkout.js). Niebla: blanco, bordes finos, el acento sobrio y controles de 40 px. */
-.co{display:grid;gap:16px}
-.co-sim{background:var(--warn-soft);border-color:var(--warn-line);color:var(--warn)}
-.co-summary{border:1px solid var(--line);border-radius:14px;padding:18px;background:var(--accent-tint);display:grid;gap:6px}
-.co-brand{justify-self:start;font-size:11px;font-weight:600;color:var(--accent-strong);background:#fff;border:1px solid var(--accent-line);border-radius:999px;padding:3px 10px}
-.co-summary h3{margin:4px 0 0;font-size:15px;line-height:1.4;font-weight:600}
-.co-summary p{margin:0;font-size:12px;color:var(--text-2);line-height:1.6}
-.co-amount{font-size:28px;font-weight:600;letter-spacing:-1px;margin:6px 0 2px}
-.co-summary small{font-size:11px;color:var(--text-3);line-height:1.6}
-.co-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px;border:1px solid var(--line);border-radius:12px;background:#fff}
-.co-tabs button{min-height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--text-2)}
-.co-tabs button[aria-selected=true]{background:var(--accent-soft);color:var(--accent-strong);font-weight:600}
-.co-tabs svg{width:16px;height:16px}
-.co-panel{display:grid;gap:14px}
-.co-panel[hidden]{display:none}
-.co-panel .field input{min-height:44px}
-.co-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.co-fill{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:11px;color:var(--text-3)}
-.co-fill .btn{min-height:40px;font-size:11px}
-.co-voucher{border:1.5px dashed var(--accent-line);border-radius:14px;padding:18px;display:grid;gap:8px;justify-items:center;text-align:center;background:#fff}
-.co-voucher small{font-size:11px;color:var(--text-3)}
-.co-voucher strong{font-size:20px;letter-spacing:1px;font-variant-numeric:tabular-nums}
-.co-voucher p{margin:4px 0 0;font-size:12px;line-height:1.7;color:var(--text-2)}
-.co-bars{width:100%;max-width:300px;height:44px;color:#2b3340}
-.co-foot{margin:0;text-align:center;font-size:11px;line-height:1.6;color:var(--text-3)}
-.co .btn.wide{width:100%;min-height:44px;display:flex;align-items:center;justify-content:center;gap:8px}
-@media(max-width:420px){.co-row{grid-template-columns:1fr}.co-amount{font-size:24px}}
+.pg{display:grid;gap:16px}
+.pg-sim{background:var(--warn-soft);border-color:var(--warn-line);color:var(--warn)}
+.pg-summary{border:1px solid var(--line);border-radius:14px;padding:18px;background:var(--accent-tint);display:grid;gap:6px}
+.pg-brand{justify-self:start;font-size:11px;font-weight:600;color:var(--accent-strong);background:#fff;border:1px solid var(--accent-line);border-radius:999px;padding:3px 10px}
+.pg-summary h3{margin:4px 0 0;font-size:15px;line-height:1.4;font-weight:600}
+.pg-summary p{margin:0;font-size:12px;color:var(--text-2);line-height:1.6}
+.pg-amount{font-size:28px;font-weight:600;letter-spacing:-1px;margin:6px 0 2px}
+.pg-summary small{font-size:11px;color:var(--text-3);line-height:1.6}
+.pg-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.pg-tabs button{min-height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--text-2)}
+.pg-tabs button[aria-selected=true]{background:var(--accent-soft);color:var(--accent-strong);font-weight:600}
+.pg-tabs svg{width:16px;height:16px}
+.pg-panel{display:grid;gap:14px}
+.pg-panel[hidden]{display:none}
+.pg-panel .field input{min-height:44px}
+.pg-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pg-fill{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:11px;color:var(--text-3)}
+.pg-fill .btn{min-height:40px;font-size:11px}
+.pg-voucher{border:1.5px dashed var(--accent-line);border-radius:14px;padding:18px;display:grid;gap:8px;justify-items:center;text-align:center;background:#fff}
+.pg-voucher small{font-size:11px;color:var(--text-3)}
+.pg-voucher strong{font-size:20px;letter-spacing:1px;font-variant-numeric:tabular-nums}
+.pg-voucher p{margin:4px 0 0;font-size:12px;line-height:1.7;color:var(--text-2)}
+.pg-bars{width:100%;max-width:300px;height:44px;color:#2b3340}
+.pg-foot{margin:0;text-align:center;font-size:11px;line-height:1.6;color:var(--text-3)}
+.pg .btn.wide{width:100%;min-height:44px;display:flex;align-items:center;justify-content:center;gap:8px}
+@media(max-width:420px){.pg-row{grid-template-columns:1fr}.pg-amount{font-size:24px}}
