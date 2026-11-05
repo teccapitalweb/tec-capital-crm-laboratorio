@@ -58,7 +58,7 @@ Administración concede estas funciones en Catálogo → Contenido. Diseño crea
 ## Administración
 
 - **Equipo:** invitaciones individuales, marcas por persona, restablecer la verificación en dos pasos.
-- **Catálogo:** cursos, ediciones, promociones, flyers, plantillas, conocimiento aprobado, banco de evaluación, importación CSV.
+- **Catálogo:** cursos, ediciones, promociones, flyers, plantillas, conocimiento aprobado, banco de evaluación, importación CSV. **La imagen de un curso** es un flyer aprobado de una de sus ediciones (así nunca sale con precio o fecha viejos): en la ficha del curso, **Imagen del curso → Agregar imagen** abre el formulario de flyer con la edición ya elegida; guárdalo como borrador y apruébalo. Si ya hay un flyer aprobado pero no se muestra, la ficha dice por qué (por ejemplo «Edición en borrador»). Archivos: PNG, JPG, WEBP, GIF o PDF de hasta 4 MB.
 - **Operación:** horarios y reparto, Pagos, Coordinación, Certificados, Finanzas, Seguimientos (automatización, recetas, respuestas automáticas, canal simulado), **Campañas**, Demo, Conectores, Eventos, Históricos.
 - **Mis resultados → Ver a:** el trabajo de cualquier persona del equipo, y el **Rendimiento del equipo** (ventas, cierre, tareas vencidas, tiempo de primera respuesta y avisos de aperturas por persona).
 - **Analítica y Modo presentación:** cifras en vivo y el guion de 13 pasos para presentar el proyecto.

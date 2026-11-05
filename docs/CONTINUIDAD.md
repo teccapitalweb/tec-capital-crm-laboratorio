@@ -502,6 +502,12 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Mejora de uso: imagen del curso desde su ficha (rama `feat/imagen-curso`, 5 nov 2026)
+
+- **Por qué:** en producción una persona intentó poner una imagen en la ventana del curso y no había dónde; la imagen vive en un flyer de la edición. Se mantiene esa regla (sin saltarse la aprobación) pero se hace visible.
+- **Qué se hizo:** `public/catalogue.js` y `public/catalogue.css`, sin servidor, esquema ni versión nuevos. La ficha del curso trae el bloque **Imagen del curso**: imagen actual si hay un flyer aprobado y listo, o el motivo por el que aún no se ve (borrador, edición en borrador, vencido…); el botón **Agregar / Cambiar imagen** abre el formulario de flyer con la edición (publicada, si hay) y el nombre ya puestos, y `edit()` acepta valores iniciales. Si el curso no tiene ninguna edición, lleva a Ediciones con un aviso. Sólo lo ve quien puede diseñar.
+- **Evidencia:** en el demo local, curso con imagen (muestra el flyer aprobado), curso nuevo (crea el flyer con un PNG, lo aprueba y la ficha explica «Edición en borrador») y 375 px sin desbordamiento ni letra menor de 11 px. **Sin publicar.**
+
 ## Herramienta: base de pruebas local (rama `feat/base-de-pruebas`, 5 nov 2026)
 
 - **Qué se hizo:** `scripts/demo-local.mjs` (`npm run demo`, `npm run demo:reset`). Arranca el servidor en `127.0.0.1` con una carpeta de datos aparte (`data-demo/`, ignorada por Git) y lo siembra **sólo por la API real**: registro, invitaciones de equipo, configuración de GlobalVet con todo encendido, reglas de comisión, responsable de apertura, conversaciones por los tres canales, etiquetas, respuestas rápidas y el simulador. Ocho cuentas con contraseñas aleatorias guardadas en `data-demo/CREDENCIALES.txt` (permiso 0600). Sin cambio de versión ni de esquema. Detalle: [BASE_DE_PRUEBAS.md](BASE_DE_PRUEBAS.md).
