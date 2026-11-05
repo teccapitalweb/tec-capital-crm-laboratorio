@@ -61,6 +61,10 @@ En **Catálogo y biblioteca → Contenido** cada marca elige qué plantilla apro
 
 Mientras llega el IPCIL nuevo, administración importa en **Operación → Históricos** un JSON o CSV exportado del panel actual (alumnos con sus pagos, cursos, aperturas, certificados) con los mismos nombres de campo del panel. Cada alumno queda ligado a la persona única del CRM; sus pagos y certificados se ven en la ficha de persona y en Finanzas como históricos, fuera del libro de ventas y sin comisiones. Repetir un archivo no duplica y un lote se puede quitar. No hay conexión en vivo con Firebase.
 
+## Etiquetas en la bandeja
+
+Las etiquetas de Contactos (VIP, Pidió beca, Lista de espera…) se ven en cada hilo de la bandeja, se puede **filtrar por etiqueta** y se etiqueta desde el botón **Etiquetas** del chat, creando etiquetas nuevas al momento. Sólo para el equipo y dentro de sus marcas. Plan: [docs/PLAN_ETIQUETAS_BANDEJA.md](docs/PLAN_ETIQUETAS_BANDEJA.md).
+
 ## Chat más rápido: respuestas con «/» y Recordarme
 
 En el chat, escribe **/** y el atajo para insertar una respuesta rápida —personal o compartida por marca— con el nombre del cliente y el curso ya puestos; **no se envía hasta que tú lo envíes**. Las administras en **Mi configuración → Respuestas rápidas**. El botón **Recordarme** deja una tarea de seguimiento en la oportunidad del chat en un clic. Precios y fechas siguen saliendo de las plantillas aprobadas, no de textos escritos a mano. Plan y límites: [docs/PLAN_CHAT_RAPIDO.md](docs/PLAN_CHAT_RAPIDO.md).

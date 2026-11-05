@@ -55,6 +55,8 @@ Cada paso termina con un **resultado esperado**; si no ocurre, detenerse y anota
 
 16. **Respuestas rápidas y Recordarme.** Con la cuenta de prueba, crear la respuesta personal `/gracias` con `{{nombre}}` y `{{curso}}`; en un chat de la marca de pruebas escribir `/gr` y elegirla con Enter. *Esperado:* el texto queda en el compositor con el nombre del cliente de prueba y **no se envía**; **Recordarme → En 1 hora** crea una tarea que aparece en Mi día. Como administración, crear una respuesta compartida de la marca y comprobar que otra persona de esa marca la ve. Archivar las respuestas de prueba al terminar.
 
+17. **Etiquetas en la bandeja.** En un chat de la marca de pruebas, **Etiquetas** → crear «PRUEBA · lista de espera» y guardar. *Esperado:* la etiqueta aparece en el hilo y en el encabezado del chat; el selector de la bandeja la ofrece y, al elegirla, sólo quedan los hilos con ella; quitarla saca el hilo del filtro y alguien de otra marca no la ve.
+
 ## D. Cierre y limpieza
 
 1. Cancelar toda campaña de prueba que siga programada o enviando.

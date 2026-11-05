@@ -8,9 +8,9 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
 | Versión publicada | **0.33.0** en `main` (respuestas rápidas y Recordarme en el chat). `/api/health` de producción devuelve `0.33.0` |
-| Pendiente de publicar | Nada |
+| Pendiente de publicar | **0.34.0** (etiquetas en la bandeja, sin esquema nuevo), rama `feat/etiquetas-bandeja`, sin publicar |
 | Esquema SQLite | **28** (último cambio: respuestas rápidas). Respaldo previo al migrar: `backups/before-crm-v28-*` |
-| Pruebas | 158 aprobadas (`npm test`); `npm run check` limpio |
+| Pruebas | 158 publicadas; 159 en la rama pendiente (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |
 | Experiencia del cliente | <https://crm-laboratorio-production.up.railway.app/> |
 | Repositorio | <https://github.com/teccapitalweb/tec-capital-crm-laboratorio>, rama `main` (público: nada de secretos) |
@@ -33,6 +33,7 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | Certificados | Folio IPCI secuencial, QR, verificación pública, revocación, créditos opcionales | Operación → Certificados, `/verificar/<folio>` | README |
 | Finanzas | Libro de ventas por eventos, comisiones con regla, liquidaciones, reembolsos, CSV, vista imprimible | Operación → Finanzas | README |
 | Personas y consentimiento | Una identidad entre marcas, baja y consentimiento a nivel persona, fusión con vista previa | Contactos → Personas | README |
+| Etiquetas en la bandeja (rama pendiente) | Las etiquetas de Contactos se ven en cada hilo, se filtra la bandeja por etiqueta y se etiqueta desde el chat | Conversaciones | [PLAN_ETIQUETAS_BANDEJA.md](PLAN_ETIQUETAS_BANDEJA.md) |
 | Respuestas rápidas y Recordarme | Escribir `/atajo` en el chat inserta un texto del equipo con el nombre del cliente y el curso (no envía); «Recordarme» deja una tarea de seguimiento en un clic | Chat, Mi configuración → Respuestas rápidas | [PLAN_CHAT_RAPIDO.md](PLAN_CHAT_RAPIDO.md) |
 | Notificaciones push y app instalable | Los avisos del equipo llegan al celular o escritorio, cifrados, sólo si cada persona los activa; manifiesto, service worker e iconos para instalar | Mi configuración → Notificaciones en este dispositivo | [PLAN_PUSH.md](PLAN_PUSH.md) |
 | Campañas | Plantilla aprobada a un segmento, vista previa con exclusiones, programación, resultados | Operación → Campañas | [PLAN_CAMPANAS.md](PLAN_CAMPANAS.md) |
@@ -111,6 +112,7 @@ Variables y respaldos: [OPERACION_Y_PRUEBAS.md](OPERACION_Y_PRUEBAS.md). Secreto
 | 0.31 | Rendimiento del equipo para administración y documentación de punta a punta (sin esquema) |
 | 0.32 | Notificaciones push y app instalable (esquema 27) |
 | 0.33 | Respuestas rápidas con «/» y Recordarme en el chat (esquema 28) |
+| 0.34 (pendiente) | Etiquetas en la bandeja: chips, filtro y etiquetar desde el chat (sin esquema) |
 
 El detalle de cada entrega, con evidencia, está en [CONTINUIDAD.md](CONTINUIDAD.md).
 

@@ -74,6 +74,7 @@ dialog::backdrop{animation:niebla-fade .2s ease}
   .modal-inner .icon-btn{min-width:40px}
   .mode-picker button{min-height:36px}
   .quick-replies button{min-height:40px}
+  .tag-filter select{min-height:40px}
   .search input,.crm-toolbar input{min-height:24px}
 }
 
