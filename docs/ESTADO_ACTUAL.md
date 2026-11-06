@@ -8,7 +8,7 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
 | Versión publicada | **0.34.0** en `main` (etiquetas en la bandeja). `/api/health` de producción devuelve `0.34.0` |
-| Pendiente de publicar | Historial de precio y cupo: eventos `catalogo.precio_cambiado` y `edicion.cupo_*`, línea de tiempo «Precio y cupo» y avisos al equipo (sin cambio de versión ni de esquema), rama `feat/historial-precio-cupo`, 166 pruebas. Ver [PLAN_HISTORIAL_PRECIO_CUPO.md](PLAN_HISTORIAL_PRECIO_CUPO.md). Ya publicados: «Preparar marca», fuera de horario, biblioteca de 50 mensajes y el acomodo de Configuración y Equipo |
+| Pendiente de publicar | Conocimiento por lote (CSV a borradores), guía de contexto y tope de gasto de la IA (sin cambio de versión ni de esquema), rama `feat/conocimiento-por-lote`, 169 pruebas. Ver [PLAN_CONOCIMIENTO_POR_LOTE.md](PLAN_CONOCIMIENTO_POR_LOTE.md). Ya publicados: «Preparar marca», fuera de horario, biblioteca de 50 mensajes, el acomodo de Configuración y Equipo y el historial de precio y cupo |
 | Esquema SQLite | **28** (último cambio: respuestas rápidas). Respaldo previo al migrar: `backups/before-crm-v28-*` |
 | Pruebas | 159 aprobadas (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |
@@ -66,7 +66,7 @@ Ninguna función por marca está encendida en producción. Apagar un interruptor
 | Verificación en dos pasos | Mi configuración → Acceso y seguridad (cada persona) | Sólo contraseña |
 | Núcleo compartido | `CORE_SINK_URL` y `CORE_SINK_SECRET` en el entorno | Outbox simulado: nada sale del servidor |
 | Conectores reales | `CHANNEL_CONNECTOR`, `PAYMENT_CONNECTOR` y sus secretos en el entorno | Todo simulado |
-| IA real | `AI_PROVIDER=claude` y `ANTHROPIC_API_KEY` en el entorno | Simulador local sin costo |
+| IA real | `AI_PROVIDER=claude` y `ANTHROPIC_API_KEY` en el entorno; modelo `AI_MODEL` (por omisión `claude-sonnet-5-5`) y topes `AI_MONTHLY_CALL_LIMIT` / `AI_MONTHLY_TOKEN_LIMIT` | Simulador local sin costo |
 
 Variables y respaldos: [OPERACION_Y_PRUEBAS.md](OPERACION_Y_PRUEBAS.md). Secretos: sólo en el entorno de Railway, nunca en el repositorio.
 

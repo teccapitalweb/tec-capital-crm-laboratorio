@@ -20,7 +20,7 @@ test('parecido léxico: raíces, variantes y umbral',async()=>{
   const sim=createAiProvider({env:{}});assert.equal(sim.name,'simulated');assert.equal(sim.configured,true);
   const d=await sim.draft({question:'¿ustedes entregan constancia o diploma?',knowledge:kb});assert.equal(d.usedIds[0],'k0');assert.match(d.text,/certificado IPCI/);
   const none=await sim.draft({question:'¿venden cafeteras?',knowledge:kb});assert.equal(none.text,null);
-  const claude=createAiProvider({env:{AI_PROVIDER:'claude'}});assert.equal(claude.name,'claude');assert.equal(claude.configured,false);assert.equal(claude.model,'claude-opus-5-5');
+  const claude=createAiProvider({env:{AI_PROVIDER:'claude'}});assert.equal(claude.name,'claude');assert.equal(claude.configured,false);assert.equal(claude.model,'claude-sonnet-5-5');
   const r=await claude.draft({brand:{name:'x'},question:'q',knowledge:kb,history:[]});assert.equal(r.text,null);assert.match(r.reason,/credenciales/);
 });
 

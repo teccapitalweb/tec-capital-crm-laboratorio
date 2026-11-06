@@ -59,7 +59,7 @@ export function validateDraft(draft,knowledge=[],{minConfidence=0.5}={}){
 
 export function createAiProvider({env=process.env,log=console,timeoutMs=20000}={}){
   const name=env.AI_PROVIDER==='claude'?'claude':'simulated';
-  const model=env.AI_MODEL||'claude-opus-5-5';
+  const model=env.AI_MODEL||'claude-sonnet-5-5';   // intermedio: alcanza para responder con conocimiento aprobado; claude-haiku-5-5 es más económico y claude-opus-5-5 el más capaz
   const hasCredentials=Boolean(env.ANTHROPIC_API_KEY||env.ANTHROPIC_AUTH_TOKEN);
   const configured=name==='simulated'||hasCredentials;
 
@@ -69,9 +69,11 @@ export function createAiProvider({env=process.env,log=console,timeoutMs=20000}={
     return {text:hit.entry.answer,usedIds:[hit.entry.id],confidence:hit.score,model:'simulado',reason:'Coincidencia léxica '+Math.round(hit.score*100)+'% con «'+hit.entry.question+'».'};
   }
 
-  let client=null;
+  let client=null,budget=null;   // tope de gasto opcional (server/ai-budget.mjs): check() devuelve el motivo si ya no se puede llamar
+  const useBudget=b=>{budget=b;};
   async function claude({brand,course,edition,question,knowledge,history=[]}){
     if(!hasCredentials)return {text:null,usedIds:[],model,reason:'Proveedor sin credenciales.'};
+    const blocked=budget?.check();if(blocked)return {text:null,usedIds:[],model,reason:blocked,budget:true};
     if(!client){const {default:Anthropic}=await import('@anthropic-ai/sdk');client=new Anthropic({timeout:timeoutMs,maxRetries:1});}
     const facts=[`Marca: ${brand.name}`,course?`Curso: ${course.title}`:null,edition?`Edición: ${edition.name} · ${edition.dateLabel||''} · precio vigente ${edition.priceLabel||'no disponible'}`:null].filter(Boolean).join('\n');
     const kb=knowledge.map(k=>`[${k.id}] P: ${k.question}\nR: ${k.answer}`).join('\n\n')||'(sin entradas)';
@@ -84,6 +86,7 @@ export function createAiProvider({env=process.env,log=console,timeoutMs=20000}={
     ].join('\n\n');
     const messages=[...history.slice(-6).map(h=>({role:h.role==='customer'?'user':'assistant',content:h.text})),{role:'user',content:question}];
     const response=await client.beta.messages.create({model,max_tokens:1024,system,messages,output_config:{effort:'low'},betas:['server-side-fallback-2026-07-01'],fallbacks:'default'});
+    budget?.record({kind:'reply',model:response.model||model,input:response.usage?.input_tokens,output:response.usage?.output_tokens});
     if(response.stop_reason==='refusal')return {text:null,usedIds:[],model,reason:'El proveedor declinó responder ('+(response.stop_details?.category||'sin categoría')+').'};
     const text=response.content.filter(b=>b.type==='text').map(b=>b.text).join('').trim().replace(/^```(?:json)?\s*|\s*```$/g,'');
     let parsed=null;try{parsed=JSON.parse(text);}catch{return {text:null,usedIds:[],model,reason:'Respuesta del proveedor no válida.'};}
@@ -107,9 +110,11 @@ export function createAiProvider({env=process.env,log=console,timeoutMs=20000}={
   }
   async function claudeRewrite({brand,template,tones,variables:allowed}){
     if(!hasCredentials)return {variants:[],model,reason:'Proveedor sin credenciales.'};
+    const blocked=budget?.check();if(blocked)return {variants:[],model,reason:blocked,budget:true};
     if(!client){const {default:Anthropic}=await import('@anthropic-ai/sdk');client=new Anthropic({timeout:timeoutMs,maxRetries:1});}
     const system=['Redactas variantes de una plantilla de mensajes de una consultora de cursos (español de México).','REGLAS: conserva exactamente las variables {{...}} del original y no uses otras que no estén en la lista; no añadas enlaces, importes, fechas ni promesas (pagos, inscripciones, descuentos); respeta el sentido; máximo 1200 caracteres por variante.','Variables permitidas: '+allowed.join(', '),'Devuelve SOLO un JSON: {"variants":[{"tone":"formal|cercano|breve","body":string}]}'].join('\n\n');
     const response=await client.beta.messages.create({model,max_tokens:2048,system,messages:[{role:'user',content:'Marca: '+brand.name+'\nEscenario: '+template.scenario+'\nTonos: '+tones.join(', ')+'\nPLANTILLA ORIGINAL:\n'+template.body}],output_config:{effort:'low'},betas:['server-side-fallback-2026-07-01'],fallbacks:'default'});
+    budget?.record({kind:'variants',model:response.model||model,input:response.usage?.input_tokens,output:response.usage?.output_tokens});
     if(response.stop_reason==='refusal')return {variants:[],model,reason:'El proveedor declinó.'};
     const text=response.content.filter(b=>b.type==='text').map(b=>b.text).join('').trim().replace(/^```(?:json)?\s*|\s*```$/g,'');
     let parsed=null;try{parsed=JSON.parse(text);}catch{return {variants:[],model,reason:'Respuesta del proveedor no válida.'};}
@@ -124,5 +129,5 @@ export function createAiProvider({env=process.env,log=console,timeoutMs=20000}={
     try{return await (name==='claude'?claude(input):simulated(input));}
     catch(e){log.error('AI provider failed:',e?.name||'Error',String(e?.message||'').slice(0,160));return {text:null,usedIds:[],model,reason:'Error del proveedor: '+String(e?.message||e).slice(0,120)};}
   }
-  return {name,model:name==='claude'?model:'simulado',configured,draft,rewrite};
+  return {name,model:name==='claude'?model:'simulado',configured,draft,rewrite,useBudget,usage:()=>name==='claude'?budget?.usage()||null:null};
 }

@@ -46,7 +46,9 @@ Para una prueba nueva usa un directorio de datos vacío e independiente. No cone
 | `BACKUP_INTERVAL_HOURS` | `24` por defecto (desactivado en `NODE_ENV=test`) | Horas entre respaldos automáticos; `0` los desactiva |
 | `BACKUP_KEEP` | `7` | Respaldos automáticos que se conservan |
 | `AI_PROVIDER` | vacío o `simulated` | `claude` activa el SDK oficial; requiere credenciales. Sin él, el nivel autónomo usa el simulador local |
-| `AI_MODEL` | `claude-opus-5-5` | Modelo del proveedor; `claude-haiku-5-5` es la opción económica para volumen |
+| `AI_MODEL` | `claude-sonnet-5-5` | Modelo del proveedor; `claude-haiku-5-5` es la opción más económica para volumen y `claude-opus-5-5` la más capaz y cara |
+| `AI_MONTHLY_CALL_LIMIT` | `1000` | Tope mensual de llamadas reales a la IA (0 = sin tope); al alcanzarlo responde una persona |
+| `AI_MONTHLY_TOKEN_LIMIT` | `0` | Tope mensual de tokens de entrada y salida (0 = sin tope) |
 | `ANTHROPIC_API_KEY` | No usar en local salvo prueba aislada | Credencial del proveedor; sólo en el entorno del servidor, nunca en Git |
 | `CHANNEL_CONNECTOR` / `PAYMENT_CONNECTOR` | `simulated` | `meta` / `stripe` o `conekta` cuando haya accesos; sin ellos el CRM sigue con el simulado y lo avisa. Ver [CONECTORES.md](CONECTORES.md) |
 | `CONNECTOR_WEBHOOK_SECRET` | Opcional | Firma de los webhooks de prueba del simulado y del botón «Probar webhook»; sin él esas rutas responden 404 |

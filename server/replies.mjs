@@ -172,8 +172,8 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     }
     if(!path.startsWith('/api/replies'))return false;
     if(user.role==='customer')throw fail(403,'Vista del equipo.');
-    if(path==='/api/replies/provider'&&req.method==='GET'){json(res,200,{name:provider.name,model:provider.model,configured:provider.configured});return true;}
-    if(path==='/api/replies/settings'&&req.method==='GET'){json(res,200,{settings:crm.brandsFor(user).map(b=>({...settings(b.id),brand_name:b.name})),modes:MODES,provider:{name:provider.name,model:provider.model,configured:provider.configured}});return true;}
+    if(path==='/api/replies/provider'&&req.method==='GET'){json(res,200,{name:provider.name,model:provider.model,configured:provider.configured,usage:provider.usage?.()||null});return true;}
+    if(path==='/api/replies/settings'&&req.method==='GET'){json(res,200,{settings:crm.brandsFor(user).map(b=>({...settings(b.id),brand_name:b.name})),modes:MODES,provider:{name:provider.name,model:provider.model,configured:provider.configured,usage:provider.usage?.()||null}});return true;}
     if((m=path.match(/^\/api\/replies\/brands\/([\w-]{1,64})$/))&&req.method==='PATCH'){const s=setSettings(user,m[1],await body(req));audit(user,'replies.settings',m[1]);json(res,200,{settings:s});return true;}
     if(path==='/api/replies/test'&&req.method==='POST'){json(res,200,{result:await test(user,await body(req))});return true;}
     if(path==='/api/replies/knowledge'){
@@ -187,5 +187,5 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     }
     throw fail(404,'Ruta de respuestas no encontrada.');
   }
-  return {handle,plan,commit,classify,settings,suggestion,consumeSuggestions,history,test,seedBrand:brandId=>seedBrandKnowledge(db,brandId,now())};
+  return {handle,plan,commit,classify,settings,suggestion,consumeSuggestions,history,test,createEntry,normalizeEntry,seedBrand:brandId=>seedBrandKnowledge(db,brandId,now())};
 }

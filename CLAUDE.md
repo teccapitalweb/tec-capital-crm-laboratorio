@@ -35,7 +35,8 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 4m. [Preparar marca](docs/PLAN_PREPARAR_MARCA.md): Operación → Preparar marca, lista de verificación por marca (sólo lectura, sin esquema nuevo; publicada en `main`).
 4n. [Mensaje de fuera de horario](docs/PLAN_FUERA_DE_HORARIO.md): evento de Contenido con la próxima apertura (sin esquema nuevo; publicado en `main`).
 4o. [Respuestas rápidas más fáciles](docs/PLAN_RESPUESTAS_FACILES.md): ejemplos listos (50, [lista](docs/BIBLIOTECA_RESPUESTAS_RAPIDAS.md)), vista previa, búsqueda y duplicar en Mi configuración (sin esquema nuevo; publicado en `main` con 13 ejemplos; la ampliación a 50, rama `feat/biblioteca-consultora`, sin publicar).
-4p. [Historial de precio y cupo](docs/PLAN_HISTORIAL_PRECIO_CUPO.md): eventos de precio y cupo, línea de tiempo por edición y avisos; base para llamadas y alertas automáticas (sin esquema nuevo; rama `feat/historial-precio-cupo`, sin publicar).
+4p. [Historial de precio y cupo](docs/PLAN_HISTORIAL_PRECIO_CUPO.md): eventos de precio y cupo, línea de tiempo por edición y avisos; base para llamadas y alertas automáticas (sin esquema nuevo; publicado en `main`).
+4q. [Conocimiento por lote y tope de gasto de la IA](docs/PLAN_CONOCIMIENTO_POR_LOTE.md): importar preguntas y respuestas por CSV como borradores, [guía para cargar el contexto](docs/GUIA_CONTEXTO_CONSULTORA.md) y topes mensuales de la IA (sin esquema nuevo; rama `feat/conocimiento-por-lote`, sin publicar). Falta probar la API real con la clave.
 4b. [Visión de la plataforma](docs/VISION_PLATAFORMA.md): el CRM como módulo de la plataforma de toda la empresa (IPCIL, Academia, finanzas, canales reales); diagnóstico, arquitectura objetivo y fases.
 5. [README](README.md) y [ROADMAP](ROADMAP.md): recorridos del producto y planificación general.
 
@@ -69,7 +70,7 @@ npm start
 
 `npm start` usa `.env` si existe. Prepara `.env` desde `.env.example` para una instalación local; consulta el runbook antes de usar datos o accesos existentes.
 
-La referencia vigente es **166 pruebas aprobadas** (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **169 pruebas aprobadas** (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 
