@@ -21,6 +21,7 @@ export const DEMO_CASES=[
   {title:'Pide la baja',input:'Ya no quiero recibir mensajes',intent:'opt_out',action:'replied',source:null,exclude:'$',tags:'consentimiento'},
   {title:'Pregunta fuera de guion',input:'¿Dan beca para estudiantes?',intent:'unknown',action:'replied',source:null,include:'asesor',tags:'desconocida'},
   {title:'Agradece',input:'Gracias, perfecto',intent:'thanks',action:'replied',source:null,tags:'cierre'},
+  {title:'Pregunta de situación (no es de horario)',input:'¿Qué pasa si un día no puedo conectarme a la sesión?',intent:'unknown',action:'replied',source:null,exclude:'Docente',tags:'desconocida,situacion'},
 ];
 export function seedBrandEvaluation(db,brandId,now=Date.now()){
   if(db.prepare('SELECT 1 FROM eval_cases WHERE brand_id=? LIMIT 1').get(brandId))return 0;

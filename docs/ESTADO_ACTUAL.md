@@ -8,7 +8,7 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
 | Versión publicada | **0.34.0** en `main` (etiquetas en la bandeja). `/api/health` de producción devuelve `0.34.0` |
-| Pendiente de publicar | Conocimiento por lote (CSV a borradores), guía de contexto y tope de gasto de la IA (sin cambio de versión ni de esquema), rama `feat/conocimiento-por-lote`, 169 pruebas. Ver [PLAN_CONOCIMIENTO_POR_LOTE.md](PLAN_CONOCIMIENTO_POR_LOTE.md). Ya publicados: «Preparar marca», fuera de horario, biblioteca de 50 mensajes, el acomodo de Configuración y Equipo y el historial de precio y cupo |
+| Pendiente de publicar | Corrección del motor de respuestas (primera pregunta y palabra suelta; sin cambio de versión ni de esquema), rama `fix/motor-primera-pregunta`, 170 pruebas. Ya publicados: conocimiento por lote y tope de gasto de la IA, historial de precio y cupo, «Preparar marca», fuera de horario y la biblioteca de 50 mensajes |
 | Esquema SQLite | **28** (último cambio: respuestas rápidas). Respaldo previo al migrar: `backups/before-crm-v28-*` |
 | Pruebas | 159 aprobadas (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |
@@ -78,7 +78,7 @@ Variables y respaldos: [OPERACION_Y_PRUEBAS.md](OPERACION_Y_PRUEBAS.md). Secreto
 - Las notificaciones push están verificadas contra el vector oficial del RFC 8291 y un receptor local, pero **la entrega real a un teléfono no se ha probado**. Es la única salida real a internet del laboratorio y es opt-in por dispositivo.
 - Faltan reglas del usuario para los roles **trafiquer** y **RH** del panel IPCIL y para comisiones por persona.
 - La base es SQLite en un volumen, con una sola instancia. El crecimiento a varias instancias llega con la migración a Postgres.
-- La IA real (`AI_PROVIDER=claude`) está sin probar con clave real en entorno aislado.
+- La IA real (`AI_PROVIDER=claude`) **se probó en local el 6 nov 2026** con una clave del usuario (copia de la base de demostración, sin tocar producción): respondió con conocimiento aprobado, no inventó precios ni confirmó pagos y el contador de uso cuadró. Sigue **apagada** en producción; falta cargar conocimiento real de las consultoras.
 - Faltan por cargar las 15 marcas y unos 120 cursos con sus fechas, responsables y piezas aprobadas. No se inventan.
 - La verificación **autenticada en producción** de los bloques recientes (campañas, portal, históricos, finanzas, certificados, coordinación) está pendiente: sólo se verificó sin sesión (archivos servidos, 401, health, CI).
 

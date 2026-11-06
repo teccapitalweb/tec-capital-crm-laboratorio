@@ -9,6 +9,12 @@ const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
 export const MODES=['off','suggest','templates','autonomous'];
 export const INTENTS=['opt_out','human','refund','enroll','payment','price','schedule','syllabus','certificate','requirements','modality','recording','duration','greeting','thanks','unknown'];
 const TOPIC_INTENTS=['certificate','payment','requirements','modality','recording','duration'];
+// «¿Qué pasa si un día no puedo conectarme a la sesión?» menciona palabras de horario pero pregunta por una SITUACIÓN: se contesta con
+// el conocimiento aprobado (o la IA), no con la ficha de fechas del catálogo.
+const SITUATION=/\b(que pasa si|y si|si no puedo|no puedo|no alcanzo|no me deja|se me|problema)\b/;
+const CATALOGUE_INTENTS=['schedule','syllabus','duration'];
+// Un primer mensaje con una pregunta concreta merece respuesta, no sólo la bienvenida.
+const looksLikeQuestion=raw=>/[?¿]/.test(raw)||normalize(raw).split(' ').filter(Boolean).length>=6;
 const PATTERNS=[
   ['human',/\b(asesor|humano|persona|alguien|atencion|hablar con)\b/,.9],
   ['refund',/\b(reembolso|devolucion|devolver|queja|molest|pesimo|fraude|engan)/,.9],
@@ -17,7 +23,7 @@ const PATTERNS=[
   // Duración va antes que precio: «¿cuánto dura?» no es una pregunta de precio.
   ['duration',/\b(duracion|cuanto dura|cuantas (horas|sesiones|clases)|cuanto tiempo)\b/,.8],
   ['price',/\b(precio|cuesta|costo|cuanto|promocion|descuento|oferta|vale)\b/,.85],
-  ['schedule',/\b(fecha|horario|cuando|dia|empieza|inicia|calendario)\b/,.8],
+  ['schedule',/\b(fecha|horario|cuando|empieza|inicia|calendario|(que|cual|primer|ultimo|proximo) dias?)\b/,.8],
   ['syllabus',/\b(temario|incluye|temas?|contenido|que voy a aprender|programa)\b/,.8],
   ['certificate',/\b(certificad|constancia|diploma|aval|validez|reconocimiento)/,.85],
   ['requirements',/\b(requisito|conocimientos previos|necesito saber|que necesito)\b/,.8],
@@ -48,11 +54,15 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
   // Plan síncrono: decide intención, texto, fuentes y si hace falta el proveedor. No escribe nada.
   function plan(c,trigger){
     const s=settings(c.brand_id),user=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id),first=(user?.name||'').split(' ')[0];
-    const ctx=catalogue.info(c.course_id,c.edition_id),course=ctx.course,{intent,confidence}=classify(trigger.text);
+    const ctx=catalogue.info(c.course_id,c.edition_id),course=ctx.course,cls=classify(trigger.text),situational=CATALOGUE_INTENTS.includes(cls.intent)&&SITUATION.test(normalize(trigger.text)),intent=situational?'unknown':cls.intent,confidence=situational?.3:cls.confidence;
     const count=db.prepare("SELECT count(*) n FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id).n;
+    // ¿El cliente pregunta algo concreto? (un tema del conocimiento, o una pregunta sin intención reconocida)
+    const asks=TOPIC_INTENTS.includes(intent)||(intent==='unknown'&&looksLikeQuestion(trigger.text));
     const out={mode:s.mode,intent,confidence,reply:'',sources:[],stage:null,handoff:false,prepared:null,reason:'',needsProvider:false,knowledge:[],buttons:null,order:false};
     const catalogueSource={type:'catalogue',courseId:course.id,editionId:ctx.edition.id,promotionId:ctx.promotion?.id||null,priceCents:ctx.priceCents,currency:ctx.currency};
     const kb=approved(c.brand_id,c.course_id);
+    // Bienvenida con la ficha vigente del curso (o la de anuncio): saludo, primer mensaje sin pregunta y respaldo del primer mensaje.
+    const welcome=()=>{out.prepared=catalogue.prepare(c,{kind:'flyer'});const ad=c.referral&&count===1?content?.render('ad_welcome',c.brand_id,{courseId:course.id,editionId:c.edition_id,name:first}):null;out.reply=ad?ad.text:course.welcome.replaceAll('{{nombre}}',first).replaceAll('{{curso}}',course.title)+'\n\n'+out.prepared.text;out.sources.push(catalogueSource,ad?{type:'template',kind:'ad_welcome',id:ad.templateId}:{type:'template',kind:'welcome'});out.buttons=['Precio','Temario','Fechas'];out.reason=count===1?'Primer mensaje: bienvenida con la ficha vigente del curso.':'Saludo o petición de información: ficha vigente del curso.';};
     const fromKnowledge=(threshold=.5)=>{const hit=bestMatch(trigger.text,kb,threshold)||(TOPIC_INTENTS.includes(intent)?{entry:kb.find(k=>k.topic===intent),score:1}:null);if(!hit?.entry)return false;out.reply=hit.entry.answer;out.sources.push({type:'knowledge',id:hit.entry.id,revision:hit.entry.revision,question:hit.entry.question});out.reason='Conocimiento aprobado «'+hit.entry.question+'»'+(hit.score<1?' (parecido '+Math.round(hit.score*100)+'%)':'')+'.';return true;};
     if(intent==='opt_out'){out.reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';out.reason='El cliente pidió la baja; se registra y se confirma una sola vez.';}
     else if(intent==='human'||intent==='refund'){out.reply=intent==='refund'?'Lamento la molestia. Una persona del equipo revisará tu caso y te responderá por aquí.':'Ya avisé al equipo. Un asesor puede tomar esta conversación para continuar contigo.';out.handoff=true;out.reason=intent==='refund'?'Queja o reembolso: siempre lo atiende una persona.':'El cliente pidió hablar con una persona.';}
@@ -67,7 +77,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     else if(intent==='price'){out.prepared=catalogue.prepare(c,{kind:'price'});out.reply=out.prepared.text.replace(/^Precio de ejemplo:/,'El precio de ejemplo de '+course.title+' es');out.stage='interesado';out.sources.push(catalogueSource);out.reason='Precio y promoción vigentes consultados en el catálogo al responder.';}
     else if(intent==='syllabus'){out.prepared=catalogue.prepare(c,{kind:'syllabus'});out.reply=out.prepared.text;out.sources.push(catalogueSource);out.reason='Temario del curso en el catálogo.';}
     else if(intent==='schedule'){out.prepared=catalogue.prepare(c,{kind:'schedule'});out.reply=out.prepared.text;out.sources.push(catalogueSource);out.reason='Fecha, horario y docente de la edición en el catálogo.';}
-    else if(intent==='greeting'||count===1){out.prepared=catalogue.prepare(c,{kind:'flyer'});const ad=c.referral&&count===1?content?.render('ad_welcome',c.brand_id,{courseId:course.id,editionId:c.edition_id,name:first}):null;out.reply=ad?ad.text:course.welcome.replaceAll('{{nombre}}',first).replaceAll('{{curso}}',course.title)+'\n\n'+out.prepared.text;out.sources.push(catalogueSource,ad?{type:'template',kind:'ad_welcome',id:ad.templateId}:{type:'template',kind:'welcome'});out.buttons=['Precio','Temario','Fechas'];out.reason=count===1?'Primer mensaje: bienvenida con la ficha vigente del curso.':'Saludo o petición de información: ficha vigente del curso.';}
+    else if(intent==='greeting'||(count===1&&!asks))welcome();
     else if(intent==='thanks'){out.reply='¡Con gusto! Si quieres, puedo ayudarte con el precio, las fechas o la inscripción de práctica.';out.reason='Agradecimiento o cierre.';}
     else if(fromKnowledge(.5)){/* respondido con conocimiento */}
     else{
@@ -75,6 +85,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
       out.needsProvider=Boolean(s.provider_enabled)&&kb.length>0;
       out.reply='Puedo ayudarte con el precio, el temario o la fecha de este curso. Si prefieres, escribe “asesor” y el equipo continuará contigo.';
       out.reason='Sin intención reconocida ni conocimiento parecido.';
+      if(count===1){welcome();if(out.needsProvider){out.prepared=null;out.buttons=null;}out.reason='Primer mensaje sin respuesta en el conocimiento: bienvenida con la ficha vigente del curso.'+(out.needsProvider?' Si el proveedor de IA responde con fuentes aprobadas, se usa su respuesta.':'');}
       if(unknownStreak(c.id)+1>=s.max_unknown){out.handoff=true;out.reply='No quiero hacerte perder tiempo: le paso tu pregunta a una persona del equipo para que te responda con precisión.';out.reason+=' Se alcanzó el máximo de respuestas sin reconocer ('+s.max_unknown+'): se escala.';}
     }
     if(out.mode==='templates'&&out.needsProvider){out.needsProvider=false;out.reason+=' (El proveedor de IA sólo se usa en modo autónomo.)';}
