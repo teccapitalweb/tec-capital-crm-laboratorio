@@ -502,6 +502,12 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Mejora de uso: asistente de alta de curso (rama `feat/asistente-curso`, 5 nov 2026)
+
+- **Por qué:** dar de alta un curso completo exigía saltar entre Cursos, Ediciones y Flyers; el usuario no encontraba dónde poner la imagen.
+- **Qué se hizo:** `public/coursewizard.js` (nuevo), conectado a `catalogue.js` (botón «Nuevo curso», acciones `cat-wizard`/`cat-wz-*`, envío del formulario `cat-wiz-form` y el campo de archivo `wz-file`), `index.html`, `server/index.mjs` y estilos `.wz-*`. Cuatro pasos y no guarda hasta el último; usa las API de siempre (curso, edición, archivo, flyer, aprobación) con la edición guardada antes que el flyer; reanudable sin duplicar. Sin esquema ni versión nuevos. Plan: [PLAN_ASISTENTE_CURSO.md](PLAN_ASISTENTE_CURSO.md).
+- **Evidencia:** en el demo local, curso con imagen (edición publicada, flyer aprobado y visible en la tarjeta), curso sin fecha ni imagen (borrador), precio por sesión inválido bloqueado, formato no admitido rechazado, y 375 px sin desbordamiento. **Sin publicar.**
+
 ## Barrido de uso: pagos y respuestas rápidas más claros (rama `fix/barrido-interfaz`, 5 nov 2026)
 
 - **Barrido:** se recorrieron como administración las 13 vistas, las 14 pestañas de Operación, las 8 de Catálogo, las ventanas de 36 botones y los 17 botones del chat; como cliente, explorar cursos, abrir una conversación, escribir y recibir la respuesta automática. Sin errores de red ni de script. Los formularios (71) se revisaron por prefijo de id: ninguno cae en otro módulo.

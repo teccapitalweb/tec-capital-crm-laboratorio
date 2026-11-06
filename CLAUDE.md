@@ -30,6 +30,7 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 4h. [Plan de notificaciones push y app instalable](docs/PLAN_PUSH.md): Fase 5, bloque 4, publicado en v0.32.0 (esquema 27); falta probar la entrega real en un teléfono.
 4i. [Plan del chat más rápido](docs/PLAN_CHAT_RAPIDO.md): respuestas rápidas con «/» y Recordarme (Fase 5, bloque 5), publicado en v0.33.0 (esquema 28).
 4j. [Plan de etiquetas en la bandeja](docs/PLAN_ETIQUETAS_BANDEJA.md): chips, filtro por etiqueta y etiquetar desde el chat (Fase 5, bloque 6), publicado en v0.34.0 (sin esquema nuevo).
+4l. [Asistente de alta de curso](docs/PLAN_ASISTENTE_CURSO.md): Catálogo → Nuevo curso en cuatro pasos (curso, edición, imagen, revisar); sólo interfaz, rama `feat/asistente-curso`.
 4k. [Base de pruebas local](docs/BASE_DE_PRUEBAS.md): `npm run demo` crea una base con un usuario de cada tipo y datos de ejemplo para probar sin tocar producción (herramienta de desarrollo, sin versión ni esquema nuevos; rama `feat/base-de-pruebas`, sin publicar).
 4b. [Visión de la plataforma](docs/VISION_PLATAFORMA.md): el CRM como módulo de la plataforma de toda la empresa (IPCIL, Academia, finanzas, canales reales); diagnóstico, arquitectura objetivo y fases.
 5. [README](README.md) y [ROADMAP](ROADMAP.md): recorridos del producto y planificación general.

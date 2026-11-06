@@ -29,11 +29,12 @@ window.createCatalogueUI=function({state,api,esc,icon,icons,showModal,toast,refr
     for(let n=0;n<3;n++)guess+=raw-Date.parse(zonedInput(guess,zone)+'Z');
     if(zonedInput(guess,zone)!==value)throw Error('Esa hora no existe en la zona seleccionada. Revisa el cambio de horario.');return guess;
   }
+  const wizardUI=window.createCourseWizardUI({state,api,esc,icon,icons,showModal,toast,field,select,opts,instant,getData:()=>data,load:()=>load(),render:()=>render(),canApprove});
   async function load(){const [cat,kn,ev]=await Promise.all([api('/api/catalogue'),api('/api/replies/knowledge').catch(()=>({entries:[]})),api('/api/evaluation/cases').catch(()=>({cases:[]}))]);if(ev.intents)evaluationUI.setMeta(ev);data={...cat,knowledge:kn.entries||[],evaluation:ev.cases||[],content:[]};return data;}
   async function render(){const own=++version;try{await load();if(tab==='content')await contentUI.load();else{try{await contentUI.load();}catch{}}if(own!==version||state.view!=='courses')return;draw();}catch(e){toast(e.message);}}
   function draw(){
     const rows=tab==='knowledge'?knowledgeUI.filter(data.knowledge,query,status):tab==='evaluation'?evaluationUI.filter(data.evaluation,query,status):tab==='content'?[]:filtered(data[tab]);
-    const toolbar=`<div class="cat-toolbar"><form id="cat-search-form" class="cat-search"><label class="search">${icon('search')}<input name="query" aria-label="Buscar en catálogo" placeholder="Buscar curso, edición o material" value="${esc(query)}"></label><button class="btn" type="submit">Buscar</button></form><label class="cat-filter">Estado<select id="cat-state-filter"><option value="">Todos</option>${tab==='evaluation'?`<option value="active" ${status==='active'?'selected':''}>Activos</option><option value="archived" ${status==='archived'?'selected':''}>Archivados</option>`:statusOptions(status,['flyers','templates','knowledge'].includes(tab))}</select></label>${admin()&&tab!=='content'?btn('edit',icon('plus')+' '+{courses:'Nuevo curso',editions:'Nueva edición',promotions:'Nueva promoción',flyers:'Subir flyer',templates:'Nueva plantilla',knowledge:'Nueva pregunta',evaluation:'Nuevo caso'}[tab],'',tab,'')+`<button type="button" class="btn" data-action="imp-open">${icon('upload')} Importar CSV</button>`:''}</div>`;
+    const toolbar=`<div class="cat-toolbar"><form id="cat-search-form" class="cat-search"><label class="search">${icon('search')}<input name="query" aria-label="Buscar en catálogo" placeholder="Buscar curso, edición o material" value="${esc(query)}"></label><button class="btn" type="submit">Buscar</button></form><label class="cat-filter">Estado<select id="cat-state-filter"><option value="">Todos</option>${tab==='evaluation'?`<option value="active" ${status==='active'?'selected':''}>Activos</option><option value="archived" ${status==='archived'?'selected':''}>Archivados</option>`:statusOptions(status,['flyers','templates','knowledge'].includes(tab))}</select></label>${admin()&&tab!=='content'?btn(tab==='courses'?'wizard':'edit',icon('plus')+' '+{courses:'Nuevo curso',editions:'Nueva edición',promotions:'Nueva promoción',flyers:'Subir flyer',templates:'Nueva plantilla',knowledge:'Nueva pregunta',evaluation:'Nuevo caso'}[tab],'',tab,'')+`<button type="button" class="btn" data-action="imp-open">${icon('upload')} Importar CSV</button>`:''}</div>`;
     let content='';
     if(tab==='courses')content=`<div class="cat-course-grid">${rows.map(c=>{const editions=data.editions.filter(e=>e.course_id===c.id),flyer=data.flyers.find(f=>f.course_id===c.id&&f.availability==='Listo para enviar'&&f.mime.startsWith('image/'));return `<article class="cat-course"><div class="cat-course-cover">${flyer?`<img src="${flyer.fileUrl}" alt="${esc(c.title)}" loading="lazy">`:`<span>${icon('book-open')}</span>`}${badge(c.active?'Curso activo':'Archivado')}</div><div class="cat-card-body"><small>${esc(brand(c.brand_id))}</small><h2>${esc(c.title)}</h2><p>${editions.filter(e=>e.status==='published').length} ediciones publicadas · ${editions.length} en total</p><div class="actions">${btn('course-editions','Ver ediciones',c.id)}${btn('edit',admin()?'Editar':'Ver ficha',c.id,'courses')}${btn('history',icon('history'),c.id,'course','aria-label="Historial del curso"')}</div></div></article>`;}).join('')}</div>`;
     if(tab==='editions')content=`<div class="cat-edition-list">${rows.map(e=>`<article class="cat-edition"><div class="cat-date"><strong>${e.starts_at?new Intl.DateTimeFormat('es-MX',{day:'2-digit',timeZone:e.timezone}).format(e.starts_at):'—'}</strong><span>${e.starts_at?new Intl.DateTimeFormat('es-MX',{month:'short',timeZone:e.timezone}).format(e.starts_at):'por confirmar'}</span></div><div class="cat-edition-info"><small>${esc(brand(e.brand_id))} · ${esc(course(e.course_id)?.title)}</small><h2>${esc(e.name)}</h2><p>${stamp(e.starts_at,e.timezone)} · ${esc(e.timezone)}</p><p>${esc(e.instructor||'Docente por confirmar')} · ${e.available_seats===null?'Cupo por confirmar':e.available_seats+' lugares informativos'}</p></div><div class="cat-edition-price"><strong>${money(e.effectivePriceCents,e.currency)}</strong>${e.effectivePriceCents!==e.price_cents?`<del>${money(e.price_cents,e.currency)}</del>`:''}${e.session_price_cents>0?`<small>${money(e.session_price_cents,e.currency)} por sesión</small>`:''}${badge(e.availability,e.availability==='Disponible')}</div><div class="actions">${btn('edit',admin()?'Gestionar':'Ver edición',e.id,'editions')}<button type="button" class="btn" data-action="ct-sheet" data-id="${e.id}" data-name="${esc(course(e.course_id)?.title||'')} · ${esc(e.name)}">${icon('image')} Ficha</button>${btn('history',icon('history'),e.id,'edition','aria-label="Historial de edición"')}</div></article>`).join('')}</div>`;
@@ -100,6 +101,7 @@ window.createCatalogueUI=function({state,api,esc,icon,icons,showModal,toast,refr
     if(!name.startsWith('cat-'))return false;const id=el.dataset.id,type=el.dataset.type;
     if(name==='cat-tab'){tab=id;status='';query='';draw();}
     if(name==='cat-course-editions'){tab='editions';query=course(id).title;status='';draw();}
+    if(name==='cat-wizard'||name.startsWith('cat-wz-')){if(await wizardUI.action(name,el)){if(name==='cat-wz-view'){tab='courses';draw();}return true;}}
     if(name==='cat-edit')await edit(type,id);
     if(name==='cat-course-image'){
       const c=course(id),eds=data.editions.filter(e=>e.course_id===id&&e.status!=='archived'),pick=eds.find(e=>e.status==='published')||eds[0];
@@ -123,6 +125,7 @@ window.createCatalogueUI=function({state,api,esc,icon,icons,showModal,toast,refr
     return true;
   }
   async function submit(form,input){
+    if(form.getAttribute('id')==='cat-wiz-form')return wizardUI.submit(form,input);
     if(form.getAttribute('id')==='kn-form')return knowledgeUI.submit(form,input);
     if(form.getAttribute('id')==='ev-form')return evaluationUI.submit(form,input);
     if(form.getAttribute('id')?.startsWith('ct-'))return contentUI.submit(form,input);
@@ -153,6 +156,7 @@ window.createCatalogueUI=function({state,api,esc,icon,icons,showModal,toast,refr
     return false;
   }
   function change(target){
+    if(target.id==='wz-file')return wizardUI.change(target);
     if(target.id==='kn-brand')return knowledgeUI.change(target);
     if(target.id==='ev-brand')return evaluationUI.change(target);
     if(target.id==='cat-brand-filter'){state.brand=target.value;query='';draw();return true;}
