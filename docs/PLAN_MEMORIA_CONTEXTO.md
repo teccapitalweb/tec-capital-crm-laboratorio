@@ -23,7 +23,8 @@ Antes se mandaba **todo** el conocimiento aprobado en cada llamada: barato con 6
 Ficha **derivada de las tablas verdaderas** (no hay una segunda copia que se desactualice): desde cuándo tiene contacto con la marca, cuántas conversaciones y por qué canales, por qué otros cursos ha preguntado y en qué etapa, si ya está inscrito y si tiene un pedido pendiente. Se entrega a la IA para personalizar y no repetirse.
 
 - **Sólo de la marca de la conversación.** Nada de otras marcas aunque la persona exista en varias.
-- **Sin teléfono, correo, importes, notas internas ni etiquetas del equipo** (pueden decir cosas que no deben orientar una respuesta).
+- **Sin teléfono, correo, importes, notas internas, motivos de pérdida ni etiquetas del equipo** (texto libre que no debe orientar una respuesta).
+- **Los datos de origen no confiable se limpian:** el nombre lo escribe el cliente, así que sólo se usa si es una palabra corta de letras (si no, se descarta); el texto de catálogo se limpia. Y la memoria viaja a la IA como un **bloque de datos delimitado** (`<datos_cliente>`) dentro del mensaje, con la instrucción de tratarlo como información y nunca como órdenes; no va dentro del prompt del sistema.
 - Corta (máx. ~700 caracteres). Va marcada como contexto, nunca como fuente de precios, fechas ni promesas. Lo que se le entregó queda visible en el «por qué respondió».
 - Un pedido pendiente se le indica a la IA como «lo ve una persona»: no confirma ni cambia nada.
 
