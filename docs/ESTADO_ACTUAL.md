@@ -8,7 +8,7 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
 | Versión publicada | **0.34.0** en `main` (etiquetas en la bandeja). `/api/health` de producción devuelve `0.34.0` |
-| Pendiente de publicar | Herramienta `npm run demo` (base de pruebas local, sin cambio de versión ni de esquema), rama `feat/base-de-pruebas`, sin publicar. Ver [BASE_DE_PRUEBAS.md](BASE_DE_PRUEBAS.md) |
+| Pendiente de publicar | «Preparar marca» (Operación → Preparar marca, lista de verificación por marca, sólo lectura; sin cambio de versión ni de esquema), rama `feat/preparar-marca`, 161 pruebas. Ver [PLAN_PREPARAR_MARCA.md](PLAN_PREPARAR_MARCA.md) |
 | Esquema SQLite | **28** (último cambio: respuestas rápidas). Respaldo previo al migrar: `backups/before-crm-v28-*` |
 | Pruebas | 159 aprobadas (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |

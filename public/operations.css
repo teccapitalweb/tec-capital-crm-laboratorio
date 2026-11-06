@@ -15,3 +15,20 @@
 .cert-settings{margin:0 0 16px}.cert-form{padding:12px 0;border-bottom:1px solid #eef0f4}.cert-form .ops-card-top strong{font-size:13px;font-weight:500}.cert-credits{padding:8px 0 14px;border-bottom:1px solid #eef0f4}.cert-row small{overflow-wrap:anywhere}.cert-form input[type=color]{min-height:40px;padding:4px;width:100%}
 .co-sp-cells{display:flex;flex-wrap:wrap;gap:4px}.co-sp-cell{font-size:11px;border:1px solid #e2e5eb;border-radius:20px;padding:5px 9px;background:#fafbfc;color:var(--text-3)}.co-sp-cell.paid{border-color:var(--ok-line);background:var(--ok-soft);color:var(--ok)}.co-sp-cell.waived{text-decoration:line-through}.co-scores{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--text-3)}.co-scores strong{font-size:13px;color:#1f242c;margin-left:3px}.co-comments{margin:6px 0 0;padding:0 0 0 14px;font-size:11px;color:var(--text-3)}.co-comments li{margin:2px 0;overflow-wrap:anywhere}.survey-form legend{font-size:13px;font-weight:500;margin-bottom:6px}.survey-form fieldset{border:0;padding:0;margin:0 0 14px}
 .leg-table{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}.leg-table th,.leg-table td{text-align:left;padding:6px 8px;border-bottom:1px solid #eef0f4;vertical-align:top}.leg-table code{font-size:11px;background:#f3f4f7;border-radius:6px;padding:1px 5px;white-space:nowrap}.leg-preview{margin:14px 0}.leg-preview h3{font-size:14px;margin:0 0 6px}.leg-page textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}.leg-page input[type=file]{font-size:12px;min-height:40px}
+/* «Preparar marca» (public/readiness.js) */
+.rdy-card{margin-bottom:20px}
+.rdy-progress{height:8px;border-radius:99px;background:var(--soft);border:1px solid var(--line);overflow:hidden;margin:6px 0 10px}
+.rdy-progress span{display:block;height:100%;background:var(--ok);border-radius:99px;min-width:0}
+.rdy-group h3{margin:18px 0 8px;font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--text-2)}
+.rdy-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.rdy-step{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff}
+.rdy-step.done{background:var(--ok-soft);border-color:var(--ok-line)}
+.rdy-step.next{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.rdy-mark{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;background:#fff;color:#fff}
+.rdy-step.done .rdy-mark{background:var(--ok);border-color:var(--ok)}
+.rdy-mark svg{width:14px;height:14px}
+.rdy-copy{display:grid;gap:2px;min-width:0}
+.rdy-copy strong{font-size:13px;font-weight:600;line-height:1.4}
+.rdy-copy small{font-size:12px;line-height:1.5;color:var(--text-2)}
+.rdy-step .btn{min-height:40px;white-space:nowrap}
+@media(max-width:560px){.rdy-step{grid-template-columns:auto 1fr}.rdy-step .btn{grid-column:1/-1;width:100%}}

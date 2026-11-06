@@ -502,6 +502,11 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Mejora de uso: «Preparar marca» (rama `feat/preparar-marca`, 5 nov 2026)
+
+- **Qué se hizo:** nueva pestaña **Operación → Preparar marca** (sólo administración): por marca, una lista de verificación con lo esencial (curso, edición vigente, conocimiento aprobado, asesores, automatización) y los extras (imagen, reparto, respuestas automáticas, canal, pagos, coordinación, certificados, campañas), cada paso con su explicación y un botón a la pantalla donde se arregla. Sólo lee: `GET /api/readiness`. Detalle: [PLAN_PREPARAR_MARCA.md](PLAN_PREPARAR_MARCA.md).
+- **Evidencia:** 161 pruebas (la nueva cubre 401/403/405, los pasos, que encender pagos cambie el paso y que la lectura no cambie la revisión de la configuración); en el demo local, escritorio y celular (375 px) sin desborde, letra ≥11 px, botones ≥40 px, y los botones llevan a Seguimientos y a Equipo. **Sin publicar.**
+
 ## Mejora de uso: asistente de alta de curso (rama `feat/asistente-curso`, 5 nov 2026)
 
 - **Por qué:** dar de alta un curso completo exigía saltar entre Cursos, Ediciones y Flyers; el usuario no encontraba dónde poner la imagen.
