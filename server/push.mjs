@@ -11,7 +11,7 @@ const fail=(status,message)=>Object.assign(new Error(message),{status});
 const b64u=b=>Buffer.from(b).toString('base64url');
 const unb64u=s=>Buffer.from(String(s||''),'base64url');
 export const GROUPS={chats:'Chats: asignación, menciones y transferencias',sla:'Objetivos de respuesta',sales:'Pagos y comprobantes',ops:'Aperturas, certificados y seguimientos'};
-const GROUP_OF={assignment:'chats',mention:'chats',transfer:'chats',sla:'sla',payment:'sales',receipt:'sales'};
+const GROUP_OF={assignment:'chats',mention:'chats',transfer:'chats',scheduled:'chats',sla:'sla',payment:'sales',receipt:'sales'};
 export const groupOf=kind=>GROUP_OF[kind]||'ops';
 // El servidor sólo contacta servicios de push conocidos (evita que una suscripción falsa use al servidor para llegar a otras direcciones).
 const HOSTS=[/^fcm\.googleapis\.com$/,/^updates\.push\.services\.mozilla\.com$/,/\.push\.services\.mozilla\.com$/,/\.push\.apple\.com$/,/^web\.push\.apple\.com$/,/\.notify\.windows\.com$/,/^android\.googleapis\.com$/];

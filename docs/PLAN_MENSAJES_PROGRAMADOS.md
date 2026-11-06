@@ -1,6 +1,6 @@
 # Plan: mensajes programados
 
-Estado: **implementado en la rama `feat/mensajes-programados`** (6 nov 2026), **esquema 32** (una tabla nueva), sin cambio de versión. Sin publicar.
+Estado: **publicado en `main`** (6 nov 2026), **esquema 32** (una tabla nueva), sin cambio de versión. La segunda entrega (avisos y Mi día, rama `feat/programados-avisos`, sin esquema nuevo) está descrita abajo.
 
 ## Para qué
 
@@ -34,11 +34,15 @@ Un mensaje programado puede quedar viejo, así que al llegar la hora se vuelve a
 - **Límites:** hora futura (mínimo 30 s) y hasta 90 días; 5000 caracteres; 10 pendientes por chat; limitador de ritmo por persona. Auditoría: `scheduled.create`, `.edit`, `.cancel`, `.send_now`.
 - El texto es lo que escribió una persona del equipo: no se interpreta ni se mezcla con datos del cliente.
 
+## Segunda entrega: avisos y Mi día
+
+- **Aviso cuando algo no sale.** Si un mensaje programado **no sale por una causa ajena a quien lo programó** (la conversación se cerró, el cliente respondió, otra persona atiende, el canal lo rechazó, pasó demasiado tiempo o hubo un error), a esa persona le llega un aviso en **Operación → Mis avisos** (tipo `scheduled`, icono de reloj, con el inicio del texto y el motivo) y, si tiene push activo, una notificación del grupo «Chats». Una sola vez por mensaje y estado (`event_key` `scheduled:<id>:<estado>`). **No se avisa** cuando la persona lo cancela ella misma, cuando sale bien, ni cuando ya no tiene acceso a la marca (no se le cuenta algo que no puede ver).
+- **Mi día → «Mensajes programados».** Panel con lo que **tú** tienes por salir, de todas tus marcas (el más próximo primero, hasta 6 y «y N más»); cada fila abre el chat. Si no tienes nada pendiente, el panel no aparece. Ruta: `GET /api/scheduled` (sólo pendientes propios; clientes 403; sin sesión 401).
+
 ## Límites actuales
 
 - Sólo texto: no programa adjuntos, flyers ni plantillas aprobadas (cuyos precios y fechas salen del catálogo vigente al momento de enviarlos, no de un texto guardado).
-- No avisa por notificación cuando algo no sale: queda en la lista del chat, con el motivo.
 - Las horas se eligen en la zona horaria del navegador de quien programa.
-- No hay vista global de «todo lo programado» ni se muestra en Mi día; sólo en cada chat.
+- Mi día muestra lo tuyo pendiente (hasta 6 filas) pero no hay una pantalla propia con todo lo programado de la marca; lo de otras personas se ve dentro de cada chat.
 
 Archivos: `server/scheduled-schema.mjs`, `server/scheduled.mjs`, `server/index.mjs` (cableado, `takeOver`, temporizador), `public/scheduled.js`, `public/app.js`, `public/crm.css`; pruebas `test/scheduled.test.mjs`.

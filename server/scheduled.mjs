@@ -67,31 +67,44 @@ export function createScheduled({db,crm,insertMessage,takeOver,accessConversatio
   }
 
   // Envío de una fila vencida. Devuelve el estado final. Nunca lanza: cualquier problema deja la fila «no enviado» con el motivo.
+  // Aviso a quien lo programó cuando un mensaje NO sale por una causa ajena a ella (cierre, respuesta del cliente, canal, acceso, retraso).
+  // Va a «Mis avisos» (y a push, grupo «chats»); una sola vez por mensaje y estado. Si ya no tiene la marca, no se le avisa de algo que no puede ver.
+  function end(r,state,reason){
+    done(r.id,state,reason);
+    if(!crm.canBrand({id:r.author_id},r.brand_id)||!db.prepare('SELECT 1 FROM conversations WHERE id=?').get(r.conversation_id))return;
+    const t=('Mensaje programado no enviado · «'+String(r.text).replace(/\s+/g,' ').slice(0,60)+(r.text.length>60?'…':'')+'» · '+reason).slice(0,300);
+    db.prepare("INSERT OR IGNORE INTO notifications(id,user_id,brand_id,conversation_id,kind,title,event_key,created_at) VALUES(?,?,?,?,'scheduled',?,?,?)").run(randomUUID(),r.author_id,r.brand_id,r.conversation_id,t,'scheduled:'+r.id+':'+state,now());
+  }
+  // Lo programado por la persona que consulta, de todas sus marcas (para Mi día): sólo pendientes, lo más próximo primero.
+  function mineList(user){
+    return db.prepare("SELECT s.*,u.name author_name,cu.name customer_name,b.name brand_name FROM scheduled_messages s JOIN conversations c ON c.id=s.conversation_id JOIN users cu ON cu.id=c.customer_id JOIN brands b ON b.id=s.brand_id LEFT JOIN users u ON u.id=s.author_id WHERE s.author_id=? AND s.state='pending' ORDER BY s.send_at LIMIT 30").all(user.id)
+      .filter(r=>crm.canBrand(user,r.brand_id)).map(r=>({...view(r,user),customerName:r.customer_name,brandName:r.brand_name}));
+  }
   function sendOne(id,{force=false}={}){
     let outcome=null;
     try{
       transaction(db,()=>{
         const r=db.prepare('SELECT * FROM scheduled_messages WHERE id=?').get(id);if(!r||r.state!=='pending')return;
         const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(r.conversation_id);
-        if(!c){done(id,'cancelled','La conversación ya no existe.');outcome='cancelled';return;}
-        if(!force&&now()-r.send_at>LIMITS.staleMs){done(id,'failed','No salió a tiempo (pasaron más de 6 horas de la hora elegida).');outcome='failed';return;}
-        if(c.status==='resolved'){done(id,'cancelled','La conversación se cerró antes de la hora.');outcome='cancelled';return;}
-        if(r.cancel_on_reply&&db.prepare("SELECT 1 FROM messages WHERE conversation_id=? AND sender_kind='customer' AND created_at>?").get(c.id,r.created_at)){done(id,'cancelled','El cliente respondió antes de la hora, así que no se envió.');outcome='cancelled';return;}
+        if(!c){end(r,'cancelled','La conversación ya no existe.');outcome='cancelled';return;}
+        if(!force&&now()-r.send_at>LIMITS.staleMs){end(r,'failed','No salió a tiempo (pasaron más de 6 horas de la hora elegida).');outcome='failed';return;}
+        if(c.status==='resolved'){end(r,'cancelled','La conversación se cerró antes de la hora.');outcome='cancelled';return;}
+        if(r.cancel_on_reply&&db.prepare("SELECT 1 FROM messages WHERE conversation_id=? AND sender_kind='customer' AND created_at>?").get(c.id,r.created_at)){end(r,'cancelled','El cliente respondió antes de la hora, así que no se envió.');outcome='cancelled';return;}
         const author=db.prepare('SELECT id,name,role,disabled FROM users WHERE id=?').get(r.author_id);
-        if(!author||!crm.canBrand(author,c.brand_id)){done(id,'failed','Quien lo programó ya no tiene acceso a esta marca.');outcome='failed';return;}
-        if(c.assigned_to&&c.assigned_to!==author.id&&author.role!=='admin'){done(id,'failed','Otra persona atiende ahora esta conversación.');outcome='failed';return;}
+        if(!author||!crm.canBrand(author,c.brand_id)){end(r,'failed','Quien lo programó ya no tiene acceso a esta marca.');outcome='failed';return;}
+        if(c.assigned_to&&c.assigned_to!==author.id&&author.role!=='admin'){end(r,'failed','Otra persona atiende ahora esta conversación.');outcome='failed';return;}
         const ref='sched:'+r.id,saved=db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref);
         let messageId=saved?.id;
         if(!messageId){
           try{messageId=insertMessage(c,author,r.text,'agent',ref);}
-          catch(error){if(error.status){done(id,'failed',String(error.message).slice(0,300));outcome='failed';return;}throw error;}   // regla del canal (ventana de 24 h…): no sale; error inesperado: se revierte todo
+          catch(error){if(error.status){end(r,'failed',String(error.message).slice(0,300));outcome='failed';return;}throw error;}   // regla del canal (ventana de 24 h…): no sale; error inesperado: se revierte todo
           takeOver(c,author.id);
         }
         done(id,'sent',null,{messageId,sentAt:now()});outcome='sent';
       });
     }catch(error){
       console.error('Scheduled message failed:',error.name);
-      try{db.prepare("UPDATE scheduled_messages SET state='failed',reason=?,revision=revision+1,updated_at=? WHERE id=? AND state='pending'").run('Error inesperado al enviar.',now(),id);}catch{}
+      try{const r=db.prepare('SELECT * FROM scheduled_messages WHERE id=?').get(id);if(r)end(r,'failed','Error inesperado al enviar.');}catch{}
       outcome='failed';
     }
     const r=db.prepare('SELECT conversation_id FROM scheduled_messages WHERE id=?').get(id);if(r&&outcome)broadcast('conversation',r.conversation_id);
@@ -104,6 +117,7 @@ export function createScheduled({db,crm,insertMessage,takeOver,accessConversatio
   }
 
   async function handle(req,res,path,user){
+    if(path==='/api/scheduled'){if(user.role==='customer')throw fail(403,'Los mensajes programados son para el equipo.');if(req.method!=='GET')throw fail(405,'Método no permitido.');json(res,200,{items:mineList(user)});return true;}
     let m=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/scheduled$/);
     if(m){
       if(user.role==='customer')throw fail(403,'Los mensajes programados son para el equipo.');
@@ -124,5 +138,5 @@ export function createScheduled({db,crm,insertMessage,takeOver,accessConversatio
     }
     throw fail(405,'Método no permitido.');
   }
-  return {handle,tick,sendOne,list};
+  return {handle,tick,sendOne,list,mineList};
 }

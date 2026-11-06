@@ -68,5 +68,16 @@ window.createScheduledUI=function({state,api,esc,icon,toast}){
     }catch(e){toast(e.message);}
     await load(id);return true;
   }
-  return {mount,action};
+  // Mi día: lo que tengo por salir, de todas mis marcas (sólo si hay algo). Cada fila abre el chat.
+  const dayRow=i=>`<button type="button" class="attention-row sch-day-row" data-action="crm-chat" data-id="${esc(i.conversationId)}"><span class="avatar">${esc((i.customerName||'?').slice(0,2).toUpperCase())}</span><span><strong>${esc(i.customerName||'Cliente')}</strong><small>${esc(i.brandName||'')} · sale ${esc(when(i.sendAt))}</small><small class="sch-day-text">${esc(i.text)}</small></span></button>`;
+  async function mountDay(){
+    const box=$('#day-scheduled');if(!box)return;
+    try{
+      const r=await api('/api/scheduled');if(!document.body.contains(box))return;
+      if(!r.items.length){box.hidden=true;box.innerHTML='';return;}
+      box.hidden=false;
+      box.innerHTML=`<div class="panel-title"><h2>Mensajes programados</h2><small class="sch-day-count">${r.items.length} por salir</small></div>${r.items.slice(0,6).map(dayRow).join('')}${r.items.length>6?`<p class="sch-day-more">y ${r.items.length-6} más en sus chats</p>`:''}`;
+    }catch{box.hidden=true;}
+  }
+  return {mount,mountDay,action};
 };

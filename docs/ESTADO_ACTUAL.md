@@ -8,8 +8,8 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
 | Versión publicada | **0.34.0** en `main` (etiquetas en la bandeja). `/api/health` de producción devuelve `0.34.0` |
-| Pendiente de publicar | **Mensajes programados** (botón «Programar» en el chat; salen solos a la hora con las reglas comprobadas al enviar; **esquema 32**), rama `feat/mensajes-programados`, 180 pruebas. Ver [PLAN_MENSAJES_PROGRAMADOS.md](PLAN_MENSAJES_PROGRAMADOS.md). Ya publicados: mejora de diseño (menú por grupos, Operación por áreas, pantallas medianas), resumen de conversación (esquema 31), Aliados (30), Pauta (29), memoria y contexto de la IA, corrección del motor, conocimiento por lote y tope de gasto de la IA, historial de precio y cupo y «Preparar marca» |
-| Esquema SQLite | **32** (último cambio: mensajes programados, sin publicar; en producción está en 31). Respaldo previo al migrar: `backups/before-crm-v32-*` |
+| Pendiente de publicar | **Avisos y Mi día de los mensajes programados** (aviso cuando uno no sale; panel de lo tuyo por salir; sin esquema nuevo), rama `feat/programados-avisos`, 180 pruebas. Ya publicados: **mensajes programados** (botón «Programar» en el chat; salen solos a la hora con las reglas comprobadas al enviar; **esquema 32**), Ver [PLAN_MENSAJES_PROGRAMADOS.md](PLAN_MENSAJES_PROGRAMADOS.md). Ya publicados: mejora de diseño (menú por grupos, Operación por áreas, pantallas medianas), resumen de conversación (esquema 31), Aliados (30), Pauta (29), memoria y contexto de la IA, corrección del motor, conocimiento por lote y tope de gasto de la IA, historial de precio y cupo y «Preparar marca» |
+| Esquema SQLite | **32** (último cambio: mensajes programados; publicado). Respaldo previo al migrar: `backups/before-crm-v32-*` |
 | Pruebas | 159 aprobadas (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |
 | Experiencia del cliente | <https://crm-laboratorio-production.up.railway.app/> |

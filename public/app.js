@@ -10,7 +10,7 @@
   const state={user:null,brands:[],courses:[],editions:[],conversations:[],messages:[],view:'inbox',mode:'customer',brand:'all',channel:'all',filter:'all',tag:'',query:'',selected:null,hasMore:false,connection:'connecting',mobileChat:false,drafts:{},attachment:null,sending:false,retry:null,authMode:'register',typing:{},newChannel:'whatsapp',referral:null};
   let inboxItems=[],inboxCursor=null,inboxPages=1,inboxVersion=0,inboxLoading=false,searchTimer,messageSearch='';
   let socket,reconnectTimer,reconnectDelay=700,refreshTimer,refreshing=false,refreshAgain=false,selectionVersion=0,toastTimer,typingTime=0,alive=true;
-  const crmUI=window.createCRMUI({state,api,esc,icon,showModal,toast,icons,refresh,shell,setView,selectConversation,load,entry});
+  const crmUI=window.createCRMUI({state,api,esc,icon,showModal,toast,icons,refresh,shell,setView,selectConversation,load,entry,afterDay:()=>scheduledUI.mountDay()});
   const catalogueUI=window.createCatalogueUI({state,api,esc,icon,icons,showModal,toast,refresh,setView,newChat});
   const replyAssist=window.createReplyAssistUI({state,api,esc,icon,toast});
   const quickUI=window.createQuickRepliesUI({state,api,esc,icon,showModal,toast});

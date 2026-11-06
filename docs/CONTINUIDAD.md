@@ -34,7 +34,11 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Mensajes programados (rama `feat/mensajes-programados`, 6 nov 2026)
+## Mensajes programados, segunda entrega: avisos y Mi día (rama `feat/programados-avisos`, 6 nov 2026)
+
+- **Qué se hizo (sin esquema nuevo):** si un mensaje programado no sale por una causa ajena a quien lo programó, le llega un aviso en Mis avisos (y push, grupo «Chats»); y Mi día tiene un panel con lo que esa persona tiene por salir. Detalle en [PLAN_MENSAJES_PROGRAMADOS.md](PLAN_MENSAJES_PROGRAMADOS.md). **Verificado:** 180 pruebas (la de mensajes programados ahora comprueba quién recibe aviso y quién no, el grupo de push y la ruta de Mi día) y revisión visual del panel. **Sin publicar.** Pendiente: programar plantillas y adjuntos.
+
+## Mensajes programados (publicado en `main`, 6 nov 2026)
 
 - **Qué es:** botón «Programar» junto a Enviar. La persona elige la hora (atajos o fecha exacta), el mensaje queda en una lista sobre el compositor y **sale solo**, a su nombre, por la misma ruta que un envío manual. Se puede editar, cancelar o enviar ya. Por omisión no sale si el cliente responde antes.
 - **Decisión de diseño:** las reglas se **vuelven a comprobar al enviar** (conversación cerrada, el cliente respondió, la autora sigue en la marca, nadie más atiende el chat, reglas del canal, no más de 6 h de retraso) y, si algo ya no cuadra, no sale y queda el motivo. Referencia determinista `sched:<id>` contra duplicados. Detalle: [PLAN_MENSAJES_PROGRAMADOS.md](PLAN_MENSAJES_PROGRAMADOS.md).

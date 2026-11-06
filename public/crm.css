@@ -112,3 +112,5 @@
 /* Cada fila en dos líneas: cuándo y acciones arriba, el mensaje completo debajo (en un chat angosto el texto desaparecía entre las acciones) */
 .sch-row{grid-template-columns:minmax(0,1fr) auto;row-gap:4px}.sch-row .sch-text{grid-column:1/-1;grid-row:2;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.sch-row .sch-actions{grid-column:2;grid-row:1}.sch-row .sch-when{grid-column:1;grid-row:1}.sch-past .sch-reason{grid-row:3}
 @media(max-width:680px){.sch-row{grid-template-columns:minmax(0,1fr)}.sch-row .sch-actions{grid-column:1;grid-row:3;justify-content:flex-start}}
+/* Mi día: mensajes programados */
+.day-scheduled{margin-top:14px}.sch-day-count{color:var(--text-3);font-size:11px}.sch-day-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;color:var(--text-3)}.sch-day-more{margin:8px 0 0;font-size:11px;color:var(--text-3)}

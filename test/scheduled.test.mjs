@@ -114,5 +114,20 @@ test('mensajes programados: alcance, validación, idempotencia, edición, y env�
  for(let i=0;i<10;i++)await call(sched(c3.id),admin.cookie,{text:'Pendiente '+i,sendAt:T()+(i+2)*HOUR,clientRef:randomUUID()},'POST',201);
  await call(sched(c3.id),admin.cookie,{text:'Sobra uno',sendAt:T()+20*HOUR,clientRef:randomUUID()},'POST',409);
  assert.equal(db.prepare("SELECT count(*) n FROM audit WHERE action LIKE 'scheduled.%'").get().n>=8,true,'quedan registros de auditoría');
+ // avisos: quien programó se entera cuando algo no sale por una causa ajena; no cuando cancela él ni cuando sale bien; ni quien ya no ve la marca
+ const notes=(user,state,id)=>db.prepare('SELECT * FROM notifications WHERE user_id=(SELECT id FROM users WHERE username=?) AND event_key=?').all(user,'scheduled:'+id+':'+state);
+ const n1=notes('admin','cancelled',r1.id);assert.equal(n1.length,1,'aviso: el cliente respondió');assert.equal(n1[0].kind,'scheduled');assert.equal(n1[0].conversation_id,conv.id);assert.match(n1[0].title,/Mensaje programado no enviado · «Seguimiento por si no respondió» · El cliente respondió/);
+ assert.equal(notes('admin','failed',old.id).length,1,'aviso: no salió a tiempo');assert.equal(notes('colega','failed',mine.id).length,1,'aviso: otra persona atendía (a quien lo programó, no a administración)');assert.equal(notes('admin','cancelled',p2.id).length,1,'aviso: chat cerrado');
+ assert.equal(notes('admin','cancelled',toCancel.id).length,0,'quien cancela no se avisa a sí mismo');assert.equal(notes('admin','sent',a.item.id).length+notes('admin','sent',r2.id).length,0,'lo enviado no genera aviso');
+ assert.equal(db.prepare("SELECT count(*) n FROM notifications WHERE event_key=?").get('scheduled:'+lost.id+':failed').n,0,'sin acceso a la marca no se avisa');
+ // push: el aviso pertenece al grupo «chats»
+ const {groupOf}=await import('../server/push.mjs');assert.equal(groupOf('scheduled'),'chats');
+
+ // Mi día: lo mío por salir, de todas mis marcas
+ await call('/api/scheduled','',undefined,'GET',401);await call('/api/scheduled',ana.cookie,undefined,'GET',403);
+ const mineList=(await call('/api/scheduled',admin.cookie)).items;assert.equal(mineList.length,10,'los 10 pendientes del chat de Bea');assert.ok(mineList.every(i=>i.state==='pending'&&i.mine&&i.customerName&&i.brandName&&i.conversationId===c3.id));
+ assert.deepEqual(mineList.map(i=>i.sendAt),[...mineList.map(i=>i.sendAt)].sort((x,y)=>x-y),'lo más próximo primero');
+ assert.equal((await call('/api/scheduled',colega.cookie)).items.length,0,'cada quien ve sólo lo suyo');
+ assert.equal((await call('/api/scheduled',outsider.cookie)).items.length,0);
  db.close();
 });
