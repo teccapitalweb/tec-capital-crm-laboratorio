@@ -8,6 +8,23 @@ import {randomUUID} from 'node:crypto';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
 export const VARIABLES={nombre:'Nombre de pila del cliente',nombre_completo:'Nombre completo del cliente',curso:'Curso de la conversación',edicion:'Edición de la conversación',marca:'Marca',asesor:'Tu nombre'};
+// Biblioteca de ejemplos: puntos de partida para que nadie empiece con la hoja en blanco. Sólo variables de conversación y
+// ningún precio, fecha ni cupo (eso sale de las plantillas aprobadas). La persona las agrega con un clic y las edita a su gusto.
+export const STARTER=[
+  {group:'Saludar',shortcut:'hola',title:'Saludo inicial',body:'Hola {{nombre}}, soy {{asesor}} de {{marca}}. ¡Gracias por escribirnos! ¿En qué te puedo ayudar con {{curso}}?'},
+  {group:'Saludar',shortcut:'gracias',title:'Agradecer el interés',body:'Hola {{nombre}}, gracias por tu interés en {{curso}}. Soy {{asesor}} de {{marca}} y con gusto te acompaño.'},
+  {group:'Saludar',shortcut:'disculpa',title:'Disculpa por la espera',body:'Disculpa la espera, {{nombre}}. Ya estoy contigo; soy {{asesor}} de {{marca}}.'},
+  {group:'Informar',shortcut:'info',title:'Ofrecer información',body:'Con gusto te cuento todo sobre {{curso}}, {{nombre}}. ¿Prefieres que te comparta el temario, las fechas o cómo inscribirte?'},
+  {group:'Informar',shortcut:'espera',title:'Pedir un momento',body:'Dame un momento, {{nombre}}, lo reviso y te respondo enseguida.'},
+  {group:'Informar',shortcut:'datos',title:'Pedir datos para inscribirlo',body:'Para continuar con tu inscripción a {{curso}}, {{nombre}}, ¿me compartes tu nombre completo y tu correo electrónico?'},
+  {group:'Seguimiento',shortcut:'seguimiento',title:'Retomar la conversación',body:'Hola {{nombre}}, ¿pudiste revisar la información de {{curso}}? Si tienes alguna duda, aquí estoy para ayudarte.'},
+  {group:'Seguimiento',shortcut:'sigues',title:'¿Todavía te interesa?',body:'Hola {{nombre}}, te escribo para saber si aún te interesa {{curso}}. Si prefieres que no te escribamos más, dímelo y lo respetamos.'},
+  {group:'Pagos',shortcut:'pagar',title:'Ofrecer el enlace de pago',body:'Para inscribirte a {{curso}} puedo enviarte tu enlace de pago aquí mismo, {{nombre}}. ¿Te lo mando?'},
+  {group:'Pagos',shortcut:'comprobante',title:'Recibí tu comprobante',body:'Recibí tu comprobante, {{nombre}}. Lo reviso y te confirmo tu inscripción a {{curso}} en cuanto esté validado.'},
+  {group:'Pagos',shortcut:'pagado',title:'Pago confirmado (úsala sólo si ya lo validaste)',body:'¡Listo, {{nombre}}! Tu pago quedó confirmado y ya estás inscrito en {{curso}} ({{edicion}}). Bienvenido a {{marca}}.'},
+  {group:'Cerrar',shortcut:'dudas',title:'¿Te quedó alguna duda?',body:'¿Te quedó alguna duda, {{nombre}}? Con gusto te ayudo.'},
+  {group:'Cerrar',shortcut:'despedida',title:'Despedida',body:'Gracias por escribir a {{marca}}, {{nombre}}. Que tengas un excelente día. Soy {{asesor}}; aquí sigo para lo que necesites.'},
+];
 const SHORTCUT=/^[a-z0-9áéíóúüñ_-]{2,20}$/;
 const MAX_PER_OWNER=100,MAX_BODY=1500;
 
@@ -28,7 +45,7 @@ export function createQuickReplies({db,crm,accessConversation,body,json,audit,no
   function list(user){
     const me=requireStaff(user),mine=db.prepare("SELECT * FROM quick_replies WHERE scope='personal' AND user_id=? AND archived_at IS NULL ORDER BY shortcut").all(me.id);
     const brands=crm.brandsFor(user).map(b=>b.id),shared=brands.length?db.prepare(`SELECT * FROM quick_replies WHERE scope='brand' AND brand_id IN (${brands.map(()=>'?').join(',')}) AND archived_at IS NULL ORDER BY brand_id,shortcut`).all(...brands):[];
-    return {quickReplies:[...mine,...shared].map(r=>view(r,me)),variables:VARIABLES,brands:crm.brandsFor(user).map(b=>({id:b.id,name:b.name})),canShare:me.role==='admin'};
+    return {quickReplies:[...mine,...shared].map(r=>view(r,me)),variables:VARIABLES,starter:STARTER,brands:crm.brandsFor(user).map(b=>({id:b.id,name:b.name})),canShare:me.role==='admin'};
   }
   function normalize(input,current=null){
     const shortcut=input.shortcut===undefined?current.shortcut:text(input.shortcut,60).replace(/^\//,'').toLowerCase();

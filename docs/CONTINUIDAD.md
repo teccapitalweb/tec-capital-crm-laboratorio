@@ -502,6 +502,11 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Mejora de uso: respuestas rápidas más fáciles (rama `feat/respuestas-rapidas-faciles`, 6 nov 2026)
+
+- **Qué se hizo:** el panel Mi configuración → Respuestas rápidas gana ejemplos listos (13, en cinco grupos, sin precios ni fechas), vista previa en vivo con contador, atajo sugerido desde el nombre, tarjetas para «¿Quién la usa?», búsqueda, filtros con cuenta y Duplicar. A petición del usuario, para que quien las organiza no batalle. Sin esquema nuevo. Detalle: [PLAN_RESPUESTAS_FACILES.md](PLAN_RESPUESTAS_FACILES.md).
+- **Evidencia:** 164 pruebas (la nueva valida cada ejemplo contra las reglas del servidor y agrega toda la biblioteca por API); en el demo local, agregar todos los ejemplos, guardar una compartida, filtrar y buscar; 375 px sin desborde, letra ≥11 px y controles ≥40 px. **Sin publicar.**
+
 ## Corrección: la tarjeta del curso explica por qué no muestra su imagen (rama `fix/portada-curso`, 6 nov 2026)
 
 - **Qué pasaba:** el usuario subió una imagen al curso «Amante» (GlobalVet, 0 ediciones publicadas) y la tarjeta seguía sin imagen y sin explicación. La tarjeta sólo muestra un flyer aprobado cuya edición está publicada; si la edición está en borrador, la imagen queda guardada pero oculta.

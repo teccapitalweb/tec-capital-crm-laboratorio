@@ -1,6 +1,6 @@
 # Plan: mensaje de fuera de horario por marca
 
-Estado: **implementado en la rama `feat/bienvenida-ausencia`** (5 nov 2026), **sin esquema nuevo y sin cambio de versión**. Sin publicar.
+Estado: **publicado en `main`** (6 nov 2026, commit `43cf966`), **sin esquema nuevo y sin cambio de versión**.
 
 ## Para qué sirve
 

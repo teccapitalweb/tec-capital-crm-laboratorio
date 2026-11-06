@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
-import {validateBody,fill,VARIABLES} from '../server/quickreplies.mjs';
+import {validateBody,fill,VARIABLES,STARTER} from '../server/quickreplies.mjs';
 
 test('respuestas rápidas: variables permitidas y sustitución',()=>{
   assert.deepEqual(Object.keys(VARIABLES),['nombre','nombre_completo','curso','edicion','marca','asesor']);
@@ -86,4 +86,27 @@ test('respuestas rápidas por API: permisos, validación, personales y de marca,
   await call('/api/quick-replies/'+created.id+'/render',vende.cookie,{conversationId:convAna.id},'POST',404);
   assert.equal((await call('/api/quick-replies',vende.cookie,{...base},'POST',201)).quickReply.shortcut,'gracias','el atajo archivado queda libre');
   assert.equal(one('PRAGMA user_version').user_version,28);assert.ok(one("SELECT count(*) n FROM audit WHERE action LIKE 'quickreply.%'").n>=6);
+});
+
+test('biblioteca de ejemplos: todos son válidos, con atajos únicos, sin precios ni fechas, y la API los entrega',async t=>{
+ assert.ok(STARTER.length>=10);
+ const shortcuts=new Set();
+ for(const s of STARTER){
+  assert.match(s.shortcut,/^[a-z0-9áéíóúüñ_-]{2,20}$/,s.shortcut);assert.ok(!shortcuts.has(s.shortcut),'atajo repetido '+s.shortcut);shortcuts.add(s.shortcut);
+  assert.ok(s.title.length>0&&s.title.length<=60,s.title);assert.ok(s.body.length>=10&&s.body.length<=1500,s.shortcut);
+  validateBody(s.body);                                              // sólo variables de conversación
+  assert.doesNotMatch(s.body,/\$|\d|pesos|mxn|usd/i,s.shortcut+': los ejemplos no llevan precios, fechas ni números');
+  assert.ok(['Saludar','Informar','Seguimiento','Pagos','Cerrar'].includes(s.group),s.group);
+ }
+ const dir=await mkdtemp(join(tmpdir(),'crm-qr-starter-')),code=randomUUID(),password='Password-starter-2026!';let logs='';
+ const server=spawn(process.execPath,['server/index.mjs'],{env:{...process.env,HOST:'127.0.0.1',PORT:'0',DATA_DIR:dir,ADMIN_INVITE_CODE:code,APP_ORIGIN:'',NODE_ENV:'test'},stdio:['ignore','pipe','pipe']});
+ const origin=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error(logs)),10000);server.stderr.on('data',b=>logs+=b);server.stdout.on('data',b=>{const m=String(b).match(/http:\/\/127.0.0.1:\d+/);if(m){clearTimeout(timer);resolve(m[0]);}});server.once('exit',()=>{clearTimeout(timer);reject(Error(logs));});});
+ t.after(async()=>{if(server.exitCode===null)await new Promise(r=>{server.once('exit',r);server.kill();});await rm(dir,{recursive:true,force:true});});
+ async function call(path,cookie='',body,method=body===undefined?'GET':'POST',expected=200){const r=await fetch(origin+path,{method,headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const result=await r.json();assert.equal(r.status,expected,path+': '+JSON.stringify(result));return {...result,cookie:r.headers.get('set-cookie')?.split(';')[0]};}
+ const admin=await call('/api/auth/register','',{username:'admin',name:'Administración',password,inviteCode:code});
+ const list=await call('/api/quick-replies',admin.cookie);assert.deepEqual(list.starter.map(s=>s.shortcut),STARTER.map(s=>s.shortcut));
+ // agregar toda la biblioteca como respuestas personales: todas se aceptan; repetir un atajo da conflicto (la pantalla lo cuenta como «ya existía»)
+ for(const s of STARTER)await call('/api/quick-replies',admin.cookie,{shortcut:s.shortcut,title:s.title,body:s.body,scope:'personal',clientRef:randomUUID()},'POST',201);
+ await call('/api/quick-replies',admin.cookie,{shortcut:STARTER[0].shortcut,title:'Otra',body:'Hola {{nombre}}, ¿cómo estás?',scope:'personal',clientRef:randomUUID()},'POST',409);
+ assert.equal((await call('/api/quick-replies',admin.cookie)).quickReplies.length,STARTER.length);
 });

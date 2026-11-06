@@ -33,7 +33,8 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 4l. [Asistente de alta de curso](docs/PLAN_ASISTENTE_CURSO.md): Catálogo → Nuevo curso en cuatro pasos (curso, edición, imagen, revisar); sólo interfaz, rama `feat/asistente-curso`.
 4k. [Base de pruebas local](docs/BASE_DE_PRUEBAS.md): `npm run demo` crea una base con un usuario de cada tipo y datos de ejemplo para probar sin tocar producción (herramienta de desarrollo, sin versión ni esquema nuevos; publicada en `main`).
 4m. [Preparar marca](docs/PLAN_PREPARAR_MARCA.md): Operación → Preparar marca, lista de verificación por marca (sólo lectura, sin esquema nuevo; publicada en `main`).
-4n. [Mensaje de fuera de horario](docs/PLAN_FUERA_DE_HORARIO.md): evento de Contenido con la próxima apertura (sin esquema nuevo; rama `feat/bienvenida-ausencia`, sin publicar).
+4n. [Mensaje de fuera de horario](docs/PLAN_FUERA_DE_HORARIO.md): evento de Contenido con la próxima apertura (sin esquema nuevo; publicado en `main`).
+4o. [Respuestas rápidas más fáciles](docs/PLAN_RESPUESTAS_FACILES.md): ejemplos listos, vista previa, búsqueda y duplicar en Mi configuración (sin esquema nuevo; rama `feat/respuestas-rapidas-faciles`, sin publicar).
 4b. [Visión de la plataforma](docs/VISION_PLATAFORMA.md): el CRM como módulo de la plataforma de toda la empresa (IPCIL, Academia, finanzas, canales reales); diagnóstico, arquitectura objetivo y fases.
 5. [README](README.md) y [ROADMAP](ROADMAP.md): recorridos del producto y planificación general.
 
@@ -67,7 +68,7 @@ npm start
 
 `npm start` usa `.env` si existe. Prepara `.env` desde `.env.example` para una instalación local; consulta el runbook antes de usar datos o accesos existentes.
 
-La referencia vigente es **163 pruebas aprobadas** (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **164 pruebas aprobadas** (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 
