@@ -47,6 +47,7 @@ Para una prueba nueva usa un directorio de datos vacío e independiente. No cone
 | `BACKUP_KEEP` | `7` | Respaldos automáticos que se conservan |
 | `AI_PROVIDER` | vacío o `simulated` | `claude` activa el SDK oficial; requiere credenciales. Sin él, el nivel autónomo usa el simulador local |
 | `AI_MODEL` | `claude-sonnet-5-5` | Modelo del proveedor; `claude-haiku-5-5` es la opción más económica para volumen y `claude-opus-5-5` la más capaz y cara |
+| `ALLY_FORM_ENABLED` | apagado | `1` enciende la página pública `/aliados` de postulación de aliados (datos personales de terceros: antes, aviso de privacidad revisado) |
 | `AI_KB_TOP_K` | `6` | Entradas de conocimiento que recibe la IA por llamada (1 a 20) |
 | `AI_MONTHLY_CALL_LIMIT` | `1000` | Tope mensual de llamadas reales a la IA (0 = sin tope); al alcanzarlo responde una persona |
 | `AI_MONTHLY_TOKEN_LIMIT` | `0` | Tope mensual de tokens de entrada y salida (0 = sin tope) |

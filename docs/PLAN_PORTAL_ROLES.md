@@ -15,7 +15,7 @@ Cada persona del equipo ve **su** trabajo: lo que vendió y cuánto le toca, su 
 | Admin | Administración con alcance general | Selector «Ver a» para revisar a cualquier persona del equipo (sólo lectura) |
 | Validar | Cola de comprobantes en Pagos | Ya existe; sin cambios |
 | Trafiquer | Operación → Pauta (sin publicar; [PLAN_PAUTA.md](PLAN_PAUTA.md)) | Hecho a partir del panel de tráfico de IPCIL |
-| RH | Sin equivalente | **Pendiente**: postulaciones por WhatsApp; faltan las reglas de qué ve y qué decide |
+| RH | Operación → Aliados (sin publicar; [PLAN_ALIADOS.md](PLAN_ALIADOS.md)) | Hecho a partir del panel RH de IPCIL: postulaciones de aliados y solicitudes de WhatsApp |
 
 ## Qué muestra
 

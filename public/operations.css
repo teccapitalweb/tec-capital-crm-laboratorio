@@ -52,3 +52,14 @@
 .ads-warn{display:block;color:var(--warn);font-size:11px}.ads-sheet .bad,.bad{color:var(--bad)}.ads-sheet .muted{color:var(--text-3)}
 .ads-access{display:grid;gap:8px;margin-top:10px}.ads-access-row{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff}.ads-access-row div{display:grid;gap:2px}.ads-access-row small{font-size:11px;color:var(--text-3)}
 @media(max-width:560px){.ads-grid{grid-template-columns:1fr}.ads-access-row{flex-wrap:wrap}.ads-access-row .btn{width:100%}.ads-day{display:flex;margin:8px 0 0}}
+/* Aliados (public/allies.js): postulaciones, solicitudes de WhatsApp y acceso de RH */
+.aly-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.aly-tile{display:grid;gap:2px;text-align:left;min-height:64px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:#fff}.aly-tile strong{font-size:24px;font-weight:600;letter-spacing:-.5px}.aly-tile span{font-size:11px;color:var(--text-3)}
+.aly-tile.active{border-color:var(--accent);background:var(--accent-tint)}.aly-tile.high strong{color:var(--warn)}.aly-tile.good strong{color:var(--ok)}
+.aly-list{display:grid;gap:10px;margin:12px 0}
+.aly-row{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.aly-row.late{border-color:var(--bad-line);background:var(--bad-soft)}.aly-row.done{background:var(--soft)}
+.aly-main{display:grid;gap:4px;min-width:0;flex:1 1 320px}.aly-main small{font-size:12px;color:var(--text-2);overflow-wrap:anywhere}.aly-main a{color:var(--accent-strong)}
+.aly-row .actions{flex:0 1 auto;justify-content:flex-end}
+.aly-file{display:grid;gap:6px}.aly-field{display:grid;grid-template-columns:150px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}.aly-field b{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);padding-top:2px}.aly-field span{overflow-wrap:anywhere}
+@media(max-width:560px){.aly-field{grid-template-columns:1fr;gap:2px}.aly-row .actions{width:100%;justify-content:flex-start}}

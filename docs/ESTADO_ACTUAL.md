@@ -8,8 +8,8 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
 | Versión publicada | **0.34.0** en `main` (etiquetas en la bandeja). `/api/health` de producción devuelve `0.34.0` |
-| Pendiente de publicar | **Pauta** (Operación → Pauta: el panel de tráfico de IPCIL dentro del CRM; **esquema 29**), rama `feat/pauta-trafiquer`, 175 pruebas. Ver [PLAN_PAUTA.md](PLAN_PAUTA.md). Ya publicados: memoria y contexto de la IA, corrección del motor, conocimiento por lote y tope de gasto de la IA, historial de precio y cupo y «Preparar marca» |
-| Esquema SQLite | **29** (último cambio: Pauta, sin publicar; en producción sigue en 28). Respaldo previo al migrar: `backups/before-crm-v29-*` |
+| Pendiente de publicar | **Aliados** (Operación → Aliados: el panel RH de IPCIL dentro del CRM; **esquema 30**), rama `feat/aliados-rh`, 178 pruebas. Ver [PLAN_ALIADOS.md](PLAN_ALIADOS.md). Ya publicados: Pauta (esquema 29), memoria y contexto de la IA, corrección del motor, conocimiento por lote y tope de gasto de la IA, historial de precio y cupo y «Preparar marca» |
+| Esquema SQLite | **30** (último cambio: Aliados, sin publicar; en producción está en 29). Respaldo previo al migrar: `backups/before-crm-v30-*` |
 | Pruebas | 159 aprobadas (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |
 | Experiencia del cliente | <https://crm-laboratorio-production.up.railway.app/> |
@@ -63,6 +63,8 @@ Ninguna función por marca está encendida en producción. Apagar un interruptor
 | Simulador de clientes | Operación → Demo; `SIMULATOR_DISABLED=1` lo oculta | Sin clientes ficticios |
 | Función de contadora | Finanzas → Acceso (administración) | Sólo administración ve Finanzas |
 | Función de trafiquer | Pauta → Quién lleva la pauta (administración) | Sólo administración ve Pauta |
+| Función de RH | Aliados → Quién lleva RH (administración) | Sólo administración ve Aliados |
+| Formulario público de aliados | `ALLY_FORM_ENABLED=1` en el entorno (necesita aviso de privacidad revisado) | `/aliados` responde 404 |
 | Funciones de diseño y aprobación | Catálogo → Contenido (administración) | Sólo administración diseña y aprueba |
 | Verificación en dos pasos | Mi configuración → Acceso y seguridad (cada persona) | Sólo contraseña |
 | Núcleo compartido | `CORE_SINK_URL` y `CORE_SINK_SECRET` en el entorno | Outbox simulado: nada sale del servidor |
@@ -77,7 +79,7 @@ Variables y respaldos: [OPERACION_Y_PRUEBAS.md](OPERACION_Y_PRUEBAS.md). Secreto
 - Las campañas sólo llegan a conversaciones **abiertas** y no se pausan una a una (se cancelan, o se pausa la marca o la automatización global). Reactivar chats cerrados exige decidir cómo reabrirlos respetando la ventana de servicio.
 - «Mis resultados» es de sólo lectura. Las ventas se atribuyen a quien tenía la oportunidad al confirmarse el pago; las del motor de respuestas no tienen vendedor.
 - Las notificaciones push están verificadas contra el vector oficial del RFC 8291 y un receptor local, pero **la entrega real a un teléfono no se ha probado**. Es la única salida real a internet del laboratorio y es opt-in por dispositivo.
-- **Pauta** (trafiquer) ya existe en el CRM a partir del panel de IPCIL (sin publicar); faltan **RH** (postulaciones por WhatsApp) y las reglas de comisiones por persona. La pauta se captura a mano: no hay conexión con Meta.
+- **Pauta** (trafiquer, publicada) y **Aliados** (RH, sin publicar) ya existen en el CRM a partir del panel de IPCIL; falta lo de **comisiones por persona**. La pauta se captura a mano (no hay conexión con Meta) y Aliados no envía correos: la invitación es un texto para copiar.
 - La base es SQLite en un volumen, con una sola instancia. El crecimiento a varias instancias llega con la migración a Postgres.
 - La IA real (`AI_PROVIDER=claude`) **se probó en local el 6 nov 2026** con una clave del usuario (copia de la base de demostración, sin tocar producción): respondió con conocimiento aprobado, no inventó precios ni confirmó pagos y el contador de uso cuadró. Sigue **apagada** en producción; falta cargar conocimiento real de las consultoras.
 - Faltan por cargar las 15 marcas y unos 120 cursos con sus fechas, responsables y piezas aprobadas. No se inventan.
