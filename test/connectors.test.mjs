@@ -97,7 +97,7 @@ test('contrato de conectores por API: estado, webhooks firmados e idempotentes, 
  assert.match(t2.response.results[0].result,/^aplicado: pedido/);assert.equal((await call('/api/payments/orders/'+o2.id,admin.cookie)).order.status,'paid');
  await call('/api/connectors/test',client.cookie,{kind:'channel'},'POST',403);
  const after=await call('/api/connectors',admin.cookie);assert.ok(after.recentEvents.length>=9);assert.equal(after.recentEvents[0].kind,'payment');
- const d=new DatabaseSync(join(S.dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,28);assert.equal(d.prepare("SELECT count(*) n FROM connector_events WHERE event_id='evt-1'").get().n,1);assert.ok(d.prepare("SELECT provider_ref FROM orders WHERE id=?").get(o2.id).provider_ref);}finally{d.close();}
+ const d=new DatabaseSync(join(S.dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,29);assert.equal(d.prepare("SELECT count(*) n FROM connector_events WHERE event_id='evt-1'").get().n,1);assert.ok(d.prepare("SELECT provider_ref FROM orders WHERE id=?").get(o2.id).provider_ref);}finally{d.close();}
  assert.equal(S.logs().includes('failed'),false,S.logs());
 });
 

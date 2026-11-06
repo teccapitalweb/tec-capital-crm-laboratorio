@@ -14,7 +14,8 @@ Cada persona del equipo ve **su** trabajo: lo que vendió y cuánto le toca, su 
 | Coordinador | Responsable de la apertura (`coordinator_id`) | Vista «Mis aperturas» con avisos de atención |
 | Admin | Administración con alcance general | Selector «Ver a» para revisar a cualquier persona del equipo (sólo lectura) |
 | Validar | Cola de comprobantes en Pagos | Ya existe; sin cambios |
-| Trafiquer, RH | Sin equivalente | **Pendiente**: faltan reglas del usuario (qué ve y qué decide cada uno) |
+| Trafiquer | Operación → Pauta (sin publicar; [PLAN_PAUTA.md](PLAN_PAUTA.md)) | Hecho a partir del panel de tráfico de IPCIL |
+| RH | Sin equivalente | **Pendiente**: postulaciones por WhatsApp; faltan las reglas de qué ve y qué decide |
 
 ## Qué muestra
 

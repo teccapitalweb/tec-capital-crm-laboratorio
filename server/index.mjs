@@ -64,13 +64,15 @@ import {createPortal} from './portal.mjs';
 import {migratePush} from './push-schema.mjs';
 import {createPush} from './push.mjs';
 import {migrateQuickReplies} from './quickreplies-schema.mjs';
+import {migrateAds} from './ads-schema.mjs';
+import {createAds} from './ads.mjs';
 import {createQuickReplies} from './quickreplies.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<28&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v28-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<29&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v29-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -97,6 +99,7 @@ migrateLegacy(db);
 migrateCampaigns(db);
 migratePush(db);
 migrateQuickReplies(db);
+migrateAds(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -183,7 +186,9 @@ const connectors=createConnectors({db,channel,payments,body,json,audit,rate,self
 const aiProvider=createAiProvider();
 aiProvider.useBudget(createAiBudget({db}));   // tope mensual de llamadas y tokens (server/ai-budget.mjs)
 const replies=createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider:aiProvider,payments,content});
-const knowledgeImport=createKnowledgeImport({db,replies,crm,body,json,audit});   // conocimiento por lote (borradores), sÛlo administraciÛn
+const knowledgeImport=createKnowledgeImport({db,replies,crm,body,json,audit});
+// Pauta (server/ads.mjs): el panel de tr·fico de IPCIL dentro del CRM; administraciÛn y la funciÛn de trafiquer.
+const ads=createAds({db,crm,body,json,audit});   // conocimiento por lote (borradores), sÛlo administraciÛn
 // Banco de evaluaci√≥n (server/evaluation.mjs): casos esperados del motor, ejecutados con la simulaci√≥n sin efectos.
 const evaluation=createEvaluation({db,crm,replies,provider:aiProvider,body,json,audit});
 const automation=createAutomation({db,onChange:step=>{if(step.conversation_id)broadcast('conversation',step.conversation_id);broadcast('crm',null,{brandId:step.brand_id});}});
@@ -340,6 +345,7 @@ const server=http.createServer(async(req,res)=>{
       if(await automation.handle(req,res,path,user,{body,json,audit}))return;
       if(await catalogueImport.handle(req,res,path,user))return;
       if(await knowledgeImport.handle(req,res,path,user))return;
+      if(await ads.handle(req,res,path,user))return;
       if(await catalogue.handle(req,res,path,user))return;
       if(await mfa.handle(req,res,path,user))return;
       if(await replies.handle(req,res,path,user,{body,json,audit,accessConversation}))return;
@@ -446,7 +452,7 @@ const server=http.createServer(async(req,res)=>{
       throw fail(404,'Ruta no disponible.');
     }
     if(req.method!=='GET'&&req.method!=='HEAD')throw fail(405,'M√©todo no permitido.');
-    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/knowledge.js':['public/knowledge.js','text/javascript; charset=utf-8'],'/simulator.js':['public/simulator.js','text/javascript; charset=utf-8'],'/payments.js':['public/payments.js','text/javascript; charset=utf-8'],'/presentation.js':['public/presentation.js','text/javascript; charset=utf-8'],'/connectors.js':['public/connectors.js','text/javascript; charset=utf-8'],'/evaluation.js':['public/evaluation.js','text/javascript; charset=utf-8'],'/coordination.js':['public/coordination.js','text/javascript; charset=utf-8'],'/finance.js':['public/finance.js','text/javascript; charset=utf-8'],'/persons.js':['public/persons.js','text/javascript; charset=utf-8'],'/certificates.js':['public/certificates.js','text/javascript; charset=utf-8'],'/content.js':['public/content.js','text/javascript; charset=utf-8'],'/legacy.js':['public/legacy.js','text/javascript; charset=utf-8'],'/campaigns.js':['public/campaigns.js','text/javascript; charset=utf-8'],'/portal.js':['public/portal.js','text/javascript; charset=utf-8'],'/push.js':['public/push.js','text/javascript; charset=utf-8'],'/quickreplies.js':['public/quickreplies.js','text/javascript; charset=utf-8'],'/inboxtags.js':['public/inboxtags.js','text/javascript; charset=utf-8'],'/coursewizard.js':['public/coursewizard.js','text/javascript; charset=utf-8'],'/knowledge-import.js':['public/knowledge-import.js','text/javascript; charset=utf-8'],'/readiness.js':['public/readiness.js','text/javascript; charset=utf-8'],'/checkout.js':['public/checkout.js','text/javascript; charset=utf-8'],'/checkout.css':['public/checkout.css','text/css; charset=utf-8'],'/sw.js':['public/sw.js','text/javascript; charset=utf-8'],'/manifest.webmanifest':['public/manifest.webmanifest','application/manifest+json; charset=utf-8'],'/icon-192.png':['public/icon-192.png','image/png'],'/icon-512.png':['public/icon-512.png','image/png'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/polish.css':['public/polish.css','text/css; charset=utf-8'],'/security.js':['public/security.js','text/javascript; charset=utf-8'],'/analytics.js':['public/analytics.js','text/javascript; charset=utf-8'],'/analytics.css':['public/analytics.css','text/css; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
+    const files={'/':['public/index.html','text/html; charset=utf-8'],'/app.js':['public/app.js','text/javascript; charset=utf-8'],'/styles.css':['public/styles.css','text/css; charset=utf-8'],'/crm.js':['public/crm.js','text/javascript; charset=utf-8'],'/crm.css':['public/crm.css','text/css; charset=utf-8'],'/catalogue.js':['public/catalogue.js','text/javascript; charset=utf-8'],'/catalogue.css':['public/catalogue.css','text/css; charset=utf-8'],'/operations.js':['public/operations.js','text/javascript; charset=utf-8'],'/knowledge.js':['public/knowledge.js','text/javascript; charset=utf-8'],'/simulator.js':['public/simulator.js','text/javascript; charset=utf-8'],'/payments.js':['public/payments.js','text/javascript; charset=utf-8'],'/presentation.js':['public/presentation.js','text/javascript; charset=utf-8'],'/connectors.js':['public/connectors.js','text/javascript; charset=utf-8'],'/evaluation.js':['public/evaluation.js','text/javascript; charset=utf-8'],'/coordination.js':['public/coordination.js','text/javascript; charset=utf-8'],'/finance.js':['public/finance.js','text/javascript; charset=utf-8'],'/persons.js':['public/persons.js','text/javascript; charset=utf-8'],'/certificates.js':['public/certificates.js','text/javascript; charset=utf-8'],'/content.js':['public/content.js','text/javascript; charset=utf-8'],'/legacy.js':['public/legacy.js','text/javascript; charset=utf-8'],'/campaigns.js':['public/campaigns.js','text/javascript; charset=utf-8'],'/portal.js':['public/portal.js','text/javascript; charset=utf-8'],'/push.js':['public/push.js','text/javascript; charset=utf-8'],'/quickreplies.js':['public/quickreplies.js','text/javascript; charset=utf-8'],'/inboxtags.js':['public/inboxtags.js','text/javascript; charset=utf-8'],'/coursewizard.js':['public/coursewizard.js','text/javascript; charset=utf-8'],'/knowledge-import.js':['public/knowledge-import.js','text/javascript; charset=utf-8'],'/ads.js':['public/ads.js','text/javascript; charset=utf-8'],'/readiness.js':['public/readiness.js','text/javascript; charset=utf-8'],'/checkout.js':['public/checkout.js','text/javascript; charset=utf-8'],'/checkout.css':['public/checkout.css','text/css; charset=utf-8'],'/sw.js':['public/sw.js','text/javascript; charset=utf-8'],'/manifest.webmanifest':['public/manifest.webmanifest','application/manifest+json; charset=utf-8'],'/icon-192.png':['public/icon-192.png','image/png'],'/icon-512.png':['public/icon-512.png','image/png'],'/catalogue-import.js':['public/catalogue-import.js','text/javascript; charset=utf-8'],'/polish.css':['public/polish.css','text/css; charset=utf-8'],'/security.js':['public/security.js','text/javascript; charset=utf-8'],'/analytics.js':['public/analytics.js','text/javascript; charset=utf-8'],'/analytics.css':['public/analytics.css','text/css; charset=utf-8'],'/contacts.js':['public/contacts.js','text/javascript; charset=utf-8'],'/recipes.js':['public/recipes.js','text/javascript; charset=utf-8'],'/recipes.css':['public/recipes.css','text/css; charset=utf-8'],'/operations.css':['public/operations.css','text/css; charset=utf-8'],'/favicon.svg':['public/favicon.svg','image/svg+xml'],'/vendor/lucide.js':['node_modules/lucide/dist/umd/lucide.min.js','text/javascript; charset=utf-8']};
     const entry=files[path]||(!path.includes('.')?files['/']:null);if(!entry)throw fail(404,'No encontrado.');const bytes=await readFile(resolve(root,entry[0]));res.writeHead(200,{'Content-Type':entry[1]});res.end(req.method==='HEAD'?undefined:bytes);
   }catch(error){if(res.headersSent)return res.end();if(!error.status)console.error('Request failed:',error.name,error.message);json(res,error.status||500,{error:error.status?error.message:'No se pudo completar la operaci√≥n. Vuelve a intentarlo.',...(error.status&&error.code?{code:error.code}:{}),...(error.status&&error.activeOpportunityId?{activeOpportunityId:error.activeOpportunityId}:{})});}
 });
