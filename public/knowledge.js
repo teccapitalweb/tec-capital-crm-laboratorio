@@ -10,20 +10,32 @@ window.createKnowledgeUI=function({state,api,esc,icon,showModal,toast,reload}){
     if(!rows.length)return '';
     return `<div class="cat-template-grid">${rows.map(e=>`<article class="cat-template kn-card"><div class="cat-card-heading"><span>${icon('message-circle-question')} ${esc(TOPICS[e.topic]||e.topic)}</span>${e.status==='approved'?'<span class="cat-badge ok">Aprobada</span>':e.status==='draft'?'<span class="cat-badge">Borrador</span>':'<span class="cat-badge">Archivada</span>'}</div><h2>${esc(e.question)}</h2><small>${esc(brandName(e.brand_id))} · ${e.course_id?esc(state.courses.find(c=>c.id===e.course_id)?.title||'Curso'):'Todos los cursos de la marca'} · v${e.revision}</small><p class="kn-answer">${esc(e.answer)}</p>${e.variants.length?`<p class="kn-variants">${e.variants.slice(0,6).map(v=>`<span class="ctc-tag">${esc(v)}</span>`).join('')}${e.variants.length>6?`<span class="ctc-tag">+${e.variants.length-6}</span>`:''}</p>`:''}<div class="actions">${e.status!=='archived'?`<button class="btn" data-action="kn-edit" data-id="${e.id}">Editar</button>`:''}${admin()&&e.status==='draft'?`<button class="btn primary" data-action="kn-approve" data-id="${e.id}" data-revision="${e.revision}">Aprobar</button>`:''}${admin()&&e.status!=='archived'?`<button class="btn" data-action="kn-archive" data-id="${e.id}" data-revision="${e.revision}">Archivar</button>`:''}<button class="btn" data-action="kn-history" data-id="${e.id}">Versiones</button></div></article>`).join('')}</div>`;
   }
-  function editor(e){
-    const b=e?.brand_id||(state.brand!=='all'?state.brand:state.brands[0]?.id),courses=state.courses.filter(c=>c.brand_id===b);
+  function editor(e,preset=null){
+    const b=e?.brand_id||preset?.brand_id||(state.brand!=='all'?state.brand:state.brands[0]?.id),courses=state.courses.filter(c=>c.brand_id===b);
     showModal(e?'Editar pregunta y respuesta':'Nueva pregunta y respuesta',`<form id="kn-form" class="form-grid"><input type="hidden" name="id" value="${esc(e?.id||'')}"><input type="hidden" name="expectedRevision" value="${e?.revision||''}">
       ${e?`<p class="crm-hint">${esc(brandName(b))}. Guardar la deja en borrador hasta que administración la apruebe otra vez.</p>`:`<label class="field">Marca<select name="brandId" id="kn-brand">${state.brands.map(x=>`<option value="${x.id}" ${x.id===b?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label>`}
       <label class="field">Tema<select name="topic">${Object.entries(TOPICS).map(([k,v])=>`<option value="${k}" ${(e?.topic||'general')===k?'selected':''}>${v}</option>`).join('')}</select></label>
       <label class="field">Curso (opcional)<select name="courseId" id="kn-course"><option value="">Todos los cursos de la marca</option>${courses.map(c=>`<option value="${c.id}" ${e?.course_id===c.id?'selected':''}>${esc(c.title)}</option>`).join('')}</select></label>
-      <label class="field">Pregunta, como la haría un cliente<input name="question" required minlength="8" maxlength="200" value="${esc(e?.question||'')}" placeholder="¿Entregan certificado al terminar?"></label>
+      <label class="field">Pregunta, como la haría un cliente<input name="question" required minlength="8" maxlength="200" value="${esc(e?.question||preset?.question||'')}" placeholder="¿Entregan certificado al terminar?"></label>
       <label class="field">Otras formas de preguntarlo (una por línea)<textarea name="variants" rows="3" placeholder="constancia&#10;diploma&#10;tiene validez">${esc((e?.variants||[]).join('\n'))}</textarea></label>
       <label class="field">Respuesta aprobada<textarea name="answer" required minlength="10" maxlength="1500" rows="5" placeholder="Respuesta clara y completa. No escribas precios ni fechas: salen del catálogo.">${esc(e?.answer||'')}</textarea></label>
       ${e?'':'<p class="crm-hint">Se guarda como borrador. Sólo las entradas aprobadas por administración se usan para responder.</p>'}
       <div class="actions"><button class="btn primary" type="submit">Guardar borrador</button></div><div class="ops-feedback" role="status"></div></form>`);
   }
+  // Preguntas que los clientes hicieron y el motor no supo responder con conocimiento aprobado (GET /api/replies/gaps).
+  async function mountGaps(){
+    const box=$('#kn-gaps');if(!box)return;
+    try{
+      const brand=state.brand==='all'?'':state.brand,r=await api('/api/replies/gaps'+(brand?'?brand='+encodeURIComponent(brand):''));
+      if(!$('#kn-gaps'))return;
+      if(!r.gaps.length){box.innerHTML='';return;}
+      const when=t=>new Intl.DateTimeFormat('es-MX',{day:'numeric',month:'short'}).format(t);
+      box.innerHTML=`<section class="crm-panel kn-gaps"><div class="ops-card-top"><h2>Preguntas que no supimos responder</h2><span class="ops-chip high">${r.gaps.length} por cubrir</span></div><p class="crm-hint">Lo que los clientes preguntaron en los últimos 30 días y el motor no pudo contestar con conocimiento aprobado, de lo más repetido a lo menos. Conviértelas en una respuesta y la próxima vez se contestan solas.</p><div class="kn-gap-list">${r.gaps.slice(0,8).map(g=>`<article class="kn-gap"><div><strong>${esc(g.example)}</strong><small>${esc(brandName(g.brandId))} · ${g.count} ${g.count===1?'vez':'veces'} · última ${esc(when(g.lastAt))}</small></div><button type="button" class="btn" data-action="kn-gap-new" data-brand="${esc(g.brandId)}" data-text="${esc(g.example)}">Crear respuesta</button></article>`).join('')}</div></section>`;
+    }catch{box.innerHTML='';}
+  }
   async function action(name,el,entries){
     try{
+      if(name==='kn-gap-new'){editor(null,{brand_id:el.dataset.brand,question:el.dataset.text});return true;}
       if(name==='kn-new'){editor(null);return true;}
       if(name==='kn-edit'){editor(entries.find(x=>x.id===el.dataset.id));return true;}
       if(name==='kn-approve'||name==='kn-archive'){await api('/api/replies/knowledge/'+el.dataset.id+'/'+name.slice(3),{method:'POST',body:{expectedRevision:Number(el.dataset.revision)}});toast(name==='kn-approve'?'Entrada aprobada: ya se usa para responder.':'Entrada archivada.');await reload();return true;}
@@ -39,7 +51,7 @@ window.createKnowledgeUI=function({state,api,esc,icon,showModal,toast,reload}){
     return true;
   }
   function change(el){if(el.id!=='kn-brand')return false;const courses=state.courses.filter(c=>c.brand_id===el.value);$('#kn-course').innerHTML='<option value="">Todos los cursos de la marca</option>'+courses.map(c=>`<option value="${c.id}">${esc(c.title)}</option>`).join('');return true;}
-  return {filter,render,action,submit,change};
+  return {filter,render,action,submit,change,mountGaps};
 };
 
 window.createReplyAssistUI=function({state,api,esc,icon,toast}){

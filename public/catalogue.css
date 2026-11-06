@@ -18,3 +18,9 @@
 .tl-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:10px}.tl-summary>div{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--accent-tint);display:grid;gap:2px}.tl-summary small{font-size:11px;color:var(--text-3)}.tl-summary strong{font-size:16px;font-weight:600}
 .tl-list{display:grid;gap:8px;margin-top:10px}.tl-row{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff}
 .tl-row .ops-chip{flex:none;padding:6px}.tl-row .ops-chip svg{width:16px;height:16px}.tl-row div{display:grid;gap:2px;min-width:0}.tl-row strong{font-size:13px;font-weight:600}.tl-row small{font-size:12px;color:var(--text-2);overflow-wrap:anywhere}.tl-row small+small{font-size:11px;color:var(--text-3)}
+/* Preguntas que no supimos responder (pestaña Conocimiento) */
+.kn-gaps{margin-bottom:18px}.kn-gap-list{display:grid;gap:8px;margin-top:10px}
+.kn-gap{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.kn-gap div{display:grid;gap:2px;min-width:0}.kn-gap strong{font-size:13px;font-weight:600;overflow-wrap:anywhere}.kn-gap small{font-size:11px;color:var(--text-3)}
+.kn-gap .btn{flex:none;min-height:40px}
+@media(max-width:560px){.kn-gap{flex-wrap:wrap}.kn-gap .btn{width:100%}}

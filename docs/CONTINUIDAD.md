@@ -502,6 +502,11 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Memoria y contexto de la IA (rama `feat/memoria-contexto`, 6 nov 2026)
+
+- **Qué se hizo:** a petición del usuario («cómo se fabricará el motor que recordará todo… mejóralo de manera súper pro»): selección inteligente del conocimiento que recibe la IA (BM25 + sinónimos del negocio + contexto reciente + presupuesto; si nada se parece no se llama a la IA), memoria del cliente derivada de las tablas verdaderas y sólo de la marca de la conversación (sin teléfono, correo, importes, notas ni etiquetas), y «Preguntas que no supimos responder» en Conocimiento, agrupadas por parecido y con «Crear respuesta». Sin esquema nuevo. Detalle: [PLAN_MEMORIA_CONTEXTO.md](PLAN_MEMORIA_CONTEXTO.md).
+- **Evidencia:** 172 pruebas (selección con 30 entradas y paráfrasis, aislamiento de memoria entre marcas y sin datos de contacto, huecos agrupados y con alcance por marca, y contexto de la IA acotado). Con la API real y 33 entradas aprobadas: 884 tokens de entrada por llamada en promedio (antes ~1,300 con sólo 6), respuestas correctas. **Sin publicar.**
+
 ## Corrección del motor de respuestas tras la primera prueba con IA real (rama `fix/motor-primera-pregunta`, 6 nov 2026)
 
 - **Qué pasó:** la primera prueba del flujo completo con la clave real (copia local de la base de demostración, GlobalVet en modo autónomo) mostró dos fallos del motor de reglas, anteriores a la IA: (1) el **primer mensaje** de una conversación siempre recibía la bienvenida con la ficha del curso aunque fuera una pregunta concreta (como «¿me dan constancia?»), por lo que nunca llegaba al conocimiento ni a la IA; (2) una palabra suelta desviaba la respuesta: «¿Qué pasa si **un día** no puedo conectarme a la sesión?» se contestó con fecha y docente porque «día» disparaba la intención de horario.

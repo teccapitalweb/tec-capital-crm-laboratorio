@@ -1,8 +1,10 @@
 import {randomUUID} from 'node:crypto';
 import {transaction} from './database.mjs';
-import {normalize,bestMatch,validateDraft} from './ai-provider.mjs';
+import {normalize,bestMatch,validateDraft,tokens,stem} from './ai-provider.mjs';
 import {seedBrandKnowledge} from './replies-schema.mjs';
 import {isOpen,openingLabel} from './service-hours.mjs';
+import {rankKnowledge} from './retrieval.mjs';
+import {customerMemory} from './memory.mjs';
 
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
@@ -36,7 +38,8 @@ const PATTERNS=[
 // Motor de respuestas v2. Reglas del proyecto que cumple: precios/fechas/cupos sólo del catálogo; nunca confirma pagos ni
 // inscripciones; cada decisión queda en reply_log con intención, fuentes y motivo; las llamadas al proveedor de IA van fuera
 // de las transacciones (plan() y commit() son síncronos; el proveedor se consulta entre ambos).
-export function createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider,payments=null,content=null,now=Date.now}){
+export function createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider,payments=null,content=null,now=Date.now,env=process.env}){
+  const TOP_K=Math.max(1,Math.min(20,Number(env.AI_KB_TOP_K)||6));   // entradas de conocimiento que recibe la IA por llamada
   const defaults=brandId=>({brand_id:brandId,mode:'templates',provider_enabled:0,max_unknown:2,revision:0,updated_by:null,updated_at:null});
   const settings=brandId=>db.prepare('SELECT * FROM reply_settings WHERE brand_id=?').get(brandId)||defaults(brandId);
   const entry=id=>typeof id==='string'?db.prepare('SELECT * FROM knowledge_entries WHERE id=?').get(id):null;
@@ -81,10 +84,15 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     else if(intent==='thanks'){out.reply='¡Con gusto! Si quieres, puedo ayudarte con el precio, las fechas o la inscripción de práctica.';out.reason='Agradecimiento o cierre.';}
     else if(fromKnowledge(.5)){/* respondido con conocimiento */}
     else{
-      out.knowledge=kb.map(k=>({id:k.id,question:k.question,answer:k.answer}));
-      out.needsProvider=Boolean(s.provider_enabled)&&kb.length>0;
+      // A la IA sólo se le manda lo relevante (BM25 + sinónimos del negocio), no todo el conocimiento (server/retrieval.mjs)
+      const recent=db.prepare("SELECT text FROM messages WHERE conversation_id=? AND sender_kind='customer' AND id!=? ORDER BY seq DESC LIMIT 2").all(c.id,trigger.id||'').map(m=>m.text).join(' ');
+      const picked=rankKnowledge(trigger.text,kb,{k:TOP_K,extraQuery:recent});
+      out.knowledge=picked.selected.map(x=>({id:x.entry.id,question:x.entry.question,answer:x.entry.answer,score:x.score}));
+      out.retrieval={considered:picked.considered,sent:picked.sent,mode:picked.mode,truncated:picked.truncated};
+      out.needsProvider=Boolean(s.provider_enabled)&&picked.sent>0;
+      if(out.needsProvider&&c.id!=='simulacion')out.memory=customerMemory(db,c,{now}).text;
       out.reply='Puedo ayudarte con el precio, el temario o la fecha de este curso. Si prefieres, escribe “asesor” y el equipo continuará contigo.';
-      out.reason='Sin intención reconocida ni conocimiento parecido.';
+      out.reason='Sin intención reconocida ni conocimiento parecido.'+(s.provider_enabled&&kb.length?(picked.sent?' Contexto para la IA: '+picked.sent+' de '+picked.considered+' entradas.':' Ninguna entrada del conocimiento se parece a la pregunta: no se consultó a la IA.'):'');
       if(count===1){welcome();if(out.needsProvider){out.prepared=null;out.buttons=null;}out.reason='Primer mensaje sin respuesta en el conocimiento: bienvenida con la ficha vigente del curso.'+(out.needsProvider?' Si el proveedor de IA responde con fuentes aprobadas, se usa su respuesta.':'');}
       if(unknownStreak(c.id)+1>=s.max_unknown){out.handoff=true;out.reply='No quiero hacerte perder tiempo: le paso tu pregunta a una persona del equipo para que te responda con precisión.';out.reason+=' Se alcanzó el máximo de respuestas sin reconocer ('+s.max_unknown+'): se escala.';}
     }
@@ -109,7 +117,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
   function commit(c,trigger,p,draft=null){
     const ref='automation:'+trigger.id;if(db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref))return {action:'skipped',reason:'Ya existía una respuesta para este mensaje.'};
     const t=now(),sources=[...p.sources];let reply=p.reply,model=null,reason=p.reason;
-    if(draft){model=draft.model;const v=validateDraft(draft,p.knowledge);if(v.ok){reply=v.text;reason='Proveedor de IA: '+draft.reason;for(const id of v.usedIds)sources.push({type:'knowledge',id});}else reason+=' Proveedor descartado: '+v.reason+(draft.text?'':' ('+draft.reason+')');}
+    if(draft){model=draft.model;const v=validateDraft(draft,p.knowledge);if(v.ok){reply=v.text;reason='Proveedor de IA: '+draft.reason+(p.retrieval?' Contexto: '+p.retrieval.sent+' de '+p.retrieval.considered+' entradas del conocimiento.':'')+(p.memory?' Memoria del cliente enviada: «'+p.memory+'»':'');for(const id of v.usedIds)sources.push({type:'knowledge',id});}else reason+=' Proveedor descartado: '+v.reason+(draft.text?'':' ('+draft.reason+')');}
     const log=(action,replyMessageId=null)=>{const id=randomUUID();db.prepare('INSERT INTO reply_log(id,conversation_id,brand_id,trigger_message_id,reply_message_id,intent,confidence,mode,action,reply_text,sources,model,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,trigger.id,replyMessageId,p.intent,p.confidence,p.mode,action,reply,JSON.stringify(sources),model,reason,t);return id;};
     if(p.mode==='off'){log('skipped');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);return {action:'skipped',reason:'Respuestas automáticas apagadas para la marca: pasa a una persona.'};}
     if(p.mode==='suggest'){log('suggested');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);return {action:'suggested',reply,reason};}
@@ -131,7 +139,27 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const p=plan(fake,trigger);let draft=null;
     if(p.needsProvider||(input.forceProvider&&p.intent==='unknown'&&p.knowledge.length)){const ctx=catalogue.info(course.id,fake.edition_id);draft=await provider.draft({brand:ctx.brand,course:ctx.course,edition:{name:ctx.edition.name,dateLabel:ctx.dateLabel,priceLabel:(ctx.priceCents/100).toFixed(2)+' '+ctx.currency},question:message,knowledge:p.knowledge,history:[]});}
     const v=draft?validateDraft(draft,p.knowledge):null,reply=(v?.ok?v.text:p.reply).replace('{{pedido}}','[aquí iría el pedido con su enlace de pago de prueba]');
-    return {intent:p.intent,confidence:p.confidence,mode:p.mode,reply,handoff:p.handoff,stage:p.stage,sources:[...p.sources,...(v?.ok?v.usedIds:[]).map(id=>({type:'knowledge',id}))],reason:draft?(v.ok?'Proveedor de IA: '+draft.reason:p.reason+' Proveedor descartado: '+v.reason):p.reason,provider:{name:provider.name,model:draft?.model||null,used:Boolean(draft),accepted:Boolean(v?.ok)}};
+    return {context:{retrieval:p.retrieval||null,knowledge:(p.knowledge||[]).map(k=>({id:k.id,question:k.question,score:k.score})),memory:p.memory||null},intent:p.intent,confidence:p.confidence,mode:p.mode,reply,handoff:p.handoff,stage:p.stage,sources:[...p.sources,...(v?.ok?v.usedIds:[]).map(id=>({type:'knowledge',id}))],reason:draft?(v.ok?'Proveedor de IA: '+draft.reason:p.reason+' Proveedor descartado: '+v.reason):p.reason,provider:{name:provider.name,model:draft?.model||null,used:Boolean(draft),accepted:Boolean(v?.ok)}};
+  }
+
+  // ---- huecos de conocimiento: lo que los clientes preguntaron y el motor no supo responder con conocimiento aprobado
+  // (intención desconocida y ninguna fuente de conocimiento en la respuesta). Se agrupan las preguntas parecidas para que quien
+  // administra el conocimiento vea primero lo que más se pregunta y pueda convertirlo en una respuesta con un clic.
+  function gaps(user,{brand=null,days=30}={}){
+    const ids=crm.brandsFor(user).map(b=>b.id).filter(id=>!brand||id===brand);if(!ids.length)return [];
+    const since=now()-Math.min(90,Math.max(1,Number(days)||30))*86400000;
+    const rows=db.prepare(`SELECT r.brand_id,r.conversation_id,r.created_at,r.sources,m.text FROM reply_log r JOIN messages m ON m.id=r.trigger_message_id WHERE r.intent='unknown' AND r.brand_id IN (${ids.map(()=>'?').join(',')}) AND r.created_at>=? ORDER BY r.created_at DESC LIMIT 600`).all(...ids,since);
+    const clusters=[];
+    for(const r of rows){
+      let sources=[];try{sources=JSON.parse(r.sources);}catch{}
+      if(sources.some(s=>s.type==='knowledge'))continue;   // sí se respondió con conocimiento aprobado
+      const set=new Set(tokens(r.text).map(stem));if(set.size<2)continue;
+      let hit=null,best=0;
+      for(const c of clusters){if(c.brandId!==r.brand_id)continue;const inter=[...set].filter(t=>c.terms.has(t)).length,j=inter/(set.size+c.terms.size-inter);if(j>=.45&&j>best){best=j;hit=c;}}
+      if(!hit){hit={brandId:r.brand_id,example:r.text.slice(0,200),count:0,conversations:new Set(),lastAt:r.created_at,terms:new Set(set)};clusters.push(hit);}
+      hit.count++;hit.conversations.add(r.conversation_id);for(const t of set)hit.terms.add(t);
+    }
+    return clusters.sort((a,b)=>b.count-a.count||b.lastAt-a.lastAt).slice(0,25).map(c=>({brandId:c.brandId,example:c.example,count:c.count,conversations:c.conversations.size,lastAt:c.lastAt}));
   }
 
   // ---- conocimiento
@@ -184,6 +212,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     if(!path.startsWith('/api/replies'))return false;
     if(user.role==='customer')throw fail(403,'Vista del equipo.');
     if(path==='/api/replies/provider'&&req.method==='GET'){json(res,200,{name:provider.name,model:provider.model,configured:provider.configured,usage:provider.usage?.()||null});return true;}
+    if(path==='/api/replies/gaps'&&req.method==='GET'){const q=new URL(req.url,'http://localhost').searchParams;json(res,200,{gaps:gaps(user,{brand:q.get('brand')||null,days:q.get('days')})});return true;}
     if(path==='/api/replies/settings'&&req.method==='GET'){json(res,200,{settings:crm.brandsFor(user).map(b=>({...settings(b.id),brand_name:b.name})),modes:MODES,provider:{name:provider.name,model:provider.model,configured:provider.configured,usage:provider.usage?.()||null}});return true;}
     if((m=path.match(/^\/api\/replies\/brands\/([\w-]{1,64})$/))&&req.method==='PATCH'){const s=setSettings(user,m[1],await body(req));audit(user,'replies.settings',m[1]);json(res,200,{settings:s});return true;}
     if(path==='/api/replies/test'&&req.method==='POST'){json(res,200,{result:await test(user,await body(req))});return true;}

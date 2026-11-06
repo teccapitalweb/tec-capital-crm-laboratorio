@@ -238,7 +238,7 @@ async function processJob(job){
     let draft=null;
     if(planned.plan.needsProvider){
       const ctx=catalogue.info(planned.c.course_id,planned.c.edition_id),history=db.prepare('SELECT sender_kind,text FROM messages WHERE conversation_id=? ORDER BY seq DESC LIMIT 6').all(planned.c.id).reverse().map(m=>({role:m.sender_kind==='customer'?'customer':'agent',text:m.text}));
-      draft=await aiProvider.draft({brand:ctx.brand,course:ctx.course,edition:{name:ctx.edition.name,dateLabel:ctx.dateLabel,priceLabel:(ctx.priceCents/100).toFixed(2)+' '+ctx.currency},question:planned.trigger.text,knowledge:planned.plan.knowledge,history});
+      draft=await aiProvider.draft({brand:ctx.brand,course:ctx.course,edition:{name:ctx.edition.name,dateLabel:ctx.dateLabel,priceLabel:(ctx.priceCents/100).toFixed(2)+' '+ctx.currency},question:planned.trigger.text,knowledge:planned.plan.knowledge,history,memory:planned.plan.memory||null});
     }
     transaction(db,()=>{const state=db.prepare('SELECT state FROM jobs WHERE id=?').get(job.id)?.state;if(state!=='pending')return;const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(job.conversation_id);if(!c.bot_enabled||c.assigned_to||c.status!=='open'){db.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").run(job.id);return;}replies.commit(c,planned.trigger,planned.plan,draft);db.prepare("UPDATE jobs SET state='done' WHERE id=?").run(job.id);});
     broadcast('conversation',job.conversation_id);
