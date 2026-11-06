@@ -502,6 +502,11 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Mejora de uso: mensaje de fuera de horario (rama `feat/bienvenida-ausencia`, 5 nov 2026)
+
+- **Qué se hizo:** nuevo evento de Contenido «Fuera de horario» (`away_hours`, variable `{{apertura}}`): si un cliente escribe con la marca cerrada y su mensaje va a esperar a una persona, recibe un aviso con la próxima apertura, una vez cada 12 horas por conversación, después de la respuesta normal. Sin plantilla aprobada y asignada no se envía nada. Nuevo paso en «Preparar marca». Sin esquema nuevo. Detalle: [PLAN_FUERA_DE_HORARIO.md](PLAN_FUERA_DE_HORARIO.md).
+- **Evidencia:** 163 pruebas (próxima apertura con noches, fin de semana y festivo; flujo HTTP: sin plantilla no hay aviso, con plantilla llega una vez con el texto completo y sin variables sin resolver). **Sin publicar.**
+
 ## Mejora de uso: «Preparar marca» (rama `feat/preparar-marca`, 5 nov 2026)
 
 - **Qué se hizo:** nueva pestaña **Operación → Preparar marca** (sólo administración): por marca, una lista de verificación con lo esencial (curso, edición vigente, conocimiento aprobado, asesores, automatización) y los extras (imagen, reparto, respuestas automáticas, canal, pagos, coordinación, certificados, campañas), cada paso con su explicación y un botón a la pantalla donde se arregla. Sólo lee: `GET /api/readiness`. Detalle: [PLAN_PREPARAR_MARCA.md](PLAN_PREPARAR_MARCA.md).

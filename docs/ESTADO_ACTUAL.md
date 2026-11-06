@@ -8,7 +8,7 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
 | Versión publicada | **0.34.0** en `main` (etiquetas en la bandeja). `/api/health` de producción devuelve `0.34.0` |
-| Pendiente de publicar | «Preparar marca» (Operación → Preparar marca, lista de verificación por marca, sólo lectura; sin cambio de versión ni de esquema), rama `feat/preparar-marca`, 161 pruebas. Ver [PLAN_PREPARAR_MARCA.md](PLAN_PREPARAR_MARCA.md) |
+| Pendiente de publicar | Mensaje de fuera de horario (evento de Contenido con `{{apertura}}`; sin cambio de versión ni de esquema), rama `feat/bienvenida-ausencia`, 163 pruebas. Ver [PLAN_FUERA_DE_HORARIO.md](PLAN_FUERA_DE_HORARIO.md). «Preparar marca» ya está publicado |
 | Esquema SQLite | **28** (último cambio: respuestas rápidas). Respaldo previo al migrar: `backups/before-crm-v28-*` |
 | Pruebas | 159 aprobadas (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |
@@ -52,6 +52,7 @@ Ninguna función por marca está encendida en producción. Apagar un interruptor
 | --- | --- | --- |
 | Automatización de la marca (necesaria para recetas y campañas) | Operación → Seguimientos → Activar / Desactivar por marca | No se programa ningún paso diferido |
 | Pausa global | Seguimientos → «Pausar todo» | Detiene todos los pasos de todas las marcas y los retoma al reanudar |
+| Mensaje de fuera de horario | Catálogo → Contenido → Eventos: plantilla aprobada para «Fuera de horario» | No se envía ningún aviso |
 | Respuestas automáticas | Seguimientos → «Respuestas automáticas a clientes» (apagado, sugerir, plantillas, autónomo) | «Plantillas» es el comportamiento de siempre |
 | Canal simulado | Seguimientos → Canal simulado → Activo | Sin estados de entrega ni ventana de 24 h |
 | Pagos | Operación → Pagos → Activa | Sin botón Cobrar ni pedidos |

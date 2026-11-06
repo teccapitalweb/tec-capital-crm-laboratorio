@@ -1,6 +1,6 @@
 # Plan: «Preparar marca» (lista de verificación por marca)
 
-Estado: **implementado en la rama `feat/preparar-marca`** (5 nov 2026), **sin esquema nuevo y sin cambio de versión**. Sin publicar.
+Estado: **publicado en `main`** (5 nov 2026, commit `f44d795`), **sin esquema nuevo y sin cambio de versión**.
 
 ## Para qué sirve
 
@@ -19,6 +19,7 @@ Una tarjeta por marca autorizada, con una barra de avance de los pasos **esencia
 | Catálogo | Imagen aprobada | No | hay un flyer `approved` |
 | Atención | Conocimiento aprobado | Sí | hay al menos una entrada `approved` |
 | Atención | Asesores asignados | Sí | hay un asesor activo con acceso a la marca |
+| Atención | Mensaje de fuera de horario | No | hay una plantilla aprobada asignada al evento «Fuera de horario» |
 | Atención | Reparto y horarios | No | el reparto está encendido y tiene personas |
 | Automatización | Automatización de la marca | Sí | `automation_settings.enabled` |
 | Automatización | Respuestas automáticas | No | modo «sugerir» o «autónomo» (el modo «plantillas» es el de siempre) |

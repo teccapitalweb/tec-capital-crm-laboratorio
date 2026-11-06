@@ -58,7 +58,7 @@ test('contenido por API: funciones de diseño y aprobación, plantillas por even
  await call('/api/content/events/globalvet/payment_confirmed',designer.cookie,{templateId:created.id,expectedRevision:0},'PUT',403);
  await call('/api/content/events/globalvet/no_existe',approver.cookie,{templateId:created.id,expectedRevision:0},'PUT',404);
  const map=(await call('/api/content/events/globalvet/payment_confirmed',approver.cookie,{templateId:created.id,expectedRevision:0},'PUT')).mapping;assert.equal(map.template_id,created.id);assert.equal(map.revision,1);
- const view=await call('/api/content/events?brand=globalvet',seller.cookie);assert.equal(view.events.length,8);const gv=view.brands[0];assert.equal(gv.mappings.find(m=>m.event==='payment_confirmed').templateTitle,'Pago confirmado · GlobalVet');assert.equal(view.access.design,false);
+ const view=await call('/api/content/events?brand=globalvet',seller.cookie);assert.equal(view.events.length,9);const gv=view.brands[0];assert.equal(gv.mappings.find(m=>m.event==='payment_confirmed').templateTitle,'Pago confirmado · GlobalVet');assert.equal(view.access.design,false);
  // escenario equivocado para el evento
  const other=(await call('/api/catalogue/templates',admin.cookie,{...tpl,title:'Info',scenario:'info',text:'Info de {{curso}}'},'POST',201)).item;await call('/api/catalogue/templates/'+other.id+'/approve',admin.cookie,{expectedRevision:other.revision});
  await call('/api/content/events/globalvet/payment_confirmed',admin.cookie,{templateId:other.id,expectedRevision:1},'PUT',400);

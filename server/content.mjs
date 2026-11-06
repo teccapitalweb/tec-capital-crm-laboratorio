@@ -25,6 +25,7 @@ export const EVENTS={
   recording_available:{title:'Grabación disponible',when:'Al registrar la grabación de una sesión en Coordinación; sin plantilla mapeada no se avisa.',category:'utility',vars:['sesion','grabacion']},
   certificate_ready:{title:'Certificado listo',when:'Al emitir el certificado del alumno.',category:'utility',vars:['folio','enlace_certificado','asistencia']},
   session_payment:{title:'Pago de sesión (enlace de pago)',when:'Al cobrar una sesión a un alumno con plan por sesión, desde Coordinación o con el recordatorio automático.',category:'utility',vars:['sesion','fecha_sesion','importe','enlace_pago','vigencia_pago']},
+  away_hours:{title:'Fuera de horario',when:'Cuando un cliente escribe fuera del horario de atención de la marca y su mensaje debe esperar a una persona. Se envía una sola vez cada 12 horas por conversación; sin plantilla mapeada no se envía nada.',category:'service',vars:['nombre','marca','apertura']},
   survey_request:{title:'Invitación a encuesta',when:'Al enviar la encuesta de una sesión realizada o de la apertura a cada inscrito.',category:'utility',vars:['sesion','enlace_encuesta']},
 };
 export const TONES={formal:'Formal',cercano:'Cercano',breve:'Breve'};

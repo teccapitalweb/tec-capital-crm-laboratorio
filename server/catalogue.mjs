@@ -10,8 +10,8 @@ const fail=(status,message)=>Object.assign(new Error(message),{status});
 const txt=(v,n)=>typeof v==='string'?v.trim().slice(0,n):'';
 const channels=['all','whatsapp','instagram','facebook'];
 // Escenarios: los clásicos de venta y, desde la Fase 2 (bloque 2.6), uno por evento del ciclo (los mapea Contenido).
-export const scenarios=['info','syllabus','schedule','price','enroll','followup','after_sale','ad_welcome','payment_pending','payment_confirmed','session_reminder','recording_available','certificate_ready','session_payment','survey_request'];
-export const variables=['nombre','marca','curso','edicion','fecha','docente','modalidad','precio','precio_regular','promocion','vigencia','temario','enlace','cupo','pedido','importe','enlace_pago','vigencia_pago','sesion','fecha_sesion','enlace_sesion','grupo','grabacion','folio','enlace_certificado','asistencia','plan_pago','enlace_encuesta'];
+export const scenarios=['info','syllabus','schedule','price','enroll','followup','after_sale','ad_welcome','payment_pending','payment_confirmed','session_reminder','recording_available','certificate_ready','session_payment','survey_request','away_hours'];
+export const variables=['nombre','marca','curso','edicion','fecha','docente','modalidad','precio','precio_regular','promocion','vigencia','temario','enlace','cupo','pedido','importe','enlace_pago','vigencia_pago','sesion','fecha_sesion','enlace_sesion','grupo','grabacion','folio','enlace_certificado','asistencia','plan_pago','enlace_encuesta','apertura'];
 // Variables de evento sin valor en una plantilla de venta quedan vacías (no «undefined»).
 export const fillTemplate=(bodyText,values)=>String(bodyText).replace(/\{\{\s*([a-z_]+)\s*\}\}/g,(_,key)=>values[key]??'');
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');

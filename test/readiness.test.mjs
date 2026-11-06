@@ -24,7 +24,7 @@ test('Preparar marca: sólo lectura para administración, refleja lo que se enci
  assert.ok(first.brands.length>=1);
  const b=first.brands.find(x=>x.id==='globalvet');assert.ok(b);
  const ids=b.steps.map(s=>s.id);
- for(const id of ['course','edition','knowledge','team','automation','payments','campaigns'])assert.ok(ids.includes(id),id);
+ for(const id of ["course","edition","knowledge","team","away","automation","payments","campaigns"])assert.ok(ids.includes(id),id);
  for(const s of b.steps){assert.ok(s.title&&s.detail&&s.view&&s.label,s.id);assert.equal(typeof s.done,'boolean');assert.equal(typeof s.required,'boolean');}
  assert.equal(b.essentials.total,b.steps.filter(s=>s.required).length);
  assert.equal(b.steps.find(s=>s.id==='automation').done,false);   // todo nace apagado

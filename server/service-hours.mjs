@@ -24,6 +24,16 @@ export function validateHolidays(list,now=Date.now()){
   return out.sort((a,b)=>a.date<b.date?-1:1);
 }
 export function isOpen(t,policy){const p=parts(t,policy.timezone);if(policy.holidays?.length&&holidaySet(policy).has(p.year+'-'+pad(p.month)+'-'+pad(p.day)))return false;const d=new Date(Date.UTC(p.year,p.month-1,p.day)).getUTCDay(),h=policy.hours[d],m=p.hour*60+p.minute;return Boolean(h&&m>=h[0]&&m<h[1]);}
+// Próxima apertura a partir de t (minuto a minuto, hasta 14 días) y su texto en la zona de la marca, p. ej. «lunes 9 de noviembre, 9:00 a. m.».
+export function nextOpening(t,policy){
+  const start=(Math.floor(t/60000)+1)*60000,stop=start+14*86400000;
+  for(let x=start;x<stop;x+=60000)if(isOpen(x,policy))return x;
+  return null;
+}
+export function openingLabel(t,policy){
+  const x=nextOpening(t,policy);if(x==null)return 'el próximo día hábil';
+  return new Intl.DateTimeFormat('es-MX',{timeZone:policy.timezone,weekday:'long',day:'numeric',month:'long',hour:'numeric',minute:'2-digit',hourCycle:'h12'}).format(x).replace(/,/g,'');
+}
 // Count real elapsed minutes only while the local business calendar is open.
 // Iterating real instants handles missing/repeated hours at DST transitions.
 export function serviceDeadline(start,minutes,policy){

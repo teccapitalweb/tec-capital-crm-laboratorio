@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {transaction} from './database.mjs';
 import {normalize,bestMatch,validateDraft} from './ai-provider.mjs';
 import {seedBrandKnowledge} from './replies-schema.mjs';
+import {isOpen,openingLabel} from './service-hours.mjs';
 
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
@@ -80,19 +81,32 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     return out;
   }
 
+  // Aviso de fuera de horario: sólo si la marca mapeó una plantilla aprobada al evento «away_hours», el mensaje debe esperar a una
+  // persona y la marca está cerrada ahora; una vez cada 12 horas por conversación. Dentro de la transacción del llamador.
+  const AWAY_GAP=12*3600e3;
+  function away(c,trigger){
+    if(!content)return;const t=now(),policy=operations.settings(c.brand_id);
+    if(isOpen(t,policy))return;
+    if(db.prepare("SELECT 1 FROM messages WHERE conversation_id=? AND client_ref LIKE 'away:%' AND created_at>?").get(c.id,t-AWAY_GAP))return;
+    const first=(db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id)?.name||'').split(' ')[0];
+    const tpl=content.render('away_hours',c.brand_id,{courseId:c.course_id,editionId:c.edition_id,name:first,extra:{apertura:openingLabel(t,policy)}});
+    if(!tpl)return;
+    insertMessage(c,null,tpl.text,'automation','away:'+trigger.id,null,null,null,{category:'service'});
+  }
+
   // Aplica el plan dentro de una transacción del llamador. Revalida que nadie respondió ya a este mensaje.
   function commit(c,trigger,p,draft=null){
     const ref='automation:'+trigger.id;if(db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref))return {action:'skipped',reason:'Ya existía una respuesta para este mensaje.'};
     const t=now(),sources=[...p.sources];let reply=p.reply,model=null,reason=p.reason;
     if(draft){model=draft.model;const v=validateDraft(draft,p.knowledge);if(v.ok){reply=v.text;reason='Proveedor de IA: '+draft.reason;for(const id of v.usedIds)sources.push({type:'knowledge',id});}else reason+=' Proveedor descartado: '+v.reason+(draft.text?'':' ('+draft.reason+')');}
     const log=(action,replyMessageId=null)=>{const id=randomUUID();db.prepare('INSERT INTO reply_log(id,conversation_id,brand_id,trigger_message_id,reply_message_id,intent,confidence,mode,action,reply_text,sources,model,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,trigger.id,replyMessageId,p.intent,p.confidence,p.mode,action,reply,JSON.stringify(sources),model,reason,t);return id;};
-    if(p.mode==='off'){log('skipped');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);return {action:'skipped',reason:'Respuestas automáticas apagadas para la marca: pasa a una persona.'};}
-    if(p.mode==='suggest'){log('suggested');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);return {action:'suggested',reply,reason};}
+    if(p.mode==='off'){log('skipped');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);return {action:'skipped',reason:'Respuestas automáticas apagadas para la marca: pasa a una persona.'};}
+    if(p.mode==='suggest'){log('suggested');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);return {action:'suggested',reply,reason};}
     if(p.order){const made=payments.createOrder(c,{user:null,source:'bot'});reply=reply.replace('{{pedido}}',payments.linkMessage(made.order));}
     const messageId=insertMessage(c,null,reply,'automation',ref,null,p.prepared?.flyerSnapshot?c.course_id:null,p.prepared,{buttons:p.buttons,category:'service'});   // responde a un mensaje entrante: siempre dentro de la ventana de servicio
     log(p.handoff?'escalated':'replied',messageId);
     if(p.stage)crm.setStage(c,p.stage);
-    if(p.handoff){db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);}
+    if(p.handoff){db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);}
     return {action:p.handoff?'escalated':'replied',messageId,reply,reason};
   }
 
