@@ -34,6 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Mensajes programados (rama `feat/mensajes-programados`, 6 nov 2026)
+
+- **Qué es:** botón «Programar» junto a Enviar. La persona elige la hora (atajos o fecha exacta), el mensaje queda en una lista sobre el compositor y **sale solo**, a su nombre, por la misma ruta que un envío manual. Se puede editar, cancelar o enviar ya. Por omisión no sale si el cliente responde antes.
+- **Decisión de diseño:** las reglas se **vuelven a comprobar al enviar** (conversación cerrada, el cliente respondió, la autora sigue en la marca, nadie más atiende el chat, reglas del canal, no más de 6 h de retraso) y, si algo ya no cuadra, no sale y queda el motivo. Referencia determinista `sched:<id>` contra duplicados. Detalle: [PLAN_MENSAJES_PROGRAMADOS.md](PLAN_MENSAJES_PROGRAMADOS.md).
+- **Datos:** esquema 32 (`scheduled_messages`), una tabla nueva, con respaldo previo. **Verificado:** 180 pruebas (una nueva cubre alcance, validación, idempotencia, edición, envío, cancelación por respuesta, mensaje viejo, otra persona atendiendo, acceso perdido, chat cerrado y tope) y revisión visual en 800 px de ancho y celular. **Sin publicar.** Pendiente: avisar por notificación cuando algo no sale, programar adjuntos/plantillas y una vista global.
+
 ## Mejora de diseño, segunda ronda: pantallas medianas (rama `feat/mejora-diseno-2`, 6 nov 2026)
 
 - **Qué había:** en pantallas de 1024 a 1280 px la tabla de Contactos escondía su última columna (acciones) tras un desplazamiento horizontal, las 8 pestañas de Catálogo también, y «Catálogo y biblioteca» se partía en dos líneas en el menú.

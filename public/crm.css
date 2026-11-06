@@ -90,3 +90,25 @@
 .sum-empty{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 12px;border:1px dashed var(--accent-line);border-radius:12px;background:var(--accent-tint);font-size:12px;color:var(--accent-strong)}.sum-empty span{display:flex;gap:6px;align-items:center}.sum-empty .btn{min-height:40px}
 .sum-card{border:1px solid var(--accent-line);border-radius:12px;background:var(--accent-tint)}.sum-card>summary{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-height:40px;padding:6px 12px;cursor:pointer;list-style:none;font-size:12px;color:var(--accent-strong)}.sum-card>summary::-webkit-details-marker{display:none}.sum-card>summary small{color:var(--text-2);font-size:11px}.sum-card svg{width:15px;height:15px}
 .sum-body{padding:0 12px 10px;display:grid;gap:6px}.sum-body p{margin:0;font-size:12px;line-height:1.6;color:var(--text-2)}.sum-body .sum-lead{color:var(--ink);font-size:13px}.sum-body .sum-next{color:var(--accent-strong);font-weight:600}.sum-body .actions{margin-top:2px}.sum-body .btn{min-height:40px}
+/* Mensajes programados (docs/PLAN_MENSAJES_PROGRAMADOS.md): lista sobre el compositor y panel para elegir la hora */
+.conv-scheduled:empty{display:none}
+.sch-list{display:grid;gap:6px;margin-bottom:10px}
+.sch-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;background:var(--soft);padding:8px 10px;font-size:12px}
+.sch-when{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;color:var(--accent-strong)}.sch-when svg{width:14px;height:14px}.sch-when small{color:var(--text-3);font-weight:400}
+.sch-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)}
+.sch-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.sch-actions .btn{padding:6px 10px;font-size:11px}.sch-note{color:var(--text-3);font-size:11px}
+.sch-past{background:transparent}.sch-past .sch-when{color:var(--text-3)}.sch-past.sch-failed .sch-when{color:#8a3a2e}.sch-reason{grid-column:1/-1;color:var(--text-3);font-size:11px}
+.sch-panel{border:1px solid var(--accent-line);background:#fff;border-radius:12px;padding:14px;display:grid;gap:12px;margin-bottom:10px}
+.sch-field{display:grid;gap:6px;font-size:12px;color:var(--text-2)}.sch-field textarea{width:100%;resize:vertical;font-size:13px;line-height:1.6}
+.sch-quick{display:flex;gap:6px;flex-wrap:wrap}.sch-quick .btn{padding:6px 10px;font-size:11px}.sch-field input[type=datetime-local]{max-width:240px;font-size:12px}
+.sch-check{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--text-2)}.sch-check input{width:16px;height:16px}
+.sch-foot{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.sch-foot small{color:var(--text-3);font-size:11px;max-width:430px;line-height:1.5}.sch-foot>span{display:flex;gap:6px}
+.sch-open{display:inline-flex;gap:6px;align-items:center;font-size:12px;padding:6px 10px}.sch-open svg{width:15px;height:15px}
+@media(max-width:680px){.sch-row{grid-template-columns:minmax(0,1fr)}.sch-text{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.sch-actions{justify-content:flex-start}.sch-field textarea,.sch-field input[type=datetime-local]{font-size:16px}.sch-foot>span{width:100%}.sch-foot>span .btn{flex:1}}
+/* El panel de programar flota sobre el chat (no empuja ni encoge los mensajes en pantallas bajas) */
+.conv-scheduled{position:relative}
+.sch-panel{position:absolute;left:0;right:0;bottom:6px;z-index:6;margin:0;max-height:min(70vh,520px);overflow:auto;box-shadow:0 10px 34px #1c2a3a22,0 2px 8px #1c2a3a14}
+.sch-panel .sch-field textarea{min-height:64px}
+/* Cada fila en dos líneas: cuándo y acciones arriba, el mensaje completo debajo (en un chat angosto el texto desaparecía entre las acciones) */
+.sch-row{grid-template-columns:minmax(0,1fr) auto;row-gap:4px}.sch-row .sch-text{grid-column:1/-1;grid-row:2;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.sch-row .sch-actions{grid-column:2;grid-row:1}.sch-row .sch-when{grid-column:1;grid-row:1}.sch-past .sch-reason{grid-row:3}
+@media(max-width:680px){.sch-row{grid-template-columns:minmax(0,1fr)}.sch-row .sch-actions{grid-column:1;grid-row:3;justify-content:flex-start}}

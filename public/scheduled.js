@@ -1,0 +1,72 @@
+// Mensajes programados (docs/PLAN_MENSAJES_PROGRAMADOS.md): botón «Programar» junto a Enviar y, arriba del compositor, la lista de lo que está
+// por salir en este chat. Sólo para el equipo. El mensaje sale solo a la hora elegida, con las mismas reglas que un envío manual; aquí se
+// elige la hora, se edita, se cancela o se envía ya. Los formularios no usan <form> (se leen al pulsar) y las acciones llevan el prefijo «sch-».
+window.createScheduledUI=function({state,api,esc,icon,toast}){
+  const $=s=>document.querySelector(s);
+  const cache=new Map();            // conversationId -> {items, at}
+  let panel=null;                   // {id, editing: item|null, clientRef, text, when, cancelOnReply, busy}
+  const when=t=>new Date(t).toLocaleString('es-MX',{weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit'});
+  const local=t=>new Date(t-new Date(t).getTimezoneOffset()*60000).toISOString().slice(0,16);   // valor para <input type=datetime-local>
+  const nextAt=(days,h)=>{const d=new Date();d.setDate(d.getDate()+days);d.setHours(h,0,0,0);return d.getTime();};
+  const monday=()=>{const d=new Date();const add=((8-d.getDay())%7)||7;return nextAt(add,9);};
+  const quick=()=>[['En 1 hora',Date.now()+3600e3],['Mañana 9:00',nextAt(1,9)],['Lunes 9:00',monday()],['En 3 días',nextAt(3,9)]];
+  const label={sent:'Enviado',cancelled:'No se envió',failed:'No se envió',pending:'Pendiente'};
+
+  function paint(id){
+    const box=$('#conv-scheduled');if(!box||box.dataset.id!==id)return;
+    const items=cache.get(id)?.items||[],pending=items.filter(i=>i.state==='pending'),past=items.filter(i=>i.state!=='pending').sort((a,b)=>(b.sentAt||b.sendAt)-(a.sentAt||a.sendAt)).slice(0,2);
+    const row=i=>`<div class="sch-row${i.state==='pending'?'':' sch-past sch-'+i.state}">
+      <span class="sch-when">${icon(i.state==='pending'?'clock':i.state==='sent'?'check':'ban')}<b>${i.state==='pending'?'Sale '+esc(when(i.sendAt)):esc(label[i.state])}</b>${i.mine?'':`<small> · ${esc(i.authorName||'el equipo')}</small>`}</span>
+      <span class="sch-text" title="${esc(i.text)}">${esc(i.text)}</span>
+      ${i.state==='pending'?`<span class="sch-actions">${i.cancelOnReply?'<small class="sch-note">se cancela si responde</small>':''}<button type="button" class="btn" data-action="sch-edit" data-id="${esc(i.id)}">Editar</button><button type="button" class="btn" data-action="sch-now" data-id="${esc(i.id)}">Enviar ahora</button><button type="button" class="btn" data-action="sch-cancel" data-id="${esc(i.id)}">Cancelar</button></span>`:(i.reason?`<small class="sch-reason">${esc(i.reason)}</small>`:'')}
+    </div>`;
+    const form=panel&&panel.id===id?`<div class="sch-panel" role="group" aria-label="${panel.editing?'Editar mensaje programado':'Programar mensaje'}">
+      <label class="sch-field">Mensaje<textarea id="sch-text" rows="3" maxlength="5000" aria-label="Mensaje a programar">${esc(panel.text)}</textarea></label>
+      <div class="sch-field"><span>¿Cuándo?</span><div class="sch-quick">${quick().map(([t,v])=>`<button type="button" class="btn" data-action="sch-pick" data-at="${v}">${esc(t)}</button>`).join('')}</div>
+        <input type="datetime-local" id="sch-when" aria-label="Fecha y hora de envío" value="${esc(panel.when)}" min="${local(Date.now()+60e3)}"></div>
+      <label class="sch-check"><input type="checkbox" id="sch-cor" ${panel.cancelOnReply?'checked':''}> No enviar si el cliente responde antes</label>
+      <div class="sch-foot"><small>Sale a tu nombre. Se respetan las reglas del canal; si no puede salir, aquí queda el motivo.</small><span><button type="button" class="btn" data-action="sch-close">Cerrar</button><button type="button" class="btn primary" data-action="sch-save" ${panel.busy?'disabled':''}>${panel.busy?'Guardando…':panel.editing?'Guardar cambios':'Programar'}</button></span></div>
+    </div>`:'';
+    box.innerHTML=(pending.length||past.length?`<div class="sch-list" aria-label="Mensajes programados en esta conversación">${pending.map(row).join('')}${past.map(row).join('')}</div>`:'')+form;
+    window.lucide?.createIcons({attrs:{'stroke-width':1.7}});
+  }
+  async function load(id){
+    try{const r=await api('/api/conversations/'+id+'/scheduled');cache.set(id,{items:r.items,at:Date.now()});}catch{if(!cache.has(id))cache.set(id,{items:[],at:Date.now()});}
+    paint(id);
+  }
+  function mount(c){const box=$('#conv-scheduled');if(!box)return;box.dataset.id=c.id;if(cache.has(c.id))paint(c.id);load(c.id);}
+  function open(id,editing=null){
+    const draft=state.drafts?.[id]||'';
+    panel={id,editing,clientRef:crypto.randomUUID(),text:editing?editing.text:draft,when:editing?local(editing.sendAt):'',cancelOnReply:editing?editing.cancelOnReply:true,busy:false};
+    paint(id);$('#sch-text')?.focus();
+  }
+  const read=()=>{if(!panel)return;const t=$('#sch-text'),w=$('#sch-when'),c=$('#sch-cor');if(t)panel.text=t.value;if(w)panel.when=w.value;if(c)panel.cancelOnReply=c.checked;};
+  async function save(){
+    read();const id=panel.id,at=panel.when?new Date(panel.when).getTime():NaN;
+    if(!panel.text.trim())return toast('Escribe el mensaje que quieres programar.');
+    if(!Number.isFinite(at))return toast('Elige la fecha y la hora.');
+    panel.busy=true;paint(id);
+    try{
+      if(panel.editing)await api('/api/scheduled/'+panel.editing.id,{method:'PATCH',body:{text:panel.text,sendAt:at,cancelOnReply:panel.cancelOnReply,expectedRevision:panel.editing.revision}});
+      else{await api(sched(id),{method:'POST',body:{text:panel.text,sendAt:at,cancelOnReply:panel.cancelOnReply,clientRef:panel.clientRef}});if(state.drafts&&state.drafts[id]!==undefined){state.drafts[id]='';try{localStorage.removeItem('tc-draft-'+state.user.id+'-'+id);}catch{}const ta=$('#message-input');if(ta)ta.value='';}}
+      toast(panel.editing?'Cambios guardados.':'Mensaje programado para '+when(at)+'.');panel=null;await load(id);
+    }catch(e){toast(e.message);if(panel){panel.busy=false;paint(id);}}
+  }
+  const sched=id=>'/api/conversations/'+id+'/scheduled';
+  async function action(name,el){
+    const id=state.selected;
+    if(name==='sch-open'){if(panel&&panel.id===id){panel=null;paint(id);}else open(id);return true;}
+    if(name==='sch-close'){panel=null;paint(id);return true;}
+    if(name==='sch-pick'){read();panel.when=local(Number(el.dataset.at));paint(id);return true;}
+    if(name==='sch-save'){await save();return true;}
+    const item=(cache.get(id)?.items||[]).find(i=>i.id===el.dataset.id);
+    if(name==='sch-edit'){if(item)open(id,item);return true;}
+    try{
+      if(name==='sch-cancel'){await api('/api/scheduled/'+el.dataset.id+'/cancel',{method:'POST',body:{}});toast('Envío cancelado.');}
+      else if(name==='sch-now'){const r=await api('/api/scheduled/'+el.dataset.id+'/send-now',{method:'POST',body:{}});toast(r.outcome==='sent'?'Mensaje enviado.':(r.item.reason||'No se pudo enviar.'));}
+      else return false;
+    }catch(e){toast(e.message);}
+    await load(id);return true;
+  }
+  return {mount,action};
+};

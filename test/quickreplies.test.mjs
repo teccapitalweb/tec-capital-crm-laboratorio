@@ -85,7 +85,7 @@ test('respuestas rápidas por API: permisos, validación, personales y de marca,
   assert.equal((await call('/api/quick-replies',vende.cookie)).quickReplies.some(r=>r.id===created.id),false);
   await call('/api/quick-replies/'+created.id+'/render',vende.cookie,{conversationId:convAna.id},'POST',404);
   assert.equal((await call('/api/quick-replies',vende.cookie,{...base},'POST',201)).quickReply.shortcut,'gracias','el atajo archivado queda libre');
-  assert.equal(one('PRAGMA user_version').user_version,31);assert.ok(one("SELECT count(*) n FROM audit WHERE action LIKE 'quickreply.%'").n>=6);
+  assert.equal(one('PRAGMA user_version').user_version,32);assert.ok(one("SELECT count(*) n FROM audit WHERE action LIKE 'quickreply.%'").n>=6);
 });
 
 test('biblioteca de ejemplos: todos son válidos, con atajos únicos, sin precios ni fechas, y la API los entrega',async t=>{
