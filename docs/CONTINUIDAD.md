@@ -502,6 +502,12 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Corrección: la tarjeta del curso explica por qué no muestra su imagen (rama `fix/portada-curso`, 6 nov 2026)
+
+- **Qué pasaba:** el usuario subió una imagen al curso «Amante» (GlobalVet, 0 ediciones publicadas) y la tarjeta seguía sin imagen y sin explicación. La tarjeta sólo muestra un flyer aprobado cuya edición está publicada; si la edición está en borrador, la imagen queda guardada pero oculta.
+- **Qué se hizo:** la tarjeta del catálogo (vista del equipo) ahora dice por qué no se ve («la edición está en borrador: publícala con fecha futura», flyer en borrador, o precio/fecha cambiados). Sólo interfaz; no cambia la regla de qué imagen se muestra.
+- **Evidencia:** en el demo local, con la edición de un curso en borrador la tarjeta muestra la nota; los demás cursos siguen con su imagen. **Sin publicar.**
+
 ## Mejora de uso: mensaje de fuera de horario (rama `feat/bienvenida-ausencia`, 5 nov 2026)
 
 - **Qué se hizo:** nuevo evento de Contenido «Fuera de horario» (`away_hours`, variable `{{apertura}}`): si un cliente escribe con la marca cerrada y su mensaje va a esperar a una persona, recibe un aviso con la próxima apertura, una vez cada 12 horas por conversación, después de la respuesta normal. Sin plantilla aprobada y asignada no se envía nada. Nuevo paso en «Preparar marca». Sin esquema nuevo. Detalle: [PLAN_FUERA_DE_HORARIO.md](PLAN_FUERA_DE_HORARIO.md).
