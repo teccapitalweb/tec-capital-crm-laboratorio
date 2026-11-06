@@ -67,6 +67,10 @@ Lo que **no** cambia: los colores y degradados de canal (`--wa`, `--ig`, `--fb`)
 
 **Resultado (3 nov 2026):** auditoría en escritorio (1366 px) y celular (375 px) sobre entrada, Mi día, Conversaciones con chat abierto, Contactos, Oportunidades, Tareas, Equipo, Mi configuración, Operación (Cola, Coordinación, Finanzas, Conectores), Analítica, Presentación, Actividad, Catálogo y la experiencia del cliente: **0** textos bajo 11 px (se corrigieron dos de 8 px en celular: selector Cliente/Equipo e insignia «Curso activo»), **0** fallos de contraste fuera de las excepciones (la herramienta no lee degradados: el «tc» de la marca y la «f» de Facebook son glifos blancos sobre degradado; las columnas vacías del tablero siguen siendo una excepción declarada) y **0 px** de desbordamiento horizontal. Los encabezados del tablero de Oportunidades pasaron a `--text-2` para mantener AA sobre la columna tintada.
 
+## Menú por grupos y Operación por áreas (6 nov 2026)
+
+Cuando una lista de navegación pasa de ~8 elementos se agrupa por tarea, no se deja plana ni se esconde tras un desplazamiento horizontal. Reglas que quedaron: **grupos con título de 11 px** en la barra lateral (en el riel de 70 px el título se oculta y queda una línea divisoria; en celular los grupos se aplanan en la barra de iconos); **máximo ~5 pestañas por área** en Operación; un área sin pestañas visibles para ese rol no se dibuja; la fila de áreas mide 40 px de alto y el área táctil de las filas del menú es de 40 px aunque la fila mida 32–36 (pseudo-elemento, como en las pestañas). Si se agrega una pestaña nueva a Operación, se coloca en el área que corresponde en `opsTabs()` (`public/operations.js`), no al final de una fila.
+
 ## Ideas de diseño que se dejaron fuera a propósito
 
 - **Modo oscuro:** cambia la identidad Niebla; se haría como decisión explícita (tokens de color por tema), no como pulido.

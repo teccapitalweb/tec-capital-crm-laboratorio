@@ -107,3 +107,20 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
 .chat-head[data-channel=whatsapp] .chat-person .channel-name{color:#04794a}
 /* Elegir archivo: el estilo global oculta los campos de archivo (el chat usa su propio botón de clip); en los formularios con etiqueta se muestran como una zona clara con botón, para que se vea dónde adjuntar. */
 label.field input[type=file]{display:block;width:100%;min-height:64px;padding:11px;border:1.5px dashed var(--accent-line);border-radius:12px;background:var(--accent-tint);color:var(--text-2);font-size:12px;cursor:pointer}label.field input[type=file]:hover,label.field input[type=file]:focus-visible{border-color:var(--accent);background:var(--accent-soft)}label.field input[type=file]::file-selector-button{min-height:40px;margin-right:14px;padding:0 18px;border:0;border-radius:10px;background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+
+/* Barra lateral por grupos y pestañas de Operación por áreas (mejora de diseño, nov 2026) */
+.nav-grouped{gap:15px}.nav-group{display:grid;gap:2px}.nav-group-title{padding:0 10px 5px;font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:1.2px}.nav-grouped button{padding:9px 10px}
+.ops-groups{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 4px}.ops-groups button{min-height:40px;padding:0 16px;border:1px solid var(--line);border-radius:999px;background:#ffffffb8;color:var(--text-2);font-size:12px;font-weight:600}.ops-groups button:hover{background:#fff}.ops-groups button.active{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent-strong)}
+.ops-subtabs{margin-top:8px}
+@media(max-width:850px){.nav-group-title{display:none}.nav-grouped{gap:8px}.nav-group+.nav-group{border-top:1px solid var(--line);padding-top:8px}}
+@media(max-width:680px){.nav-grouped{gap:3px}.nav-group{display:contents}.nav-group+.nav-group{border:0;padding:0}.ops-groups{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.ops-groups button{flex:0 0 auto}}
+/* En pantallas bajas la barra lateral se compacta (y, si aun así no cabe, se desplaza) para que usuario y modo siempre se vean */
+.sidebar{overflow-y:auto;scrollbar-width:thin}
+@media(min-width:681px) and (max-height:900px){.sidebar{gap:16px;padding-top:20px}.sidebar .lab-note{display:none}.nav-grouped{gap:10px}.nav-grouped button{padding:8px 10px}}
+/* La lista de navegación es la que se desplaza si la pantalla es muy baja; el usuario y el modo quedan siempre a la vista. Área táctil de 40 px aunque la fila mida 36. */
+.sidebar{overflow:hidden}
+.sidebar>div:has(>.nav-grouped){flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:thin;overscroll-behavior:contain}
+.nav-grouped button{position:relative}.nav-grouped button::after{content:"";position:absolute;inset:-2px 0}
+@media(min-width:681px) and (max-height:900px){.sidebar{gap:12px;padding-top:16px}}
+@media(min-width:681px) and (max-height:900px){.nav-grouped{gap:8px}.nav-grouped button{padding:7px 10px}.nav-grouped button::after{inset:-4px 0}.nav-group-title{padding-bottom:3px}}
+@media(min-width:851px) and (max-height:900px){.sidebar .nav-grouped button{padding-top:7px;padding-bottom:7px}}

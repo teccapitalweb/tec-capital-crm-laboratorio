@@ -7,6 +7,7 @@ Para quien va a **usar** el CRM, no a programarlo. Todo es un laboratorio: los d
 - **Clientes de prueba:** <https://crm-laboratorio-production.up.railway.app/>. Crean un perfil con nombre, usuario y contraseña (no necesitan su número de WhatsApp) y reciben un número de prueba.
 - **Equipo:** <https://crm-laboratorio-production.up.railway.app/crm>. Se entra con la cuenta del equipo. Quien se registró como cliente acepta su **invitación individual** que administración le preparó; el código de invitación es personal y no se comparte.
 - El selector **Cliente / Equipo** del menú cambia de experiencia a quien tiene acceso al equipo. En celular el menú es una barra de iconos que se desplaza.
+- **El menú del equipo está por grupos:** *Atención* (Mi día, Conversaciones, Contactos, Oportunidades, Tareas), *Gestión* (Catálogo y biblioteca, Operación, Equipo), *Resultados* (Mis resultados, Analítica, Actividad, Presentación) y *Cuenta* (Mi configuración). **Operación** se divide en áreas: *Atención* (Cola, Mis avisos, Coordinación, Macros, Horarios y reparto), *Ventas y cobro* (Pagos, Certificados, Finanzas, Campañas, Seguimientos), *Crecimiento* (Pauta, Aliados) y *Sistema* (Preparar marca, Conectores, Eventos, Históricos, Demo). Cada quien ve sólo lo que su rol permite.
 - La verificación en dos pasos es opcional: **Mi configuración → Acceso y seguridad**.
 
 ## Cliente de prueba

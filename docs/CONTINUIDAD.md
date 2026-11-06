@@ -27,6 +27,13 @@ La intención futura es conectar WhatsApp, Instagram y Messenger oficiales, resp
 
 Este commit identifica el código funcional. Un commit posterior que añada únicamente esta documentación no implica una versión funcional diferente.
 
+## Mejora de diseño: menú y Operación por áreas (rama `feat/mejora-diseno`, 6 nov 2026)
+
+- **Qué había:** la barra lateral era una lista plana de 13 botones en orden accidental (Conversaciones y Catálogo al final), y Operación tenía **17 pestañas en una sola fila** con barra de desplazamiento que escondía Pauta, Aliados y las de administración.
+- **Qué se hizo (sólo interfaz, sin esquema ni rutas nuevas):** la barra lateral del equipo se agrupa en **Atención** (Mi día, Conversaciones, Contactos, Oportunidades, Tareas), **Gestión** (Catálogo y biblioteca, Operación, Equipo), **Resultados** (Mis resultados, Analítica, Actividad, Presentación) y **Cuenta** (Mi configuración); y Operación se divide en cuatro **áreas** (Atención · Ventas y cobro · Crecimiento · Sistema) con las pestañas de cada una debajo. Mismas pestañas y mismos permisos (Finanzas, Pauta, Aliados y las de administración aparecen sólo a quien corresponde; un área sin pestañas visibles no se muestra). En pantallas bajas el menú se compacta y, si aun así no cabe, sólo la lista se desplaza: usuario y modo quedan siempre a la vista. El cliente de prueba sigue con sus dos botones.
+- **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
+- **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
+
 ## Entregas completadas
 
 | Entrega | Commit | Resultado |

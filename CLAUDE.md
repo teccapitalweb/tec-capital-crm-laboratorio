@@ -41,7 +41,8 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 4s. [Pauta](docs/PLAN_PAUTA.md): el panel de tráfico («trafiquer») de IPCIL dentro del CRM, Operación → Pauta (**esquema 29**; publicada en `main`).
 4t. [Aliados](docs/PLAN_ALIADOS.md): el panel RH de IPCIL dentro del CRM, Operación → Aliados (**esquema 30**; publicado en `main`); formulario público `/aliados` apagado por omisión. Pendiente de IPCIL: comisiones por persona.
 4u. [Resumen de conversación](docs/PLAN_RESUMEN_CONVERSACION.md): tarjeta en el chat, por reglas y con IA, y contexto para la IA en chats largos (**esquema 31**; rama `feat/resumen-conversacion`, sin publicar).
-4b. [Visión de la plataforma](docs/VISION_PLATAFORMA.md): el CRM como módulo de la plataforma de toda la empresa (IPCIL, Academia, finanzas, canales reales); diagnóstico, arquitectura objetivo y fases.
+4v. [Mejora de diseño](docs/DISENO_Y_AUDITORIA.md): menú lateral por grupos y Operación por áreas en lugar de 17 pestañas en fila (sólo interfaz; rama `feat/mejora-diseno`, sin publicar).
+4u. [Resumen de conversación](docs/VISION_PLATAFORMA.md): el CRM como módulo de la plataforma de toda la empresa (IPCIL, Academia, finanzas, canales reales); diagnóstico, arquitectura objetivo y fases.
 5. [README](README.md) y [ROADMAP](ROADMAP.md): recorridos del producto y planificación general.
 
 El código y el estado real del repositorio prevalecen si estas notas quedan desactualizadas. Comprueba `git status`, `package.json`, historial de commits y `/api/health` antes de actuar.
