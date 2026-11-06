@@ -39,7 +39,8 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 4q. [Conocimiento por lote y tope de gasto de la IA](docs/PLAN_CONOCIMIENTO_POR_LOTE.md): importar preguntas y respuestas por CSV como borradores, [guía para cargar el contexto](docs/GUIA_CONTEXTO_CONSULTORA.md) y topes mensuales de la IA (sin esquema nuevo; publicado en `main`; la API real se probó en local con la clave del usuario).
 4r. [Memoria y contexto de la IA](docs/PLAN_MEMORIA_CONTEXTO.md): selección del conocimiento que recibe la IA, memoria del cliente (sólo de su marca, sin datos de contacto) y preguntas sin respuesta (sin esquema nuevo; publicado en `main`).
 4s. [Pauta](docs/PLAN_PAUTA.md): el panel de tráfico («trafiquer») de IPCIL dentro del CRM, Operación → Pauta (**esquema 29**; publicada en `main`).
-4t. [Aliados](docs/PLAN_ALIADOS.md): el panel RH de IPCIL dentro del CRM, Operación → Aliados (**esquema 30**; rama `feat/aliados-rh`, sin publicar); formulario público `/aliados` apagado por omisión. Pendiente de IPCIL: comisiones por persona.
+4t. [Aliados](docs/PLAN_ALIADOS.md): el panel RH de IPCIL dentro del CRM, Operación → Aliados (**esquema 30**; publicado en `main`); formulario público `/aliados` apagado por omisión. Pendiente de IPCIL: comisiones por persona.
+4u. [Resumen de conversación](docs/PLAN_RESUMEN_CONVERSACION.md): tarjeta en el chat, por reglas y con IA, y contexto para la IA en chats largos (**esquema 31**; rama `feat/resumen-conversacion`, sin publicar).
 4b. [Visión de la plataforma](docs/VISION_PLATAFORMA.md): el CRM como módulo de la plataforma de toda la empresa (IPCIL, Academia, finanzas, canales reales); diagnóstico, arquitectura objetivo y fases.
 5. [README](README.md) y [ROADMAP](ROADMAP.md): recorridos del producto y planificación general.
 
@@ -73,7 +74,7 @@ npm start
 
 `npm start` usa `.env` si existe. Prepara `.env` desde `.env.example` para una instalación local; consulta el runbook antes de usar datos o accesos existentes.
 
-La referencia vigente es **178 pruebas aprobadas** (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **179 pruebas aprobadas** (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 

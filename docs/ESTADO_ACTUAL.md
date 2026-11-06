@@ -8,8 +8,8 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
 | Versión publicada | **0.34.0** en `main` (etiquetas en la bandeja). `/api/health` de producción devuelve `0.34.0` |
-| Pendiente de publicar | **Aliados** (Operación → Aliados: el panel RH de IPCIL dentro del CRM; **esquema 30**), rama `feat/aliados-rh`, 178 pruebas. Ver [PLAN_ALIADOS.md](PLAN_ALIADOS.md). Ya publicados: Pauta (esquema 29), memoria y contexto de la IA, corrección del motor, conocimiento por lote y tope de gasto de la IA, historial de precio y cupo y «Preparar marca» |
-| Esquema SQLite | **30** (último cambio: Aliados, sin publicar; en producción está en 29). Respaldo previo al migrar: `backups/before-crm-v30-*` |
+| Pendiente de publicar | **Resumen de conversación** (tarjeta en el chat, por reglas y con IA; **esquema 31**), rama `feat/resumen-conversacion`, 179 pruebas. Ver [PLAN_RESUMEN_CONVERSACION.md](PLAN_RESUMEN_CONVERSACION.md). Ya publicados: Aliados (esquema 30), Pauta (29), memoria y contexto de la IA, corrección del motor, conocimiento por lote y tope de gasto de la IA, historial de precio y cupo y «Preparar marca» |
+| Esquema SQLite | **31** (último cambio: resumen de conversación, sin publicar; en producción está en 30). Respaldo previo al migrar: `backups/before-crm-v31-*` |
 | Pruebas | 159 aprobadas (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |
 | Experiencia del cliente | <https://crm-laboratorio-production.up.railway.app/> |
@@ -69,7 +69,7 @@ Ninguna función por marca está encendida en producción. Apagar un interruptor
 | Verificación en dos pasos | Mi configuración → Acceso y seguridad (cada persona) | Sólo contraseña |
 | Núcleo compartido | `CORE_SINK_URL` y `CORE_SINK_SECRET` en el entorno | Outbox simulado: nada sale del servidor |
 | Conectores reales | `CHANNEL_CONNECTOR`, `PAYMENT_CONNECTOR` y sus secretos en el entorno | Todo simulado |
-| IA real | `AI_PROVIDER=claude` y `ANTHROPIC_API_KEY` en el entorno; modelo `AI_MODEL` (por omisión `claude-sonnet-5-5`), topes `AI_MONTHLY_CALL_LIMIT` / `AI_MONTHLY_TOKEN_LIMIT` y `AI_KB_TOP_K` (entradas de conocimiento por llamada, 6) | Simulador local sin costo |
+| IA real | `AI_PROVIDER=claude` y `ANTHROPIC_API_KEY` en el entorno; modelo `AI_MODEL` (por omisión `claude-sonnet-5-5`), topes `AI_MONTHLY_CALL_LIMIT` / `AI_MONTHLY_TOKEN_LIMIT` y `AI_KB_TOP_K` (entradas de conocimiento por llamada, 6) y `AI_SUMMARY_MODEL` (resúmenes, `claude-haiku-5-5`) | Simulador local sin costo |
 
 Variables y respaldos: [OPERACION_Y_PRUEBAS.md](OPERACION_Y_PRUEBAS.md). Secretos: sólo en el entorno de Railway, nunca en el repositorio.
 
