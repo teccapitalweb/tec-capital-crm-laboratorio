@@ -34,6 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Mejora de diseño, segunda ronda: pantallas medianas (rama `feat/mejora-diseno-2`, 6 nov 2026)
+
+- **Qué había:** en pantallas de 1024 a 1280 px la tabla de Contactos escondía su última columna (acciones) tras un desplazamiento horizontal, las 8 pestañas de Catálogo también, y «Catálogo y biblioteca» se partía en dos líneas en el menú.
+- **Qué se hizo (sólo CSS y una etiqueta):** en ese rango las tablas del CRM compactan el relleno y dejan que el texto baje de línea; las pestañas de Catálogo pasan a una segunda línea en vez de desplazarse; el menú muestra «Catálogo» (el nombre completo sigue en el tooltip y en la etiqueta de accesibilidad). Celular y pantallas grandes no cambian. El tablero de Oportunidades conserva su desplazamiento horizontal a propósito.
+- **Verificado:** 179 pruebas; 1024 px (sin desplazamiento en Contactos ni Catálogo) y 375 px (sin desbordar). **Sin publicar.**
+
 ## Entregas completadas
 
 | Entrega | Commit | Resultado |

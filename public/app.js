@@ -56,9 +56,9 @@
   }
   // Barra lateral del equipo agrupada por tarea (Atención · Gestión · Resultados · Cuenta). Cada módulo sigue aportando sus botones; aquí sólo se ordenan.
   function sideNav(team){
-    const btn=(view,symbol,label)=>`<button data-view="${view}" class="${state.view===view?'active':''}" aria-label="${label}" title="${label}">${icon(symbol)}<span class="nav-label-text">${label}</span></button>`;
+    const btn=(view,symbol,label,short)=>`<button data-view="${view}" class="${state.view===view?'active':''}" aria-label="${label}" title="${label}">${icon(symbol)}<span class="nav-label-text">${short||label}</span></button>`;
     if(!team)return btn('inbox','inbox','Conversaciones')+btn('courses','book-open','Explorar cursos');
-    const by={inbox:btn('inbox','inbox','Conversaciones'),courses:btn('courses','book-open','Catálogo y biblioteca'),activity:btn('activity','chart-no-axes-column','Actividad')};
+    const by={inbox:btn('inbox','inbox','Conversaciones'),courses:btn('courses','book-open','Catálogo y biblioteca','Catálogo'),activity:btn('activity','chart-no-axes-column','Actividad')};
     [crmUI.nav(),operationsUI.nav(),portalUI.nav(),analyticsUI.nav(),presentationUI.nav()].forEach(html=>html.split(/(?<=<\/button>)/).forEach(piece=>{const m=piece.match(/data-view="([^"]+)"/);if(m)by[m[1]]=piece;}));
     const groups=[['Atención',['day','inbox','contacts','opportunities','tasks']],['Gestión',['courses','operations','team']],['Resultados',['results','analytics','activity','presentation']],['Cuenta',['settings']]];
     return groups.map(([title,ids])=>{const items=ids.map(id=>by[id]||'').join('');return items?`<div class="nav-group" role="group" aria-label="${title}"><div class="nav-group-title">${title}</div>${items}</div>`:'';}).join('');
