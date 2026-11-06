@@ -8,7 +8,7 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
 | Versión publicada | **0.34.0** en `main` (etiquetas en la bandeja). `/api/health` de producción devuelve `0.34.0` |
-| Pendiente de publicar | Biblioteca de 50 mensajes rápidos de consultora de cursos (sin cambio de versión ni de esquema), rama `feat/biblioteca-consultora`, 164 pruebas. Ver [BIBLIOTECA_RESPUESTAS_RAPIDAS.md](BIBLIOTECA_RESPUESTAS_RAPIDAS.md). Ya publicados: «Preparar marca», mensaje de fuera de horario, nota de la tarjeta del curso y respuestas rápidas más fáciles |
+| Pendiente de publicar | Historial de precio y cupo: eventos `catalogo.precio_cambiado` y `edicion.cupo_*`, línea de tiempo «Precio y cupo» y avisos al equipo (sin cambio de versión ni de esquema), rama `feat/historial-precio-cupo`, 166 pruebas. Ver [PLAN_HISTORIAL_PRECIO_CUPO.md](PLAN_HISTORIAL_PRECIO_CUPO.md). Ya publicados: «Preparar marca», fuera de horario, biblioteca de 50 mensajes y el acomodo de Configuración y Equipo |
 | Esquema SQLite | **28** (último cambio: respuestas rápidas). Respaldo previo al migrar: `backups/before-crm-v28-*` |
 | Pruebas | 159 aprobadas (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |

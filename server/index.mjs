@@ -147,7 +147,7 @@ const events=createEvents({db,crm,body,json,audit});
 const persons=createPersons({db,crm,events,body,json,audit,broadcast});
 crm.setContactHook(c=>persons.attach(c));
 crm.setStageHook(({id,eventId,actor,from,to,reason,source})=>{const o=db.prepare('SELECT brand_id,contact_id,course_id,edition_id FROM opportunities WHERE id=?').get(id);if(o)events.publish({type:'oportunidad.etapa',brandId:o.brand_id,entityKind:'opportunity',entityId:id,payload:{from,to,reason:reason||undefined,source,contactId:o.contact_id,courseId:o.course_id,editionId:o.edition_id},actorId:actor?.id||null,source:'crm',dedupeKey:'oportunidad.etapa:'+eventId});});
-const catalogue=createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer});
+const catalogue=createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer,events});
 // Contenido (server/content.mjs): plantillas por evento, funciones de diseño/aprobación, variantes por IA y fichas SVG. El proveedor de IA se resuelve al usarse.
 const content=createContent({db,crm,catalogue,events,insertMessage,provider:()=>aiProvider,body,json,audit,broadcast,dataDir});
 // Encuestas (server/surveys.mjs): invitación por chat con token propio, respuesta pública en /encuesta/<token>, resultados por apertura; envío automático por marca apagado.

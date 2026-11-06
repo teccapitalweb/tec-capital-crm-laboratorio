@@ -502,6 +502,11 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Mejora de base: historial de precio y cupo (rama `feat/historial-precio-cupo`, 6 nov 2026)
+
+- **Qué se hizo:** a pregunta del usuario («¿todo guarda bien?, porque se piensan poner llamadas automatizadas y saber si un curso se llenó, si el precio subió o bajó…») se revisó qué se guarda y se cerraron dos huecos: el cupo no dejaba rastro y los cambios de precio no eran eventos. Cinco tipos de evento nuevos (`catalogo.precio_cambiado`, `edicion.cupo_cambiado`, `_agotado`, `_liberado`, `_bajo`), línea de tiempo «Precio y cupo» por edición y avisos al equipo. Sin esquema nuevo. Detalle: [PLAN_HISTORIAL_PRECIO_CUPO.md](PLAN_HISTORIAL_PRECIO_CUPO.md).
+- **Evidencia:** 166 pruebas (unitaria de las reglas, incluido el 20 % de «quedan pocos» sin repetir, y recorrido por API: dos cambios de precio reales, tres inscripciones hasta agotar, baja que libera, línea de tiempo, permisos y avisos); en el demo local, la ventana a 375 px sin desborde. **Sin publicar.**
+
 ## Corrección: espacio desaprovechado en Mi configuración y Equipo (rama `fix/espacio-configuracion`, 6 nov 2026)
 
 - **Qué pasaba:** el usuario señaló que, aun después de acomodar las filas, sobraba mucho espacio: las respuestas rápidas vivían dentro de la columna angosta de «Acceso y seguridad», con la columna izquierda vacía al lado, y la lista de Equipo ocupaba un solo lado.

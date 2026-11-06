@@ -4,6 +4,7 @@ import {resolve} from 'node:path';
 import {transaction} from './database.mjs';
 import {cancelConversationSteps} from './automation.mjs';
 import {defaultEditionId,ensureDefaultEdition} from './catalogue-schema.mjs';
+import {publishPriceChange,publishSeatChange,timeline} from './catalogue-events.mjs';
 import {artworkAsset} from './demo-catalog.mjs';
 
 const fail=(status,message)=>Object.assign(new Error(message),{status});
@@ -35,7 +36,7 @@ export function validateTemplateBody(bodyText){
   const matches=[...bodyText.matchAll(/\{\{([^{}]+)\}\}/g)];
   if(matches.some(m=>!variables.includes(m[1].trim()))||bodyText.replace(/\{\{[^{}]+\}\}/g,'').includes('{{')||bodyText.replace(/\{\{[^{}]+\}\}/g,'').includes('}}'))throw fail(400,'Usa sólo las variables disponibles y cierra sus llaves.');
 }
-export function createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer}){
+export function createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,attachmentData,accessConversation,insertMessage,serveFlyer,events=null}){
   function admin(user){const current=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!current||current.disabled||current.role!=='admin')throw fail(403,'Sólo administración puede editar y aprobar el catálogo.');}
   function scoped(table,id,user){const row=db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);if(!row)throw fail(404,'Contenido no disponible.');crm.requireBrand(user,row.brand_id);return row;}
   function record(kind,row,user,action){const snapshot=kind==='promotion'?{...row,currency:edition(row.edition_id).currency}:row;db.prepare('INSERT INTO catalogue_events(brand_id,entity_kind,entity_id,revision,action,actor_id,snapshot,created_at) VALUES(?,?,?,?,?,?,?,?)').run(row.brand_id,kind,row.id,row.revision||row.version,action,user?.id||null,JSON.stringify(snapshot),Date.now());audit(user,'catalogue.'+kind+'.'+action,row.id);}
@@ -117,7 +118,7 @@ export function createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,a
   }
   function legacyUpdated(c,user){
     const id=ensureDefaultEdition(db,c),e=edition(id);
-    if(e.legacy){db.prepare('UPDATE editions SET price_cents=?,revision=revision+1,updated_at=? WHERE id=?').run(c.price_cents,Date.now(),id);record('edition',edition(id),user,'updated');}
+    if(e.legacy){db.prepare('UPDATE editions SET price_cents=?,revision=revision+1,updated_at=? WHERE id=?').run(c.price_cents,Date.now(),id);record('edition',edition(id),user,'updated');const after=edition(id);publishPriceChange(events,e,after,{actorId:user?.id||null,source:'catalogo',dedupeKey:after.id+':'+after.revision});}
     record('course',c,user,'updated');changed(c.brand_id);
   }
   async function handle(req,res,path,user){
@@ -164,6 +165,8 @@ export function createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,a
         flyers:permitted(db.prepare('SELECT f.*,l.mime,l.filename FROM flyers f JOIN library_files l ON l.id=f.file_id ORDER BY f.updated_at DESC').all()).map(f=>({...f,availability:flyerState(f),fileUrl:'/api/library/files/'+f.file_id})),
         templates:permitted(db.prepare('SELECT * FROM content_templates ORDER BY title').all()),variables});return true;
     }
+    const line=path.match(/^\/api\/catalogue\/edition\/([a-z0-9-]+)\/timeline$/);
+    if(line&&req.method==='GET'){const e=scoped('editions',line[1],user);json(res,200,{edition:{id:e.id,name:e.name,priceCents:e.price_cents,sessionPriceCents:e.session_price_cents,currency:e.currency,capacity:e.capacity,availableSeats:e.available_seats,status:e.status},timeline:timeline(db,e.id)});return true;}
     const history=path.match(/^\/api\/catalogue\/(course|edition|promotion|flyer|template)\/([a-z0-9-]+)\/history$/);
     if(history&&req.method==='GET'){
       const tables={course:'courses',edition:'editions',promotion:'promotions',flyer:'flyers',template:'content_templates'};const item=scoped(tables[history[1]],history[2],user),before=Number(url.searchParams.get('before'))||Number.MAX_SAFE_INTEGER;
@@ -215,7 +218,9 @@ export function createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,a
         if(sessionCost!==null&&sessionCost>cost)throw fail(400,'El precio por sesión no puede superar el precio regular.');
         if(link){try{if(!['https:','http:'].includes(new URL(link).protocol))throw Error();}catch{throw fail(400,'El enlace debe comenzar con https:// o http://.');}}
         if(old){const promos=db.prepare("SELECT * FROM promotions WHERE edition_id=? AND status='published' AND ends_at>?").all(old.id,Date.now());if(promos.some(p=>p.price_cents>=cost||starts!==null&&p.ends_at>starts)||promos.length&&currency!==old.currency)throw fail(400,'Ajusta o archiva primero las promociones publicadas que entran en conflicto con el precio, moneda o fecha nuevos.');}
-        const row={id:old?.id||randomUUID(),brand_id:c.brand_id,course_id:c.id,name,starts_at:starts,ends_at:ends,timezone:zone,instructor:txt(input.instructor,120),modality:input.modality,location:txt(input.location,250),capacity,available_seats:available,info_url:link,price_cents:cost,session_price_cents:sessionCost,currency,status,legacy:0,revision:(old?.revision||0)+1,created_at:old?.created_at||Date.now(),updated_at:Date.now()};save(table,row,old);record(kind,row,user,old?'updated':'created');return row;
+        const row={id:old?.id||randomUUID(),brand_id:c.brand_id,course_id:c.id,name,starts_at:starts,ends_at:ends,timezone:zone,instructor:txt(input.instructor,120),modality:input.modality,location:txt(input.location,250),capacity,available_seats:available,info_url:link,price_cents:cost,session_price_cents:sessionCost,currency,status,legacy:0,revision:(old?.revision||0)+1,created_at:old?.created_at||Date.now(),updated_at:Date.now()};save(table,row,old);record(kind,row,user,old?'updated':'created');
+        if(old){const key=row.id+':'+row.revision;publishPriceChange(events,old,row,{actorId:user.id,source:'catalogo',dedupeKey:key});publishSeatChange(events,row,old.available_seats,row.available_seats,{reason:'manual',actorId:user.id,source:'catalogo',dedupeKey:key});}
+        return row;
       }else if(type==='promotions'){
         const e=edition(old?.edition_id||input.editionId);crm.requireBrand(user,e.brand_id);const name=txt(input.name,120),cost=price(input.price),starts=date(input.startsAt),ends=date(input.endsAt),status=input.status||'draft';
         if(!name||starts===null||ends===null||ends<=starts||cost>=e.price_cents||!['draft','published','archived'].includes(status))throw fail(400,'La promoción necesita nombre, precio menor al regular y un período válido.');
@@ -241,5 +246,16 @@ export function createCatalogue({db,crm,body,json,audit,broadcast,dataDir,root,a
   }
   function save(table,row,old){const keys=Object.keys(row);if(old)db.prepare(`UPDATE ${table} SET ${keys.filter(k=>k!=='id').map(k=>k+'=?').join(',')} WHERE id=?`).run(...keys.filter(k=>k!=='id').map(k=>row[k]),row.id);else db.prepare(`INSERT INTO ${table}(${keys.join(',')}) VALUES(${keys.map(()=>'?').join(',')})`).run(...keys.map(k=>row[k]));}
   let contentGate=null;
+  // Avisos al equipo (Mis avisos) cuando una edición se agota, se libera un lugar, quedan pocos o cambia su precio. Se suscriben al índice
+  // de eventos, así que ocurren fuera de la transacción que hizo el cambio y se reintentan solos.
+  if(events){
+    const money=(cents,cur)=>new Intl.NumberFormat('es-MX',{style:'currency',currency:cur||'MXN'}).format((cents||0)/100);
+    const staffOf=brandId=>db.prepare("SELECT id FROM users WHERE role IN ('admin','agent') AND COALESCE(disabled,0)=0 AND (role='admin' OR id IN (SELECT user_id FROM brand_members WHERE brand_id=?))").all(brandId).map(u=>u.id);
+    const notifyAll=(title)=>ev=>{const t=Date.now(),text=title(ev.payload,db.prepare('SELECT title FROM courses WHERE id=?').get(ev.payload.courseId)?.title||'Curso');for(const uid of staffOf(ev.brand_id))db.prepare('INSERT OR IGNORE INTO notifications(id,user_id,brand_id,conversation_id,kind,title,event_key,created_at) VALUES(?,?,?,?,?,?,?,?)').run(randomUUID(),uid,ev.brand_id,null,'catalogue',text,'catalogue:'+ev.seq,t);};
+    events.subscribe('edicion.cupo_agotado','catalogue.alert',notifyAll((p,c)=>'Se agotó el cupo · '+c+' · '+p.name));
+    events.subscribe('edicion.cupo_liberado','catalogue.alert',notifyAll((p,c)=>'Se liberó un lugar · '+c+' · '+p.name+' · '+p.available+' disponible'+(p.available===1?'':'s')));
+    events.subscribe('edicion.cupo_bajo','catalogue.alert',notifyAll((p,c)=>'Quedan pocos lugares · '+c+' · '+p.name+' · '+p.available+' de '+p.capacity));
+    events.subscribe('catalogo.precio_cambiado','catalogue.alert',notifyAll((p,c)=>'El precio '+(p.direction==='subio'?'subió':p.direction==='bajo'?'bajó':'cambió')+' · '+c+' · '+p.name+' · de '+money(p.from,p.currency)+' a '+money(p.to,p.currency)));
+  }
   return {handle,info,prepare,serveFile,flyerState,legacyUpdated,editionState,setContentGate:fn=>{contentGate=fn;}};
 }

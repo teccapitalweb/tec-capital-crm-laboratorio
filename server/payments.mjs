@@ -1,6 +1,7 @@
 import {randomUUID,randomBytes} from 'node:crypto';
 import {transaction} from './database.mjs';
 import {cancelConversationSteps} from './automation.mjs';
+import {publishSeatChange} from './catalogue-events.mjs';
 
 // Venta con pago simulado (Fase 1 · bloque 4). Un pedido nace de una conversación (lo crea el equipo con «Cobrar» o el
 // motor de respuestas al detectar una inscripción, si la marca lo tiene activo), con importe tomado del catálogo en ese
@@ -80,7 +81,9 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     }
     const plan=o.plan==='per_session'?'per_session':'full',covered=plan==='per_session'?db.prepare("SELECT id FROM edition_sessions WHERE edition_id=? AND status='scheduled' AND starts_at+duration_min*60000>? ORDER BY starts_at LIMIT 1").get(o.edition_id,t)?.id||null:null;
     const enrollmentId=randomUUID();db.prepare('INSERT INTO enrollments(id,order_id,brand_id,contact_id,opportunity_id,course_id,edition_id,status,created_at,payment_plan,covered_session_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(enrollmentId,o.id,o.brand_id,o.contact_id,o.opportunity_id,o.course_id,o.edition_id,'enrolled',t,plan,covered);
+    const seatsBefore=db.prepare('SELECT available_seats s FROM editions WHERE id=?').get(o.edition_id)?.s;
     db.prepare('UPDATE editions SET available_seats=available_seats-1,updated_at=? WHERE id=? AND available_seats IS NOT NULL AND available_seats>0').run(t,o.edition_id);
+    {const ed=db.prepare('SELECT * FROM editions WHERE id=?').get(o.edition_id);publishSeatChange(events,ed,seatsBefore,ed?.available_seats,{reason:'inscripcion',actorId:actor?.id||null,source:'pago',dedupeKey:'enrollment:'+enrollmentId});}
     // La venta la cierra quien confirma; un pago del proveedor simulado queda sin actor (origen «pago»).
     crm.setStage(c,'ganada',actor||{id:null},{});
     event(o.id,'confirmed',{method,providerRef,note:text(note,500)},actor?.id||null,t);

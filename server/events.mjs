@@ -43,6 +43,11 @@ export const EVENT_TYPES={
   'pago.condonado':{title:'Pago de sesión condonado',entity:'session',payload:'editionId, enrollmentId, number, amountCents, currency, note'},
   'encuesta.enviada':{title:'Encuesta enviada',entity:'survey',payload:'editionId, sessionId, kind, title, invited, skipped'},
   'encuesta.respondida':{title:'Encuesta respondida',entity:'survey',payload:'editionId, sessionId, title, contentScore, instructorScore, organizationScore, nps, comment'},
+  'catalogo.precio_cambiado':{title:'Precio de una edición cambió',entity:'edition',payload:'courseId, name, currency, from, to, sessionFrom, sessionTo, deltaCents, deltaPct, direction'},
+  'edicion.cupo_cambiado':{title:'Cupo disponible cambió',entity:'edition',payload:'courseId, name, capacity, from, to, reason'},
+  'edicion.cupo_agotado':{title:'Se agotó el cupo',entity:'edition',payload:'courseId, name, capacity, from, reason'},
+  'edicion.cupo_liberado':{title:'Se liberó un lugar',entity:'edition',payload:'courseId, name, capacity, available, reason'},
+  'edicion.cupo_bajo':{title:'Quedan pocos lugares',entity:'edition',payload:'courseId, name, capacity, available, threshold, reason'},
   'historico.importado':{title:'Históricos importados',entity:'batch',payload:'source, format, filename, counts, repeated, personsCreated'},
 };
 export const ENTITY_KINDS={conversation:'Conversación',opportunity:'Oportunidad',order:'Pedido',enrollment:'Inscripción',message:'Mensaje',contact:'Contacto',edition:'Apertura',session:'Sesión',payout:'Pago de comisión',person:'Persona',certificate:'Certificado',resource:'Recurso de apertura',survey:'Encuesta',batch:'Importación de históricos'};

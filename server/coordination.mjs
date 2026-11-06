@@ -1,6 +1,7 @@
 import {randomUUID,randomBytes} from 'node:crypto';
 import {transaction} from './database.mjs';
 import {SURVEY_MODES} from './surveys.mjs';
+import {publishSeatChange} from './catalogue-events.mjs';
 
 // Coordinación académica (Fase 2 · bloque 2.3, arranque). La «apertura» del panel IPCIL y la «cohorte» de la Academia
 // son la misma edición del catálogo: mínimo de alumnos, inscritos (desde enrollments, que nacen del pago confirmado),
@@ -217,7 +218,9 @@ export function createCoordination({db,crm,events,insertMessage,body,json,audit,
     const t=now(),c=courseOf(e);
     transaction(db,()=>{
       if(!db.prepare("UPDATE enrollments SET status='cancelled',cancelled_at=?,cancel_reason=? WHERE id=? AND status='enrolled'").run(t,reason,id).changes)throw fail(409,'La inscripción cambió. Recárgala.');
+      const seatsBefore=db.prepare('SELECT available_seats s FROM editions WHERE id=?').get(e.id)?.s;
       db.prepare('UPDATE editions SET available_seats=available_seats+1,updated_at=? WHERE id=? AND available_seats IS NOT NULL AND (capacity IS NULL OR available_seats<capacity)').run(t,e.id);
+      {const ed=db.prepare('SELECT * FROM editions WHERE id=?').get(e.id);publishSeatChange(events,ed,seatsBefore,ed?.available_seats,{reason:'baja',actorId:user?.id||null,source:'coordination',dedupeKey:'enrollment-cancel:'+id});}
       db.prepare("UPDATE session_payments SET status='waived',note='Baja de la inscripción',updated_at=? WHERE enrollment_id=? AND status='pending'").run(t,id);payments?.voidSessionOrders({enrollmentId:id},'Baja de la inscripción: '+reason,user);
       emit('inscripcion.cancelada',e,'enrollment',id,{orderId:en.order_id,editionId:e.id,courseId:e.course_id,courseTitle:c.title,contactId:en.contact_id,reason},user,'coordination');
       notify(e,'coordination','Baja de inscripción · '+c.title+' · '+e.name+' · '+enrolled(e.id)+' inscritos','enrollment:'+id+':cancelled');
