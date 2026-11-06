@@ -57,7 +57,13 @@ test('resumen de conversación: reglas con datos verdaderos, sin datos de contac
  const none=mk({summarize:async()=>({summary:null,reason:'Proveedor simulado'})});assert.equal((await none.refresh(row)).source,'rules');
 
  // la IA que responde recibe un resumen sólo en chats largos, y uno desactualizado se renueva
- const long=await ai.ensureFor(row);assert.ok(long&&/Busca el curso de aves/.test(long)||/Ana escribió/.test(long));
+ await ai.refresh(row);const long=await ai.ensureFor(row);assert.ok(long&&/Busca el curso de aves/.test(long),'la IA que responde recibe la narrativa');
+ // …pero NUNCA lo interno del equipo: quién la atiende, etapa, seguimientos, pedidos, siguiente paso ni conteos del equipo
+ db.prepare("UPDATE conversations SET assigned_to=(SELECT id FROM users WHERE username='admin') WHERE id=?").run(conv.id);
+ const teamText=(await ai.refresh(db.prepare('SELECT * FROM conversations WHERE id=?').get(conv.id))).text;assert.match(teamText,/Siguiente paso sugerido|La atiende/,'el resumen del equipo sí lo lleva');
+ assert.doesNotMatch(long,/La atiende|Administración|Siguiente paso|Seguimientos|pedido|Etapa:|del equipo|automáticos|Espera a una persona|Pendiente:/,'a la IA del cliente no le llega lo interno');
+ assert.doesNotMatch(ai.forCustomerAi(db.prepare('SELECT * FROM conversation_summaries WHERE conversation_id=?').get(conv.id)),/La atiende|Siguiente paso|Seguimientos|Etapa:|automáticos/);
+ db.prepare('UPDATE conversations SET assigned_to=NULL WHERE id=?').run(conv.id);
  for(let i=0;i<10;i++)await say('Mensaje de relleno número '+i,false);
  const stale=db.prepare('SELECT message_count FROM conversation_summaries WHERE conversation_id=?').get(conv.id).message_count;
  await ai.ensureFor(row);assert.ok(db.prepare('SELECT message_count FROM conversation_summaries WHERE conversation_id=?').get(conv.id).message_count>stale,'se renovó porque pasaron más de 8 mensajes');

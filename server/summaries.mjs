@@ -82,6 +82,7 @@ export function createSummaries({db,crm,provider,accessConversation,body,json,au
     const msgs=messagesOf(c.id);if(!msgs.length)throw fail(409,'La conversación todavía no tiene mensajes.');
     const prev=get(c.id),rules=byRules(c,msgs);let ai=null;
     try{ai=await narrative(c,msgs,prev?.source==='ai'?prev.text.split('\n')[0]:null);}catch{ai=null;}
+    if(ai)rules.facts.narrative=ai.summary;
     const parts=[];if(ai){parts.push(ai.summary);if(ai.objections.length)rules.facts.objections=[...new Set([...rules.facts.objections,...ai.objections])];if(ai.pending.length)parts.push('Pendiente: '+ai.pending.join('; ')+'.');parts.push(...rules.lines.slice(1));}else parts.push(...rules.lines);
     const text=parts.join('\n'),t=now(),upto=msgs.at(-1).seq;
     db.prepare("INSERT INTO conversation_summaries(conversation_id,upto_seq,message_count,text,data,source,model,requested_by,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,1,?,?) ON CONFLICT(conversation_id) DO UPDATE SET upto_seq=excluded.upto_seq,message_count=excluded.message_count,text=excluded.text,data=excluded.data,source=excluded.source,model=excluded.model,requested_by=excluded.requested_by,revision=conversation_summaries.revision+1,updated_at=excluded.updated_at")
@@ -89,13 +90,23 @@ export function createSummaries({db,crm,provider,accessConversation,body,json,au
     if(user)audit(user,'conversation.summary',c.id);
     return view(get(c.id),msgs.length);
   }
+  // Versión para la IA que RESPONDE AL CLIENTE: sólo lo que la propia persona dijo o preguntó (el hilo), nunca lo interno del equipo: quién la atiende, etapa
+  // comercial, seguimientos, pedidos, siguiente paso sugerido ni conteos del equipo. El resumen del equipo sigue siendo sólo para el equipo.
+  function forCustomerAi(row){
+    const d=JSON.parse(row.data||'{}'),parts=[];
+    parts.push(d.narrative||`La persona escribió por ${d.channel||'el chat'} sobre ${d.course||'un curso'}.`);
+    if(d.topics?.length)parts.push('Ha preguntado por: '+d.topics.join(', ')+'.');
+    if(d.objections?.length)parts.push('Dudas que expresó: '+d.objections.join('; ')+'.');
+    if(d.questions?.length)parts.push('Últimas preguntas: '+d.questions.map(q=>'«'+q+'»').join(' · '));
+    return parts.join('\n');
+  }
   // Para que la IA que responde no pierda el principio de un chat largo: el resumen vigente, o uno nuevo si hace falta. Nunca falla la respuesta.
   const LONG=12,STALE=8;
   async function ensureFor(c){
     try{
       const n=db.prepare('SELECT count(*) n FROM messages WHERE conversation_id=?').get(c.id).n;if(n<=LONG)return null;
       let row=get(c.id);if(!row||n-row.message_count>STALE)row=(await refresh(c))&&get(c.id);
-      return row?.text||null;
+      return row?forCustomerAi(row):null;   // nunca el texto del equipo
     }catch{return null;}
   }
   // Al pasar un chat a una persona se deja listo el resumen (sin esperar).
@@ -111,5 +122,5 @@ export function createSummaries({db,crm,provider,accessConversation,body,json,au
     if(req.method==='POST'){rate('summary:'+user.id,12);await body(req).catch(()=>({}));json(res,200,{summary:await refresh(c,user)});return true;}
     throw fail(405,'Método no permitido.');
   }
-  return {handle,refresh,ensureFor,auto,byRules,get};
+  return {handle,refresh,ensureFor,auto,byRules,get,forCustomerAi};
 }

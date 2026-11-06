@@ -502,6 +502,10 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Corrección: el resumen que ve la IA del cliente no lleva datos internos (rama `fix/resumen-ia-sin-datos-internos`, 6 nov 2026)
+
+- **Qué pasó:** la revisión de seguridad automática señaló que el resumen publicado (v. abajo) se le pasaba a la IA que responde al cliente tal cual lo ve el equipo, con quién atiende, etapa, seguimientos, pedidos y siguiente paso. **Qué se hizo:** la IA del cliente recibe una versión aparte con sólo lo que la propia persona dijo o preguntó, y la instrucción de no citarlo; una prueba lo fija. La IA seguía apagada en producción. **Sin publicar.**
+
 ## Resumen de conversación (rama `feat/resumen-conversacion`, 6 nov 2026)
 
 - **Qué se hizo:** el usuario dijo «tú ve con qué podemos seguir» y se eligió lo que más pesaba para la IA sin depender de terceros: la IA sólo veía los últimos 6 mensajes y quien tomaba un chat avanzado tenía que leerlo completo. Tarjeta **Resumen** en cada chat (por reglas siempre, con IA si hay proveedor y tope; modelo económico `AI_SUMMARY_MODEL`), automática al pasar a una persona y usada por la IA que responde en chats de más de 12 mensajes. Datos del cliente enmascarados, nombre reducido a una palabra y la conversación tratada como información, no como órdenes. **Esquema 31.** Detalle: [PLAN_RESUMEN_CONVERSACION.md](PLAN_RESUMEN_CONVERSACION.md).
