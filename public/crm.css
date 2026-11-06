@@ -64,3 +64,10 @@
 .qr-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0 0}.qr-group-head .qr-group{margin:0}.qr-group span{color:var(--text-3);font-weight:400}
 .qr-group-head .btn{min-height:40px}.qr-group-head small{font-size:11px;color:var(--text-3)}
 .qr-actions .btn,.qr-bar .btn,.qr-lib-top .btn,.qr-group-head .btn{min-height:40px}
+/* Lista de Mi configuración: la columna es angosta, así que cada respuesta va en vertical (atajo, texto y acciones) */
+.qr-list .qr-row{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-items:start}
+.qr-list .qr-row .slash-key{justify-self:start;flex:none;width:auto;max-width:100%;text-align:left}
+.qr-list .qr-row .qr-copy{min-width:0}
+.qr-list .qr-row .qr-actions{justify-content:flex-start;width:auto}
+.qr-list .qr-row .qr-actions small{font-size:11px;color:var(--text-3)}
+.qr-list .qr-text{-webkit-line-clamp:2}

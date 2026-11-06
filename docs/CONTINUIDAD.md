@@ -502,6 +502,12 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Corrección: filas de respuestas rápidas aplastadas en Mi configuración (rama `fix/filas-respuestas`, 6 nov 2026)
+
+- **Qué pasaba:** el usuario mostró con una captura que, en la columna angosta de Mi configuración, cada respuesta rápida repartía el ancho entre el atajo, el texto y tres botones; el título y el texto quedaban en una columna de pocas letras y los botones los pisaban.
+- **Qué se hizo:** en esa lista cada respuesta va en vertical (atajo, título y texto, acciones debajo; el texto se corta a dos líneas). Sólo estilos. La biblioteca de ejemplos, que está en una ventana ancha, no cambia.
+- **Evidencia:** en el demo local con la columna limitada a 420 px: sin texto encimado y botones completos. **Sin publicar.**
+
 ## Mejora de uso: biblioteca de 50 mensajes de consultora de cursos (rama `feat/biblioteca-consultora`, 6 nov 2026)
 
 - **Qué se hizo:** «Ejemplos listos» pasa de 13 a **50 mensajes** en nueve grupos (descubrir lo que necesita, objeciones, inscripción, pagos, seguimiento, alumnos, cierre…), con buscador y «Agregar el grupo». A petición del usuario, para que la biblioteca sea de nivel consultora. Instantánea para revisar: [BIBLIOTECA_RESPUESTAS_RAPIDAS.md](BIBLIOTECA_RESPUESTAS_RAPIDAS.md). Sin esquema nuevo.
