@@ -81,7 +81,7 @@ window.createQuickRepliesUI=function({state,api,esc,icon,showModal,toast}){
   const SAMPLE={nombre:'Ana',nombre_completo:'Ana López',curso:'Curso de ejemplo',edicion:'Primera edición',asesor:'tu nombre'};
   const preview=(body,brand)=>esc(body.replace(/\{\{([^{}]+)\}\}/g,(m,k)=>({...SAMPLE,marca:brand||'tu marca',asesor:(state.user?.name||'').split(' ')[0]||SAMPLE.asesor})[k.trim()]??m));
   const hl=body=>esc(body).replace(/\{\{([^{}]+)\}\}/g,'<mark>{{$1}}</mark>');
-  const GROUPS=['Saludar','Informar','Seguimiento','Pagos','Cerrar'];
+  const groupsOf=()=>[...new Set(data.starter.map(x=>x.group))];
   let filter='all',search='';
   const slug=t=>t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
   // corta en una palabra completa (hasta 20 caracteres) para que el atajo no quede a medias
@@ -138,7 +138,14 @@ window.createQuickRepliesUI=function({state,api,esc,icon,showModal,toast}){
     showModal('Ejemplos listos para usar',`<p class="crm-hint">Agrega las que te sirvan y cámbialas cuando quieras. Ninguna lleva precios ni fechas: eso lo pones tú o sale de las plantillas aprobadas.</p>
       <div class="qr-lib-top"><label class="field">Agregar a<select id="qr-lib-dest"><option value="personal" ${dest==='personal'?'selected':''}>Mis respuestas (sólo yo)</option>${data.canShare?data.brands.map(b=>`<option value="${esc(b.id)}" ${dest===b.id?'selected':''}>Todo el equipo de ${esc(b.name)}</option>`).join(''):''}</select></label>
       <button type="button" class="btn primary" data-action="qr-add-all" ${missing.length?'':'disabled'}>${missing.length?`Agregar las ${missing.length} que faltan a ${esc(target)}`:'Ya tienes todas'}</button></div>
-      ${GROUPS.map(g=>`<h4 class="qr-group">${g}</h4>${data.starter.filter(s=>s.group===g).map(s=>`<article class="qr-row"><span class="slash-key">/${esc(s.shortcut)}</span><div class="qr-copy"><strong>${esc(s.title)}</strong><p class="qr-text">${preview(s.body,data.brands[0]?.name)}</p></div><div class="qr-actions">${have.has(s.shortcut)?'<small>Ya la tienes</small>':`<button type="button" class="btn" data-action="qr-add-one" data-shortcut="${esc(s.shortcut)}">Agregar</button>`}</div></article>`).join('')}`).join('')}`);
+      <label class="qr-search qr-lib-search"><span class="sr-only">Buscar entre los ejemplos</span>${icon('search')}<input id="qr-lib-search" type="search" placeholder="Buscar: caro, pago pendiente, bienvenida…" autocomplete="off"></label>
+      ${groupsOf().map(g=>{const rows=data.starter.filter(s=>s.group===g),todo=rows.filter(s=>!have.has(s.shortcut));return `<section class="qr-lib-group" data-group><div class="qr-group-head"><h4 class="qr-group">${esc(g)} <span>${rows.length}</span></h4>${todo.length?`<button type="button" class="btn" data-action="qr-add-group" data-id="${esc(g)}">Agregar las ${todo.length}</button>`:'<small>Ya las tienes</small>'}</div>${rows.map(s=>`<article class="qr-row" data-find="${esc((s.shortcut+' '+s.title+' '+s.body).toLowerCase())}"><span class="slash-key">/${esc(s.shortcut)}</span><div class="qr-copy"><strong>${esc(s.title)}</strong><p class="qr-text">${preview(s.body,data.brands[0]?.name)}</p></div><div class="qr-actions">${have.has(s.shortcut)?'<small>Ya la tienes</small>':`<button type="button" class="btn" data-action="qr-add-one" data-shortcut="${esc(s.shortcut)}">Agregar</button>`}</div></article>`).join('')}</section>`;}).join('')}`);
+    const sel=$('#qr-lib-dest');if(sel&&dest!==sel.value)sel.value=dest;
+  }
+  function filterLibrary(q){
+    const t=q.trim().toLowerCase().replace(/^\//,'');let any=false;
+    document.querySelectorAll('#modal [data-group]').forEach(g=>{let n=0;g.querySelectorAll('.qr-row').forEach(r=>{const ok=!t||r.dataset.find.includes(t);r.hidden=!ok;if(ok)n++;});g.hidden=!n;if(n)any=true;});
+    let none=document.querySelector('#qr-lib-none');if(!any&&!none){document.querySelector('#modal [data-group]:last-of-type')?.insertAdjacentHTML('afterend','<p id="qr-lib-none" class="crm-hint">Ningún ejemplo coincide. Prueba con otra palabra.</p>');}if(any)none?.remove();
   }
   async function addStarter(shortcuts){
     const dest=$('#qr-lib-dest')?.value||'personal',scope=dest==='personal'?'personal':'brand';let added=0,skipped=0;
@@ -152,6 +159,7 @@ window.createQuickRepliesUI=function({state,api,esc,icon,showModal,toast}){
   }
   document.addEventListener('input',e=>{
     if(e.target.id==='qr-search'){search=e.target.value;paintList();return;}
+    if(e.target.id==='qr-lib-search'){filterLibrary(e.target.value);return;}
     if(e.target.id==='qr-body')paintPreview();
     if(e.target.id==='qr-title'){const sc=$('#qr-shortcut');if(sc&&!sc.dataset.touched&&!$('#qr-form [name=id]')?.value)sc.value=short(e.target.value);}
     if(e.target.id==='qr-shortcut')e.target.dataset.touched='1';
@@ -175,6 +183,7 @@ window.createQuickRepliesUI=function({state,api,esc,icon,showModal,toast}){
       if(name==='qr-dup'){await ensure();const r=data.quickReplies.find(x=>x.id===el.dataset.id);if(r){form(null,{shortcut:(r.shortcut+'-2').slice(0,20),title:(r.title+' (copia)').slice(0,60),body:r.body});}return true;}
       if(name==='qr-filter'){filter=el.dataset.id;await mount();return true;}
       if(name==='qr-library'){await ensure();library();return true;}
+      if(name==='qr-add-group'){const dest=$('#qr-lib-dest')?.value||'personal',have=new Set(data.quickReplies.filter(r=>dest==='personal'?r.scope==='personal':r.brandId===dest).map(r=>r.shortcut));await addStarter(data.starter.filter(x=>x.group===el.dataset.id&&!have.has(x.shortcut)).map(x=>x.shortcut));return true;}
       if(name==='qr-add-one'){await addStarter([el.dataset.shortcut]);return true;}
       if(name==='qr-add-all'){const dest=$('#qr-lib-dest')?.value||'personal',have=new Set(data.quickReplies.filter(r=>dest==='personal'?r.scope==='personal':r.brandId===dest).map(r=>r.shortcut));await addStarter(data.starter.filter(x=>!have.has(x.shortcut)).map(x=>x.shortcut));return true;}
       if(name==='qr-edit'){await ensure();form(data.quickReplies.find(x=>x.id===el.dataset.id));return true;}

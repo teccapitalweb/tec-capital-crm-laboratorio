@@ -58,3 +58,9 @@
 .qr-row .slash-key{flex:0 0 108px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:680px){.qr-row .slash-key{flex:0 0 auto;max-width:100%}}
 .qr-lib-top select,.qr-lib-top .btn{min-height:44px}
+.qr-row[hidden],.qr-lib-group[hidden]{display:none}
+.qr-lib-search{margin:10px 0 4px;width:100%}
+.qr-lib-group{display:grid;gap:8px}
+.qr-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0 0}.qr-group-head .qr-group{margin:0}.qr-group span{color:var(--text-3);font-weight:400}
+.qr-group-head .btn{min-height:40px}.qr-group-head small{font-size:11px;color:var(--text-3)}
+.qr-actions .btn,.qr-bar .btn,.qr-lib-top .btn,.qr-group-head .btn{min-height:40px}

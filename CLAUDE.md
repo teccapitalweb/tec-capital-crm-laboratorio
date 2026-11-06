@@ -34,7 +34,7 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 4k. [Base de pruebas local](docs/BASE_DE_PRUEBAS.md): `npm run demo` crea una base con un usuario de cada tipo y datos de ejemplo para probar sin tocar producción (herramienta de desarrollo, sin versión ni esquema nuevos; publicada en `main`).
 4m. [Preparar marca](docs/PLAN_PREPARAR_MARCA.md): Operación → Preparar marca, lista de verificación por marca (sólo lectura, sin esquema nuevo; publicada en `main`).
 4n. [Mensaje de fuera de horario](docs/PLAN_FUERA_DE_HORARIO.md): evento de Contenido con la próxima apertura (sin esquema nuevo; publicado en `main`).
-4o. [Respuestas rápidas más fáciles](docs/PLAN_RESPUESTAS_FACILES.md): ejemplos listos, vista previa, búsqueda y duplicar en Mi configuración (sin esquema nuevo; rama `feat/respuestas-rapidas-faciles`, sin publicar).
+4o. [Respuestas rápidas más fáciles](docs/PLAN_RESPUESTAS_FACILES.md): ejemplos listos (50, [lista](docs/BIBLIOTECA_RESPUESTAS_RAPIDAS.md)), vista previa, búsqueda y duplicar en Mi configuración (sin esquema nuevo; publicado en `main` con 13 ejemplos; la ampliación a 50, rama `feat/biblioteca-consultora`, sin publicar).
 4b. [Visión de la plataforma](docs/VISION_PLATAFORMA.md): el CRM como módulo de la plataforma de toda la empresa (IPCIL, Academia, finanzas, canales reales); diagnóstico, arquitectura objetivo y fases.
 5. [README](README.md) y [ROADMAP](ROADMAP.md): recorridos del producto y planificación general.
 

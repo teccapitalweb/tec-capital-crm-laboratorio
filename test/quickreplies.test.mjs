@@ -89,14 +89,19 @@ test('respuestas rápidas por API: permisos, validación, personales y de marca,
 });
 
 test('biblioteca de ejemplos: todos son válidos, con atajos únicos, sin precios ni fechas, y la API los entrega',async t=>{
- assert.ok(STARTER.length>=10);
+ assert.ok(STARTER.length>=40);const groups=new Set(STARTER.map(x=>x.group));assert.equal(groups.size,9);for(const g of groups)assert.ok(STARTER.filter(x=>x.group===g).length>=3,g+' debe tener al menos 3 ejemplos');
  const shortcuts=new Set();
  for(const s of STARTER){
   assert.match(s.shortcut,/^[a-z0-9áéíóúüñ_-]{2,20}$/,s.shortcut);assert.ok(!shortcuts.has(s.shortcut),'atajo repetido '+s.shortcut);shortcuts.add(s.shortcut);
   assert.ok(s.title.length>0&&s.title.length<=60,s.title);assert.ok(s.body.length>=10&&s.body.length<=1500,s.shortcut);
   validateBody(s.body);                                              // sólo variables de conversación
   assert.doesNotMatch(s.body,/\$|\d|pesos|mxn|usd/i,s.shortcut+': los ejemplos no llevan precios, fechas ni números');
-  assert.ok(['Saludar','Informar','Seguimiento','Pagos','Cerrar'].includes(s.group),s.group);
+  assert.ok(['Saludar','Descubrir','Informar','Objeciones','Inscripción','Pagos','Seguimiento','Alumnos','Cerrar'].includes(s.group),s.group);
+  // criterio de calidad de una consultora de cursos: se dirige a la persona, es breve, no promete ni afirma lo que varía por marca o curso
+  assert.match(s.body,/{{nombre}}/,s.shortcut+' debe dirigirse a la persona por su nombre');
+  assert.ok(s.body.length>=30&&s.body.length<=400,s.shortcut+' debe ser breve ('+s.body.length+' caracteres)');
+  assert.doesNotMatch(s.body,/garantiz|gratis|descuento|promoci|cupo|lugares|última|ultima|oferta|urgente|certificad|diploma|rvoe|aval|validez|oficial/i,s.shortcut+' no afirma garantías, ofertas, cupos ni validez: eso lo confirma una persona o el catálogo');
+  assert.doesNotMatch(s.body,/!{2,}|[A-ZÁÉÍÓÚÑ]{5,}/,s.shortcut+' sin gritos ni exceso de signos');
  }
  const dir=await mkdtemp(join(tmpdir(),'crm-qr-starter-')),code=randomUUID(),password='Password-starter-2026!';let logs='';
  const server=spawn(process.execPath,['server/index.mjs'],{env:{...process.env,HOST:'127.0.0.1',PORT:'0',DATA_DIR:dir,ADMIN_INVITE_CODE:code,APP_ORIGIN:'',NODE_ENV:'test'},stdio:['ignore','pipe','pipe']});

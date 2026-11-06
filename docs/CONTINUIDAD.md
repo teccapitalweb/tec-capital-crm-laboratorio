@@ -502,6 +502,11 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Mejora de uso: biblioteca de 50 mensajes de consultora de cursos (rama `feat/biblioteca-consultora`, 6 nov 2026)
+
+- **Qué se hizo:** «Ejemplos listos» pasa de 13 a **50 mensajes** en nueve grupos (descubrir lo que necesita, objeciones, inscripción, pagos, seguimiento, alumnos, cierre…), con buscador y «Agregar el grupo». A petición del usuario, para que la biblioteca sea de nivel consultora. Instantánea para revisar: [BIBLIOTECA_RESPUESTAS_RAPIDAS.md](BIBLIOTECA_RESPUESTAS_RAPIDAS.md). Sin esquema nuevo.
+- **Criterio (lo hace cumplir `test/quickreplies.test.mjs`):** se dirige por nombre, 30–400 caracteres, sin precios, fechas, números, cupos, descuentos, garantías, certificados ni validez, sin gritos. **Evidencia:** 164 pruebas; en el demo local, buscar, agregar un grupo y 375 px sin desborde. **Sin publicar.**
+
 ## Mejora de uso: respuestas rápidas más fáciles (rama `feat/respuestas-rapidas-faciles`, 6 nov 2026)
 
 - **Qué se hizo:** el panel Mi configuración → Respuestas rápidas gana ejemplos listos (13, en cinco grupos, sin precios ni fechas), vista previa en vivo con contador, atajo sugerido desde el nombre, tarjetas para «¿Quién la usa?», búsqueda, filtros con cuenta y Duplicar. A petición del usuario, para que quien las organiza no batalle. Sin esquema nuevo. Detalle: [PLAN_RESPUESTAS_FACILES.md](PLAN_RESPUESTAS_FACILES.md).
