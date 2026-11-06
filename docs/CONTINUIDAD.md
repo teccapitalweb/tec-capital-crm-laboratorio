@@ -502,6 +502,12 @@ Bloque 2.6 de [PLAN_FASE_2.md](PLAN_FASE_2.md). Esquema **v23** (`server/content
 - **Decisiones y límites:** una sola etiqueta a la vez en el filtro, sin «sin etiqueta», sin etiquetas automáticas por reglas ni etiquetado masivo.
 - **Evidencia:** 159 pruebas aprobadas; en el demo local se creó una etiqueta desde el chat, apareció en el hilo y en el encabezado, el selector la ofreció y filtró 6 hilos a 1, y al limpiar volvieron los 6; auditoría de diseño en escritorio y 375 px sin textos bajo 11 px, sin desbordamiento y con el selector y los botones de 40 px. **Publicado** (ver abajo).
 
+## Corrección: espacio desaprovechado en Mi configuración y Equipo (rama `fix/espacio-configuracion`, 6 nov 2026)
+
+- **Qué pasaba:** el usuario señaló que, aun después de acomodar las filas, sobraba mucho espacio: las respuestas rápidas vivían dentro de la columna angosta de «Acceso y seguridad», con la columna izquierda vacía al lado, y la lista de Equipo ocupaba un solo lado.
+- **Qué se hizo:** Mi configuración usa dos columnas parejas (Mi perfil / Acceso y seguridad) y las respuestas rápidas pasan a un bloque propio de ancho completo, con el buscador junto a los botones y las respuestas en tarjetas en rejilla (se adaptan de tres a una columna). En Equipo, de 1200 px en adelante, personas e invitaciones van en dos columnas. Sólo disposición: `public/crm.js` (el bloque nuevo), `public/quickreplies.js` (cabecera) y `public/crm.css`.
+- **Evidencia:** en el demo local a 1366 px (dos columnas y rejilla de tarjetas), 1024 px y 375 px: sin desborde, letra ≥11 px. **Sin publicar.**
+
 ## Corrección: filas de respuestas rápidas aplastadas en Mi configuración (rama `fix/filas-respuestas`, 6 nov 2026)
 
 - **Qué pasaba:** el usuario mostró con una captura que, en la columna angosta de Mi configuración, cada respuesta rápida repartía el ancho entre el atajo, el texto y tres botones; el título y el texto quedaban en una columna de pocas letras y los botones los pisaban.

@@ -71,3 +71,17 @@
 .qr-list .qr-row .qr-actions{justify-content:flex-start;width:auto}
 .qr-list .qr-row .qr-actions small{font-size:11px;color:var(--text-3)}
 .qr-list .qr-text{-webkit-line-clamp:2}
+/* Mi configuración: dos columnas parejas y las respuestas rápidas en un bloque de ancho completo con tarjetas en rejilla */
+.settings-grid{grid-template-columns:repeat(2,minmax(0,1fr));max-width:1280px;align-items:start}
+.settings-wide{grid-column:1/-1}
+.qr-head{display:flex;gap:12px 16px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin:14px 0 6px}
+.qr-head .qr-bar{margin:0}.qr-head .qr-tools{margin:0;flex:1;justify-content:flex-end;min-width:280px}
+.qr-list{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.qr-list .qr-row{display:flex;flex-direction:column;align-items:stretch;gap:8px}
+.qr-list .qr-row .qr-copy{flex:1}
+.qr-list .qr-row .qr-actions{margin-top:auto}
+.qr-empty,.qr-list>.crm-hint{grid-column:1/-1}
+@media(max-width:1100px){.settings-grid{grid-template-columns:minmax(0,1fr)}}
+.qr-list .qr-row .slash-key{align-self:flex-start}
+/* Equipo y accesos: en pantallas anchas las personas van en dos columnas en vez de una lista larga con el lado derecho vacío */
+@media(min-width:1200px){#team-content .crm-panel:has(>.crm-list-row){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:24px;align-content:start}#team-content .crm-panel:has(>.crm-list-row)>:not(.crm-list-row){grid-column:1/-1}}
