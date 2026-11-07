@@ -9,12 +9,14 @@ import {transaction} from './database.mjs';
 // El envío es síncrono (SQLite) y usa una referencia determinista, así que un reintento o dos ciclos seguidos no lo duplican.
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max)=>typeof v==='string'?v.replace(/\r\n/g,'\n').trim().slice(0,max):'';
+const parse=(v,d)=>{try{return JSON.parse(v);}catch{return d;}};
 export const LIMITS={maxText:5000,minLeadMs:30*1000,maxLeadMs:90*86400*1000,maxPending:10,staleMs:6*3600*1000};
 
-export function createScheduled({db,crm,insertMessage,takeOver,accessConversation,broadcast,body,json,audit,rate}){
+export const KINDS={syllabus:'Temario',price:'Precio y promoción',schedule:'Fechas y docente',flyer:'Flyer de la edición'};
+export function createScheduled({db,crm,catalogue=null,insertMessage,takeOver,accessConversation,broadcast,body,json,audit,rate}){
   const now=()=>Date.now();
   const view=(r,user)=>({id:r.id,conversationId:r.conversation_id,text:r.text,sendAt:r.send_at,cancelOnReply:Boolean(r.cancel_on_reply),state:r.state,reason:r.reason||null,
-    authorId:r.author_id,authorName:r.author_name||null,mine:Boolean(user)&&r.author_id===user.id,messageId:r.message_id||null,revision:r.revision,createdAt:r.created_at,sentAt:r.sent_at||null});
+    material:r.material?{label:r.material_label||'Material'}:null,authorId:r.author_id,authorName:r.author_name||null,mine:Boolean(user)&&r.author_id===user.id,messageId:r.message_id||null,revision:r.revision,createdAt:r.created_at,sentAt:r.sent_at||null});
   const row=id=>db.prepare('SELECT s.*,u.name author_name FROM scheduled_messages s LEFT JOIN users u ON u.id=s.author_id WHERE s.id=?').get(id);
   const done=(id,state,reason,extra={})=>{db.prepare("UPDATE scheduled_messages SET state=?,reason=?,message_id=?,sent_at=?,revision=revision+1,updated_at=? WHERE id=? AND state='pending'").run(state,reason||null,extra.messageId||null,extra.sentAt||null,now(),id);};
 
@@ -22,8 +24,18 @@ export function createScheduled({db,crm,insertMessage,takeOver,accessConversatio
     const since=now()-3*86400*1000;
     return db.prepare("SELECT s.*,u.name author_name FROM scheduled_messages s LEFT JOIN users u ON u.id=s.author_id WHERE s.conversation_id=? AND (s.state='pending' OR s.updated_at>=?) ORDER BY s.send_at LIMIT 40").all(c.id,since).map(r=>view(r,user));
   }
-  function check(c,user,input,{editing=null}={}){
-    const body=text(input.text,LIMITS.maxText),sendAt=Number(input.sendAt),t=now();
+  // Material del catálogo (temario, precio, fechas, flyer o plantilla aprobada): se valida con las mismas reglas que un envío manual (catalogue.prepare) y se guarda
+  // QUÉ es, no su texto; el texto se arma al enviar con los datos vigentes. La vista previa de hoy sólo sirve para mostrarlo.
+  function materialOf(c,input){
+    const m=input?.material;if(!m)return null;if(!catalogue)throw fail(409,'Los materiales no están disponibles.');
+    const pick=m.templateId?{templateId:String(m.templateId)}:m.flyerId?{flyerId:String(m.flyerId)}:KINDS[m.kind]?{kind:m.kind}:null;
+    if(!pick)throw fail(400,'Elige qué material programar (temario, precio, fechas, flyer o una plantilla).');
+    const prepared=catalogue.prepare(c,pick);   // lanza 409 con el motivo si la plantilla o el flyer no están aprobados o vigentes para esta conversación
+    const label=pick.templateId?db.prepare('SELECT title FROM content_templates WHERE id=?').get(pick.templateId)?.title:pick.flyerId?db.prepare('SELECT title FROM flyers WHERE id=?').get(pick.flyerId)?.title:KINDS[pick.kind];
+    return {pick,preview:String(prepared.text||'').slice(0,LIMITS.maxText),label:String(label||'Material').slice(0,120)};
+  }
+  function check(c,user,input,{material=false}={}){
+    const body=material?String(input.text||'').slice(0,LIMITS.maxText):text(input.text,LIMITS.maxText),sendAt=Number(input.sendAt),t=now();
     if(!body)throw fail(400,'Escribe el mensaje que quieres programar.');
     if(!Number.isSafeInteger(sendAt))throw fail(400,'Elige la fecha y la hora.');
     if(sendAt<t+LIMITS.minLeadMs)throw fail(400,'La hora tiene que ser futura (al menos en un minuto). Para enviarlo ya, usa Enviar.');
@@ -36,11 +48,11 @@ export function createScheduled({db,crm,insertMessage,takeOver,accessConversatio
     const clientRef=text(input.clientRef,100);if(!/^[a-zA-Z0-9-]{16,100}$/.test(clientRef))throw fail(400,'Referencia no válida.');
     const again=db.prepare('SELECT id FROM scheduled_messages WHERE author_id=? AND client_ref=?').get(user.id,clientRef);
     if(again){if(row(again.id).conversation_id!==c.id)throw fail(409,'Referencia ya utilizada.');return {item:view(row(again.id),user),duplicate:true};}
-    const {body,sendAt}=check(c,user,input);
+    const mat=materialOf(c,input),{body,sendAt}=check(c,user,mat?{...input,text:mat.preview||mat.label}:input,{material:Boolean(mat)});
     const id=randomUUID(),t=now();
     transaction(db,()=>{
       if(db.prepare("SELECT count(*) n FROM scheduled_messages WHERE conversation_id=? AND state='pending'").get(c.id).n>=LIMITS.maxPending)throw fail(409,'Este chat ya tiene '+LIMITS.maxPending+' mensajes programados. Cancela alguno primero.');
-      db.prepare('INSERT INTO scheduled_messages(id,conversation_id,brand_id,author_id,text,send_at,cancel_on_reply,client_ref,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,user.id,body,sendAt,input.cancelOnReply===false?0:1,clientRef,t,t);
+      db.prepare('INSERT INTO scheduled_messages(id,conversation_id,brand_id,author_id,text,send_at,cancel_on_reply,client_ref,created_at,updated_at,material,material_label) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,user.id,body,sendAt,input.cancelOnReply===false?0:1,clientRef,t,t,mat?JSON.stringify(mat.pick):null,mat?mat.label:null);
     });
     return {item:view(row(id),user),duplicate:false};
   }
@@ -54,7 +66,8 @@ export function createScheduled({db,crm,insertMessage,takeOver,accessConversatio
     const {r,c}=mine(user,id);
     if(r.state!=='pending')throw fail(409,'Este mensaje ya no está pendiente.');
     if(!Number.isInteger(input.expectedRevision)||input.expectedRevision!==r.revision)throw fail(409,'Otra persona lo cambió. Vuelve a abrirlo.');
-    const {body,sendAt}=check(c,user,{text:input.text??r.text,sendAt:input.sendAt??r.send_at});
+    if(r.material&&input.text!==undefined&&input.text!==r.text)throw fail(400,'Un material del catálogo no cambia de texto: se arma al enviarse. Cancélalo y programa otro si quieres algo distinto.');
+    const {body,sendAt}=check(c,user,{text:r.material?r.text:input.text??r.text,sendAt:input.sendAt??r.send_at},{material:Boolean(r.material)});
     const changed=db.prepare("UPDATE scheduled_messages SET text=?,send_at=?,cancel_on_reply=?,revision=revision+1,updated_at=? WHERE id=? AND state='pending' AND revision=?").run(body,sendAt,input.cancelOnReply===undefined?r.cancel_on_reply:input.cancelOnReply?1:0,now(),id,r.revision).changes;
     if(!changed)throw fail(409,'Este mensaje cambió mientras lo editabas.');
     return view(row(id),user);
@@ -96,8 +109,10 @@ export function createScheduled({db,crm,insertMessage,takeOver,accessConversatio
         const ref='sched:'+r.id,saved=db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref);
         let messageId=saved?.id;
         if(!messageId){
-          try{messageId=insertMessage(c,author,r.text,'agent',ref);}
-          catch(error){if(error.status){end(r,'failed',String(error.message).slice(0,300));outcome='failed';return;}throw error;}   // regla del canal (ventana de 24 h…): no sale; error inesperado: se revierte todo
+          try{
+            if(r.material){const prepared=catalogue.prepare(c,parse(r.material,{}));messageId=insertMessage(c,author,prepared.text,'agent',ref,null,prepared.flyerSnapshot?c.course_id:null,prepared);}   // se arma AHORA con el catálogo vigente
+            else messageId=insertMessage(c,author,r.text,'agent',ref);
+          }catch(error){if(error.status){end(r,'failed',String(error.message).slice(0,300));outcome='failed';return;}throw error;}   // regla del canal (ventana de 24 h…): no sale; error inesperado: se revierte todo
           takeOver(c,author.id);
         }
         done(id,'sent',null,{messageId,sentAt:now()});outcome='sent';

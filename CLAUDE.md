@@ -42,7 +42,7 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 4t. [Aliados](docs/PLAN_ALIADOS.md): el panel RH de IPCIL dentro del CRM, Operación → Aliados (**esquema 30**; publicado en `main`); formulario público `/aliados` apagado por omisión. Pendiente de IPCIL: comisiones por persona.
 4u. [Resumen de conversación](docs/PLAN_RESUMEN_CONVERSACION.md): tarjeta en el chat, por reglas y con IA, y contexto para la IA en chats largos (**esquema 31**; publicado en `main`).
 4v. [Mejora de diseño](docs/DISENO_Y_AUDITORIA.md): menú lateral por grupos y Operación por áreas en lugar de 17 pestañas en fila (sólo interfaz; rama `feat/mejora-diseno`, sin publicar).
-4w. [Mensajes programados](docs/PLAN_MENSAJES_PROGRAMADOS.md): botón «Programar» en el chat; salen solos a la hora y las reglas se comprueban al enviar (**esquema 32**; publicado en `main`). Con avisos cuando no salen y panel en Mi día (publicado).
+4w. [Mensajes programados](docs/PLAN_MENSAJES_PROGRAMADOS.md): botón «Programar» en el chat; salen solos a la hora y las reglas se comprueban al enviar (**esquema 32**; publicado en `main`). Con avisos cuando no salen y panel en Mi día (publicado). Programar materiales del catálogo (temario, precio, fechas, flyer, plantillas aprobadas), armados al enviar (**esquema 37**; rama `feat/programar-plantillas`, sin publicar).
 4x. [Agenda de citas](docs/PLAN_AGENDA_CITAS.md): «Agendar cita» en el chat, recordatorio opcional al cliente (un mensaje programado), aviso previo y «Mis citas» en Mi día (**esquema 33**; publicado en `main`). Vista semanal «Agenda», sólo lectura (publicada).
 4y. [Cupones de descuento](docs/PLAN_CUPONES.md): códigos por marca (porcentaje o monto fijo) que el equipo aplica en Cobrar; los usos se cuentan sobre los pedidos vivos (**esquema 34**; publicado en `main`). El cliente puede escribir su cupón en la pantalla de pago si administración lo permite (**esquema 36**; publicado en `main`).
 4zz. [Activar la IA en producción](docs/ACTIVAR_IA_PRODUCCION.md): guía paso a paso (clave sólo en Railway, tope, conocimiento, «Sugerir», evaluación con IA real) y pantalla de estado Operación → Sistema → Inteligencia artificial, sólo lectura y sin secretos (sin esquema nuevo; rama `feat/estado-ia`, sin publicar).
@@ -80,7 +80,7 @@ npm start
 
 `npm start` usa `.env` si existe. Prepara `.env` desde `.env.example` para una instalación local; consulta el runbook antes de usar datos o accesos existentes.
 
-La referencia vigente es **187 pruebas aprobadas** (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **188 pruebas aprobadas** (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 

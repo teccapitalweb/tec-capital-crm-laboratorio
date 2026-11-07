@@ -34,6 +34,14 @@ Un mensaje programado puede quedar viejo, así que al llegar la hora se vuelve a
 - **Límites:** hora futura (mínimo 30 s) y hasta 90 días; 5000 caracteres; 10 pendientes por chat; limitador de ritmo por persona. Auditoría: `scheduled.create`, `.edit`, `.cancel`, `.send_now`.
 - El texto es lo que escribió una persona del equipo: no se interpreta ni se mezcla con datos del cliente.
 
+## Tercera entrega: programar materiales del catálogo (esquema 37, rama `feat/programar-plantillas`, sin publicar)
+
+- En el panel de **Programar**, el selector **«¿Qué enviar?»** ofrece, además de un mensaje escrito: **Temario**, **Precio y promoción**, **Fechas y docente**, **Flyer de la edición**, las **plantillas aprobadas** de esa conversación (curso, edición y canal) y los **flyers listos para enviar**. Al elegir uno se muestra **cómo se vería hoy**.
+- **Se arma al enviarse, no al programar.** Se guarda *qué* es (no su texto) y, a la hora, se vuelve a armar con el catálogo vigente (`catalogue.prepare`, la misma ruta que un envío manual de la Biblioteca). Si el precio, una fecha o el temario cambiaron entre tanto, sale **lo vigente**, y el mensaje guarda su instantánea comercial del momento del envío (los envíos anteriores no cambian). Si la plantilla o el flyer **dejan de estar aprobados o vigentes**, o la edición deja de estar publicada, **no sale**, queda el motivo en la lista del chat y se avisa a quien lo programó (como cualquier mensaje programado que no puede salir).
+- Al programar se valida con las mismas reglas que un envío manual (plantilla aprobada para este curso, edición y canal; flyer vigente), así que no se programa algo que hoy no se podría enviar.
+- Un material **no cambia de texto**: se puede mover de hora y elegir si se cancela cuando el cliente responde; para cambiar el material se cancela y se programa otro. Las plantillas aprobadas pueden salir aunque la ventana de 24 h del canal esté cerrada (las reglas del canal las respetan como en un envío manual).
+- Datos: esquema 37 (`scheduled_messages.material` y `material_label`, aditivo, con respaldo previo `backups/before-crm-v37-*`). Pruebas: `test/scheduled-material.test.mjs`.
+
 ## Segunda entrega: avisos y Mi día
 
 - **Aviso cuando algo no sale.** Si un mensaje programado **no sale por una causa ajena a quien lo programó** (la conversación se cerró, el cliente respondió, otra persona atiende, el canal lo rechazó, pasó demasiado tiempo o hubo un error), a esa persona le llega un aviso en **Operación → Mis avisos** (tipo `scheduled`, icono de reloj, con el inicio del texto y el motivo) y, si tiene push activo, una notificación del grupo «Chats». Una sola vez por mensaje y estado (`event_key` `scheduled:<id>:<estado>`). **No se avisa** cuando la persona lo cancela ella misma, cuando sale bien, ni cuando ya no tiene acceso a la marca (no se le cuenta algo que no puede ver).
@@ -41,7 +49,7 @@ Un mensaje programado puede quedar viejo, así que al llegar la hora se vuelve a
 
 ## Límites actuales
 
-- Sólo texto: no programa adjuntos, flyers ni plantillas aprobadas (cuyos precios y fechas salen del catálogo vigente al momento de enviarlos, no de un texto guardado).
+- No programa adjuntos que la persona suba (archivos o imágenes propios); sí programa materiales del catálogo (ver abajo).
 - Las horas se eligen en la zona horaria del navegador de quien programa.
 - Mi día muestra lo tuyo pendiente (hasta 6 filas) pero no hay una pantalla propia con todo lo programado de la marca; lo de otras personas se ve dentro de cada chat.
 

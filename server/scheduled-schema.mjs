@@ -16,3 +16,15 @@ export function migrateScheduled(db){
     PRAGMA user_version=32;
   `));
 }
+
+// Esquema v37: un mensaje programado puede ser un MATERIAL del catálogo (temario, precio y promoción, fechas, flyer o una plantilla aprobada) en lugar de un texto
+// fijo. `material` guarda qué es (JSON: kind, templateId o flyerId) y `material_label` cómo se llama; el texto real se ARMA al enviar, con el catálogo vigente de ese
+// momento (docs/PLAN_MENSAJES_PROGRAMADOS.md). Aditivo.
+export function migrateScheduledMaterial(db){
+  if(db.prepare('PRAGMA user_version').get().user_version>=37)return;
+  transaction(db,()=>db.exec(`
+    ALTER TABLE scheduled_messages ADD COLUMN material TEXT;
+    ALTER TABLE scheduled_messages ADD COLUMN material_label TEXT;
+    PRAGMA user_version=37;
+  `));
+}

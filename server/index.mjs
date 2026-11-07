@@ -70,7 +70,7 @@ import {migrateAllies} from './allies-schema.mjs';
 import {createAllies} from './allies.mjs';
 import {migrateSummaries} from './summaries-schema.mjs';
 import {createSummaries} from './summaries.mjs';
-import {migrateScheduled} from './scheduled-schema.mjs';
+import {migrateScheduled,migrateScheduledMaterial} from './scheduled-schema.mjs';
 import {createScheduled} from './scheduled.mjs';
 import {migrateAppointments} from './appointments-schema.mjs';
 import {createAppointments} from './appointments.mjs';
@@ -85,7 +85,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<36&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v36-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<37&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v37-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -120,6 +120,7 @@ migrateAppointments(db);
 migrateCoupons(db);
 migrateIntegrations(db);
 migrateCouponEntry(db);
+migrateScheduledMaterial(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -220,7 +221,7 @@ const allies=createAllies({db,crm,body,json,audit,rate});
 // Resumen de conversación (server/summaries.mjs): por reglas siempre, con IA si hay proveedor; lo usa también la IA que responde en chats largos.
 const summaries=createSummaries({db,crm,provider:aiProvider,accessConversation,body,json,audit,rate});
 // Mensajes programados (server/scheduled.mjs): salen solos a la hora elegida, con las mismas reglas que un envio manual.
-const scheduled=createScheduled({db,crm,insertMessage,takeOver,accessConversation,broadcast,body,json,audit,rate});
+const scheduled=createScheduled({db,crm,catalogue,insertMessage,takeOver,accessConversation,broadcast,body,json,audit,rate});
 // Agenda de citas (server/appointments.mjs): se agendan desde el chat, con recordatorio opcional al cliente (un mensaje programado) y aviso a quien la lleva.
 const appointments=createAppointments({db,crm,accessConversation,scheduled,broadcast,body,json,audit,rate});   // conocimiento por lote (borradores), sólo administración
 // Banco de evaluaciÃ³n (server/evaluation.mjs): casos esperados del motor, ejecutados con la simulaciÃ³n sin efectos.

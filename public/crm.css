@@ -158,3 +158,8 @@
 .ais-checks{list-style:none;margin:0;padding:0;display:grid;gap:10px}.ais-check{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start}.ais-check strong{display:block;font-size:12px;font-weight:600}.ais-check small{display:block;color:var(--text-3);font-size:11px;line-height:1.5;margin-top:2px}.ais-check .btn{margin-top:8px;min-height:36px;font-size:11px}
 .ais-mark{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;color:var(--text-3)}.ais-mark svg{width:13px;height:13px}.ais-mark.ok{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent-strong)}.ais-check.done strong{color:var(--text-2)}
 .ais-brand{margin-top:14px}.ais-head code{font-size:11px;background:#fff;border-radius:5px;padding:1px 5px}
+/* Programar un material del catálogo (docs/PLAN_MENSAJES_PROGRAMADOS.md) */
+.sch-mat{color:var(--accent-strong);font-weight:600}.sch-mat svg{width:12px;height:12px;vertical-align:-1px}
+.sch-material{display:grid;gap:6px;border:1px solid var(--line);border-radius:10px;background:var(--soft);padding:10px 12px;font-size:12px}.sch-material strong svg{width:13px;height:13px;vertical-align:-2px}
+.sch-preview{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:150px;overflow:auto;line-height:1.55;color:var(--text-2)}.sch-material small{color:var(--text-3);font-size:11px;line-height:1.5}
+.sch-field select{width:100%;font-size:13px}@media(max-width:680px){.sch-field select{font-size:16px}}
