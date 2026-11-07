@@ -151,3 +151,10 @@
 .pg-coupon-row{display:flex;gap:8px;margin-top:6px}.pg-coupon-row input{flex:1;text-transform:uppercase;font-size:13px}.pg-coupon-row .btn{min-height:40px}#pg-coupon-msg{margin:6px 0 0;font-size:12px;color:#8a3a2e}#pg-coupon-msg:empty{display:none}
 .co-check{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--text-2)}.co-check input{margin-top:2px}
 @media(max-width:680px){.pg-coupon-row input{font-size:16px}}
+/* Estado de la IA (docs/ACTIVAR_IA_PRODUCCION.md) */
+.ais-head h3{margin:18px 0 8px;font-size:13px}.ais-usage{display:grid;gap:10px;border:1px solid var(--line);border-radius:12px;background:var(--soft);padding:12px 14px;margin:10px 0}.ais-usage small{color:var(--text-3);font-size:11px}
+.ais-meter-top{display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-bottom:4px}.ais-bar{height:8px;border-radius:99px;background:#e4eaef;overflow:hidden}.ais-bar span{display:block;height:100%;background:var(--accent);border-radius:99px}.ais-bar span.warm{background:#c98a2b}.ais-bar span.hot{background:#b5483a}
+.ais-warn{margin:0;color:#8a3a2e;font-size:12px;font-weight:600}.ais-next{margin:10px 0;font-size:13px;color:var(--text-2)}
+.ais-checks{list-style:none;margin:0;padding:0;display:grid;gap:10px}.ais-check{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start}.ais-check strong{display:block;font-size:12px;font-weight:600}.ais-check small{display:block;color:var(--text-3);font-size:11px;line-height:1.5;margin-top:2px}.ais-check .btn{margin-top:8px;min-height:36px;font-size:11px}
+.ais-mark{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;color:var(--text-3)}.ais-mark svg{width:13px;height:13px}.ais-mark.ok{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent-strong)}.ais-check.done strong{color:var(--text-2)}
+.ais-brand{margin-top:14px}.ais-head code{font-size:11px;background:#fff;border-radius:5px;padding:1px 5px}

@@ -1,6 +1,6 @@
 # Plan: cupones de descuento
 
-Estado: **publicado en `main`** (6 nov 2026), **esquema 34** (una tabla nueva y tres columnas en `orders`), sin cambio de versión. La segunda entrega, el cupón escrito por el cliente (**esquema 36**, rama `feat/cupon-cliente`, sin publicar), está descrita abajo.
+Estado: **publicado en `main`** (6 nov 2026), **esquema 34** (una tabla nueva y tres columnas en `orders`), sin cambio de versión. La segunda entrega, el cupón escrito por el cliente (**esquema 36**, publicada), está descrita abajo.
 
 ## Para qué
 
