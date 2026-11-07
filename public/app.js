@@ -20,6 +20,7 @@
   const tagsUI=window.createInboxTagsUI({state,api,esc,icon,showModal,toast,reload:()=>{renderChat();loadThreads(false,true);}});
   const analyticsUI=window.createAnalyticsUI({state,api,esc,icon,icons,toast});
   const portalUI=window.createPortalUI({state,api,esc,icon,icons,toast});
+  const agendaUI=window.createAgendaUI({state,api,esc,icon,icons,toast});
   const operationsUI=window.createOperationsUI({state,api,esc,icon,icons,showModal,toast,refresh,setView,selectConversation});
   const presentationUI=window.createPresentationUI({state,api,esc,icon,icons,toast,setView,openOps:tab=>operationsUI.openTab(tab)});
   if(location.pathname==='/crm')state.authMode='login';
@@ -61,8 +62,8 @@
     const btn=(view,symbol,label,short)=>`<button data-view="${view}" class="${state.view===view?'active':''}" aria-label="${label}" title="${label}">${icon(symbol)}<span class="nav-label-text">${short||label}</span></button>`;
     if(!team)return btn('inbox','inbox','Conversaciones')+btn('courses','book-open','Explorar cursos');
     const by={inbox:btn('inbox','inbox','Conversaciones'),courses:btn('courses','book-open','Catálogo y biblioteca','Catálogo'),activity:btn('activity','chart-no-axes-column','Actividad')};
-    [crmUI.nav(),operationsUI.nav(),portalUI.nav(),analyticsUI.nav(),presentationUI.nav()].forEach(html=>html.split(/(?<=<\/button>)/).forEach(piece=>{const m=piece.match(/data-view="([^"]+)"/);if(m)by[m[1]]=piece;}));
-    const groups=[['Atención',['day','inbox','contacts','opportunities','tasks']],['Gestión',['courses','operations','team']],['Resultados',['results','analytics','activity','presentation']],['Cuenta',['settings']]];
+    [crmUI.nav(),operationsUI.nav(),portalUI.nav(),analyticsUI.nav(),presentationUI.nav(),agendaUI.nav()].forEach(html=>html.split(/(?<=<\/button>)/).forEach(piece=>{const m=piece.match(/data-view="([^"]+)"/);if(m)by[m[1]]=piece;}));
+    const groups=[['Atención',['day','inbox','contacts','opportunities','tasks','agenda']],['Gestión',['courses','operations','team']],['Resultados',['results','analytics','activity','presentation']],['Cuenta',['settings']]];
     return groups.map(([title,ids])=>{const items=ids.map(id=>by[id]||'').join('');return items?`<div class="nav-group" role="group" aria-label="${title}"><div class="nav-group-title">${title}</div>${items}</div>`:'';}).join('');
   }
   function shell(){
@@ -70,7 +71,7 @@
     app.innerHTML=`<div class="workspace ${state.mobileChat?'mobile-chat':''}"><aside class="sidebar"><div class="brand"><span class="brand-mark">tc</span><div class="brand-copy"><strong>TEC CAPITAL</strong><small>Laboratorio CRM</small></div></div><div class="workspace-picker">${icon('building-2')}<select aria-label="Filtrar por marca" id="brand-picker">${brandOptions}</select></div><div>${team?'':'<div class="nav-label">Tu espacio</div>'}<nav class="nav ${team?'nav-grouped':''}" aria-label="Navegación principal">${sideNav(team)}</nav></div><div class="sidebar-bottom">${!isStaff()?'<a class="customer-team-link" href="/crm">Entrar al CRM</a>':''}${isStaff()?`<div class="mode-picker" aria-label="Cambiar experiencia"><button data-mode="customer" class="${!team?'active':''}">Cliente</button><button data-mode="agent" class="${team?'active':''}">Equipo</button></div>`:''}<div class="lab-note"><strong>${team?'Un equipo. Un espacio.':'Tu número de prueba: '+state.user.testNumber}</strong>${team?'Mensajes, cursos y atención en tiempo real.':'Este perfil identifica tus mensajes. No es un número de WhatsApp.'}</div><div class="user-card"><button data-action="profile" aria-label="Mi perfil"><span class="avatar">${esc(initials(state.user.name))}</span><span class="user-copy"><strong title="${esc(state.user.name)}">${esc(state.user.name)}</strong><small>${state.user.role==='admin'?'Administrador':state.user.role==='agent'?'Asesor':'Cliente de prueba'}</small></span></button><button class="icon-btn" data-action="logout" aria-label="Cerrar sesión">${icon('log-out')}</button></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb"><span>Laboratorio</span>${icon('chevron-right')}<strong id="breadcrumb-title">${pageTitle()}</strong></div><div class="top-status"><span id="connection" class="connection">Conectando</span><span class="lab-label">DATOS Y PAGOS DE PRUEBA</span>${!team?`<button class="btn" data-action="new-chat">${icon('plus')}<span>Nueva conversación</span></button>`:''}<button class="icon-btn mobile-profile" data-action="profile" aria-label="Mi perfil">${icon('user-round')}</button></div></header><div class="notice" id="notice"></div><div class="page-slot" id="page"></div></main></div>`;
     renderPage();updateConnection();icons();
   }
-  function pageTitle(){if(state.view==='operations')return 'Operación del equipo';if(state.view==='analytics')return 'Analítica comercial';if(state.view==='results')return 'Mis resultados';if(state.view==='presentation')return 'Modo presentación';if(crmUI.labels[state.view])return crmUI.labels[state.view];return state.view==='courses'?(agentMode()?'Catálogo y biblioteca':'Explorar cursos'):state.view==='activity'?'Actividad':'Conversaciones';}
+  function pageTitle(){if(state.view==='operations')return 'Operación del equipo';if(state.view==='analytics')return 'Analítica comercial';if(state.view==='results')return 'Mis resultados';if(state.view==='agenda')return 'Agenda de citas';if(state.view==='presentation')return 'Modo presentación';if(crmUI.labels[state.view])return crmUI.labels[state.view];return state.view==='courses'?(agentMode()?'Catálogo y biblioteca':'Explorar cursos'):state.view==='activity'?'Actividad':'Conversaciones';}
   function setView(view){state.view=view;state.mobileChat=false;shell();const page=document.querySelector('#page');if(page){page.classList.remove('enter');void page.offsetWidth;page.classList.add('enter');}}
   function sources(){const all=allowedConversations().filter(c=>state.brand==='all'||c.brand_id===state.brand);return `<div class="sources" role="group" aria-label="Filtrar por canal">${Object.entries(channels).map(([id,c])=>`<button class="source-tab ${id} ${state.channel===id?'active':''}" data-source="${id}" aria-pressed="${state.channel===id}">${provider(id)}<span>${c.name}</span><span class="source-count">${all.filter(x=>id==='all'||x.channel===id).length}</span></button>`).join('')}</div>`;}
   function renderPage(){
@@ -78,6 +79,7 @@
     if(agentMode()&&state.view==='operations')return operationsUI.render();
     if(agentMode()&&state.view==='analytics')return analyticsUI.render();
     if(agentMode()&&state.view==='results')return portalUI.render();
+    if(agentMode()&&state.view==='agenda')return agendaUI.render();
     if(agentMode()&&state.view==='presentation')return presentationUI.render();
     if(agentMode()&&crmUI.labels[state.view])return crmUI.render();
     if(state.view==='courses')return renderCourses();if(state.view==='activity')return renderActivity();
@@ -199,6 +201,7 @@
     if(await operationsUI.action(name,element)){if(name==='ops-detail'){const t=document.querySelector('#ops-replies');if(t)replyAssist.renderLog(t.dataset.conversation,t);}return;}
     if(await analyticsUI.action(name,element))return;
     if(await portalUI.action(name,element))return;
+    if(await agendaUI.action(name,element))return;
     if(await presentationUI.action(name,element))return;
     if(await catalogueUI.action(name,element))return;
     if(await crmUI.action(name,element))return;

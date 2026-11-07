@@ -128,3 +128,5 @@ label.field input[type=file]{display:block;width:100%;min-height:64px;padding:11
 @media(min-width:681px) and (max-width:1280px){.crm-table th,.crm-table td{padding:12px 10px}.crm-table td:not(:first-child){white-space:normal}.crm-table td:first-child{min-width:170px}}
 /* Pestañas de Catálogo (8) y similares: en pantallas medianas pasan a otra línea en vez de esconderse tras un desplazamiento */
 @media(min-width:681px) and (max-width:1280px){.cat-tabs{flex-wrap:wrap;overflow:visible;row-gap:0}.cat-tabs button{padding:12px 12px 14px}}
+/* Pantallas muy bajas: los títulos de grupo del menú ceden su lugar a una línea divisoria para que todos los botones quepan sin desplazar */
+@media(min-width:851px) and (max-height:820px){.nav-group-title{display:none}.nav-group+.nav-group{border-top:1px solid var(--line);padding-top:6px}.nav-grouped{gap:6px}}

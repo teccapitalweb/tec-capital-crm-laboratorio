@@ -100,5 +100,20 @@ test('agenda de citas: alcance, validación, empalmes, recordatorio al cliente, 
  for(let i=0;i<10;i++)await make(colega.cookie,{startsAt:T()+(200+i)*H},c3);
  await make(colega.cookie,{startsAt:T()+300*H,expect:409},c3);
  assert.equal(db.prepare("SELECT count(*) n FROM audit WHERE action LIKE 'appointment.%'").get().n>=10,true,'auditoría');
+ // vista semanal: por rango, mías o de todo el equipo, sin canceladas, con alcance por marca
+ const rng=(cookie,q,expected=200)=>call('/api/appointments?'+new URLSearchParams(q),cookie,undefined,'GET',expected);
+ const from=T()-86400*1000,to=T()+10*86400*1000;
+ await rng(admin.cookie,{from},400);await rng(admin.cookie,{from:to,to:from},400);await rng(admin.cookie,{from:T(),to:T()+60*86400*1000},400);await rng(admin.cookie,{from:'x',to:'y'},400);
+ await rng('',{from,to},401);await rng(ana.cookie,{from,to},403);await rng(outsider.cookie,{from,to,scope:'team',brand},404);
+ const wk=(await rng(admin.cookie,{from,to})).items;
+ assert.ok(wk.some(i=>i.id===a.item.id&&i.state==='no_show'),'incluye las cerradas del rango');assert.ok(!wk.some(i=>i.id===withRem.item.id),'sin canceladas');
+ assert.ok(wk.every(i=>i.mine&&i.customerName&&i.brandName&&i.startsAt>=from&&i.startsAt<to),'sólo las mías y dentro del rango');
+ assert.deepEqual(wk.map(i=>i.startsAt),[...wk.map(i=>i.startsAt)].sort((x,y)=>x-y),'ordenadas por hora');
+ assert.equal((await rng(admin.cookie,{from:T()+60*86400*1000,to:T()+70*86400*1000})).items.length,0,'fuera del rango no hay nada');
+ assert.equal((await rng(colega.cookie,{from,to})).items.filter(i=>i.ownerName==='Administración').length,0,'«mías» no trae las de otra persona');
+ const teamWeek=(await rng(colega.cookie,{from,to,scope:'team'})).items;assert.ok(teamWeek.some(i=>i.id===a.item.id&&i.ownerName==='Administración'&&i.mine===false),'el equipo de la marca ve las de administración');
+ assert.equal((await rng(outsider.cookie,{from,to,scope:'team'})).items.length,0,'otra marca no ve nada');
+ assert.equal((await rng(admin.cookie,{from,to,scope:'team',brand})).items.length>=wk.length,true);
+ assert.equal((await rng(admin.cookie,{from,to,scope:'team',brand:brand==='odonteck'?'dermalysse':'odonteck'})).items.length,0,'el filtro por marca separa');
  db.close();
 });

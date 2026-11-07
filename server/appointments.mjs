@@ -94,6 +94,19 @@ export function createAppointments({db,crm,accessConversation,scheduled,broadcas
     return db.prepare("SELECT a.*,u.name owner_name,cu.name customer_name,b.name brand_name FROM appointments a JOIN conversations c ON c.id=a.conversation_id JOIN users cu ON cu.id=c.customer_id JOIN brands b ON b.id=a.brand_id LEFT JOIN users u ON u.id=a.owner_id WHERE a.owner_id=? AND a.state='scheduled' AND a.starts_at+a.duration_min*60000>=? ORDER BY a.starts_at LIMIT 30").all(user.id,now()-6*3600*1000)
       .filter(r=>crm.canBrand(user,r.brand_id)).map(r=>({...view(r,user),customerName:r.customer_name,brandName:r.brand_name}));
   }
+  // Agenda por rango (vista semanal): las citas de [from,to) sin canceladas; «mine» sólo las propias, «team» las de todas las marcas que la persona ve
+  // (opcionalmente una marca). Máximo 42 días y 500 citas.
+  function range(user,{from,to,scope,brand}){
+    from=Number(from);to=Number(to);
+    if(!Number.isSafeInteger(from)||!Number.isSafeInteger(to)||to<=from)throw fail(400,'Rango de fechas no válido.');
+    if(to-from>42*86400*1000)throw fail(400,'El rango máximo es de 42 días.');
+    if(brand&&!crm.canBrand(user,brand))throw fail(404,'Marca o registro no disponible.');
+    const mineOnly=scope!=='team',args=[from,to];let sql="SELECT a.*,u.name owner_name,cu.name customer_name,b.name brand_name FROM appointments a JOIN conversations c ON c.id=a.conversation_id JOIN users cu ON cu.id=c.customer_id JOIN brands b ON b.id=a.brand_id LEFT JOIN users u ON u.id=a.owner_id WHERE a.starts_at>=? AND a.starts_at<? AND a.state<>'cancelled'";
+    if(mineOnly){sql+=' AND a.owner_id=?';args.push(user.id);}
+    if(brand){sql+=' AND a.brand_id=?';args.push(brand);}
+    sql+=' ORDER BY a.starts_at LIMIT 500';
+    return db.prepare(sql).all(...args).filter(r=>crm.canBrand(user,r.brand_id)).map(r=>({...view(r,user),customerName:r.customer_name,brandName:r.brand_name}));
+  }
   // Aviso a quien lleva la cita poco antes de que empiece (una sola vez por cita y hora: si se mueve, vuelve a avisar).
   function tick(){
     const t=now(),due=db.prepare("SELECT * FROM appointments WHERE state='scheduled' AND starts_at>? AND starts_at<=?").all(t,t+LIMITS.soonMs);
@@ -110,6 +123,8 @@ export function createAppointments({db,crm,accessConversation,scheduled,broadcas
     if(path==='/api/appointments'){
       if(user.role==='customer')throw fail(403,'La agenda es para el equipo.');
       if(req.method!=='GET')throw fail(405,'Método no permitido.');
+      const q=new URL(req.url,'http://x').searchParams;
+      if(q.has('from')){json(res,200,{items:range(user,{from:q.get('from'),to:q.get('to'),scope:q.get('scope'),brand:q.get('brand')||null})});return true;}
       json(res,200,{items:mineList(user)});return true;
     }
     let m=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/appointments$/);
@@ -128,5 +143,5 @@ export function createAppointments({db,crm,accessConversation,scheduled,broadcas
     if(m[2]==='state'&&req.method==='POST'){const input=await body(req);const item=setState(user,m[1],input.state);audit(user,'appointment.'+item.state,m[1]);broadcast('conversation',item.conversationId);json(res,200,{item});return true;}
     throw fail(405,'Método no permitido.');
   }
-  return {handle,tick,list,mineList};
+  return {handle,tick,list,mineList,range};
 }

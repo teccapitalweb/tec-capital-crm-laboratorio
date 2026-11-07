@@ -34,7 +34,11 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Agenda de citas (rama `feat/agenda-citas`, 6 nov 2026)
+## Agenda semanal (rama `feat/calendario-agenda`, 6 nov 2026)
+
+- **Qué se hizo (sin esquema nuevo):** nueva vista **Agenda** (menú, grupo Atención): semana de lunes a domingo con las citas de cada día, **Mías / Del equipo**, filtro por marca y cada cita abre su chat. Sólo lectura. Ruta `GET /api/appointments?from&to&scope&brand`. En pantallas muy bajas (≤820 px de alto) los títulos de grupo del menú se ocultan para que quepan los 14 botones sin desplazar. Detalle en [PLAN_AGENDA_CITAS.md](PLAN_AGENDA_CITAS.md). **Verificado:** 181 pruebas (la de citas ahora cubre rangos, alcance y filtro por marca) y revisión visual a 1024 px y 375 px. **Sin publicar.** Pendiente: vista de mes, calendarios externos y autoagenda del cliente.
+
+## Agenda de citas (publicado en `main`, 6 nov 2026)
 
 - **Qué es:** botón «Agendar cita» en el chat (título, tipo, duración, hora, enlace o lugar, notas), con recordatorio opcional al cliente que es un **mensaje programado normal** (hereda sus reglas y se retira si la cita se mueve o se cancela), lista de citas sobre el compositor, «Mis citas» en Mi día y un aviso 15 minutos antes a quien la lleva. Sin empalmes salvo confirmación. Detalle: [PLAN_AGENDA_CITAS.md](PLAN_AGENDA_CITAS.md).
 - **Datos:** esquema 33 (`appointments`), una tabla nueva, con respaldo previo. **Verificado:** 181 pruebas (una nueva: alcance, validación, empalmes, recordatorio, mover y cancelar, cierre, aviso previo, Mi día, tope) y revisión visual en escritorio y celular. **Sin publicar.** Pendiente: calendario semanal/mensual, conexión con calendarios externos y autoagenda del cliente.

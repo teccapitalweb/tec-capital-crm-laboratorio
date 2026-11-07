@@ -118,3 +118,19 @@
 .apt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.apt-panel input[type=text],.apt-panel select,.apt-panel textarea{width:100%;font-size:13px}.apt-panel .sch-field>select{max-width:100%}
 .apt-row .sch-text strong{font-weight:600;color:var(--text-1,inherit)}
 @media(max-width:680px){.apt-grid{grid-template-columns:1fr}.apt-panel input[type=text],.apt-panel select,.apt-panel textarea{font-size:16px}}
+/* Agenda semanal (docs/PLAN_AGENDA_CITAS.md) */
+.agd-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:6px 0 16px}.agd-nav{display:flex;gap:6px}.agd-nav .btn{min-width:40px;min-height:40px;display:inline-grid;place-items:center;padding:0 12px}.agd-nav .btn svg{width:16px;height:16px}
+.agd-range{font-size:15px;font-weight:600;letter-spacing:-.2px;min-width:150px}.agd-count{margin-left:auto;color:var(--text-3);font-size:12px}
+.agd-scope{display:flex;background:#dfe7ec99;border-radius:10px;padding:3px}.agd-scope button{min-height:34px;padding:0 14px;border-radius:8px;font-size:12px;color:var(--text-2)}.agd-scope button.active{background:#fff;color:var(--accent-strong);font-weight:600;box-shadow:0 2px 5px #00000006}
+.agd-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:start}
+.agd-day{background:#ffffffb3;border:1px solid var(--line);border-radius:14px;padding:10px;display:grid;gap:8px;min-height:140px;align-content:start}
+.agd-day>header{display:flex;align-items:baseline;gap:6px;border-bottom:1px solid var(--line);padding-bottom:8px}.agd-day>header span{text-transform:capitalize;font-size:12px;color:var(--text-3)}.agd-day>header b{font-size:18px;letter-spacing:-.4px}.agd-day>header small{margin-left:auto;font-size:11px;color:var(--accent-strong);background:var(--accent-soft);border-radius:999px;padding:1px 8px}
+.agd-today{border-color:var(--accent-line);box-shadow:0 0 0 2px var(--accent-soft)}.agd-today>header b{color:var(--accent-strong)}.agd-pastday{opacity:.78}
+.agd-none{margin:0;font-size:11px;color:var(--text-3)}
+.agd-card{display:grid;gap:3px;text-align:left;width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:12px;min-height:40px;transition:background-color .16s,border-color .16s}.agd-card:hover{background:var(--accent-tint);border-color:var(--accent-line)}
+.agd-card time{display:flex;gap:5px;align-items:center;font-size:11px;color:var(--accent-strong);font-weight:600}.agd-card time svg{width:13px;height:13px}.agd-card strong{font-size:12px;font-weight:600;overflow-wrap:anywhere}.agd-card small{font-size:11px;color:var(--text-3);overflow-wrap:anywhere}
+.agd-done,.agd-no_show{background:transparent}.agd-no_show time{color:#8a3a2e}.agd-tag{justify-self:start;font-size:11px;border-radius:999px;padding:1px 8px;background:var(--soft);color:var(--text-2)}.agd-warn{background:#fbeee9;color:#8a3a2e}
+.agd-empty{display:grid;gap:4px;padding:16px;margin-bottom:12px}.agd-hint{margin:14px 2px 0;color:var(--text-3);font-size:12px}
+@media(max-width:1180px){.agd-week{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:680px){.agd-week{grid-template-columns:minmax(0,1fr)}.agd-day{min-height:0}.agd-count{margin-left:0;width:100%}.agd-range{min-width:0;flex:1}.agd-day>header{align-items:center}}
+@media(max-width:680px){.agd-range{white-space:nowrap;flex:1 1 auto;text-align:right}.agd-scope{order:5;width:100%}.agd-scope button{flex:1;min-height:40px}.agd-count{order:6}}

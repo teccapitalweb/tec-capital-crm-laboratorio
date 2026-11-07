@@ -1,6 +1,6 @@
 # Plan: agenda de citas
 
-Estado: **implementado en la rama `feat/agenda-citas`** (6 nov 2026), **esquema 33** (una tabla nueva), sin cambio de versión. Sin publicar.
+Estado: **publicado en `main`** (6 nov 2026), **esquema 33** (una tabla nueva), sin cambio de versión. La vista semanal «Agenda» (rama `feat/calendario-agenda`, sin esquema nuevo) está descrita abajo.
 
 ## Para qué
 
@@ -13,6 +13,12 @@ Vender un curso casi siempre pasa por una llamada o una videollamada de asesorí
 - **Lista sobre el compositor** con las citas de ese chat (las pendientes y las dos últimas cerradas). Pendientes: **Editar** y **Cancelar**; cuando ya empezaron: **Se hizo** y **No asistió**. Una cita que ya terminó y sigue sin cerrar lo dice.
 - **Mi día → «Mis citas»:** las citas pendientes de la persona, de todas sus marcas, la más próxima primero; cada fila abre el chat. Las que ya terminaron sin cerrar quedan marcadas «ya terminó, ciérrala».
 - **Aviso previo:** 15 minutos antes llega un aviso a quien lleva la cita (Operación → Mis avisos y push, grupo «Chats»), con título, cliente, tipo y lugar. Una sola vez por cita y hora: si se mueve, vuelve a avisar.
+
+## Vista semanal «Agenda»
+
+- Nueva entrada **Agenda** en el menú (grupo Atención): una semana de lunes a domingo con las citas de cada día. Botones **‹ Hoy ›** para cambiar de semana y el selector **Mías / Del equipo**. «Del equipo» muestra las citas de todas las marcas que la persona ve (con el nombre de quien las lleva); el selector de marca del menú la filtra.
+- Cada cita muestra hora, título, cliente, marca y tipo, y **abre su chat** al tocarla. Las cerradas se marcan («Se hizo», «No asistió») y las que ya terminaron sin cerrar avisan «Ya terminó: ciérrala en el chat». Es de **sólo lectura**: las citas se agendan y se cambian desde el chat.
+- Ruta: `GET /api/appointments?from=&to=&scope=mine|team&brand=` (milisegundos; máximo 42 días y 500 citas; sin canceladas). Sin sesión 401; clientes 403; una marca que la persona no ve, 404; el equipo de otra marca no aparece. En celular los días se apilan en una columna.
 
 ## Reglas
 
@@ -35,7 +41,7 @@ Vender un curso casi siempre pasa por una llamada o una videollamada de asesorí
 
 - No hay conexión con Google Calendar, Outlook ni videollamadas automáticas: el enlace se pega a mano.
 - No hay disponibilidad ni autoagenda para el cliente (que él elija un hueco); la cita la fija el equipo.
-- No hay una pantalla propia de calendario (semana/mes); se ve en cada chat y en Mi día.
+- La vista «Agenda» es semanal; no hay vista de mes ni de horas del día (cada día lista sus citas por orden de hora).
 - Las horas se eligen y se muestran en la zona horaria del navegador de quien agenda.
 - El recordatorio al cliente es sólo texto.
 

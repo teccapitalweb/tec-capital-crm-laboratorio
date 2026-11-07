@@ -43,7 +43,7 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 4u. [Resumen de conversación](docs/PLAN_RESUMEN_CONVERSACION.md): tarjeta en el chat, por reglas y con IA, y contexto para la IA en chats largos (**esquema 31**; publicado en `main`).
 4v. [Mejora de diseño](docs/DISENO_Y_AUDITORIA.md): menú lateral por grupos y Operación por áreas en lugar de 17 pestañas en fila (sólo interfaz; rama `feat/mejora-diseno`, sin publicar).
 4w. [Mensajes programados](docs/PLAN_MENSAJES_PROGRAMADOS.md): botón «Programar» en el chat; salen solos a la hora y las reglas se comprueban al enviar (**esquema 32**; publicado en `main`). Con avisos cuando no salen y panel en Mi día (publicado).
-4x. [Agenda de citas](docs/PLAN_AGENDA_CITAS.md): «Agendar cita» en el chat, recordatorio opcional al cliente (un mensaje programado), aviso previo y «Mis citas» en Mi día (**esquema 33**; rama `feat/agenda-citas`, sin publicar).
+4x. [Agenda de citas](docs/PLAN_AGENDA_CITAS.md): «Agendar cita» en el chat, recordatorio opcional al cliente (un mensaje programado), aviso previo y «Mis citas» en Mi día (**esquema 33**; publicado en `main`). Vista semanal «Agenda», sólo lectura (rama `feat/calendario-agenda`, sin publicar).
 4b. [Visión de la plataforma](docs/VISION_PLATAFORMA.md): el CRM como módulo de la plataforma de toda la empresa (IPCIL, Academia, finanzas, canales reales); diagnóstico, arquitectura objetivo y fases.
 5. [README](README.md) y [ROADMAP](ROADMAP.md): recorridos del producto y planificación general.
 
