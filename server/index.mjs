@@ -74,7 +74,7 @@ import {migrateScheduled} from './scheduled-schema.mjs';
 import {createScheduled} from './scheduled.mjs';
 import {migrateAppointments} from './appointments-schema.mjs';
 import {createAppointments} from './appointments.mjs';
-import {migrateCoupons} from './coupons-schema.mjs';
+import {migrateCoupons,migrateCouponEntry} from './coupons-schema.mjs';
 import {createCoupons} from './coupons.mjs';
 import {migrateIntegrations} from './integrations-schema.mjs';
 import {createIntegrations} from './integrations.mjs';
@@ -84,7 +84,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<35&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v35-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<36&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v36-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -118,6 +118,7 @@ migrateScheduled(db);
 migrateAppointments(db);
 migrateCoupons(db);
 migrateIntegrations(db);
+migrateCouponEntry(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -191,7 +192,7 @@ const operations=createOperations({db,crm,catalogue,body,json,audit,broadcast,on
 const coupons=createCoupons({db,crm,body,json,audit});
 // API pública de lectura y webhooks salientes (server/integrations.mjs): llaves por marca, envíos firmados con reintento, destinos privados rechazados.
 const integrations=createIntegrations({db,crm,events,body,json,audit,rate,baseDelayMs:process.env.NODE_ENV==='test'?100:5000,capDelayMs:process.env.NODE_ENV==='test'?400:15*60000});
-const payments=createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events,content,coupons});
+const payments=createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events,content,coupons,rate});
 // CoordinaciÃ³n acadÃ©mica (server/coordination.mjs): aperturas sobre la ediciÃ³n, sesiones, asistencia y recursos; la venta confirmada entra por evento.
 // Lista «Preparar marca» (server/readiness.mjs): sólo lectura, administración.
 const readiness=createReadiness({db,crm,json});

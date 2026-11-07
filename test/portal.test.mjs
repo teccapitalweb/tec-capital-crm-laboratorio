@@ -86,5 +86,5 @@ test('portal por roles por API: cada persona ve lo suyo, administración ve a ot
  await call('/api/portal/team?brand=nope',admin.cookie,undefined,'GET',404);await call('/api/portal/team?days=0',admin.cookie,undefined,'GET',400);await call('/api/portal/team',admin.cookie,{},'POST',405);
  // sólo lectura y sin esquema nuevo
  await call('/api/portal/me',vende.cookie,{},'POST',405);
- assert.equal(one('PRAGMA user_version').user_version,35);
+ assert.equal(one('PRAGMA user_version').user_version,36);
 });

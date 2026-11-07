@@ -13,6 +13,13 @@ window.simCheckout=(()=>{
     for(let i=0;i<46;i++){const w=1+((d[i%d.length]+i*3)%4),gap=1+((d[(i+5)%d.length]+i)%3);if(i%2===0)out+=`<rect x="${x}" y="0" width="${w}" height="40"/>`;x+=w+(i%2?gap:1);}
     return `<svg class="pg-bars" viewBox="0 0 ${x} 40" preserveAspectRatio="none" role="img" aria-label="Código de barras de ejemplo" fill="currentColor">${out}</svg>`;
   }
+  // «¿Tienes un cupón?»: sólo si la marca ofrece alguno para escribir; si el cliente aplicó el suyo, puede quitarlo. Nunca manda un precio: el servidor recalcula.
+  function couponBlock(o,{esc,icon,preview}){
+    if(preview)return '';
+    if(o.coupon?.removable)return `<div class="pg-coupon"><span>${icon('ticket-percent')} Cupón <strong>${esc(o.coupon.code)}</strong> aplicado (−${esc(o.coupon.discountLabel)})</span><button type="button" class="btn" data-action="pay-coupon-remove" data-id="${esc(o.id)}">Quitar</button></div>`;
+    if(o.couponEntry)return `<details class="pg-coupon pg-coupon-entry"><summary>${icon('ticket-percent')} ¿Tienes un cupón?</summary><div class="pg-coupon-row"><input id="pg-coupon" maxlength="24" autocomplete="off" autocapitalize="characters" placeholder="Escribe tu código" aria-label="Código de cupón"><button type="button" class="btn" data-action="pay-coupon-apply" data-id="${esc(o.id)}">Aplicar</button></div><p id="pg-coupon-msg" role="alert"></p></details>`;
+    return '';
+  }
   function html(o,{esc,icon,preview=false}){
     const line=o.kind==='session'&&o.session?`Sesión ${o.session.number}. ${esc(o.session.title)}`:o.plan==='per_session'?'Plan por sesión · este pago cubre tu primera sesión':'';
     const until=new Date(o.expiresAt).toLocaleString('es-MX',{dateStyle:'medium',timeStyle:'short'});
@@ -25,6 +32,7 @@ window.simCheckout=(()=>{
         <div class="pg-amount">${esc(o.amountLabel)}</div>
         <small>${o.promotion?esc(o.promotion)+' · ':''}${o.coupon?'Cupón '+esc(o.coupon.code)+' (−'+esc(o.coupon.discountLabel)+') · ':''}Referencia ${esc(o.reference)} · vigente hasta ${esc(until)}</small>
       </section>
+      ${couponBlock(o,{esc,icon,preview})}
       <div class="pg-tabs" role="tablist" aria-label="Método de pago">
         <button type="button" role="tab" aria-selected="true" data-pg-tab="card">${icon('credit-card')} Tarjeta</button>
         <button type="button" role="tab" aria-selected="false" data-pg-tab="oxxo">${icon('store')} OXXO</button>

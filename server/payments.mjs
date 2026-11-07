@@ -16,7 +16,7 @@ export const METHODS={card:'Tarjeta (simulada)',oxxo:'OXXO (simulado)',transfer:
 const money=(cents,currency)=>new Intl.NumberFormat('es-MX',{style:'currency',currency:currency||'MXN'}).format(cents/100);
 const stamp=t=>new Intl.DateTimeFormat('es-MX',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Mexico_City'}).format(t);
 
-export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events=null,content=null,coupons=null,now=Date.now,env=process.env}){
+export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events=null,content=null,coupons=null,rate=()=>{},now=Date.now,env=process.env}){
   const defaults=b=>({brand_id:b,enabled:0,link_hours:48,revision:0,updated_by:null,updated_at:null});
   const settings=b=>db.prepare('SELECT * FROM payment_settings WHERE brand_id=?').get(b)||defaults(b);
   const requireAdmin=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||u.role!=='admin')throw fail(403,'La venta con pago la configura un administrador.');};
@@ -26,6 +26,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
   let connectorOf=null;const useConnector=fn=>{connectorOf=fn;};
   const event=(orderId,kind,details,actor,t)=>db.prepare('INSERT INTO payment_events(order_id,kind,details,actor_id,created_at) VALUES(?,?,?,?,?)').run(orderId,kind,JSON.stringify(details||{}),actor||null,t);
   // Evento de dominio (índice común): referencia al pedido, nunca copia del detalle; dentro de la transacción del llamador.
+  const GENERIC_COUPON='Ese cupón no es válido o no está disponible para este pedido.';
   const emit=(type,o,payload,actor,dedupeKey)=>events?.publish({type,brandId:o.brand_id,entityKind:'order',entityId:o.id,payload:{reference:o.reference,amountCents:o.amount_cents,currency:o.currency,conversationId:o.conversation_id,contactId:o.contact_id,courseId:o.course_id,editionId:o.edition_id,...payload},actorId:actor?.id||null,source:'payments',dedupeKey});
   const staffOf=brandId=>db.prepare("SELECT id FROM users WHERE role IN ('admin','agent') AND COALESCE(disabled,0)=0 AND (role='admin' OR id IN (SELECT user_id FROM brand_members WHERE brand_id=?))").all(brandId).map(u=>u.id);
   function notifyStaff(c,kind,title,key){const t=now();for(const id of staffOf(c.brand_id))db.prepare('INSERT OR IGNORE INTO notifications(id,user_id,brand_id,conversation_id,kind,title,event_key,created_at) VALUES(?,?,?,?,?,?,?,?)').run(randomUUID(),id,c.brand_id,c.id,kind,title,key,t);}
@@ -63,8 +64,8 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     let off=0,couponId=null,couponCode=null;
     if(coupon){if(perSession)throw fail(409,'Los cupones aplican al curso completo, no al plan por sesión.');if(!coupons)throw fail(409,'Los cupones no están disponibles.');const q=coupons.validate({brandId:c.brand_id,courseId:c.course_id,editionId:ctx.edition.id,contactId:opp.contact_id,baseCents:amount,code:coupon});off=q.discountCents;couponId=q.coupon.id;couponCode=q.coupon.code;}
     const t=now(),id=randomUUID();let reference;do{reference='TC-'+randomBytes(3).toString('hex').toUpperCase();}while(db.prepare('SELECT 1 FROM orders WHERE reference=?').get(reference));
-    db.prepare('INSERT INTO orders(id,reference,brand_id,contact_id,opportunity_id,conversation_id,course_id,edition_id,promotion_id,amount_cents,currency,status,source,created_by,expires_at,created_at,updated_at,plan,coupon_id,coupon_code,discount_cents) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-      .run(id,reference,c.brand_id,opp.contact_id,oppId,c.id,c.course_id,ctx.edition.id,promoId,amount-off,ctx.currency,'pending',source,user?.id||null,t+s.link_hours*3600000,t,t,perSession?'per_session':'full',couponId,couponCode,off);
+    db.prepare('INSERT INTO orders(id,reference,brand_id,contact_id,opportunity_id,conversation_id,course_id,edition_id,promotion_id,amount_cents,currency,status,source,created_by,expires_at,created_at,updated_at,plan,coupon_id,coupon_code,discount_cents,coupon_source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(id,reference,c.brand_id,opp.contact_id,oppId,c.id,c.course_id,ctx.edition.id,promoId,amount-off,ctx.currency,'pending',source,user?.id||null,t+s.link_hours*3600000,t,t,perSession?'per_session':'full',couponId,couponCode,off,couponId?'agent':null);
     event(id,'created',{source,amountCents:amount-off,listAmountCents:amount,couponCode,discountCents:off,currency:ctx.currency,promotionId:promoId,plan:perSession?'per_session':'full',expiresAt:t+s.link_hours*3600000},user?.id||null,t);
     emit('pedido.creado',get(id),{source,promotionId:promoId,couponCode,discountCents:off,kind:'course',plan:perSession?'per_session':'full',expiresAt:t+s.link_hours*3600000},user);
     return {order:get(id),created:true};
@@ -99,6 +100,41 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     return get(o.id);
   }
   function expire(o){const t=now();if(db.prepare("UPDATE orders SET status='expired',revision=revision+1,updated_at=? WHERE id=? AND status='pending'").run(t,o.id).changes){event(o.id,'expired',{},null,t);emit('pedido.vencido',o,{},null);}}
+  // Cupón escrito por el cliente en su pantalla de pago (docs/PLAN_CUPONES.md). Sólo un pedido pendiente de curso completo y sin cupón, y sólo un cupón que
+  // administración permitió para esto. Reglas iguales a las del equipo (marca, vigencia, alcance, usos totales y por persona); al cliente toda negativa le llega con
+  // el mismo mensaje (no se le dice si el código existe) y hay límite de intentos. El importe se recalcula en el servidor; el cliente nunca manda un precio.
+  function applyCoupon(o,user,input){
+    const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id);if(!c||c.customer_id!==user.id)throw fail(404,'Pedido no disponible.');
+    rate('coupon-try:'+user.id,12);rate('coupon-order:'+o.id,15,10*60000);
+    if(o.status==='pending'&&o.expires_at<=now()){transaction(db,()=>expire(o));throw fail(409,'El enlace de pago venció. Pide uno nuevo por el chat.');}
+    const code=coupons?.normalizeCode(input?.code||'');if(!coupons||!code)throw fail(400,'Escribe tu código de cupón.');
+    const out=transaction(db,()=>{
+      const fresh=get(o.id);
+      if(fresh.status!=='pending')throw fail(409,'Este pedido ya no admite cambios: '+STATUS[fresh.status].toLowerCase()+'.');
+      if(fresh.kind!=='course'||fresh.plan!=='full')throw fail(409,'Los cupones aplican al curso completo.');
+      if(fresh.coupon_id)throw fail(409,'Este pedido ya tiene un cupón aplicado.');
+      let q;try{q=coupons.validate({brandId:fresh.brand_id,courseId:fresh.course_id,editionId:fresh.edition_id,contactId:fresh.contact_id,baseCents:fresh.amount_cents,code,customer:true});}
+      catch(e){if(e.status===409)throw fail(409,GENERIC_COUPON);throw e;}
+      const t=now(),total=fresh.amount_cents-q.discountCents;
+      db.prepare("UPDATE orders SET amount_cents=?,coupon_id=?,coupon_code=?,discount_cents=?,coupon_source='customer',revision=revision+1,updated_at=? WHERE id=? AND status='pending' AND coupon_id IS NULL").run(total,q.coupon.id,q.coupon.code,q.discountCents,t,fresh.id);
+      event(fresh.id,'coupon.applied',{couponCode:q.coupon.code,discountCents:q.discountCents,amountCents:total,by:'customer'},user.id,t);
+      const next=get(fresh.id);emit('pedido.cupon_aplicado',next,{couponCode:q.coupon.code,discountCents:q.discountCents,amountCents:total,by:'customer'},user,'pedido.cupon_aplicado:'+fresh.id+':'+next.revision);
+      try{say(c,'Aplicaste el cupón '+q.coupon.code+' al pedido '+fresh.reference+' (−'+money(q.discountCents,fresh.currency)+'). Nuevo total: '+money(total,fresh.currency)+'.','order:'+fresh.id+':coupon:'+next.revision);}catch(e){if(!e.status)throw e;}   // si el canal no deja avisar, el cupón igual queda aplicado
+      return next;
+    });
+    broadcast('conversation',c.id);return out;
+  }
+  function removeCoupon(o,user){
+    const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id);if(!c||c.customer_id!==user.id)throw fail(404,'Pedido no disponible.');
+    const out=transaction(db,()=>{
+      const fresh=get(o.id);
+      if(fresh.status!=='pending')throw fail(409,'Este pedido ya no admite cambios: '+STATUS[fresh.status].toLowerCase()+'.');
+      if(!fresh.coupon_id||fresh.coupon_source!=='customer')throw fail(409,'Sólo puedes quitar un cupón que tú aplicaste. Pide al equipo que lo cambie.');
+      const t=now();db.prepare("UPDATE orders SET amount_cents=amount_cents+discount_cents,coupon_id=NULL,coupon_code=NULL,discount_cents=0,coupon_source=NULL,revision=revision+1,updated_at=? WHERE id=?").run(t,fresh.id);
+      event(fresh.id,'coupon.removed',{couponCode:fresh.coupon_code,discountCents:fresh.discount_cents,by:'customer'},user.id,t);return get(fresh.id);
+    });
+    broadcast('conversation',c.id);return out;
+  }
   // Proveedor simulado: el cliente paga desde el enlace. Un webhook real de Stripe/Conekta llamaría a confirm() tras verificar la firma.
   function pay(o,user,input){
     const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id);if(!c||c.customer_id!==user.id)throw fail(404,'Pedido no disponible.');
@@ -240,7 +276,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     return {coupon,couponError,enabled:Boolean(s.enabled),reason:ctx.reason||closed||null,course:ctx.course.title,edition:ctx.edition.name,promotion:ctx.promotion?.name||null,amountCents:ctx.priceCents,amountLabel:money(ctx.priceCents,ctx.currency),currency:ctx.currency,linkHours:s.link_hours,sessionPriceCents:ctx.edition.session_price_cents>0?ctx.edition.session_price_cents:null,sessionPriceLabel:ctx.edition.session_price_cents>0?money(ctx.edition.session_price_cents,ctx.currency):null,existing:existing?view(existing):null};
   }
 
-  const view=o=>{const n=names(o),s=sessionOf(o);return {...o,courseTitle:n.course,editionName:n.edition,promotionName:n.promotion,contactName:n.contact,amountLabel:money(o.amount_cents,o.currency),statusLabel:STATUS[o.status],methodLabel:o.method?METHODS[o.method]:null,couponCode:o.coupon_code||null,discountLabel:o.discount_cents>0?money(o.discount_cents,o.currency):null,planLabel:planLabel(o),sessionNumber:s?.number||null,sessionTitle:s?.title||null,link:linkFor(o),pendingReceipts:db.prepare("SELECT count(*) n FROM receipts WHERE order_id=? AND status='pending'").get(o.id).n};};
+  const view=o=>{const n=names(o),s=sessionOf(o);return {...o,courseTitle:n.course,editionName:n.edition,promotionName:n.promotion,contactName:n.contact,amountLabel:money(o.amount_cents,o.currency),statusLabel:STATUS[o.status],methodLabel:o.method?METHODS[o.method]:null,couponCode:o.coupon_code||null,couponBy:o.coupon_code?(o.coupon_source==='customer'?'cliente':'equipo'):null,discountLabel:o.discount_cents>0?money(o.discount_cents,o.currency):null,planLabel:planLabel(o),sessionNumber:s?.number||null,sessionTitle:s?.title||null,link:linkFor(o),pendingReceipts:db.prepare("SELECT count(*) n FROM receipts WHERE order_id=? AND status='pending'").get(o.id).n};};
   function list(user,{brand,status}){
     const ids=crm.brandsFor(user).map(b=>b.id).filter(id=>!brand||brand==='all'||id===brand);if(!ids.length)return {orders:[],stats:emptyStats()};
     const ph=ids.map(()=>'?').join(',');
@@ -260,7 +296,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id);if(!c||c.customer_id!==user.id)throw fail(404,'Pedido no disponible.');
     const n=names(o),brand=db.prepare('SELECT name FROM brands WHERE id=?').get(o.brand_id);
     if(o.status==='pending'&&o.expires_at<=now())transaction(db,()=>expire(o));
-    const fresh=get(o.id),s=sessionOf(o);return {id:o.id,reference:o.reference,status:fresh.status,statusLabel:STATUS[fresh.status],amountLabel:money(o.amount_cents,o.currency),coupon:o.coupon_code&&o.discount_cents>0?{code:o.coupon_code,discountLabel:money(o.discount_cents,o.currency)}:null,course:n.course,edition:n.edition,promotion:n.promotion,brand:brand?.name,kind:o.kind,plan:o.plan,planLabel:planLabel(o),session:s?{number:s.number,title:s.title,startsAt:s.starts_at}:null,expiresAt:o.expires_at,conversationId:o.conversation_id,checkoutUrl:fresh.checkout_url&&!fresh.checkout_url.includes('/?pay=')?fresh.checkout_url:null,methods:Object.entries(METHODS).map(([id,label])=>({id,label}))};
+    const fresh=get(o.id),s=sessionOf(o);return {id:o.id,reference:o.reference,status:fresh.status,statusLabel:STATUS[fresh.status],amountLabel:money(o.amount_cents,o.currency),coupon:o.coupon_code&&o.discount_cents>0?{code:o.coupon_code,discountLabel:money(o.discount_cents,o.currency),removable:o.coupon_source==='customer'&&fresh.status==='pending'}:null,couponEntry:Boolean(coupons)&&fresh.status==='pending'&&o.kind==='course'&&o.plan==='full'&&!o.coupon_id&&coupons.customerOffered(o.brand_id,o.course_id,o.edition_id),course:n.course,edition:n.edition,promotion:n.promotion,brand:brand?.name,kind:o.kind,plan:o.plan,planLabel:planLabel(o),session:s?{number:s.number,title:s.title,startsAt:s.starts_at}:null,expiresAt:o.expires_at,conversationId:o.conversation_id,checkoutUrl:fresh.checkout_url&&!fresh.checkout_url.includes('/?pay=')?fresh.checkout_url:null,methods:Object.entries(METHODS).map(([id,label])=>({id,label}))};
   }
   function setSettings(brandId,input,user){
     requireAdmin(user);if(!db.prepare('SELECT 1 FROM brands WHERE id=?').get(brandId))throw fail(404,'Marca no encontrada.');
@@ -283,9 +319,11 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     if(path==='/api/payments/settings'&&req.method==='GET'){requireStaff(user);json(res,200,{settings:crm.brandsFor(user).map(b=>({...settings(b.id),brand_name:b.name}))});return true;}
     if((x=path.match(/^\/api\/payments\/brands\/([a-zA-Z0-9-]+)$/))&&req.method==='PATCH'){json(res,200,{settings:setSettings(x[1],await body(req),user)});return true;}
     if(path==='/api/payments/orders'&&req.method==='GET'){requireStaff(user);json(res,200,list(user,{brand:url.searchParams.get('brand'),status:url.searchParams.get('status')}));return true;}
-    if((x=path.match(/^\/api\/payments\/orders\/([a-f0-9-]{36})(?:\/(customer|pay|cancel))?$/))){
+    if((x=path.match(/^\/api\/payments\/orders\/([a-f0-9-]{36})(?:\/(customer|pay|cancel|coupon))?$/))){
       const o=get(x[1]);if(!o)throw fail(404,'Pedido no disponible.');
       if(x[2]==='customer'&&req.method==='GET'){json(res,200,{order:customerView(o,user)});return true;}
+      if(x[2]==='coupon'&&req.method==='POST'){json(res,200,{order:customerView(applyCoupon(o,user,await body(req)),user)});return true;}
+      if(x[2]==='coupon'&&req.method==='DELETE'){json(res,200,{order:customerView(removeCoupon(o,user),user)});return true;}
       if(x[2]==='pay'&&req.method==='POST'){json(res,200,{order:view(pay(o,user,await body(req)))});return true;}
       requireStaff(user);
       if(!x[2]&&req.method==='GET'){json(res,200,detail(o,user));return true;}

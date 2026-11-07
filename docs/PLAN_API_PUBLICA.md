@@ -27,7 +27,7 @@ Hasta ahora el CRM sólo hablaba con sus propias pantallas. Para que otro sistem
 
 ### Webhooks salientes
 
-- Administración registra **destinos HTTPS** por marca (hasta 10) con un **filtro de eventos** (todos o una lista de los 37 tipos de [ARQUITECTURA.md](ARQUITECTURA.md) / `GET /api/v1/me`).
+- Administración registra **destinos HTTPS** por marca (hasta 10) con un **filtro de eventos** (todos o una lista de los 38 tipos de [ARQUITECTURA.md](ARQUITECTURA.md) / `GET /api/v1/me`).
 - Cuando ocurre un evento de esa marca que coincide, el CRM **lo encola** (una fila por destino y evento; no se duplica) y un temporizador lo **envía por red fuera de cualquier transacción**.
 - **Cuerpo** (JSON):
 

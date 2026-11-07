@@ -5,6 +5,7 @@ import {randomUUID} from 'node:crypto';
 // reglas: marca, estado, vigencia, alcance (curso o edición), usos totales y usos por persona. El bot nunca aplica cupones.
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
+export const GENERIC_CUSTOMER_MESSAGE='Ese cupón no es válido o no está disponible para este pedido.';
 export const LIVE="('pending','review','paid')";
 export const LIMITS={maxPercent:90,minAmountCents:100,maxPerContact:10};
 export const normalizeCode=v=>typeof v==='string'?v.trim().toUpperCase().replace(/\s+/g,''):'';
@@ -16,16 +17,18 @@ export function createCoupons({db,crm,body,json,audit}){
   const uses=id=>db.prepare(`SELECT count(*) n,coalesce(sum(CASE WHEN status='paid' THEN 1 ELSE 0 END),0) paid,coalesce(sum(CASE WHEN status='paid' THEN discount_cents ELSE 0 END),0) off FROM orders WHERE coupon_id=? AND status IN ${LIVE}`).get(id);
   const view=r=>{const u=uses(r.id);return {id:r.id,brandId:r.brand_id,code:r.code,name:r.name,kind:r.kind,value:r.value,valueLabel:r.kind==='percent'?r.value+' %':money(r.value),courseId:r.course_id||null,editionId:r.edition_id||null,
     courseTitle:r.course_id?db.prepare('SELECT title FROM courses WHERE id=?').get(r.course_id)?.title||null:null,editionName:r.edition_id?db.prepare('SELECT name FROM editions WHERE id=?').get(r.edition_id)?.name||null:null,
-    startsAt:r.starts_at||null,endsAt:r.ends_at||null,maxUses:r.max_uses||null,perContact:r.per_contact,status:r.status,revision:r.revision,uses:u.n,paidUses:u.paid,discountPaidCents:u.off,
+    startsAt:r.starts_at||null,endsAt:r.ends_at||null,maxUses:r.max_uses||null,perContact:r.per_contact,customerEntry:Boolean(r.customer_entry),status:r.status,revision:r.revision,uses:u.n,paidUses:u.paid,discountPaidCents:u.off,
     remaining:r.max_uses?Math.max(0,r.max_uses-u.n):null,state:stateOf(r,u.n),createdAt:r.created_at};};
   // Estado efectivo para mostrar: activo, pausado, archivado, aún no vigente, vencido o agotado.
   function stateOf(r,n=uses(r.id).n){const t=now();if(r.status!=='active')return r.status;if(r.starts_at&&t<r.starts_at)return 'scheduled';if(r.ends_at&&t>r.ends_at)return 'expired';if(r.max_uses&&n>=r.max_uses)return 'exhausted';return 'active';}
 
   // Reglas de un cupón para esta conversación y este precio base. Devuelve el descuento o lanza 409 con el motivo, dicho para el equipo.
-  function validate({brandId,courseId,editionId,contactId,baseCents,code}){
+  // `customer: true` = lo escribe el cliente en su pantalla de pago: sólo sirve un cupón que administración permitió para eso.
+  function validate({brandId,courseId,editionId,contactId,baseCents,code,customer=false}){
     const c=normalizeCode(code);if(!CODE.test(c))throw fail(409,'Escribe un código de cupón válido (letras, números, guion).');
     const r=db.prepare('SELECT * FROM coupons WHERE brand_id=? AND code=?').get(brandId,c);
     if(!r)throw fail(409,'El cupón «'+c+'» no existe en esta marca.');
+    if(customer&&!r.customer_entry)throw fail(409,'El cupón «'+c+'» sólo lo aplica el equipo.');
     if(r.status==='paused')throw fail(409,'El cupón «'+c+'» está pausado.');if(r.status==='archived')throw fail(409,'El cupón «'+c+'» ya no está disponible.');
     const t=now();if(r.starts_at&&t<r.starts_at)throw fail(409,'El cupón «'+c+'» todavía no está vigente.');if(r.ends_at&&t>r.ends_at)throw fail(409,'El cupón «'+c+'» ya venció.');
     if(r.edition_id&&r.edition_id!==editionId)throw fail(409,'El cupón «'+c+'» no aplica a esta edición.');if(r.course_id&&r.course_id!==courseId)throw fail(409,'El cupón «'+c+'» no aplica a este curso.');
@@ -56,12 +59,13 @@ export function createCoupons({db,crm,body,json,audit}){
     if(startsAt&&endsAt&&endsAt<=startsAt)throw fail(400,'El cupón tiene que terminar después de empezar.');
     const maxUses=num(input.maxUses,current?.max_uses??null);if(maxUses!==null&&(!Number.isInteger(maxUses)||maxUses<=0||maxUses>100000))throw fail(400,'El tope de usos no es válido.');
     const perContact=input.perContact===undefined?current?.per_contact??1:Number(input.perContact);if(!Number.isInteger(perContact)||perContact<1||perContact>LIMITS.maxPerContact)throw fail(400,'Los usos por persona van de 1 a '+LIMITS.maxPerContact+'.');
-    return {brandId,code,name,kind,value,courseId,editionId,startsAt,endsAt,maxUses,perContact};
+    const customerEntry=input.customerEntry===undefined?Boolean(current?.customer_entry):Boolean(input.customerEntry);
+    return {brandId,code,name,kind,value,courseId,editionId,startsAt,endsAt,maxUses,perContact,customerEntry};
   }
   function create(user,input){
     const f=check(user,input),id=randomUUID(),t=now();
     if(db.prepare('SELECT 1 FROM coupons WHERE brand_id=? AND code=?').get(f.brandId,f.code))throw fail(409,'Ya existe un cupón «'+f.code+'» en esta marca.');
-    db.prepare('INSERT INTO coupons(id,brand_id,code,name,kind,value,course_id,edition_id,starts_at,ends_at,max_uses,per_contact,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,f.brandId,f.code,f.name,f.kind,f.value,f.courseId,f.editionId,f.startsAt,f.endsAt,f.maxUses,f.perContact,user.id,t,t);
+    db.prepare('INSERT INTO coupons(id,brand_id,code,name,kind,value,course_id,edition_id,starts_at,ends_at,max_uses,per_contact,customer_entry,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,f.brandId,f.code,f.name,f.kind,f.value,f.courseId,f.editionId,f.startsAt,f.endsAt,f.maxUses,f.perContact,f.customerEntry?1:0,user.id,t,t);
     return view(db.prepare('SELECT * FROM coupons WHERE id=?').get(id));
   }
   function update(user,id,input){
@@ -74,7 +78,7 @@ export function createCoupons({db,crm,body,json,audit}){
     const f=check(user,input,cur),status=input.status===undefined?cur.status:input.status;
     if(!['active','paused','archived'].includes(status))throw fail(400,'Estado no válido.');
     if(f.maxUses!==null&&f.maxUses<used)throw fail(409,'Ya hay '+used+' usos; el tope no puede ser menor.');
-    const changed=db.prepare('UPDATE coupons SET name=?,course_id=?,edition_id=?,starts_at=?,ends_at=?,max_uses=?,per_contact=?,status=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?').run(f.name,f.courseId,f.editionId,f.startsAt,f.endsAt,f.maxUses,f.perContact,status,now(),id,cur.revision).changes;
+    const changed=db.prepare('UPDATE coupons SET name=?,course_id=?,edition_id=?,starts_at=?,ends_at=?,max_uses=?,per_contact=?,customer_entry=?,status=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?').run(f.name,f.courseId,f.editionId,f.startsAt,f.endsAt,f.maxUses,f.perContact,f.customerEntry?1:0,status,now(),id,cur.revision).changes;
     if(!changed)throw fail(409,'Este cupón cambió mientras lo editabas.');
     return view(db.prepare('SELECT * FROM coupons WHERE id=?').get(id));
   }
@@ -98,5 +102,7 @@ export function createCoupons({db,crm,body,json,audit}){
     if(req.method==='PATCH'){const out=update(user,m[1],await body(req));audit(user,'coupon.update',m[1]);json(res,200,{coupon:out});return true;}
     throw fail(405,'Método no permitido.');
   }
-  return {handle,validate,view,list,normalizeCode};
+  // ¿La marca tiene algún cupón que el cliente pueda escribir ahora? (sólo para decidir si se muestra «¿Tienes un cupón?»; no revela cuáles ni cuántos)
+  const customerOffered=(brandId,courseId,editionId)=>Boolean(db.prepare("SELECT 1 FROM coupons WHERE brand_id=? AND customer_entry=1 AND status='active' AND (course_id IS NULL OR course_id=?) AND (edition_id IS NULL OR edition_id=?) AND (starts_at IS NULL OR starts_at<=?) AND (ends_at IS NULL OR ends_at>=?) LIMIT 1").get(brandId,courseId,editionId,now(),now()));
+  return {handle,validate,view,list,normalizeCode,customerOffered};
 }

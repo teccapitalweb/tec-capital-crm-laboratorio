@@ -20,3 +20,14 @@ export function migrateCoupons(db){
     PRAGMA user_version=34;
   `));
 }
+
+// Esquema v36: el cliente puede escribir su cupón en la pantalla de pago (docs/PLAN_CUPONES.md). `coupons.customer_entry` (0 por omisión: un cupón sólo lo aplica el
+// equipo hasta que administración lo permita) y `orders.coupon_source` ('agent' o 'customer', para saber quién lo aplicó y si el cliente puede quitarlo). Aditivo.
+export function migrateCouponEntry(db){
+  if(db.prepare('PRAGMA user_version').get().user_version>=36)return;
+  transaction(db,()=>db.exec(`
+    ALTER TABLE coupons ADD COLUMN customer_entry INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE orders ADD COLUMN coupon_source TEXT;
+    PRAGMA user_version=36;
+  `));
+}

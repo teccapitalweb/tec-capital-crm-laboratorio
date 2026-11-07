@@ -145,3 +145,9 @@
 .int-code{background:#1f2a35;color:#e8eef3;border-radius:10px;padding:12px;font-size:11px;line-height:1.6;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 .int-scopes,.int-events{display:grid;gap:8px;max-height:260px;overflow:auto}.int-events label{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center}.int-events label small{grid-column:2;color:var(--text-3);font-size:11px}
 .int-all{display:flex;gap:8px;align-items:center;font-weight:600;margin-bottom:8px}.int-deliveries{display:grid;gap:8px;max-height:60vh;overflow:auto}
+/* Cupón en la pantalla de pago del cliente (docs/PLAN_CUPONES.md) */
+.pg-coupon{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px dashed var(--accent-line);border-radius:12px;background:var(--accent-tint);padding:10px 12px;font-size:12px;margin:0 0 12px}.pg-coupon svg{width:14px;height:14px;vertical-align:-2px}
+.pg-coupon-entry{display:block}.pg-coupon-entry summary{cursor:pointer;color:var(--accent-strong);font-weight:600;min-height:40px;display:flex;align-items:center;gap:6px}
+.pg-coupon-row{display:flex;gap:8px;margin-top:6px}.pg-coupon-row input{flex:1;text-transform:uppercase;font-size:13px}.pg-coupon-row .btn{min-height:40px}#pg-coupon-msg{margin:6px 0 0;font-size:12px;color:#8a3a2e}#pg-coupon-msg:empty{display:none}
+.co-check{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--text-2)}.co-check input{margin-top:2px}
+@media(max-width:680px){.pg-coupon-row input{font-size:16px}}

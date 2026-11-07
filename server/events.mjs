@@ -15,6 +15,7 @@ export const EVENT_TYPES={
   'conversacion.abierta':{title:'Conversación abierta',entity:'conversation',payload:'channel, courseId, editionId, referral'},
   'oportunidad.etapa':{title:'Cambio de etapa comercial',entity:'opportunity',payload:'from, to, reason, source'},
   'pedido.creado':{title:'Pedido creado',entity:'order',payload:'reference, amountCents, currency, source, conversationId'},
+  'pedido.cupon_aplicado':{title:'Cupón aplicado a un pedido',entity:'order',payload:'reference, couponCode, discountCents, amountCents, currency, by'},
   'pedido.cancelado':{title:'Pedido cancelado',entity:'order',payload:'reference, reason'},
   'pedido.vencido':{title:'Pedido vencido',entity:'order',payload:'reference'},
   'comprobante.recibido':{title:'Comprobante recibido',entity:'order',payload:'receiptId, reference, filename'},

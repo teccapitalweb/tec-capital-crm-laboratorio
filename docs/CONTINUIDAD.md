@@ -34,7 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Corrección de seguridad de la API pública (rama `fix/api-seguridad`, 7 nov 2026)
+## Cupón escrito por el cliente (rama `feat/cupon-cliente`, 7 nov 2026)
+
+- **Qué es:** en el enlace de pago del cliente aparece «¿Tienes un cupón?» cuando la marca tiene algún cupón que administración permitió para eso (casilla nueva en el cupón, apagada por omisión). El cliente escribe el código, el servidor recalcula el total, el chat lo registra y puede quitar el cupón que él puso. Detalle: [PLAN_CUPONES.md](PLAN_CUPONES.md).
+- **Decisiones de seguridad:** el cliente sólo manda un código (nunca un precio); ante cualquier negativa recibe el **mismo mensaje** (no se puede usar para descubrir códigos); límite de intentos por persona y por pedido; sólo pedidos pendientes de curso completo; las mismas reglas de uso que el equipo. Nuevo evento `pedido.cupon_aplicado` (permiso `orders` en la API de lectura). **Datos:** esquema 36 (`coupons.customer_entry`, `orders.coupon_source`), con respaldo previo. **Verificado:** 185 pruebas (una nueva con todo lo anterior) y revisión visual del pago en escritorio y celular. **Sin publicar.** Se encontró y corrigió durante la prueba que volver a aplicar un cupón tras quitarlo repetía la referencia del mensaje del chat.
+
+## Corrección de seguridad de la API pública (publicada en `main`, 7 nov 2026)
 
 - **Qué pasó:** la revisión de seguridad automática señaló dos cosas en la API publicada: (1) el filtro de destinos de webhooks rechazaba sólo algunos rangos IPv6 (podían pasar, por ejemplo, direcciones NAT64 o 6to4 que apuntan a IPv4 internos); (2) una llave con sólo el permiso `events` leía el contenido de eventos de pedidos y de personas. **Qué se hizo:** IPv6 se niega por omisión (sólo unicast global, sin las formas que incrustan IPv4 ni las de documentación) y los eventos de la API de lectura exigen además el permiso del dato que llevan (si no, llegan sin contenido y marcados como `redacted`). Pruebas nuevas para ambos. Los destinos los registra sólo administración y no había ninguno en producción. **Sin publicar.**
 
