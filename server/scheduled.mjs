@@ -138,5 +138,7 @@ export function createScheduled({db,crm,insertMessage,takeOver,accessConversatio
     }
     throw fail(405,'Método no permitido.');
   }
-  return {handle,tick,sendOne,list,mineList};
+  // Para otros módulos (citas): programar el recordatorio de un cliente y retirarlo si la cita se cancela o se mueve.
+  const cancelSystem=(id,reason)=>{db.prepare("UPDATE scheduled_messages SET state='cancelled',reason=?,revision=revision+1,updated_at=? WHERE id=? AND state='pending'").run(String(reason).slice(0,300),now(),id);};
+  return {handle,tick,sendOne,list,mineList,create,cancelSystem};
 }

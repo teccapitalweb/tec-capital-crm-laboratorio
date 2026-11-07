@@ -60,5 +60,5 @@ test('etiquetas en la bandeja por API: etiquetas por hilo, filtro por etiqueta c
   // el cliente no recibe etiquetas ni el contacto interno, y el filtro no le sirve
   const own=(await call('/api/conversations?tag='+vip.id,ana.cookie)).conversations;assert.equal(own.length,1);assert.equal('tags' in own[0],false);assert.equal('contact_id' in own[0],false);
   assert.equal('tags' in (await call('/api/conversations/'+convAna.id,ana.cookie)).conversation,false);
-  assert.equal(one('PRAGMA user_version').user_version,32,'sin migración nueva');
+  assert.equal(one('PRAGMA user_version').user_version,33,'sin migración nueva');
 });

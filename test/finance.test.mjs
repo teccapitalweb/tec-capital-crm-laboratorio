@@ -155,5 +155,5 @@ test('finanzas por API: libro por eventos, reglas, comisiones, recálculo, liqui
 
  // revocar la función de contadora
  await call('/api/finance/access',admin.cookie,{userId:conta.user.id,enabled:false},'PUT');await call('/api/finance',conta.cookie,undefined,'GET',403);
- const d=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,32);assert.equal(d.prepare('SELECT count(*) n FROM ledger_entries').get().n,3);assert.equal(d.prepare("SELECT count(*) n FROM commission_entries WHERE status='paid'").get().n,2);}finally{d.close();}
+ const d=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,33);assert.equal(d.prepare('SELECT count(*) n FROM ledger_entries').get().n,3);assert.equal(d.prepare("SELECT count(*) n FROM commission_entries WHERE status='paid'").get().n,2);}finally{d.close();}
 });

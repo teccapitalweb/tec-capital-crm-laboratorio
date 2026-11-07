@@ -34,7 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Mensajes programados, segunda entrega: avisos y Mi día (rama `feat/programados-avisos`, 6 nov 2026)
+## Agenda de citas (rama `feat/agenda-citas`, 6 nov 2026)
+
+- **Qué es:** botón «Agendar cita» en el chat (título, tipo, duración, hora, enlace o lugar, notas), con recordatorio opcional al cliente que es un **mensaje programado normal** (hereda sus reglas y se retira si la cita se mueve o se cancela), lista de citas sobre el compositor, «Mis citas» en Mi día y un aviso 15 minutos antes a quien la lleva. Sin empalmes salvo confirmación. Detalle: [PLAN_AGENDA_CITAS.md](PLAN_AGENDA_CITAS.md).
+- **Datos:** esquema 33 (`appointments`), una tabla nueva, con respaldo previo. **Verificado:** 181 pruebas (una nueva: alcance, validación, empalmes, recordatorio, mover y cancelar, cierre, aviso previo, Mi día, tope) y revisión visual en escritorio y celular. **Sin publicar.** Pendiente: calendario semanal/mensual, conexión con calendarios externos y autoagenda del cliente.
+
+## Mensajes programados, segunda entrega: avisos y Mi día (publicado en `main`, 6 nov 2026)
 
 - **Qué se hizo (sin esquema nuevo):** si un mensaje programado no sale por una causa ajena a quien lo programó, le llega un aviso en Mis avisos (y push, grupo «Chats»); y Mi día tiene un panel con lo que esa persona tiene por salir. Detalle en [PLAN_MENSAJES_PROGRAMADOS.md](PLAN_MENSAJES_PROGRAMADOS.md). **Verificado:** 180 pruebas (la de mensajes programados ahora comprueba quién recibe aviso y quién no, el grupo de push y la ruta de Mi día) y revisión visual del panel. **Sin publicar.** Pendiente: programar plantillas y adjuntos.
 

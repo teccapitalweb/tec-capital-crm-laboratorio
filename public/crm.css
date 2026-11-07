@@ -114,3 +114,7 @@
 @media(max-width:680px){.sch-row{grid-template-columns:minmax(0,1fr)}.sch-row .sch-actions{grid-column:1;grid-row:3;justify-content:flex-start}}
 /* Mi día: mensajes programados */
 .day-scheduled{margin-top:14px}.sch-day-count{color:var(--text-3);font-size:11px}.sch-day-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;color:var(--text-3)}.sch-day-more{margin:8px 0 0;font-size:11px;color:var(--text-3)}
+/* Agenda de citas (docs/PLAN_AGENDA_CITAS.md): usa las filas y el panel de mensajes programados */
+.apt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.apt-panel input[type=text],.apt-panel select,.apt-panel textarea{width:100%;font-size:13px}.apt-panel .sch-field>select{max-width:100%}
+.apt-row .sch-text strong{font-weight:600;color:var(--text-1,inherit)}
+@media(max-width:680px){.apt-grid{grid-template-columns:1fr}.apt-panel input[type=text],.apt-panel select,.apt-panel textarea{font-size:16px}}

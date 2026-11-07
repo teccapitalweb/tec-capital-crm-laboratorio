@@ -42,7 +42,8 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 4t. [Aliados](docs/PLAN_ALIADOS.md): el panel RH de IPCIL dentro del CRM, Operación → Aliados (**esquema 30**; publicado en `main`); formulario público `/aliados` apagado por omisión. Pendiente de IPCIL: comisiones por persona.
 4u. [Resumen de conversación](docs/PLAN_RESUMEN_CONVERSACION.md): tarjeta en el chat, por reglas y con IA, y contexto para la IA en chats largos (**esquema 31**; publicado en `main`).
 4v. [Mejora de diseño](docs/DISENO_Y_AUDITORIA.md): menú lateral por grupos y Operación por áreas en lugar de 17 pestañas en fila (sólo interfaz; rama `feat/mejora-diseno`, sin publicar).
-4w. [Mensajes programados](docs/PLAN_MENSAJES_PROGRAMADOS.md): botón «Programar» en el chat; salen solos a la hora y las reglas se comprueban al enviar (**esquema 32**; publicado en `main`). Segunda entrega, avisos cuando no salen y panel en Mi día (rama `feat/programados-avisos`, sin publicar).
+4w. [Mensajes programados](docs/PLAN_MENSAJES_PROGRAMADOS.md): botón «Programar» en el chat; salen solos a la hora y las reglas se comprueban al enviar (**esquema 32**; publicado en `main`). Con avisos cuando no salen y panel en Mi día (publicado).
+4x. [Agenda de citas](docs/PLAN_AGENDA_CITAS.md): «Agendar cita» en el chat, recordatorio opcional al cliente (un mensaje programado), aviso previo y «Mis citas» en Mi día (**esquema 33**; rama `feat/agenda-citas`, sin publicar).
 4b. [Visión de la plataforma](docs/VISION_PLATAFORMA.md): el CRM como módulo de la plataforma de toda la empresa (IPCIL, Academia, finanzas, canales reales); diagnóstico, arquitectura objetivo y fases.
 5. [README](README.md) y [ROADMAP](ROADMAP.md): recorridos del producto y planificación general.
 
@@ -76,7 +77,7 @@ npm start
 
 `npm start` usa `.env` si existe. Prepara `.env` desde `.env.example` para una instalación local; consulta el runbook antes de usar datos o accesos existentes.
 
-La referencia vigente es **180 pruebas aprobadas** (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **181 pruebas aprobadas** (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 
