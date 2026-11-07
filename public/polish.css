@@ -130,3 +130,13 @@ label.field input[type=file]{display:block;width:100%;min-height:64px;padding:11
 @media(min-width:681px) and (max-width:1280px){.cat-tabs{flex-wrap:wrap;overflow:visible;row-gap:0}.cat-tabs button{padding:12px 12px 14px}}
 /* Pantallas muy bajas: los títulos de grupo del menú ceden su lugar a una línea divisoria para que todos los botones quepan sin desplazar */
 @media(min-width:851px) and (max-height:820px){.nav-group-title{display:none}.nav-group+.nav-group{border-top:1px solid var(--line);padding-top:6px}.nav-grouped{gap:6px}}
+/* Auditoría de celular (7 nov 2026): lo que medía menos de 40 px de alto o se salía de su panel. */
+@media (pointer:coarse),(max-width:680px){
+  .task-check{position:relative}.task-check::after{content:"";position:absolute;inset:-8px}
+  .icon-btn{min-width:40px;min-height:40px}
+  .checkbox-field,.ops-hours-row label{min-height:40px}
+  .checkbox-field input,.ops-hours-row input[type=checkbox],.sch-check input{width:20px;height:20px}
+  .ops-hours-row input:not([type=checkbox]){min-height:40px}
+  .content-page summary,.modal-inner summary{padding-block:10px;cursor:pointer}
+  .crm-panel:has(>.leg-table),.crm-panel:has(>table){overflow-x:auto}
+}

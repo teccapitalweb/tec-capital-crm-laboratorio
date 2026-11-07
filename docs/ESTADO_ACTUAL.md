@@ -1,6 +1,6 @@
 # Estado actual del CRM
 
-Página de referencia corta y vigente. Si algo de aquí contradice al código, **el código manda**: comprueba `git status`, `package.json`, `git log` y `/api/health` antes de actuar. Al publicar un cambio, actualiza esta página (versión, esquema, pruebas y fecha). Última actualización: **4 nov 2026**.
+Página de referencia corta y vigente. Si algo de aquí contradice al código, **el código manda**: comprueba `git status`, `package.json`, `git log` y `/api/health` antes de actuar. Al publicar un cambio, actualiza esta página (versión, esquema, pruebas y fecha). Última actualización: **7 nov 2026**.
 
 ## Identificación
 
@@ -8,9 +8,9 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
 | Versión publicada | **0.34.0** en `main` (etiquetas en la bandeja). `/api/health` de producción devuelve `0.34.0` |
-| Pendiente de publicar | **Programar materiales del catálogo** (temario, precio, fechas, flyer o plantilla aprobada; se arma al enviar; **esquema 37**), rama `feat/programar-plantillas`, 188 pruebas. Ya publicados: **estado de la IA y guía de activación** (Operación → Sistema → Inteligencia artificial, sólo lectura y sin secretos; [ACTIVAR_IA_PRODUCCION.md](ACTIVAR_IA_PRODUCCION.md)), rama `feat/estado-ia`, 187 pruebas, sin esquema nuevo. Ya publicados: **cupón escrito por el cliente en su pantalla de pago** (esquema 36; [PLAN_CUPONES.md](PLAN_CUPONES.md)), **API pública de lectura y webhooks salientes** con su corrección de seguridad (esquema 35; [PLAN_API_PUBLICA.md](PLAN_API_PUBLICA.md)), **cupones de descuento** (esquema 34; [PLAN_CUPONES.md](PLAN_CUPONES.md)), **vista semanal «Agenda»** (citas de la semana, mías o del equipo), **agenda de citas** (botón «Agendar cita» en el chat, recordatorio opcional al cliente, aviso previo y «Mis citas» en Mi día; **esquema 33**; [PLAN_AGENDA_CITAS.md](PLAN_AGENDA_CITAS.md)), **mensajes programados** con sus avisos y su panel en Mi día (esquema 32; [PLAN_MENSAJES_PROGRAMADOS.md](PLAN_MENSAJES_PROGRAMADOS.md)), mejora de diseño (menú por grupos, Operación por áreas, pantallas medianas), resumen de conversación (esquema 31), Aliados (30), Pauta (29), memoria y contexto de la IA, corrección del motor, conocimiento por lote y tope de gasto de la IA, historial de precio y cupo y «Preparar marca» |
-| Esquema SQLite | **37** (último cambio: materiales programados, sin publicar; en producción está en 36). Respaldo previo al migrar: `backups/before-crm-v37-*` |
-| Pruebas | 159 aprobadas (`npm test`); `npm run check` limpio |
+| Pendiente de publicar | **Auditoría de celular, ronda 3** (áreas táctiles de 40 px en casillas, horas, resúmenes desplegables, tachar tareas y botones de ícono; tablas que se salían de su panel; sólo CSS), rama `feat/mejora-diseno-3`. Ya publicados desde la v0.34.0 (todos sobre `main`, `/api/health` sigue diciendo 0.34.0): menú por grupos y Operación por áreas, mensajes programados (esquema 32) con avisos, panel en Mi día y **materiales del catálogo** (esquema 37), agenda de citas (33) y vista semanal, cupones (34) y cupón escrito por el cliente (36), API pública y webhooks (35, con su corrección de seguridad), estado de la IA y guía de activación, resumen de conversación (31), Aliados (30), Pauta (29) y lo anterior. El usuario ya confirmó en producción el menú agrupado, Agenda y «Mis citas» con una cita real |
+| Esquema SQLite | **37** (publicado). Respaldo previo al migrar: `backups/before-crm-v37-*` |
+| Pruebas | 188 aprobadas (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |
 | Experiencia del cliente | <https://crm-laboratorio-production.up.railway.app/> |
 | Repositorio | <https://github.com/teccapitalweb/tec-capital-crm-laboratorio>, rama `main` (público: nada de secretos) |
