@@ -1,6 +1,6 @@
 # Plan: API pública de lectura y webhooks salientes
 
-Estado: **implementado en la rama `feat/api-publica`** (7 nov 2026), **esquema 35** (tres tablas nuevas), sin cambio de versión. Sin publicar.
+Estado: **publicado en `main`** (7 nov 2026), **esquema 35** (tres tablas nuevas), sin cambio de versión. Dos correcciones posteriores a la revisión de seguridad automática (rama `fix/api-seguridad`, sin publicar) están en «Seguridad».
 
 ## Para qué
 
@@ -17,7 +17,7 @@ Hasta ahora el CRM sólo hablaba con sus propias pantallas. Para que otro sistem
 | Ruta | Permiso | Qué devuelve |
 |---|---|---|
 | `/api/v1/me` | cualquiera | La marca, los permisos de la llave, la versión y los tipos de evento |
-| `/api/v1/events?after=<seq>&limit=&type=` | `events` | Eventos de dominio en orden, con el mismo sobre que los webhooks; `next` y `hasMore` para seguir donde se quedó |
+| `/api/v1/events?after=<seq>&limit=&type=` | `events` (+ el del dato) | Eventos de dominio en orden, con el mismo sobre que los webhooks; `next` y `hasMore` para seguir donde se quedó. **El contenido (`data`) de cada tipo exige además su permiso**: `orders` (pedidos, pagos, inscripciones, reembolsos, comisiones), `contacts` (conversaciones, etapas, mensajes, bajas, certificados, encuestas, históricos) o `editions` (aperturas, sesiones, cupos, precios, grabaciones). Sin él llega el sobre con `data: {}`, `redacted: true` y `requires`; `GET /api/v1/me` trae el mapa `eventScopes` |
 | `/api/v1/orders?after=&status=&limit=` | `orders` | Pedidos (importe final, descuento, cupón, estado, método, fechas); sin referencias del proveedor ni notas |
 | `/api/v1/contacts?after=&limit=` | `contacts` | Contactos de la marca con teléfono y correo |
 | `/api/v1/editions` | `editions` | Aperturas publicadas con precio, fechas, modalidad y cupo |
@@ -55,11 +55,12 @@ function verify(secret,header,raw){            // header = req.headers['tc-signa
 
 ## Seguridad
 
-- **Destinos internos rechazados (SSRF).** Sólo HTTPS, sin usuario ni contraseña en la URL, y el dominio debe resolver **únicamente a direcciones públicas**: se rechazan loopback, redes privadas, enlace local (incluido el servicio de metadatos de la nube `169.254.169.254`), CGNAT, multicast, IPv6 local y mapeadas, y los nombres `localhost`, `.local`, `.internal`, `.lan`. Se comprueba al registrar **y en cada envío**; no se siguen redirecciones (un 3xx cuenta como falla). Limitación conocida: entre la comprobación y la conexión el DNS podría cambiar (rebinding); el riesgo es bajo porque sólo administración registra destinos, y queda como mejora fijar la IP resuelta.
+- **Destinos internos rechazados (SSRF).** Sólo HTTPS, sin usuario ni contraseña en la URL, y el dominio debe resolver **únicamente a direcciones públicas**: se rechazan loopback, redes privadas, enlace local (incluido el servicio de metadatos de la nube `169.254.169.254`), CGNAT, multicast, IPv6 local y mapeadas, y los nombres `localhost`, `.local`, `.internal`, `.lan`. **IPv6 se niega por omisión:** sólo se acepta unicast global (`2000::/3`) y, aun ahí, se rechazan `2001::/23` (Teredo y reservadas), `2001:db8::/32` y `3fff::/20` (documentación) y las direcciones 6to4 (`2002::/16`) cuyo IPv4 incrustado sea privado; las IPv4 mapeadas o compatibles se juzgan por su IPv4 (así quedan fuera ULA, enlace local, multicast, NAT64 `64:ff9b::/96`, `::1`…). Se comprueba al registrar **y en cada envío**; no se siguen redirecciones (un 3xx cuenta como falla). Limitación conocida: entre la comprobación y la conexión el DNS podría cambiar (rebinding); el riesgo es bajo porque sólo administración registra destinos, y queda como mejora fijar la IP resuelta.
 - `WEBHOOK_ALLOW_PRIVATE=1` **sólo para laboratorio y pruebas** (permite http y direcciones locales). No debe activarse en producción.
 - **Secretos:** la llave de la API se guarda como hash; el **secreto de firma de un destino sí se guarda** (hace falta para firmar). Por eso una **copia de la base SQLite contiene secretos de webhooks**: tratarla como sensible, igual que ya se hace con sesiones y claves push. Nada de esto se imprime ni se vuelve a mostrar en la lista (sólo los últimos 4 caracteres del secreto).
 - **Alcance:** administración gestiona llaves y destinos de las marcas que ve; la API sólo expone la **marca de la llave** y sólo los permisos elegidos. Clientes y asesores reciben 403 en `/api/integrations`; sin sesión 401.
 - **Datos que salen:** los eventos llevan la «carga breve» ya definida para cada tipo (referencias, importes, ids); los contactos salen sólo con el permiso `contacts`. No hay mensajes de chat ni adjuntos en la API. El destino es responsabilidad de quien lo registra: revisa qué eventos le mandas.
+- **Permisos de la API de eventos:** el permiso `events` solo no basta para leer el contenido de eventos que llevan pedidos o datos de personas (ver la tabla de rutas); un tipo nuevo de evento queda restringido hasta clasificarlo (hay una prueba que lo exige). Los **webhooks** no se filtran así: los registra administración, que decide qué eventos manda a cada destino.
 - Auditoría: `apikey.create`, `apikey.revoke`, `webhook.create`, `.update`, `.rotate`, `.delete`, `.retry`.
 
 ## Datos

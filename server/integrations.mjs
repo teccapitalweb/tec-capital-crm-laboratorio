@@ -17,6 +17,14 @@ const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
 export const API_VERSION='1';
 export const SUBSCRIBER='webhooks.out';
 export const SCOPES={events:'Eventos del negocio',orders:'Pedidos (importes y estados)',contacts:'Contactos (con teléfono y correo)',editions:'Aperturas, precios y cupos'};
+// Qué permiso (además de `events`) hace falta para ver el CONTENIDO de cada tipo de evento por la API de lectura. Sin él se entrega el sobre (tipo, marca, entidad,
+// fecha) con `data` vacío y `redacted: true`. Un tipo sin clasificar se trata como restringido. Los webhooks no se filtran así: los registra administración y es ella
+// quien decide qué eventos manda a qué destino.
+export const EVENT_NEEDS={
+  'pedido.creado':'orders','pedido.cancelado':'orders','pedido.vencido':'orders','comprobante.recibido':'orders','pago.confirmado':'orders','pago.rechazado':'orders','reembolso.registrado':'orders','comision.pagada':'orders','pago.condonado':'orders','inscripcion.activada':'orders','inscripcion.cancelada':'orders',
+  'conversacion.abierta':'contacts','oportunidad.etapa':'contacts','mensaje.entregado':'contacts','mensaje.fallido':'contacts','baja.registrada':'contacts','persona.fusionada':'contacts','certificado.emitido':'contacts','certificado.revocado':'contacts','encuesta.enviada':'contacts','encuesta.respondida':'contacts','historico.importado':'contacts',
+  'apertura.abierta':'editions','apertura.en_curso':'editions','apertura.cerrada':'editions','apertura.cancelada':'editions','sesion.programada':'editions','sesion.proxima':'editions','sesion.realizada':'editions','sesion.cancelada':'editions','asistencia.registrada':'editions','grabacion.disponible':'editions','catalogo.precio_cambiado':'editions','edicion.cupo_cambiado':'editions','edicion.cupo_agotado':'editions','edicion.cupo_liberado':'editions','edicion.cupo_bajo':'editions',
+};
 export const LIMITS={maxKeys:20,maxEndpoints:10,maxAttempts:6,disableAfter:15,timeoutMs:8000,batch:10,page:200,perKeyPerMinute:120};
 
 // Firma de cada envío: `TC-Signature: t=<unix>,v1=<hex(hmac-sha256(secreto, t + "." + cuerpo))>`. La verificación del lado receptor usa la misma regla.
@@ -30,8 +38,25 @@ export function verifyWebhook(secret,header,raw,{now=Date.now,toleranceMs=5*6000
 export function isPrivateAddress(ip){
   const v=net.isIP(ip);
   if(v===4){const [a,b]=ip.split('.').map(Number);return a===0||a===10||a===127||(a===100&&b>=64&&b<=127)||(a===169&&b===254)||(a===172&&b>=16&&b<=31)||(a===192&&b===168)||(a===192&&b===0)||(a===198&&(b===18||b===19))||a>=224;}
-  if(v===6){const s=ip.toLowerCase();if(s==='::'||s==='::1')return true;if(s.startsWith('::ffff:')){const m=s.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);return m?isPrivateAddress(m[1]):true;}return /^f[cd]/.test(s)||/^fe[89ab]/.test(s)||s.startsWith('ff');}
+  if(v===6){
+    const b=v6bytes(ip);
+    if(b.slice(0,10).every(x=>x===0)&&b[10]===0xff&&b[11]===0xff)return isPrivateAddress(b.slice(12).join('.'));   // ::ffff:a.b.c.d (IPv4 mapeada)
+    if(b.slice(0,12).every(x=>x===0))return true;                                  // ::, ::1 y ::a.b.c.d (IPv4 compatible)
+    if((b[0]&0xe0)!==0x20)return true;                                             // NEGAR POR OMISIÓN: sólo unicast global 2000::/3 (deja fuera ULA, enlace local, multicast, 64:ff9b::/96 NAT64, 100::/64…)
+    if(b[0]===0x20&&b[1]===0x01){if(b[2]<=0x01)return true;if(b[2]===0x0d&&b[3]===0xb8)return true;}   // 2001::/23 (Teredo y reservadas) y 2001:db8::/32 (documentación)
+    if(b[0]===0x20&&b[1]===0x02)return isPrivateAddress(b.slice(2,6).join('.'));   // 6to4: el IPv4 va dentro de la dirección
+    if(b[0]===0x3f&&b[1]===0xff&&(b[2]&0xf0)===0)return true;                      // 3fff::/20 (documentación)
+    return false;
+  }
   return true;
+}
+// IPv6 a 16 bytes (acepta «::», cola con IPv4 y zona). Sólo se llama con direcciones que net.isIP ya validó.
+function v6bytes(ip){
+  let s=ip.toLowerCase();const z=s.indexOf('%');if(z>=0)s=s.slice(0,z);
+  const m=s.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/);if(m){const [a,b,c,d]=m[2].split('.').map(Number);s=m[1]+((a<<8)|b).toString(16)+':'+((c<<8)|d).toString(16);}
+  const [head,rest]=s.split('::'),h=head?head.split(':'):[],r=rest===undefined?[]:rest?rest.split(':'):[];
+  const groups=rest===undefined?h:[...h,...Array(Math.max(0,8-h.length-r.length)).fill('0'),...r];
+  return groups.flatMap(g=>{const n=parseInt(g||'0',16);return [n>>8,n&255];});
 }
 // Valida el destino: HTTPS, sin credenciales, y que el dominio resuelva sólo a direcciones públicas. Se vuelve a comprobar en cada envío (el DNS puede cambiar).
 export async function assertPublicUrl(raw,{allowPrivate=false,allowInsecure=false,lookup=dns.lookup}={}){
@@ -168,10 +193,10 @@ export function createIntegrations({db,crm,events,body,json,audit,rate,now=Date.
     rate('api:'+key.id,LIMITS.perKeyPerMinute);
     if(!key.last_used_at||now()-key.last_used_at>60000)db.prepare('UPDATE api_keys SET last_used_at=? WHERE id=?').run(now(),key.id);
     const q=url.searchParams,limit=limitOf(q.get('limit')),brand=key.brand_id;
-    if(path==='/api/v1/me'){json(res,200,{apiVersion:API_VERSION,brand:{id:brand,name:brandName(brand)},key:{name:key.name,prefix:key.prefix},scopes:parse(key.scopes,[]),eventTypes:Object.keys(EVENT_TYPES)});return true;}
+    if(path==='/api/v1/me'){json(res,200,{apiVersion:API_VERSION,brand:{id:brand,name:brandName(brand)},key:{name:key.name,prefix:key.prefix},scopes:parse(key.scopes,[]),eventTypes:Object.keys(EVENT_TYPES),eventScopes:EVENT_NEEDS});return true;}
     if(path==='/api/v1/events'){
-      need(key,'events');const after=Number(q.get('after'))||0,type=q.get('type');if(type&&!EVENT_TYPES[type])throw fail(400,'Tipo de evento no existe.');
-      const rows=db.prepare('SELECT * FROM domain_events WHERE brand_id=? AND seq>?'+(type?' AND type=?':'')+' ORDER BY seq LIMIT ?').all(...[brand,after,...(type?[type]:[]),limit]).map(e=>({...envelope({...e,payload:parse(e.payload,{})}),seq:e.seq}));
+      need(key,'events');const after=Number(q.get('after'))||0,type=q.get('type'),have=parse(key.scopes,[]);if(type&&!EVENT_TYPES[type])throw fail(400,'Tipo de evento no existe.');
+      const rows=db.prepare('SELECT * FROM domain_events WHERE brand_id=? AND seq>?'+(type?' AND type=?':'')+' ORDER BY seq LIMIT ?').all(...[brand,after,...(type?[type]:[]),limit]).map(e=>{const ok=have.includes(EVENT_NEEDS[e.type]),env=envelope({...e,payload:ok?parse(e.payload,{}):{}});return {...env,seq:e.seq,...(ok?{}:{redacted:true,requires:EVENT_NEEDS[e.type]||null})};});
       json(res,200,{events:rows,next:rows.length?rows.at(-1).seq:after,hasMore:rows.length===limit});return true;
     }
     if(path==='/api/v1/orders'){
