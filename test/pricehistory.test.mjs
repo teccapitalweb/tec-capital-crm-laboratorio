@@ -80,7 +80,7 @@ test('historial de precio y cupo: eventos al cambiar el precio, al inscribir y d
  for(const k of ['cupo','cupo_bajo','cupo_agotado','cupo_liberado'])assert.ok(kinds.includes(k),'la línea de tiempo trae '+k);
 
  // avisos al equipo en «Mis avisos» (los entrega el índice de eventos fuera de la transacción)
- const notes=await until(async()=>{const r=await call('/api/operations/notifications',admin.cookie);return r.items.filter(n=>n.kind==='catalogue').length>=4?r.items:null;});
+ const notes=await until(async()=>{const r=await call('/api/operations/notifications',admin.cookie);return r.items.filter(n=>n.kind==='catalogue').length>=5?r.items:null;});
  assert.ok(notes,'llegan los avisos de catálogo');
  const titles=notes.filter(n=>n.kind==='catalogue').map(n=>n.title).join('\n');
  assert.match(titles,/El precio subió/);assert.match(titles,/El precio bajó/);assert.match(titles,/Quedan pocos lugares/);assert.match(titles,/Se agotó el cupo/);assert.match(titles,/Se liberó un lugar/);

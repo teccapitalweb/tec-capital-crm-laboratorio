@@ -139,3 +139,9 @@
 .crm-hint.coupon-ok{color:var(--ok,#256b4e);font-weight:600}.crm-hint.coupon-bad{color:#8a3a2e}
 .coupon-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.coupon-row .avatar{font-weight:700}
 @media(max-width:680px){.coupon-two{grid-template-columns:1fr}.co-coupon input{font-size:16px}}
+/* API y webhooks (docs/PLAN_API_PUBLICA.md) */
+.int-row code,.int-row+.crm-hint code,.crm-hint code{font-size:11px;background:var(--soft);border-radius:5px;padding:1px 5px}
+.int-warn{color:#8a3a2e}.int-secret{display:flex;gap:8px;align-items:center;margin:8px 0}.int-secret code{flex:1;overflow-wrap:anywhere;font-size:12px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px}.int-secret .btn{min-height:40px}
+.int-code{background:#1f2a35;color:#e8eef3;border-radius:10px;padding:12px;font-size:11px;line-height:1.6;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.int-scopes,.int-events{display:grid;gap:8px;max-height:260px;overflow:auto}.int-events label{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center}.int-events label small{grid-column:2;color:var(--text-3);font-size:11px}
+.int-all{display:flex;gap:8px;align-items:center;font-weight:600;margin-bottom:8px}.int-deliveries{display:grid;gap:8px;max-height:60vh;overflow:auto}
