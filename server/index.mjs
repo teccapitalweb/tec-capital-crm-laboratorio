@@ -74,13 +74,15 @@ import {migrateScheduled} from './scheduled-schema.mjs';
 import {createScheduled} from './scheduled.mjs';
 import {migrateAppointments} from './appointments-schema.mjs';
 import {createAppointments} from './appointments.mjs';
+import {migrateCoupons} from './coupons-schema.mjs';
+import {createCoupons} from './coupons.mjs';
 import {createQuickReplies} from './quickreplies.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<33&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v33-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<34&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v34-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -112,6 +114,7 @@ migrateAllies(db);
 migrateSummaries(db);
 migrateScheduled(db);
 migrateAppointments(db);
+migrateCoupons(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -181,7 +184,9 @@ const contacts=createContacts({db,crm,body,json,audit,broadcast,events,persons})
 const catalogueImport=createCatalogueImport({db,catalogue,crm,body,json,audit});
 const operations=createOperations({db,crm,catalogue,body,json,audit,broadcast,online,insertMessage});
 // Venta con pago simulado (server/payments.mjs): pedidos, enlace de prueba, comprobantes en cola, inscripciÃ³n; apagada por marca por omisiÃ³n.
-const payments=createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events,content});
+// Cupones de descuento (server/coupons.mjs): administración los crea por marca; el equipo los aplica al cobrar desde el chat.
+const coupons=createCoupons({db,crm,body,json,audit});
+const payments=createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events,content,coupons});
 // CoordinaciÃ³n acadÃ©mica (server/coordination.mjs): aperturas sobre la ediciÃ³n, sesiones, asistencia y recursos; la venta confirmada entra por evento.
 // Lista «Preparar marca» (server/readiness.mjs): sólo lectura, administración.
 const readiness=createReadiness({db,crm,json});
@@ -375,6 +380,7 @@ const server=http.createServer(async(req,res)=>{
       if(await summaries.handle(req,res,path,user))return;
       if(await scheduled.handle(req,res,path,user))return;
       if(await appointments.handle(req,res,path,user))return;
+      if(await coupons.handle(req,res,path,user))return;
       if(await catalogue.handle(req,res,path,user))return;
       if(await mfa.handle(req,res,path,user))return;
       if(await replies.handle(req,res,path,user,{body,json,audit,accessConversation}))return;

@@ -16,7 +16,7 @@ export const METHODS={card:'Tarjeta (simulada)',oxxo:'OXXO (simulado)',transfer:
 const money=(cents,currency)=>new Intl.NumberFormat('es-MX',{style:'currency',currency:currency||'MXN'}).format(cents/100);
 const stamp=t=>new Intl.DateTimeFormat('es-MX',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Mexico_City'}).format(t);
 
-export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events=null,content=null,now=Date.now,env=process.env}){
+export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events=null,content=null,coupons=null,now=Date.now,env=process.env}){
   const defaults=b=>({brand_id:b,enabled:0,link_hours:48,revision:0,updated_by:null,updated_at:null});
   const settings=b=>db.prepare('SELECT * FROM payment_settings WHERE brand_id=?').get(b)||defaults(b);
   const requireAdmin=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||u.role!=='admin')throw fail(403,'La venta con pago la configura un administrador.');};
@@ -37,9 +37,9 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
 
   // Texto del enlace de pago que recibe el cliente (lo envía el equipo o el motor de respuestas).
   function linkMessage(o){
-    const n=names(o);
-    const t=content?.render('payment_pending',o.brand_id,{courseId:o.course_id,editionId:o.edition_id,name:n.contact.split(' ')[0],extra:{pedido:o.reference,importe:money(o.amount_cents,o.currency),enlace_pago:linkFor(o),vigencia_pago:stamp(o.expires_at),plan_pago:planLabel(o)}});if(t)return t.text;
-    return `Pedido de práctica ${o.reference}: ${n.course} · ${n.edition} por ${money(o.amount_cents,o.currency)}${o.plan==='per_session'?' (plan por sesión: este pago cubre tu primera sesión; las siguientes se cobran antes de cada clase)':n.promotion?' ('+n.promotion+')':''}.\nPaga aquí (simulado): ${linkFor(o)}\nVigente hasta ${stamp(o.expires_at)}. También puedes enviar tu comprobante de transferencia por este chat y una persona lo valida.\nLaboratorio: no se realizan cobros reales.`;
+    const n=names(o),promo=o.coupon_code&&o.discount_cents>0?' Incluye tu cupón '+o.coupon_code+' (−'+money(o.discount_cents,o.currency)+').':'';
+    const t=content?.render('payment_pending',o.brand_id,{courseId:o.course_id,editionId:o.edition_id,name:n.contact.split(' ')[0],extra:{pedido:o.reference,importe:money(o.amount_cents,o.currency),enlace_pago:linkFor(o),vigencia_pago:stamp(o.expires_at),plan_pago:planLabel(o)}});if(t)return t.text+promo;
+    return `Pedido de práctica ${o.reference}: ${n.course} · ${n.edition} por ${money(o.amount_cents,o.currency)}${o.plan==='per_session'?' (plan por sesión: este pago cubre tu primera sesión; las siguientes se cobran antes de cada clase)':n.promotion?' ('+n.promotion+')':''}.${promo}\nPaga aquí (simulado): ${linkFor(o)}\nVigente hasta ${stamp(o.expires_at)}. También puedes enviar tu comprobante de transferencia por este chat y una persona lo valida.\nLaboratorio: no se realizan cobros reales.`;
   }
   // Enlace de pago de una sesión (plan por sesión): mismo recorrido de cobro, un pedido por sesión e inscripción.
   function sessionLinkMessage(o){
@@ -49,20 +49,24 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
   }
   // Crea el pedido dentro de la transacción del llamador. Si ya hay uno vigente en la conversación, lo devuelve.
   // plan='per_session': el importe es el precio por sesión de la edición y el pago cubre la primera sesión disponible.
-  function createOrder(c,{user=null,source,plan='full'}){
+  function createOrder(c,{user=null,source,plan='full',coupon=null}){
     const s=settings(c.brand_id);if(!s.enabled)throw fail(409,'La venta con pago simulado está apagada para esta marca. Actívala en Operación → Pagos.');
     if(c.status==='resolved')throw fail(409,'La conversación está cerrada.');
-    const existing=openOrder(c.id);if(existing)return {order:existing,created:false};
+    const existing=openOrder(c.id);if(existing&&coupon)throw fail(409,'Ya hay un pedido vigente ('+existing.reference+'). Cancélalo para cobrar de nuevo con un cupón.');if(existing)return {order:existing,created:false};
+    if(coupon&&source!=='agent')throw fail(409,'Los cupones los aplica una persona del equipo.');
     const ctx=catalogue.info(c.course_id,c.edition_id);if(ctx.reason)throw fail(409,ctx.reason+'. Elige otra edición antes de cobrar.');
     const perSession=plan==='per_session';if(perSession&&!(ctx.edition.session_price_cents>0))throw fail(409,'Esta edición no tiene precio por sesión. Defínelo en Catálogo o cobra el curso completo.');
     const amount=perSession?ctx.edition.session_price_cents:ctx.priceCents,promoId=perSession?null:ctx.promotion?.id||null;
     const oppId=crm.syncConversation(c),opp=db.prepare('SELECT * FROM opportunities WHERE id=?').get(oppId);
     if(['ganada','perdida'].includes(opp.stage))throw fail(409,'La oportunidad ya está cerrada ('+opp.stage+'). Abre una nueva conversación para otra venta.');
+    // Cupón (sólo curso completo): se valida con las mismas reglas que la vista previa, dentro de esta transacción, y el pedido guarda el descuento.
+    let off=0,couponId=null,couponCode=null;
+    if(coupon){if(perSession)throw fail(409,'Los cupones aplican al curso completo, no al plan por sesión.');if(!coupons)throw fail(409,'Los cupones no están disponibles.');const q=coupons.validate({brandId:c.brand_id,courseId:c.course_id,editionId:ctx.edition.id,contactId:opp.contact_id,baseCents:amount,code:coupon});off=q.discountCents;couponId=q.coupon.id;couponCode=q.coupon.code;}
     const t=now(),id=randomUUID();let reference;do{reference='TC-'+randomBytes(3).toString('hex').toUpperCase();}while(db.prepare('SELECT 1 FROM orders WHERE reference=?').get(reference));
-    db.prepare('INSERT INTO orders(id,reference,brand_id,contact_id,opportunity_id,conversation_id,course_id,edition_id,promotion_id,amount_cents,currency,status,source,created_by,expires_at,created_at,updated_at,plan) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-      .run(id,reference,c.brand_id,opp.contact_id,oppId,c.id,c.course_id,ctx.edition.id,promoId,amount,ctx.currency,'pending',source,user?.id||null,t+s.link_hours*3600000,t,t,perSession?'per_session':'full');
-    event(id,'created',{source,amountCents:amount,currency:ctx.currency,promotionId:promoId,plan:perSession?'per_session':'full',expiresAt:t+s.link_hours*3600000},user?.id||null,t);
-    emit('pedido.creado',get(id),{source,promotionId:promoId,kind:'course',plan:perSession?'per_session':'full',expiresAt:t+s.link_hours*3600000},user);
+    db.prepare('INSERT INTO orders(id,reference,brand_id,contact_id,opportunity_id,conversation_id,course_id,edition_id,promotion_id,amount_cents,currency,status,source,created_by,expires_at,created_at,updated_at,plan,coupon_id,coupon_code,discount_cents) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(id,reference,c.brand_id,opp.contact_id,oppId,c.id,c.course_id,ctx.edition.id,promoId,amount-off,ctx.currency,'pending',source,user?.id||null,t+s.link_hours*3600000,t,t,perSession?'per_session':'full',couponId,couponCode,off);
+    event(id,'created',{source,amountCents:amount-off,listAmountCents:amount,couponCode,discountCents:off,currency:ctx.currency,promotionId:promoId,plan:perSession?'per_session':'full',expiresAt:t+s.link_hours*3600000},user?.id||null,t);
+    emit('pedido.creado',get(id),{source,promotionId:promoId,couponCode,discountCents:off,kind:'course',plan:perSession?'per_session':'full',expiresAt:t+s.link_hours*3600000},user);
     return {order:get(id),created:true};
   }
   // Confirmación de pago (proveedor simulado o persona). Dentro de la transacción del llamador.
@@ -182,10 +186,10 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     broadcast('conversation',c.id);return 'aplicado: pago rechazado registrado para '+o.reference;
   }
   // Cobro desde el chat por el equipo: pedido (nuevo o vigente) + mensaje con el enlace; el equipo toma la conversación como con una plantilla.
-  function sendLink(c,user,{resend=false,plan='full'}={}){
+  function sendLink(c,user,{resend=false,plan='full',coupon=null}={}){
     crm.requireBrand(user,c.brand_id);if(c.status==='resolved')throw fail(409,'La conversación está cerrada.');
     let made;transaction(db,()=>{
-      made=createOrder(c,{user,source:'agent',plan});
+      made=createOrder(c,{user,source:'agent',plan,coupon});
       if(made.created||resend){crm.assignConversation(c,user.id);insertMessage(c,user,linkMessage(made.order),'agent','order:'+made.order.id+':link:'+randomUUID().slice(0,8),null,null,null,{category:'utility'});db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);cancelConversationSteps(db,c.id,'human_takeover');event(made.order.id,'link.sent',{by:user.id},user.id,now());}
     });
     audit(user,'payment.order.link',made.order.id);broadcast('conversation',c.id);broadcast('crm',null,{brandId:c.brand_id});return made;
@@ -226,15 +230,17 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     }
     return rows.length;
   }
-  function preview(c,user){
+  function preview(c,user,couponCode=''){
     crm.requireBrand(user,c.brand_id);const s=settings(c.brand_id),ctx=catalogue.info(c.course_id,c.edition_id),existing=openOrder(c.id);
     // Si ya no se puede cobrar (conversación o venta cerradas), se avisa antes de abrir la ventana en lugar de fallar al enviarla.
     const stage=db.prepare('SELECT o.stage FROM opportunities o JOIN conversation_opportunities co ON co.opportunity_id=o.id WHERE co.conversation_id=?').get(c.id)?.stage;
     const closed=existing?null:c.status==='resolved'?'La conversación está cerrada':['ganada','perdida'].includes(stage)?'La oportunidad ya está cerrada ('+stage+'). Abre una nueva conversación para otra venta':null;
-    return {enabled:Boolean(s.enabled),reason:ctx.reason||closed||null,course:ctx.course.title,edition:ctx.edition.name,promotion:ctx.promotion?.name||null,amountCents:ctx.priceCents,amountLabel:money(ctx.priceCents,ctx.currency),currency:ctx.currency,linkHours:s.link_hours,sessionPriceCents:ctx.edition.session_price_cents>0?ctx.edition.session_price_cents:null,sessionPriceLabel:ctx.edition.session_price_cents>0?money(ctx.edition.session_price_cents,ctx.currency):null,existing:existing?view(existing):null};
+    // Cupón opcional: se prueba con las mismas reglas que al crear el pedido; si no aplica, se dice por qué (no es un error de la vista previa).
+    let coupon=null,couponError=null;if(couponCode&&coupons&&!ctx.reason){try{const q=coupons.validate({brandId:c.brand_id,courseId:c.course_id,editionId:ctx.edition.id,contactId:db.prepare('SELECT o.contact_id FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id WHERE co.conversation_id=?').get(c.id)?.contact_id||'',baseCents:ctx.priceCents,code:couponCode});coupon={code:q.coupon.code,name:q.coupon.name,discountCents:q.discountCents,discountLabel:money(q.discountCents,ctx.currency),finalCents:q.finalCents,finalLabel:money(q.finalCents,ctx.currency)};}catch(e){if(!e.status)throw e;couponError=e.message;}}
+    return {coupon,couponError,enabled:Boolean(s.enabled),reason:ctx.reason||closed||null,course:ctx.course.title,edition:ctx.edition.name,promotion:ctx.promotion?.name||null,amountCents:ctx.priceCents,amountLabel:money(ctx.priceCents,ctx.currency),currency:ctx.currency,linkHours:s.link_hours,sessionPriceCents:ctx.edition.session_price_cents>0?ctx.edition.session_price_cents:null,sessionPriceLabel:ctx.edition.session_price_cents>0?money(ctx.edition.session_price_cents,ctx.currency):null,existing:existing?view(existing):null};
   }
 
-  const view=o=>{const n=names(o),s=sessionOf(o);return {...o,courseTitle:n.course,editionName:n.edition,promotionName:n.promotion,contactName:n.contact,amountLabel:money(o.amount_cents,o.currency),statusLabel:STATUS[o.status],methodLabel:o.method?METHODS[o.method]:null,planLabel:planLabel(o),sessionNumber:s?.number||null,sessionTitle:s?.title||null,link:linkFor(o),pendingReceipts:db.prepare("SELECT count(*) n FROM receipts WHERE order_id=? AND status='pending'").get(o.id).n};};
+  const view=o=>{const n=names(o),s=sessionOf(o);return {...o,courseTitle:n.course,editionName:n.edition,promotionName:n.promotion,contactName:n.contact,amountLabel:money(o.amount_cents,o.currency),statusLabel:STATUS[o.status],methodLabel:o.method?METHODS[o.method]:null,couponCode:o.coupon_code||null,discountLabel:o.discount_cents>0?money(o.discount_cents,o.currency):null,planLabel:planLabel(o),sessionNumber:s?.number||null,sessionTitle:s?.title||null,link:linkFor(o),pendingReceipts:db.prepare("SELECT count(*) n FROM receipts WHERE order_id=? AND status='pending'").get(o.id).n};};
   function list(user,{brand,status}){
     const ids=crm.brandsFor(user).map(b=>b.id).filter(id=>!brand||brand==='all'||id===brand);if(!ids.length)return {orders:[],stats:emptyStats()};
     const ph=ids.map(()=>'?').join(',');
@@ -254,7 +260,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id);if(!c||c.customer_id!==user.id)throw fail(404,'Pedido no disponible.');
     const n=names(o),brand=db.prepare('SELECT name FROM brands WHERE id=?').get(o.brand_id);
     if(o.status==='pending'&&o.expires_at<=now())transaction(db,()=>expire(o));
-    const fresh=get(o.id),s=sessionOf(o);return {id:o.id,reference:o.reference,status:fresh.status,statusLabel:STATUS[fresh.status],amountLabel:money(o.amount_cents,o.currency),course:n.course,edition:n.edition,promotion:n.promotion,brand:brand?.name,kind:o.kind,plan:o.plan,planLabel:planLabel(o),session:s?{number:s.number,title:s.title,startsAt:s.starts_at}:null,expiresAt:o.expires_at,conversationId:o.conversation_id,checkoutUrl:fresh.checkout_url&&!fresh.checkout_url.includes('/?pay=')?fresh.checkout_url:null,methods:Object.entries(METHODS).map(([id,label])=>({id,label}))};
+    const fresh=get(o.id),s=sessionOf(o);return {id:o.id,reference:o.reference,status:fresh.status,statusLabel:STATUS[fresh.status],amountLabel:money(o.amount_cents,o.currency),coupon:o.coupon_code&&o.discount_cents>0?{code:o.coupon_code,discountLabel:money(o.discount_cents,o.currency)}:null,course:n.course,edition:n.edition,promotion:n.promotion,brand:brand?.name,kind:o.kind,plan:o.plan,planLabel:planLabel(o),session:s?{number:s.number,title:s.title,startsAt:s.starts_at}:null,expiresAt:o.expires_at,conversationId:o.conversation_id,checkoutUrl:fresh.checkout_url&&!fresh.checkout_url.includes('/?pay=')?fresh.checkout_url:null,methods:Object.entries(METHODS).map(([id,label])=>({id,label}))};
   }
   function setSettings(brandId,input,user){
     requireAdmin(user);if(!db.prepare('SELECT 1 FROM brands WHERE id=?').get(brandId))throw fail(404,'Marca no encontrada.');
@@ -269,8 +275,8 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     let x;const url=new URL(req.url,'http://localhost');
     if((x=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/orders(?:\/(preview))?$/))){
       requireStaff(user);const c=accessConversation(x[1],user);
-      if(x[2]==='preview'&&req.method==='GET'){json(res,200,preview(c,user));return true;}
-      if(!x[2]&&req.method==='POST'){const input=await body(req),made=sendLink(c,user,{resend:Boolean(input.resend),plan:input.plan==='per_session'?'per_session':'full'});json(res,made.created?201:200,{order:view(made.order),created:made.created});return true;}
+      if(x[2]==='preview'&&req.method==='GET'){json(res,200,preview(c,user,coupons?.normalizeCode(url.searchParams.get('coupon')||'')||''));return true;}
+      if(!x[2]&&req.method==='POST'){const input=await body(req),made=sendLink(c,user,{resend:Boolean(input.resend),plan:input.plan==='per_session'?'per_session':'full',coupon:coupons?.normalizeCode(input.coupon||'')||null});json(res,made.created?201:200,{order:view(made.order),created:made.created});return true;}
       throw fail(405,'Método no permitido.');
     }
     if(!path.startsWith('/api/payments'))return false;

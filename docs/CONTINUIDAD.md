@@ -34,7 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Agenda semanal (rama `feat/calendario-agenda`, 6 nov 2026)
+## Cupones de descuento (rama `feat/cupones`, 6 nov 2026)
+
+- **Qué es:** códigos por marca (porcentaje de 1 a 90 % o monto fijo) que administración crea en Operación → Ventas y cobro → Pagos → Cupones y que el equipo escribe en **Cobrar**; el pedido sale con el descuento, el mensaje del enlace y la pantalla de pago lo dicen. Vigencia, curso, usos totales y usos por persona. Detalle en [PLAN_CUPONES.md](PLAN_CUPONES.md).
+- **Decisiones:** los usos se cuentan sobre los pedidos vivos (cancelar o vencer libera el cupo; sin tabla de canjes que se desfase); código, tipo y valor no cambian después de crear; el descuento nunca cubre todo; el bot nunca aplica cupones; sólo curso completo. **Datos:** esquema 34 (`coupons` y tres columnas en `orders` con valor por omisión), con respaldo previo. **Verificado:** 182 pruebas (una nueva: alcance, validación, vista previa, pedido con descuento, usos por persona y totales, vigencia, alcance por curso, pausar y archivar) y revisión visual en escritorio y celular. **Sin publicar.** Pendiente: aplicar el cupón en la pantalla de pago del cliente, códigos únicos por persona y reporte por campaña.
+
+## Agenda semanal (publicada en `main`, 6 nov 2026)
 
 - **Qué se hizo (sin esquema nuevo):** nueva vista **Agenda** (menú, grupo Atención): semana de lunes a domingo con las citas de cada día, **Mías / Del equipo**, filtro por marca y cada cita abre su chat. Sólo lectura. Ruta `GET /api/appointments?from&to&scope&brand`. En pantallas muy bajas (≤820 px de alto) los títulos de grupo del menú se ocultan para que quepan los 14 botones sin desplazar. Detalle en [PLAN_AGENDA_CITAS.md](PLAN_AGENDA_CITAS.md). **Verificado:** 181 pruebas (la de citas ahora cubre rangos, alcance y filtro por marca) y revisión visual a 1024 px y 375 px. **Sin publicar.** Pendiente: vista de mes, calendarios externos y autoagenda del cliente.
 

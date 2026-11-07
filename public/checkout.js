@@ -23,7 +23,7 @@ window.simCheckout=(()=>{
         <h3>${esc(o.course)} · ${esc(o.edition)}</h3>
         ${line?`<p>${line}</p>`:''}
         <div class="pg-amount">${esc(o.amountLabel)}</div>
-        <small>${o.promotion?esc(o.promotion)+' · ':''}Referencia ${esc(o.reference)} · vigente hasta ${esc(until)}</small>
+        <small>${o.promotion?esc(o.promotion)+' · ':''}${o.coupon?'Cupón '+esc(o.coupon.code)+' (−'+esc(o.coupon.discountLabel)+') · ':''}Referencia ${esc(o.reference)} · vigente hasta ${esc(until)}</small>
       </section>
       <div class="pg-tabs" role="tablist" aria-label="Método de pago">
         <button type="button" role="tab" aria-selected="true" data-pg-tab="card">${icon('credit-card')} Tarjeta</button>

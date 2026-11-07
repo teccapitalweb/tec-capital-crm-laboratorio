@@ -122,6 +122,6 @@ test('campañas por API: permisos, apagado por marca, vista previa con motivos, 
 
  // el listado y la persistencia
  const list=(await call('/api/campaigns',admin.cookie)).campaigns;assert.ok(list.length>=6);assert.ok(list.every(c=>typeof c.stats.recipients==='number'));
- assert.equal(one('PRAGMA user_version').user_version,33);
+ assert.equal(one('PRAGMA user_version').user_version,34);
  assert.ok(one("SELECT count(*) n FROM audit WHERE action IN ('campaign.create','campaign.schedule','campaign.cancel','campaign.settings')").n>=6);
 });

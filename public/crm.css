@@ -134,3 +134,8 @@
 @media(max-width:1180px){.agd-week{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:680px){.agd-week{grid-template-columns:minmax(0,1fr)}.agd-day{min-height:0}.agd-count{margin-left:0;width:100%}.agd-range{min-width:0;flex:1}.agd-day>header{align-items:center}}
 @media(max-width:680px){.agd-range{white-space:nowrap;flex:1 1 auto;text-align:right}.agd-scope{order:5;width:100%}.agd-scope button{flex:1;min-height:40px}.agd-count{order:6}}
+/* Cupones de descuento (docs/PLAN_CUPONES.md) */
+.co-coupon{display:flex;gap:8px;align-items:stretch}.co-coupon input{flex:1;text-transform:uppercase}.co-coupon .btn{min-height:40px}
+.crm-hint.coupon-ok{color:var(--ok,#256b4e);font-weight:600}.crm-hint.coupon-bad{color:#8a3a2e}
+.coupon-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.coupon-row .avatar{font-weight:700}
+@media(max-width:680px){.coupon-two{grid-template-columns:1fr}.co-coupon input{font-size:16px}}
