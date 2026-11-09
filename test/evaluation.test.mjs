@@ -16,6 +16,12 @@ test('calificación de un caso: intención, acción, fuente y texto',()=>{
   assert.equal(f.length,5);assert.match(f[0],/intención/);assert.match(f[1],/acción/);assert.match(f[2],/fuente/);
   assert.deepEqual(grade({expect_source:'none'},{...r,sources:[]}),[]);assert.equal(grade({expect_source:'none'},r).length,1);
   assert.equal(actionOf({mode:'off'}),'skipped');assert.equal(actionOf({mode:'suggest'}),'suggested');assert.equal(actionOf({mode:'templates',handoff:true}),'escalated');assert.equal(actionOf({mode:'autonomous',handoff:false}),'replied');
+  // «Sugerir»: el borrador cuenta como respuesta (el asesor sólo decide si lo envía); escalar sigue siendo escalar
+  const s={...r,mode:'suggest'};assert.equal(actionOf(s),'suggested');assert.deepEqual(grade({expect_intent:'price',expect_action:'replied',expect_source:'catalogue',must_include:'$'},s),[]);assert.deepEqual(grade({expect_action:'suggested'},s),[]);
+  assert.equal(grade({expect_action:'escalated'},s).length,1);assert.equal(grade({expect_action:'replied'},{...s,handoff:true}).length,1);assert.deepEqual(grade({expect_action:'escalated'},{...s,handoff:true}),[]);
+  // curso sin edición disponible: la causa sale primero
+  const nd={mode:'suggest',intent:'greeting',handoff:true,sources:[{type:'catalogue'}],reply:'La edición ya no tiene cupo. Un asesor puede ayudarte a revisar otra edición disponible.',reason:'La edición no está disponible según el catálogo.'};
+  assert.match(grade({expect_intent:'greeting',expect_source:'template'},nd)[0],/catálogo: el curso de la simulación no tiene una edición disponible/);
   assert.equal(DEMO_CASES.length,18);
 });
 
@@ -59,11 +65,11 @@ test('banco de evaluación por API: siembra, casos, ejecución con el nivel vige
  assert.equal((await call('/api/evaluation/brands/globalvet/run',admin.cookie,{})).run.total,18);
  assert.equal((await call('/api/evaluation/cases/'+bad.id+'/restore',admin.cookie,{})).case.status,'active');
 
- // el banco refleja el nivel de la marca: en «sugerir» la acción esperada «responde» ya no se cumple
+ // el banco refleja el nivel de la marca: en «sugerir» el borrador cuenta como respuesta y el banco sigue pasando (antes fallaba siempre, y la IA no podía llegar al 85 %)
  const rs=(await call('/api/replies/settings',admin.cookie)).settings.find(x=>x.brand_id==='odonteck');
  await call('/api/replies/brands/odonteck',admin.cookie,{mode:'suggest',providerEnabled:false,expectedRevision:rs.revision},'PATCH');
  const suggest=(await call('/api/evaluation/brands/odonteck/run',admin.cookie,{})).run;
- assert.equal(suggest.mode,'suggest');assert.ok(suggest.passed<suggest.total);assert.ok(suggest.results.find(r=>r.title==='Pregunta el precio').failures.some(f=>/obtuvo «suggested»/.test(f)));
+ assert.equal(suggest.mode,'suggest');assert.equal(suggest.passed,suggest.total,JSON.stringify(suggest.results.filter(r=>!r.pass).map(r=>[r.title,r.failures])));assert.equal(suggest.results.find(r=>r.title==='Pregunta el precio').got.action,'suggested');
 
  // historial y detalle; marca sin acceso y ejecución vacía
  const runs=(await call('/api/evaluation/brands/globalvet/runs',admin.cookie)).runs;assert.equal(runs.length,4);assert.equal(runs[0].total,18);assert.equal(runs[0].actor_name,'Administración');

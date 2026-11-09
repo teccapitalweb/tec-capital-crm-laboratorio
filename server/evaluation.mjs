@@ -16,8 +16,12 @@ export const actionOf=r=>r.mode==='off'?'skipped':r.mode==='suggest'?'suggested'
 // Compara un resultado de simulación con lo esperado; devuelve la lista de diferencias (vacía = pasa).
 export function grade(c,r){
   const failures=[],action=actionOf(r),types=new Set((r.sources||[]).map(s=>s.type));
+  // En modo «Sugerir» el motor responde igual, pero deja el borrador al asesor en lugar de enviarlo: para el banco, un borrador vale como respuesta (y un caso que espera «suggested» pasa en ese modo).
+  const would=r.mode==='suggest'?(r.handoff?'escalated':'replied'):action;
+  // Si el curso de la simulación no tiene una edición disponible, el motor escala sin ficha ni precio y casi todos los casos fallan por eso: se dice la causa de frente.
+  if(/La edición no está disponible/.test(r.reason||''))failures.push('catálogo: el curso de la simulación no tiene una edición disponible ('+String(r.reply||'').split('.')[0].slice(0,100)+'). Publica una edición con cupo y fecha en Catálogo.');
   if(c.expect_intent&&r.intent!==c.expect_intent)failures.push('intención: esperaba «'+c.expect_intent+'», obtuvo «'+r.intent+'»');
-  if(c.expect_action&&action!==c.expect_action)failures.push('acción: esperaba «'+c.expect_action+'», obtuvo «'+action+'»');
+  if(c.expect_action&&action!==c.expect_action&&would!==c.expect_action)failures.push('acción: esperaba «'+c.expect_action+'», obtuvo «'+action+'»');
   if(c.expect_source==='none'?types.size>0:c.expect_source&&!types.has(c.expect_source))failures.push('fuente: esperaba «'+c.expect_source+'», obtuvo «'+([...types].join(', ')||'ninguna')+'»');
   if(c.must_include&&!norm(r.reply).includes(norm(c.must_include)))failures.push('texto: debía incluir «'+c.must_include+'»');
   if(c.must_exclude&&norm(r.reply).includes(norm(c.must_exclude)))failures.push('texto: no debía incluir «'+c.must_exclude+'»');

@@ -57,7 +57,7 @@ Con un perfil «PRUEBA · cliente», haz las preguntas típicas (precio, fechas,
 
 ## Paso 6 · Evaluar con IA real
 
-Catálogo → **Evaluación** → ejecutar el banco de casos **con la IA real**. Se pide **al menos 85 %** (la pantalla de Inteligencia artificial lo marca). Corrige el conocimiento donde falle y vuelve a correr. Con eso la marca pasa a **«Lista para responder»**.
+Catálogo → **Evaluación** → ejecutar el banco de casos **con la IA real**. El banco funciona en modo «Sugerir» (el borrador cuenta como respuesta). La evaluación sólo cuenta como «con IA real» si algún caso llegó a consultar a la IA; si dice que ninguno la necesitó, agrega casos con preguntas que sólo responda el conocimiento aprobado. Si casi todos los casos fallan con «el curso de la simulación no tiene una edición disponible», publica una edición con cupo y fecha en Catálogo. Se pide **al menos 85 %** (la pantalla de Inteligencia artificial lo marca). Corrige el conocimiento donde falle y vuelve a correr. Con eso la marca pasa a **«Lista para responder»**.
 
 ## Paso 7 · Vigilar
 
