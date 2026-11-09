@@ -77,6 +77,15 @@ test('banco de evaluación por API: siembra, casos, ejecución con el nivel vige
  await call('/api/evaluation/runs/'+randomUUID(),admin.cookie,undefined,'GET',404);
  const brand=(await call('/api/brands',admin.cookie,{name:'Marca Eval',description:'prueba'},'POST',201)).id;
  assert.equal((await call('/api/evaluation/cases?brand='+brand,admin.cookie)).cases.length,18,'una marca nueva recibe la siembra');
+ // sin curso indicado, la simulación usa el primer curso (por título) con edición disponible: si el primero quedó en borrador, salta al siguiente en vez de escalar todo
+ {const d2=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{
+  const cs=d2.prepare('SELECT id,title FROM courses WHERE brand_id=? AND active=1 ORDER BY title').all('globalvet');assert.ok(cs.length>=2,'la base de práctica trae al menos dos cursos en GlobalVet');
+  const ok=await call('/api/replies/test',admin.cookie,{brandId:'globalvet',text:'¿Cuánto cuesta?'});assert.equal(ok.result.handoff,false);
+  d2.prepare("UPDATE editions SET status='draft' WHERE course_id=?").run(cs[0].id);
+  const skip=await call('/api/replies/test',admin.cookie,{brandId:'globalvet',text:'¿Cuánto cuesta?'});assert.equal(skip.result.handoff,false,'salta el curso sin edición disponible');assert.doesNotMatch(skip.result.reason,/no está disponible/);
+  d2.prepare("UPDATE editions SET status='draft' WHERE course_id IN (SELECT id FROM courses WHERE brand_id='globalvet')").run();
+  const none=await call('/api/replies/test',admin.cookie,{brandId:'globalvet',text:'¿Cuánto cuesta?'});assert.equal(none.result.handoff,true);assert.match(none.result.reason,/no está disponible/);
+ }finally{d2.close();}}
  const d=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,37);assert.equal(d.prepare('SELECT count(*) n FROM eval_runs').get().n,5);}finally{d.close();}
  assert.equal(logs.includes('failed'),false,logs);
 });

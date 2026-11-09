@@ -132,7 +132,8 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
   // Simulación para administración: mismo plan, sin escribir y con la llamada al proveedor incluida.
   async function test(user,input){
     const brandId=input.brandId;if(typeof brandId!=='string'||!db.prepare('SELECT 1 FROM brands WHERE id=?').get(brandId))throw fail(404,'Marca no disponible.');crm.requireBrand(user,brandId);
-    const course=input.courseId?db.prepare('SELECT * FROM courses WHERE id=? AND brand_id=?').get(input.courseId,brandId):db.prepare('SELECT * FROM courses WHERE brand_id=? AND active=1 ORDER BY title LIMIT 1').get(brandId);
+    // Sin curso indicado se simula con el primer curso activo (por título) que tenga una edición disponible; si ninguno la tiene, con el primero, y el motor dirá por qué escala.
+    const course=input.courseId?db.prepare('SELECT * FROM courses WHERE id=? AND brand_id=?').get(input.courseId,brandId):(()=>{const all=db.prepare('SELECT * FROM courses WHERE brand_id=? AND active=1 ORDER BY title').all(brandId);return all.find(k=>{try{return !catalogue.info(k.id).reason;}catch{return false;}})||all[0];})();
     if(!course)throw fail(400,'La marca no tiene cursos activos para simular.');
     const message=text(input.text,2000);if(!message)throw fail(400,'Escribe el mensaje del cliente.');
     const fake={id:'simulacion',customer_id:user.id,brand_id:brandId,course_id:course.id,edition_id:input.editionId||null,channel:['whatsapp','instagram','facebook'].includes(input.channel)?input.channel:'whatsapp',status:'open',bot_enabled:1,assigned_to:null},trigger={id:'simulacion',text:message,created_at:now()};

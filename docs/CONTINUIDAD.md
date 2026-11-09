@@ -34,6 +34,10 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Corrección: la simulación elige un curso con edición disponible (rama `fix/evaluacion-curso`, 9 nov 2026)
+
+- **Qué pasó:** en GlobalVet la evaluación con IA real salió 3 de 17 porque la simulación usaba siempre el primer curso por título y su edición estaba en **borrador**: el motor escalaba sin ficha ni precio. **Qué se hizo:** `replies.test` (simulación y banco) usa el primer curso activo **con edición disponible**; si ninguno la tiene, el primero, y el caso dice la causa. No cambia datos comerciales ni esquema. **Sin publicar.**
+
 ## Corrección: evaluación con IA en modo «Sugerir» y veredicto de la pantalla de IA (rama `fix/evaluacion-ia`, 9 nov 2026)
 
 - **Qué pasó:** la primera evaluación con Claude en GlobalVet salió «1 de 17 · 5,9 %» y la pantalla de Inteligencia artificial dijo **«Lista para responder»** con «590 %». Dos fallos míos. (1) `eval_runs.score` se guarda en **porcentaje (0–100)** y `server/ai-status.mjs` lo comparaba como fracción con 0,85 y lo multiplicaba por 100 al mostrarlo: cualquier puntaje ≥ 1 % pasaba el umbral. (2) En modo «Sugerir» el banco calificaba la acción como `suggested`, así que todo caso que esperaba `replied` fallaba siempre y ninguna marca en «Sugerir» podía llegar al 85 %.
