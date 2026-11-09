@@ -63,3 +63,5 @@
 .aly-row .actions{flex:0 1 auto;justify-content:flex-end}
 .aly-file{display:grid;gap:6px}.aly-field{display:grid;grid-template-columns:150px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}.aly-field b{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);padding-top:2px}.aly-field span{overflow-wrap:anywhere}
 @media(max-width:560px){.aly-field{grid-template-columns:1fr;gap:2px}.aly-row .actions{width:100%;justify-content:flex-start}}
+/* Casilla «Usar la IA para redactar» en Seguimientos */
+.rcp-ai{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:center;margin-top:8px;font-size:12px}.rcp-ai small{grid-column:2;color:var(--text-3);font-size:11px;line-height:1.4}.rcp-ai input{width:18px;height:18px}.rcp-ai:has(input:disabled){opacity:.75}

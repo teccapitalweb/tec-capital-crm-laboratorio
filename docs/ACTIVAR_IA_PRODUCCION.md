@@ -43,7 +43,7 @@ Esa misma pantalla muestra, **por marca**, el veredicto (**No lista**, **Lista p
 
 ## Paso 4 · Autorizar la marca y empezar en «Sugerir»
 
-Operación → **Seguimientos** → «Respuestas automáticas a clientes» de la marca de pruebas: enciende **usar la IA para redactar** y elige el modo **Sugerir**. En **Inteligencia artificial** la marca pasa a **«Lista para sugerir»**.
+Operación → Ventas y cobro → **Seguimientos** → «Respuestas automáticas a clientes», en la fila de la marca de pruebas: primero elige el modo **Sugerir al asesor** y después marca la casilla **«Usar la IA para redactar»** (la casilla sólo se habilita con Claude configurado y en los modos Sugerir o Autónomo). En **Inteligencia artificial** la marca pasa a **«Lista para sugerir»**.
 
 ## Paso 5 · Probar con clientes de práctica
 

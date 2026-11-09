@@ -34,7 +34,11 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Programar materiales del catálogo (rama `feat/programar-plantillas`, 7 nov 2026)
+## Corrección: encender la IA en modo «Sugerir» (rama `fix/ia-sugerir`, 9 nov 2026)
+
+- **Qué pasó:** al encender la IA en producción se vio que la pantalla de Seguimientos sólo marcaba «usar el proveedor de IA» cuando el modo era **Autónomo** (`providerEnabled: mode==='autonomous'`). El servidor sí admite la IA en «Sugerir» (redacta borradores para el asesor), pero no había cómo encenderla ahí sin que respondiera sola. **Qué se hizo:** casilla nueva **«Usar la IA para redactar»** en cada marca, independiente del modo (habilitada sólo con Claude configurado y en Sugerir o Autónomo); al cambiar de modo, Autónomo la enciende, Sugerir conserva lo elegido y los demás modos la apagan. Sólo interfaz; el servidor no cambia. Sin esto, la guía de activación no podía completarse. **Sin publicar.**
+
+## Programar materiales del catálogo (publicado en `main`, 7 nov 2026)
 
 - **Qué es:** el panel de Programar ahora ofrece **«¿Qué enviar?»**: temario, precio y promoción, fechas, flyer o una plantilla aprobada, además del texto escrito. Se guarda *qué* es y se **arma al enviarse con el catálogo vigente** (no con el texto de cuando se programó); si ya no se puede enviar, no sale y se avisa. Detalle: [PLAN_MENSAJES_PROGRAMADOS.md](PLAN_MENSAJES_PROGRAMADOS.md).
 - **Decisión de diseño:** respeta la regla del proyecto «un cambio de precio o flyer sólo afecta nuevos envíos»: programar no congela el contenido, y el envío guarda su instantánea comercial. **Datos:** esquema 37 (dos columnas en `scheduled_messages`), con respaldo previo. **Verificado:** 188 pruebas (nuevas: validación al programar, edición, temario y precio vigentes al enviar tras cambiar el catálogo, instantánea comercial, edición despublicada, plantilla que deja de estar aprobada, permisos) y revisión visual en escritorio y celular. **Sin publicar.** Pendiente: programar archivos propios y una secuencia de varios materiales.
