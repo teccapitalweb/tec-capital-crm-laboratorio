@@ -443,6 +443,7 @@ const server=http.createServer(async(req,res)=>{
             if(!isCustomer&&current.assigned_to&&current.assigned_to!==user.id&&user.role!=='admin')throw fail(409,'Otro asesor tomó la conversación.');
             if(attachment)db.prepare('INSERT INTO attachments VALUES(?,?,?,?,?,?,?,?)').run(attachmentId,c.id,user.id,attachment.filename,attachment.storageName,attachment.mime,attachment.buffer.length,Date.now());
             if(!isCustomer){replies.consumeSuggestions(c.id);crm.assignConversation(c,user.id);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(user.id,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);cancelConversationSteps(db,c.id,'human_takeover');}
+            if(isCustomer&&!attachmentId)replies.resumeIfPausedByMode(current);   // la marca ya responde sola y el chat solo esperaba por el nivel anterior
             messageId=insertMessage(c,user,text,isCustomer?'customer':'agent',ref,attachmentId);
             const receiptId=isCustomer&&attachmentId?payments.attachReceipt(current,messageId,attachmentId):null;   // un adjunto con pedido vigente es un comprobante: cola humana, sin bot
             if(isCustomer&&!receiptId&&current.bot_enabled&&!current.assigned_to)db.prepare('INSERT INTO jobs(id,conversation_id,message_id,due_at) VALUES(?,?,?,?)').run(randomUUID(),c.id,messageId,Date.now()+700);

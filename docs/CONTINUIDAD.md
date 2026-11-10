@@ -34,6 +34,11 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Corrección: un chat en espera por «Sugerir» se reanuda cuando la marca pasa a responder (rama `fix/reanudar-automatico`, 10 nov 2026)
+
+- **Qué pasó:** con Claude ya funcionando, el usuario pasó GlobalVet a «Autónomo» y siguió escribiendo como cliente en el mismo chat: nadie contestó. En «Apagado» y «Sugerir» el primer mensaje deja el chat en `waiting` con `bot_enabled=0`, y cambiar el nivel de la marca no lo devolvía al asistente; había que pulsar «automatizar» chat por chat o abrir otro.
+- **Qué se hizo:** `replies.resumeIfPausedByMode(c)`, llamado al entrar un mensaje de cliente (sin adjunto): si el chat está en espera, sin responsable, la marca está en «Plantillas» o «Autónomo» y la **última decisión del motor** fue `suggested` o `skipped` (es decir, esperaba sólo por el nivel), lo reanuda (`bot_enabled=1`, `open`, borrador pendiente consumido, espera de servicio reiniciada) y el mensaje se contesta. **No** reanuda lo escalado a una persona (pidió asesor, queja, pago reportado, tope de sin reconocer), lo que alguien tomó, ni lo cerrado. Sin esquema nuevo. **Sin publicar.**
+
 ## Probar conexión con Claude (rama `feat/probar-claude`, 10 nov 2026)
 
 - **Qué pasó:** con la clave ya puesta en Railway el contador seguía en 0 de 200 y no había forma directa de saber si Claude respondía: había que armar casos de evaluación o una conversación de cliente y deducirlo.

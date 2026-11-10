@@ -129,6 +129,20 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     return {action:p.handoff?'escalated':'replied',messageId,reply,reason};
   }
 
+  // Reanuda al asistente en una conversación que sólo quedó en espera por el NIVEL de la marca («Apagado» o «Sugerir») cuando la marca ya responde sola
+  // («Plantillas» o «Autónomo»). No toca las que alguien tomó, las cerradas, ni las que se escalaron a una persona (lo pidió el cliente, queja, pago
+  // reportado o tope de preguntas sin reconocer): ésas siguen esperando a un asesor. Dentro de la transacción del llamador; actualiza también `c`.
+  function resumeIfPausedByMode(c){
+    if(c.bot_enabled||c.assigned_to||c.status!=='waiting')return false;
+    if(!['templates','autonomous'].includes(settings(c.brand_id).mode))return false;
+    const last=db.prepare('SELECT action FROM reply_log WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1').get(c.id);
+    if(!last||!['suggested','skipped'].includes(last.action))return false;
+    consumeSuggestions(c.id);
+    db.prepare("UPDATE conversations SET bot_enabled=1,status='open',updated_at=? WHERE id=?").run(now(),c.id);
+    operations.reset(c,'automation.resumed',null);
+    c.bot_enabled=1;c.status='open';return true;
+  }
+
   // Simulación para administración: mismo plan, sin escribir y con la llamada al proveedor incluida.
   async function test(user,input){
     const brandId=input.brandId;if(typeof brandId!=='string'||!db.prepare('SELECT 1 FROM brands WHERE id=?').get(brandId))throw fail(404,'Marca no disponible.');crm.requireBrand(user,brandId);
@@ -228,5 +242,5 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     }
     throw fail(404,'Ruta de respuestas no encontrada.');
   }
-  return {handle,plan,commit,classify,settings,suggestion,consumeSuggestions,history,test,createEntry,normalizeEntry,seedBrand:brandId=>seedBrandKnowledge(db,brandId,now())};
+  return {handle,plan,commit,classify,settings,resumeIfPausedByMode,suggestion,consumeSuggestions,history,test,createEntry,normalizeEntry,seedBrand:brandId=>seedBrandKnowledge(db,brandId,now())};
 }
