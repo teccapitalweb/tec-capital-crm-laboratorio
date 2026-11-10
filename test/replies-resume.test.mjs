@@ -49,6 +49,24 @@ test('un chat que sólo esperaba por el nivel «Sugerir» vuelve a contestarse s
  await call('/api/conversations/'+b+'/action',admin.cookie,{action:'take'});await mode('autonomous');
  await say(beto,b,'¿Cuánto cuesta?',false);assert.equal(bot(b).length,0);assert.equal(conv(b).bot_enabled,0);assert.equal(conv(b).assigned_to!==null,true);
 
+ // 4b) pidió una persona MIENTRAS la marca estaba en «Sugerir» (la bitácora dice «suggested»): al pasar a responder, sigue con una persona
+ await mode('suggest');const dani=await customer('dani'),d=await open(dani);await say(dani,d,'Quiero hablar con un asesor');assert.equal(db.prepare('SELECT action FROM reply_log WHERE conversation_id=?').get(d).action,'suggested');
+ await mode('autonomous');await say(dani,d,'¿Cuánto cuesta?',false);assert.deepEqual(conv(d),{status:'waiting',bot_enabled:0,assigned_to:null});assert.equal(bot(d).length,0,'el cliente no puede saltarse su propia petición de una persona');
+ // 4c) quedó en pausa por «Sugerir» y DESPUÉS pidió un reembolso (ese mensaje ya no pasó por el motor): tampoco se reanuda
+ await mode('suggest');const eli=await customer('eli'),e=await open(eli);await say(eli,e,'Hola, me interesa el curso');await say(eli,e,'Quiero un reembolso, pésimo servicio',false);
+ await mode('autonomous');await say(eli,e,'¿Cuánto cuesta?',false);assert.equal(conv(e).bot_enabled,0);assert.equal(bot(e).length,0);
+ // 4d) una persona lo tomó y lo devolvió a la cola: el siguiente mensaje del cliente no deshace esa decisión
+ await mode('suggest');const fer=await customer('fer'),f=await open(fer);await say(fer,f,'Hola, me interesa el curso');
+ await call('/api/conversations/'+f+'/action',admin.cookie,{action:'take'});
+ db.prepare("UPDATE conversations SET assigned_to=NULL,status='waiting',bot_enabled=0 WHERE id=?").run(f);   // devuelto a la cola (queda el evento de asignación)
+ assert.ok(db.prepare("SELECT 1 FROM operation_events WHERE conversation_id=? AND kind='assignment'").get(f));
+ await mode('autonomous');await say(fer,f,'¿Cuánto cuesta?',false);assert.deepEqual(conv(f),{status:'waiting',bot_enabled:0,assigned_to:null});assert.equal(bot(f).length,0);
+ // 4e) un archivo enviado durante la pausa (posible comprobante) también lo deja con una persona
+ await mode('suggest');const gil=await customer('gil'),g=await open(gil);await say(gil,g,'Hola, me interesa el curso');
+ {const first=db.prepare("SELECT seq FROM messages WHERE conversation_id=? AND sender_kind='customer' ORDER BY seq LIMIT 1").get(g);const att=randomUUID();db.prepare('INSERT INTO attachments VALUES(?,?,?,?,?,?,?,?)').run(att,g,gil.user?.id||db.prepare("SELECT id FROM users WHERE username='gil'").get().id,'pago.pdf','x-'+att,'application/pdf',10,Date.now());
+  db.prepare("INSERT INTO messages(id,conversation_id,sender_id,sender_kind,text,attachment_id,client_ref,created_at) VALUES(?,?,?,'customer','',?,?,?)").run(randomUUID(),g,db.prepare("SELECT id FROM users WHERE username='gil'").get().id,att,randomUUID(),Date.now());assert.ok(first);}
+ await mode('autonomous');await say(gil,g,'¿Cuánto cuesta?',false);assert.equal(conv(g).bot_enabled,0);assert.equal(bot(g).length,0);
+
  // 5) y si la marca sigue en «Sugerir», nada cambia
  await mode('suggest');const caro=await customer('caro'),c=await open(caro);await say(caro,c,'Hola, me interesa el curso');
  await say(caro,c,'¿Cuánto cuesta?',false);assert.deepEqual(conv(c),{status:'waiting',bot_enabled:0,assigned_to:null});assert.equal(bot(c).length,0);

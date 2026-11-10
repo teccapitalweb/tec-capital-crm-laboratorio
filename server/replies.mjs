@@ -131,12 +131,27 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
 
   // Reanuda al asistente en una conversación que sólo quedó en espera por el NIVEL de la marca («Apagado» o «Sugerir») cuando la marca ya responde sola
   // («Plantillas» o «Autónomo»). No toca las que alguien tomó, las cerradas, ni las que se escalaron a una persona (lo pidió el cliente, queja, pago
-  // reportado o tope de preguntas sin reconocer): ésas siguen esperando a un asesor. Dentro de la transacción del llamador; actualiza también `c`.
+  // reportado), ni aquéllas donde alguien del equipo intervino después de la pausa: ésas siguen esperando a un asesor. Dentro de la transacción del
+  // llamador; actualiza también `c`.
   function resumeIfPausedByMode(c){
     if(c.bot_enabled||c.assigned_to||c.status!=='waiting')return false;
     if(!['templates','autonomous'].includes(settings(c.brand_id).mode))return false;
-    const last=db.prepare('SELECT action FROM reply_log WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1').get(c.id);
-    if(!last||!['suggested','skipped'].includes(last.action))return false;
+    const last=db.prepare('SELECT action,trigger_message_id,created_at FROM reply_log WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1').get(c.id);
+    if(!last||!['suggested','skipped'].includes(last.action)||!last.trigger_message_id)return false;
+    // Una persona ya intervino después de la pausa (respondió, tomó, transfirió, devolvió a la cola, anotó): la decisión es suya, no del cliente.
+    if(db.prepare("SELECT 1 FROM messages WHERE conversation_id=? AND sender_kind='agent' AND created_at>=? LIMIT 1").get(c.id,last.created_at))return false;
+    if(db.prepare("SELECT 1 FROM operation_events WHERE conversation_id=? AND created_at>=? AND (actor_id IS NOT NULL OR kind IN ('assignment','response') OR kind LIKE 'transfer.%') LIMIT 1").get(c.id,last.created_at))return false;
+    // En «Sugerir»/«Apagado» la bitácora dice «suggested»/«skipped» aunque el mensaje pidiera una persona. Se revisa el mensaje que quedó en pausa y los
+    // que el cliente escribió después: si alguno pide asesor, es queja o reembolso, reporta un pago o trae un archivo, sigue esperando a una persona.
+    const trig=db.prepare('SELECT seq FROM messages WHERE id=?').get(last.trigger_message_id);if(!trig)return false;
+    const pending=db.prepare("SELECT text,attachment_id FROM messages WHERE conversation_id=? AND sender_kind='customer' AND seq>=? ORDER BY seq LIMIT 21").all(c.id,trig.seq);
+    if(pending.length>20)return false;   // demasiados mensajes sin atender: que lo vea una persona
+    for(const m of pending){
+      if(m.attachment_id)return false;
+      const intent=classify(m.text).intent;
+      if(intent==='human'||intent==='refund')return false;
+      if(intent==='payment'&&/comprobante|pague|ya pague|transferi|deposite/.test(normalize(m.text)))return false;
+    }
     consumeSuggestions(c.id);
     db.prepare("UPDATE conversations SET bot_enabled=1,status='open',updated_at=? WHERE id=?").run(now(),c.id);
     operations.reset(c,'automation.resumed',null);
