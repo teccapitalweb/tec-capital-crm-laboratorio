@@ -35,6 +35,10 @@ Entra a `/crm` como administrador → **Operación → Sistema → Inteligencia 
 
 Esa misma pantalla muestra, **por marca**, el veredicto (**No lista**, **Lista para sugerir** o **Lista para responder**) y lo que falta.
 
+### Comprobar que Claude responde
+
+En esa misma pantalla, **«Probar conexión con Claude»** hace una llamada mínima real (cuenta 1 contra el tope). Si funciona, dice el modelo, el tiempo y los tokens, y «Llamadas» sube. Si no, dice el motivo: clave inválida o revocada, cuenta sin saldo (se arregla en *Billing* de la consola de Anthropic), modelo no disponible (`AI_MODEL`), petición rechazada o sin conexión. Hasta que esta prueba pase no tiene sentido seguir con los pasos siguientes.
+
 ## Paso 3 · Cargar y aprobar el conocimiento (marca de pruebas)
 
 1. Catálogo → **Conocimiento** → **Importar preguntas (CSV)** (hay plantilla). Todo entra como **borrador**.

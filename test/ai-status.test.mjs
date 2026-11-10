@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
+import {createServer} from 'node:http';
 
 async function start(t,extra={}){
  const dir=await mkdtemp(join(tmpdir(),'crm-aistatus-')),code=randomUUID();let logs='';
@@ -73,4 +74,39 @@ test('estado de la IA con Claude: nunca expone la clave, cuenta el gasto contra 
  // sin el conocimiento o sin la autorización, una buena evaluación no basta
  db.prepare("UPDATE reply_settings SET provider_enabled=0 WHERE brand_id='globalvet'").run();assert.equal((await brand('globalvet')).verdict,'blocked');
  db.close();
+});
+
+test('probar conexión con Claude: una llamada real mínima, sólo administración, cuenta contra el tope y explica por qué falla sin exponer la clave',async t=>{
+ // Anthropic de mentira: el SDK respeta ANTHROPIC_BASE_URL, así la prueba recorre el camino real sin red ni gasto
+ const SECRET='sk-ant-api03-ESTE-VALOR-NO-DEBE-SALIR-NUNCA';let mode='ok';const seen=[];
+ const stub=createServer((req,res)=>{let raw='';req.on('data',c=>raw+=c);req.on('end',()=>{seen.push({url:req.url,beta:req.headers['anthropic-beta']||'',body:raw?JSON.parse(raw):null});
+  const send=(status,obj)=>{res.writeHead(status,{'content-type':'application/json'});res.end(JSON.stringify(obj));},err=(status,type,message)=>send(status,{type:'error',error:{type,message}});
+  if(mode==='ok')return send(200,{id:'msg_prueba',type:'message',role:'assistant',model:'claude-sonnet-5-5',content:[{type:'text',text:'LISTO'}],stop_reason:'end_turn',stop_sequence:null,usage:{input_tokens:12,output_tokens:3}});
+  if(mode==='401')return err(401,'authentication_error','invalid x-api-key '+SECRET);
+  if(mode==='saldo')return err(400,'invalid_request_error','Your credit balance is too low to access the Anthropic API.');
+  if(mode==='404')return err(404,'not_found_error','model: claude-sonnet-5-5');
+  return err(400,'invalid_request_error','fallbacks: Extra inputs are not permitted');});});
+ await new Promise(r=>stub.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>stub.close(r)));
+ const {call,admin,colega,ana}=await start(t,{AI_PROVIDER:'claude',ANTHROPIC_API_KEY:SECRET,ANTHROPIC_BASE_URL:'http://127.0.0.1:'+stub.address().port,AI_MODEL:'claude-sonnet-5-5',AI_MONTHLY_CALL_LIMIT:'3',AI_PING_COOLDOWN_MS:'250'});
+ const wait=()=>new Promise(r=>setTimeout(r,300)),ping=(expected=200)=>call('/api/ai/ping',admin.cookie,{},'POST',expected);
+ // permisos y método
+ await call('/api/ai/ping','',{},'POST',401);await call('/api/ai/ping',ana.cookie,{},'POST',403);await call('/api/ai/ping',colega.cookie,{},'POST',403);await call('/api/ai/ping',admin.cookie,undefined,'GET',405);assert.equal(seen.length,0,'sin permiso no sale ninguna llamada');
+ // funciona: misma forma de petición que las respuestas reales, y cuenta contra el tope
+ const ok=await ping();assert.equal(ok.result.ok,true);assert.equal(ok.result.called,true);assert.equal(ok.result.model,'claude-sonnet-5-5');assert.equal(ok.result.inputTokens,12);assert.equal(ok.result.outputTokens,3);assert.equal(ok.provider.usage.calls,1);assert.deepEqual(ok.provider.usage.byKind,{ping:1});
+ assert.equal(seen.length,1);assert.match(seen[0].url,/\/v1\/messages/);assert.equal(seen[0].body.model,'claude-sonnet-5-5');assert.equal(seen[0].body.fallbacks,'default');assert.equal(seen[0].body.output_config.effort,'low');assert.match(seen[0].beta,/server-side-fallback-2026-07-01/);
+ // no se puede martillar el botón
+ await ping(429);assert.equal(seen.length,1);await wait();
+ // fallos: motivo legible, sin contar llamada y sin que la clave salga aunque el proveedor la repita
+ mode='401';const bad=await ping();assert.equal(bad.result.ok,false);assert.equal(bad.result.called,false);assert.match(bad.result.reason,/clave de API no es válida/);assert.ok(!bad.raw.includes(SECRET)&&!/sk-ant/.test(bad.raw));assert.equal(bad.provider.usage.calls,1);await wait();
+ mode='saldo';assert.match((await ping()).result.reason,/no tiene saldo/);await wait();
+ mode='404';assert.match((await ping()).result.reason,/modelo «claude-sonnet-5-5» no existe o no está disponible/);await wait();
+ mode='400';const rej=await ping();assert.match(rej.result.reason,/rechazó la petición \(400\)/);assert.match(rej.result.reason,/fallbacks/);await wait();
+ // el tope también frena la prueba: al llegar a 3 ya no sale ninguna llamada
+ mode='ok';await ping();await wait();const third=await ping();assert.equal(third.provider.usage.calls,3);await wait();const before=seen.length;
+ const capped=await ping();assert.equal(capped.result.ok,false);assert.match(capped.result.reason,/tope mensual/);assert.equal(seen.length,before,'con el tope alcanzado no se llama');
+});
+
+test('probar conexión con el motor simulado: no llama a nadie y lo dice',async t=>{
+ const {call,admin}=await start(t,{AI_PING_COOLDOWN_MS:'0'});
+ const r=await call('/api/ai/ping',admin.cookie,{},'POST');assert.equal(r.result.ok,false);assert.equal(r.result.called,false);assert.match(r.result.reason,/simulado/);assert.equal(r.provider.usage,null);
 });

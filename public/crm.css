@@ -163,3 +163,6 @@
 .sch-material{display:grid;gap:6px;border:1px solid var(--line);border-radius:10px;background:var(--soft);padding:10px 12px;font-size:12px}.sch-material strong svg{width:13px;height:13px;vertical-align:-2px}
 .sch-preview{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:150px;overflow:auto;line-height:1.55;color:var(--text-2)}.sch-material small{color:var(--text-3);font-size:11px;line-height:1.5}
 .sch-field select{width:100%;font-size:13px}@media(max-width:680px){.sch-field select{font-size:16px}}
+
+/* Resultado de «Probar conexión con Claude» */
+.ais-ping{display:flex;gap:10px;align-items:flex-start;margin:12px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;line-height:1.5}.ais-ping svg{width:16px;height:16px;flex:none;margin-top:2px}.ais-ping small{color:var(--text-3);font-size:11px;white-space:nowrap}.ais-ping.ok{border-color:#bcd9c6;background:#f1f8f3}.ais-ping.bad{border-color:#e6c4bd;background:#fbf2f0}

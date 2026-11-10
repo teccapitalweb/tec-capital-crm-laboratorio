@@ -51,11 +51,21 @@ export function createAiStatus({db,crm,provider,env=process.env,json,now=Date.no
     const p=providerInfo(),steps=globalSteps(p);
     return {provider:p,steps,thresholds:THRESHOLDS,brands:crm.brandsFor(user).map(b=>brandStatus(b,p,steps))};
   }
+  // Prueba de conexión: una llamada mínima real a Claude (cuenta contra el tope). Sólo administración; con pausa entre pruebas para no gastar por accidente.
+  let lastPing=0;const cooldown=Number.isFinite(Number(env.AI_PING_COOLDOWN_MS))&&env.AI_PING_COOLDOWN_MS!==undefined&&env.AI_PING_COOLDOWN_MS!==''?Math.max(0,Number(env.AI_PING_COOLDOWN_MS)):5000;
+  async function ping(user){
+    requireAdmin(user);
+    if(now()-lastPing<cooldown)throw fail(429,'Espera unos segundos antes de probar otra vez.');
+    lastPing=now();
+    let r;try{r=await provider.ping();}finally{lastPing=now();}   // la pausa cuenta desde que termina la prueba anterior
+    return {result:{ok:Boolean(r.ok),called:Boolean(r.called),reason:String(r.reason||'').slice(0,300),model:r.model||null,ms:r.ms??null,inputTokens:r.inputTokens??null,outputTokens:r.outputTokens??null},provider:providerInfo()};
+  }
   async function handle(req,res,path,user){
+    if(path==='/api/ai/ping'){if(user.role==='customer')throw fail(403,'El estado de la IA es para administración.');if(req.method!=='POST')throw fail(405,'Método no permitido.');json(res,200,await ping(user));return true;}
     if(path!=='/api/ai/status')return false;
     if(user.role==='customer')throw fail(403,'El estado de la IA es para administración.');requireAdmin(user);
     if(req.method!=='GET')throw fail(405,'Método no permitido.');
     json(res,200,status(user));return true;
   }
-  return {handle,status};
+  return {handle,status,ping};
 }
