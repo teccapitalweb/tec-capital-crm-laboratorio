@@ -140,3 +140,10 @@ label.field input[type=file]{display:block;width:100%;min-height:64px;padding:11
   .content-page summary,.modal-inner summary{padding-block:10px;cursor:pointer}
   .crm-panel:has(>.leg-table),.crm-panel:has(>table){overflow-x:auto}
 }
+
+/* Cuadro de escribir del chat: crece con el texto y se puede ampliar (fitComposer en app.js) */
+#message-input{min-height:64px;max-height:none;line-height:1.55;resize:none;transition:height .12s var(--ease,ease)}
+.compose.compose-tall #message-input{font-size:14px}
+.compose-expand[aria-pressed="true"]{background:var(--accent-soft,#e8f0f4);border-color:var(--accent-line,#c4d7e0)}
+@media(max-width:680px){#message-input{font-size:16px}}
+@media(prefers-reduced-motion:reduce){#message-input{transition:none}}

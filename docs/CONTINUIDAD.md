@@ -34,6 +34,10 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Cuadro de escribir del chat más amplio (rama `feat/redactor-amplio`, 10 nov 2026)
+
+- **Qué pasó:** al editar un borrador largo (por ejemplo una respuesta sugerida) el cuadro del chat quedaba en 2 líneas y se desplazaba: `styles.css` lo limitaba a 140 px (100 px en celular). **Qué se hizo:** el cuadro crece con el texto hasta el 42 % de la altura de la ventana (30 % en celular) y muestra todo sin desplazarse hasta ese tope; un botón **Ampliar** junto al clip lo deja más alto (62 % / 50 % en celular). Sólo interfaz (`fitComposer()` en `public/app.js` y reglas en `public/polish.css`); sin esquema nuevo. **Sin publicar.**
+
 ## Corrección: «consultó a la IA» sólo si la llamada salió (rama `fix/evaluacion-llamada`, 10 nov 2026)
 
 - **Qué pasó:** la evaluación de GlobalVet salió 17 de 17 en 0,2 s y la pantalla de IA dijo «Lista para responder», pero el contador de llamadas seguía en 0 de 200. `AiProvider.draft()` devuelve un borrador vacío (con su motivo) cuando la llamada falla, y el banco contaba ese borrador como «consulta a la IA». **Qué se hizo:** `draft()` devuelve `called` (la petición a Claude salió y respondió); la simulación lo expone junto con `error`, el banco guarda `providerCalled`/`providerError` por caso, y la pantalla de IA sólo cuenta evaluaciones con llamadas reales y muestra el motivo si no las hubo. En «Respuesta y motivo» aparece «NO se consultó a la IA: …». Sin esquema nuevo. **Sin publicar.**
