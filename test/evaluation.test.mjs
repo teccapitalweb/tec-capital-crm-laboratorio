@@ -8,6 +8,15 @@ import {randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {grade,actionOf} from '../server/evaluation.mjs';
 import {DEMO_CASES} from '../server/evaluation-schema.mjs';
+import {createAiProvider} from '../server/ai-provider.mjs';
+
+test('el proveedor distingue una llamada real a Claude de un borrador vacío por error, sin clave o por tope',async()=>{
+  const input={brand:{name:'M'},course:{title:'C'},edition:{name:'E'},question:'¿Algo?',knowledge:[]},quiet={error(){}};
+  const noKey=await createAiProvider({env:{AI_PROVIDER:'claude'},log:quiet}).draft(input);assert.equal(noKey.called,false);assert.match(noKey.reason,/sin credenciales/i);
+  const capped=createAiProvider({env:{AI_PROVIDER:'claude',ANTHROPIC_API_KEY:'sk-prueba'},log:quiet});capped.useBudget({check:()=>'Se alcanzó el tope mensual.',record(){}});
+  const r=await capped.draft(input);assert.equal(r.called,false);assert.equal(r.text,null);assert.match(r.reason,/tope/);
+  const sim=await createAiProvider({env:{},log:quiet}).draft({...input,knowledge:[]});assert.equal(sim.called,false,'el motor simulado nunca cuenta como llamada a la IA');
+});
 
 test('calificación de un caso: intención, acción, fuente y texto',()=>{
   const r={mode:'templates',intent:'price',handoff:false,sources:[{type:'catalogue'}],reply:'El precio de ejemplo es $379.00 MXN'};

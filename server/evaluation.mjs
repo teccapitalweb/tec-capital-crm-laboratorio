@@ -72,7 +72,7 @@ export function createEvaluation({db,crm,replies,provider,body,json,audit,now=Da
     const started=now(),results=[];let mode='templates',providerName=provider?.name||'simulated';
     for(const c of cases){
       let got,failures;
-      try{const r=await replies.test(user,{brandId,courseId:c.course_id||undefined,text:c.input_text});mode=r.mode;if(r.provider?.name)providerName=r.provider.name;got={intent:r.intent,confidence:r.confidence,action:actionOf(r),sources:(r.sources||[]).map(s=>s.type),reply:String(r.reply||'').slice(0,600),reason:r.reason,providerUsed:Boolean(r.provider?.used)};failures=grade(c,r);}
+      try{const r=await replies.test(user,{brandId,courseId:c.course_id||undefined,text:c.input_text});mode=r.mode;if(r.provider?.name)providerName=r.provider.name;got={intent:r.intent,confidence:r.confidence,action:actionOf(r),sources:(r.sources||[]).map(s=>s.type),reply:String(r.reply||'').slice(0,600),reason:r.reason,providerUsed:Boolean(r.provider?.used),providerCalled:Boolean(r.provider?.called),providerError:r.provider?.error||null};failures=grade(c,r);}
       catch(e){got={intent:null,action:null,sources:[],reply:'',reason:'Error: '+String(e?.message||e).slice(0,160)};failures=['error al simular: '+String(e?.message||e).slice(0,120)];}
       results.push({caseId:c.id,title:c.title,input:c.input_text,expected:{intent:c.expect_intent,action:c.expect_action,source:c.expect_source,include:c.must_include,exclude:c.must_exclude},got,pass:failures.length===0,failures});
     }

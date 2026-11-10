@@ -71,7 +71,7 @@ export function createAiProvider({env=process.env,log=console,timeoutMs=20000}={
 
   let client=null,budget=null;   // tope de gasto opcional (server/ai-budget.mjs): check() devuelve el motivo si ya no se puede llamar
   const useBudget=b=>{budget=b;};
-  async function claude({brand,course,edition,question,knowledge,history=[],memory=null,summary=null}){
+  async function claude({brand,course,edition,question,knowledge,history=[],memory=null,summary=null,_meta=null}){
     if(!hasCredentials)return {text:null,usedIds:[],model,reason:'Proveedor sin credenciales.'};
     const blocked=budget?.check();if(blocked)return {text:null,usedIds:[],model,reason:blocked,budget:true};
     if(!client){const {default:Anthropic}=await import('@anthropic-ai/sdk');client=new Anthropic({timeout:timeoutMs,maxRetries:1});}
@@ -88,6 +88,7 @@ export function createAiProvider({env=process.env,log=console,timeoutMs=20000}={
     ].filter(Boolean).join('\n\n');
     const messages=[...history.slice(-6).map(h=>({role:h.role==='customer'?'user':'assistant',content:h.text})),{role:'user',content:[summary?'<resumen_conversacion>\n'+String(summary).replace(/[<>]/g,' ')+'\n</resumen_conversacion>':null,memory?'<datos_cliente>\n'+String(memory).replace(/[<>]/g,' ')+'\n</datos_cliente>':null,question].filter(Boolean).join('\n\n')}];
     const response=await client.beta.messages.create({model,max_tokens:1024,system,messages,output_config:{effort:'low'},betas:['server-side-fallback-2026-07-01'],fallbacks:'default'});
+    if(_meta)_meta.called=true;   // la petición salió y Claude respondió (se cobra y se cuenta)
     budget?.record({kind:'reply',model:response.model||model,input:response.usage?.input_tokens,output:response.usage?.output_tokens});
     if(response.stop_reason==='refusal')return {text:null,usedIds:[],model,reason:'El proveedor declinó responder ('+(response.stop_details?.category||'sin categoría')+').'};
     const text=response.content.filter(b=>b.type==='text').map(b=>b.text).join('').trim().replace(/^```(?:json)?\s*|\s*```$/g,'');
@@ -148,8 +149,10 @@ export function createAiProvider({env=process.env,log=console,timeoutMs=20000}={
     catch(e){log.error('AI rewrite failed:',e?.name||'Error',String(e?.message||'').slice(0,160));return {variants:[],model,reason:'Error del proveedor: '+String(e?.message||e).slice(0,120)};}
   }
   async function draft(input){
-    try{return await (name==='claude'?claude(input):simulated(input));}
-    catch(e){log.error('AI provider failed:',e?.name||'Error',String(e?.message||'').slice(0,160));return {text:null,usedIds:[],model,reason:'Error del proveedor: '+String(e?.message||e).slice(0,120)};}
+    // `called`: la petición a Claude realmente salió y se contestó. Un error de red, de clave, de tope o de modelo devuelve un borrador vacío con `called:false` y su motivo.
+    const meta={called:false};
+    try{const r=await (name==='claude'?claude({...input,_meta:meta}):simulated(input));return {...r,called:name==='claude'&&meta.called};}
+    catch(e){log.error('AI provider failed:',e?.name||'Error',String(e?.message||'').slice(0,160));return {text:null,usedIds:[],model,reason:'Error del proveedor: '+String(e?.message||e).slice(0,160),called:meta.called};}
   }
   return {name,model:name==='claude'?model:'simulado',configured,draft,rewrite,summarize,useBudget,usage:()=>name==='claude'?budget?.usage()||null:null};
 }
