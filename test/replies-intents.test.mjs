@@ -62,6 +62,20 @@ test('reglas de intención: cada frase del banco va a la ruta correcta y las res
  const paid=await sim('ya pague ahora que hago');assert.equal(paid.intent,'payment');assert.equal(paid.handoff,true);assert.match(paid.reply,/revisará tu pago/);assert.match(paid.reply,/no confirmamos pagos de forma automática/);assert.doesNotMatch(paid.reply,/Puedes pagar con|formas de pago/i);
  const how=await sim('disculpa y cuantos metodos de pago tienen');assert.equal(how.intent,'payment');assert.equal(how.handoff,false);assert.equal(route(how),'kb');assert.doesNotMatch(how.reply,/revisará tu pago/);
 
+ // varias preguntas en un mismo mensaje: se contestan todas (antes sólo la primera)
+ const two=await sim('Que temas incluye, y tiene certificado oficial?');
+ assert.equal(two.intent,'syllabus');assert.match(two.reply,/Esto es lo que verás en /);assert.match(two.reply,/• /);assert.match(two.reply,/certificad|constancia/i,'también responde lo del certificado');
+ assert.deepEqual([...new Set(two.sources.map(s=>s.type))].sort(),['catalogue','knowledge']);assert.match(two.reason,/Varias preguntas en un mensaje \(syllabus, certificate\)/);
+ assert.equal((two.reply.match(/Quiero inscribirme/g)||[]).length,1,'un solo cierre para todo el mensaje');assert.doesNotMatch(two.reply,/¿Te cuento el precio o las fechas\?/);
+ const pd=await sim('¿Cuánto cuesta y cuándo empieza?');assert.equal(pd.intent,'price');assert.match(pd.reply,/El precio de .+ es de \$/);assert.match(pd.reply,/• Inicio: /);assert.match(pd.reply,/precio de ejemplo/i);assert.equal(pd.stage,'interesado');
+ const three=await sim('¿Se graba la clase? ¿Y entregan certificado? ¿Cuánto dura?');assert.equal(three.sources.filter(s=>s.type==='knowledge').length,3,'tres temas del conocimiento en una respuesta');
+ // una sola pregunta sigue contestándose como una sola, aunque use palabras de dos temas
+ const one=await sim('¿cuánto hay que pagar?');assert.doesNotMatch(one.reason,/Varias preguntas/);assert.equal(route(one),'cat');
+ const cert=await sim('Tiene certificado o algo');assert.equal(cert.intent,'certificate');assert.doesNotMatch(cert.reason,/Varias preguntas/);assert.equal(route(cert),'kb');
+ // y lo que debe ir con una persona no se mezcla: pedir asesor o avisar de un pago gana
+ const person=await sim('¿Cuánto cuesta? y quiero hablar con un asesor');assert.equal(person.intent,'human');assert.equal(person.handoff,true);assert.doesNotMatch(person.reason,/Varias preguntas/);
+ const paid2=await sim('ya pagué, y cuándo empieza?');assert.equal(paid2.handoff,true);assert.match(paid2.reply,/revisará tu pago/);assert.doesNotMatch(paid2.reason,/Varias preguntas/);
+
  // en el chat: lo que redactó la IA se marca aparte de lo que salió por reglas
  const ana=await call('/api/auth/register','',{username:'ana',name:'Ana Pérez',password});
  const course=db.prepare("SELECT c.id FROM courses c JOIN editions e ON e.course_id=c.id WHERE c.brand_id='globalvet' AND c.active=1 AND e.status='published' ORDER BY c.title LIMIT 1").get().id;

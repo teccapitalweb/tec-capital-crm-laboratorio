@@ -61,6 +61,12 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     for(const [intent,re,confidence,when] of PATTERNS)if(re.test(t)&&(!when||when(t,String(raw||''))))return {intent,confidence};
     return {intent:'unknown',confidence:0};
   }
+  // Todas las intenciones que aparecen en el mensaje, en el orden de las reglas (para contestar varias preguntas a la vez).
+  function classifyAll(raw){
+    const t=normalize(raw),found=[];
+    for(const [intent,re,,when] of PATTERNS)if(!found.includes(intent)&&re.test(t)&&(!when||when(t,String(raw||''))))found.push(intent);
+    return found;
+  }
   const unknownStreak=conversationId=>{let n=0;for(const r of db.prepare("SELECT intent,action FROM reply_log WHERE conversation_id=? AND action IN ('replied','suggested') ORDER BY created_at DESC LIMIT 5").all(conversationId)){if(r.intent==='unknown')n++;else break;}return n;};
 
   // Plan síncrono: decide intención, texto, fuentes y si hace falta el proveedor. No escribe nada.
@@ -79,9 +85,34 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     // «¿cuánto tiempo tengo para pagar?» no se contesta con «¿cuánto dura el curso?».
     const pool=TOPIC_INTENTS.includes(intent)?kb.filter(k=>k.topic===intent||!TOPIC_INTENTS.includes(k.topic)):kb;
     const fromKnowledge=(threshold=.5)=>{const hit=bestMatch(trigger.text,pool,threshold)||(TOPIC_INTENTS.includes(intent)?{entry:kb.find(k=>k.topic===intent),score:1}:null);if(!hit?.entry)return false;out.reply=hit.entry.answer;out.sources.push({type:'knowledge',id:hit.entry.id,revision:hit.entry.revision,question:hit.entry.question});out.reason='Conocimiento aprobado «'+hit.entry.question+'»'+(hit.score<1?' (parecido '+Math.round(hit.score*100)+'%)':'')+'.';return true;};
+    // Varias preguntas en un mensaje («¿qué temas incluye, y tiene certificado?»): antes sólo se contestaba la primera intención reconocida.
+    // Se juntan cuando el mensaje une dos o más preguntas informativas (con «y», coma o un segundo signo de pregunta) y cada una tiene
+    // respuesta en el catálogo o en el conocimiento aprobado. Pedir un asesor, una queja, inscribirse o avisar de un pago siguen su camino de siempre.
+    const INFO=['price','schedule','syllabus','certificate','requirements','modality','recording','duration','payment'];
+    const paidClaim=/comprobante|pague|ya pague|transferi|deposite/.test(normalize(trigger.text));
+    const several=()=>{
+      if(situational||paidClaim||!INFO.includes(intent))return false;
+      // señal de que son dos preguntas y no una: un conector («y», «también»…), una coma o dos signos de cierre de pregunta
+      if(!/\b(y|e|tambien|ademas|aparte)\b|[,;]|\?.*\S.*\?/.test(normalize(trigger.text)+' '+trigger.text.toLowerCase()))return false;
+      const asked=classifyAll(trigger.text).filter(i=>INFO.includes(i)).slice(0,3);if(asked.length<2)return false;
+      const parts=[],sources=[];let kind=null;
+      for(const it of asked){
+        if(it==='price'){parts.push(copy.priceBody(ctx));kind='price';}
+        else if(it==='schedule'){parts.push(copy.scheduleBody(ctx));kind=kind==='price'?kind:'schedule';}
+        else if(it==='syllabus'){parts.push(copy.syllabusBody(ctx));kind=kind||'syllabus';}
+        else{const entry=kb.find(k=>k.topic===it);if(entry){parts.push(entry.answer);sources.push({type:'knowledge',id:entry.id,revision:entry.revision,question:entry.question});}}
+      }
+      if(parts.length<2)return false;   // sólo una tenía respuesta: se contesta como siempre
+      if(kind){out.prepared=catalogue.prepare(c,{kind});out.sources.push(catalogueSource);}
+      out.sources.push(...sources);if(asked.includes('price'))out.stage='interesado';
+      out.reply=copy.several(parts,{price:asked.includes('price')});
+      out.reason='Varias preguntas en un mensaje ('+asked.join(', ')+'): se contestan juntas con el catálogo vigente y el conocimiento aprobado.';
+      return true;
+    };
     if(intent==='opt_out'){out.reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';out.reason='El cliente pidió la baja; se registra y se confirma una sola vez.';}
     else if(intent==='human'||intent==='refund'){out.reply=intent==='refund'?copy.refund(user?.name):copy.human(user?.name);out.handoff=true;out.reason=intent==='refund'?'Queja o reembolso: siempre lo atiende una persona.':'El cliente pidió hablar con una persona.';}
     else if(ctx.reason){out.reply=copy.unavailable(ctx.reason);out.handoff=true;out.reason='La edición no está disponible según el catálogo.';out.sources.push(catalogueSource);}
+    else if(several()){/* varias preguntas: respondidas juntas */}
     else if(intent==='enroll'){
       const open=payments?.openOrder(c.id);
       if(open){out.reply=copy.orderReminder(open.reference)+payments.linkMessage(open);out.stage='inscripcion';out.reason='Ya existía un pedido vigente: se recuerda el enlace de pago.';out.sources.push(catalogueSource);}

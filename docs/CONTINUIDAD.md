@@ -34,7 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Mensajes del asistente más amables (rama `feat/mensajes-amables`, 11 nov 2026)
+## El asistente contesta varias preguntas de un mismo mensaje (rama `feat/varias-preguntas`, 11 nov 2026)
+
+- **Qué pasó:** desde su teléfono (primera prueba en un celular real: el chat se ve como app de mensajería) el usuario escribió «¿Qué temas incluye, y tiene certificado oficial?» y el asistente sólo contestó el temario. El motor tomaba la **primera** intención reconocida y descartaba el resto.
+- **Qué se hizo:** `classifyAll()` junta todas las intenciones del mensaje y, si hay dos o más **informativas** (precio, fechas, temario, certificado, requisitos, modalidad, grabación, duración, formas de pago) unidas por «y», una coma o dos signos de pregunta, se contestan juntas: los cuerpos del catálogo y las respuestas aprobadas del conocimiento, con un solo cierre (`copy.several`). Tope de tres por mensaje. Pedir un asesor, una queja, inscribirse o avisar de un pago **no se mezclan**: siguen su camino. Una sola pregunta que usa palabras de dos temas («¿cuánto hay que pagar?») se contesta como una. Sin esquema nuevo. **Sin publicar.**
+
+## Mensajes del asistente más amables (publicado en `main`, 11 nov 2026)
 
 - **Qué pidió el usuario:** que los mensajes automáticos sean más amigables, con la información necesaria y que lleven a inscribirse.
 - **Qué se hizo:** todos los textos fijos del asistente pasaron a `server/reply-copy.mjs` (funciones puras) y se reescribieron: bienvenida con ficha en renglones, precio con siguiente paso, temario en viñetas, fechas en palabras con su zona, pedido y confirmación más claros, y frases de asesor, queja, gracias y «no la tengo» con nombre y diciendo qué sigue. Lo que no se sabe se omite («Docente: Por confirmar» ya no aparece en la ficha). La nota de laboratorio se dice una vez y en corto. Un cambio de comportamiento: la consulta general de pago sin respuesta aprobada ya no promete una revisión que nadie hacía. Detalle y tabla antes/después: [PLAN_MENSAJES_AMABLES.md](PLAN_MENSAJES_AMABLES.md). Sin esquema nuevo. **Sin publicar.**

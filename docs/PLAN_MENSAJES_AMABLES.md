@@ -1,6 +1,6 @@
 # Mensajes del asistente más amables (11 nov 2026)
 
-Rama `feat/mensajes-amables`. Sin esquema nuevo.
+Publicado en `main` (11 nov 2026). Sin esquema nuevo.
 
 ## Para qué
 
@@ -34,6 +34,10 @@ Todos los textos fijos del asistente están en **`server/reply-copy.mjs`**: func
 | Pide asesor / queja / gracias | Frases neutras | Con su nombre y diciendo qué pasa después |
 
 Cambio de comportamiento (uno): una consulta general de pago **sin** respuesta aprobada decía «El equipo revisará tu consulta» sin avisar a nadie. Ahora, si la venta de prueba está activa, dice las formas de pago; si no, pasa el chat a una persona.
+
+## Varias preguntas en un mensaje
+
+Cada respuesta se separó en **cuerpo** (el dato) y **cierre** (el siguiente paso): `priceBody`, `syllabusBody`, `scheduleBody`. Cuando el cliente pregunta dos o tres cosas a la vez («¿qué temas incluye, y tiene certificado?»), `several()` une los cuerpos y pone un solo cierre. Los temas del conocimiento (certificado, grabación, requisitos…) entran con su respuesta aprobada; si un tema no tiene respuesta aprobada, se omite y se contesta lo demás.
 
 ## Lo que no cambió
 

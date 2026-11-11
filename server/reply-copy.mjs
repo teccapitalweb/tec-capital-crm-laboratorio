@@ -42,16 +42,28 @@ export const LAB_NOTE='Chat de prueba: los precios y las fechas son de ejemplo.'
 export const card=ctx=>title(ctx)+'\n'+facts(ctx).join('\n')+'\n\n'+LAB_NOTE;
 export const welcome=(ctx,name)=>ctx.course.welcome.replaceAll('{{nombre}}',firstName(name)||'qué tal').replaceAll('{{curso}}',ctx.course.title)+'\n\n'+card(ctx);
 
-export const price=ctx=>'El precio de '+title(ctx)+' es de '+priceText(ctx)+'.\n\nSi quieres apartar tu lugar, escribe «Quiero inscribirme» y te mando tu enlace de pago.\n(Precio de ejemplo: este es un chat de prueba.)';
+// Cada respuesta tiene un CUERPO (el dato) y un CIERRE (el siguiente paso). Por separado sirven para contestar varias preguntas en un mensaje.
+const ENROLL_CTA='Si quieres apartar tu lugar, escribe «Quiero inscribirme» y te mando tu enlace de pago.';
+const PRICE_NOTE='(Precio de ejemplo: este es un chat de prueba.)';
+export const priceBody=ctx=>'El precio de '+title(ctx)+' es de '+priceText(ctx)+'.';
+export const price=ctx=>priceBody(ctx)+'\n\n'+ENROLL_CTA+'\n'+PRICE_NOTE;
 
-export function syllabus(ctx){
+export function syllabusBody(ctx){
   const items=String(ctx.course.syllabus||'').split('\n').map(l=>l.trim()).filter(Boolean).map(l=>/^([•\-–*]|\d+[.)])\s/.test(l)?l:'• '+l);
-  return 'Esto es lo que verás en '+ctx.course.title+':\n\n'+items.join('\n')+'\n\n¿Te cuento el precio o las fechas?';
+  return 'Esto es lo que verás en '+ctx.course.title+':\n\n'+items.join('\n');
 }
-export function schedule(ctx){
-  const known=startText(ctx.edition)!==null,lines=facts(ctx,{price:false});
+export const syllabus=ctx=>syllabusBody(ctx)+'\n\n¿Te cuento el precio o las fechas?';
+export function scheduleBody(ctx){
+  const lines=facts(ctx,{price:false});
   if(!ctx.edition.instructor)lines.splice(1,0,'• Docente: por confirmar');
-  return title(ctx)+'\n'+lines.join('\n')+'\n\n'+(known?'¿Quieres apartar tu lugar? Escribe «Quiero inscribirme».':'En cuanto se confirme la fecha te avisamos por aquí. Mientras tanto, ¿te cuento el precio o el temario?');
+  return title(ctx)+'\n'+lines.join('\n');
+}
+export const schedule=ctx=>scheduleBody(ctx)+'\n\n'+(startText(ctx.edition)!==null?'¿Quieres apartar tu lugar? Escribe «Quiero inscribirme».':'En cuanto se confirme la fecha te avisamos por aquí. Mientras tanto, ¿te cuento el precio o el temario?');
+
+// Varias preguntas en un mismo mensaje («¿qué temas incluye y tiene certificado?»): se contestan todas, en el orden en que se reconocen,
+// con un solo cierre. `parts` son cuerpos ya armados (del catálogo o respuestas aprobadas del conocimiento).
+export function several(parts,{price=false}={}){
+  return parts.join('\n\n')+'\n\n'+(price?ENROLL_CTA+'\n'+PRICE_NOTE:'Si quieres apartar tu lugar, escribe «Quiero inscribirme». ¿Te ayudo con algo más?');
 }
 
 export const enrollWithOrder=(ctx,name)=>'¡Qué gusto'+hi(name)+'! Ya tengo listo tu pedido:\n\n{{pedido}}';
