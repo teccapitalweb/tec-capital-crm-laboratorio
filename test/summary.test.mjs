@@ -27,8 +27,8 @@ test('resumen de conversación: reglas con datos verdaderos, sin datos de contac
  await call('/api/conversations/'+conv.id+'/summary','',undefined,'GET',401);await call('/api/conversations/'+conv.id+'/summary',ana.cookie,undefined,'GET',403);await call('/api/conversations/'+conv.id+'/summary',other.cookie,undefined,'GET',404);
 
  // una conversación real: saludo, precio, objeción, dato de contacto escrito por el cliente, certificado y paso a una persona
- await say('Hola',true);await say('¿Cuánto cuesta?',true);await say('Uf, está muy caro, lo voy a pensar',false);
- await say('Mi correo es ana.privada@ejemplo.com y mi celular 55 1234 5678, ahí me avisan. Pago $3,000 pesos si hay descuento',false);
+ await say('Hola',true);await say('¿Cuánto cuesta?',true);await say('Uf, está muy caro, lo voy a pensar',true);
+ await say('Mi correo es ana.privada@ejemplo.com y mi celular 55 1234 5678, ahí me avisan. Pago $3,000 pesos si hay descuento',true);
  await say('¿Entregan certificado al terminar?',true);await say('Quiero hablar con un asesor',true);await say('Sigo esperando respuesta por favor',false);
  await sleep(800);
 
