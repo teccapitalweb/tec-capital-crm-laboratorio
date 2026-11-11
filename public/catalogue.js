@@ -160,7 +160,9 @@ window.createCatalogueUI=function({state,api,esc,icon,icons,showModal,toast,refr
           body.fileId=$('#cat-file-input').dataset.uploaded||input.fileId;
         }
         const result=await api('/api/catalogue/'+type+(input.id?'/'+input.id:''),{method:input.id?'PATCH':'POST',body});
-        await edit(type,result.item.id);await refresh();toast(['flyers','templates'].includes(type)?'Borrador guardado. Revísalo y apruébalo.':'Datos guardados');
+        const nextStep=['flyers','templates'].includes(type)||!input.id;   // un borrador por aprobar o un registro recién creado: la ventana sigue abierta
+        if(nextStep)await edit(type,result.item.id);else document.getElementById('modal')?.close();
+        await refresh();toast(['flyers','templates'].includes(type)?'Borrador guardado. Revísalo y apruébalo.':'Datos guardados');
       }catch(e){$('#cat-feedback').innerHTML=`<div class="form-error">${esc(e.message)}</div>`;toast(e.message);}
       return true;
     }

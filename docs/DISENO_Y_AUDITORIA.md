@@ -75,6 +75,10 @@ Cuando una lista de navegación pasa de ~8 elementos se agrupa por tarea, no se 
 
 Se recorrieron **todas** las pantallas del equipo (12 vistas y las 4 áreas de Operación con todas sus pestañas) a 375 px y a escritorio con un guion que mide, por pantalla: desbordamiento horizontal de la página, letra menor de 11 px, controles de menos de 36 px de alto y elementos que se salen de su contenedor sin desplazamiento propio. **Escritorio: sin hallazgos.** **Celular, hallazgos corregidos** (sólo CSS, en `public/polish.css`): tachar tarea (26 px), botones de ícono (34 px), casillas y campos de horas de «Horarios y reparto» (19–32 px), resúmenes desplegables de Conectores (22 px) y la tabla de Históricos, que se salía de su panel. Las tablas de datos anchas (Mis resultados, Finanzas, Históricos) se **desplazan dentro de su panel** por diseño. Para repetir la auditoría: mismo guion en la consola del navegador con el viewport en 375×812 y en escritorio.
 
+## Avisos (11 nov 2026)
+
+Los avisos breves (`toast`) se muestran en la capa superior del navegador (`popover="manual"`), por encima de las ventanas, **arriba a la derecha** en computadora y **arriba a lo ancho** en celular. No bloquean clics. Al guardar cambios de algo existente en Catálogo la ventana se cierra; si falta un paso (algo recién creado o un borrador por aprobar), sigue abierta.
+
 ## Ideas de diseño que se dejaron fuera a propósito
 
 - **Modo oscuro:** cambia la identidad Niebla; se haría como decisión explícita (tokens de color por tema), no como pulido.

@@ -34,7 +34,14 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Pasarela de prueba a pantalla completa (rama `feat/pasarela-de-prueba`, 11 nov 2026)
+## Corrección: avisos encima de las ventanas y a un lado; el catálogo cierra al guardar (rama `fix/avisos-y-guardado`, 11 nov 2026)
+
+- **Qué reportó el usuario** al editar una edición en producción: el aviso «Datos guardados» salía **debajo** de la ventana (un `<dialog>` vive en la capa superior del navegador y el aviso no), la ventana **no se cerraba** al guardar, y pidió que los avisos salgan a un lado.
+- **Qué se hizo:** el aviso (`#toast`) es ahora un *popover* manual: se dibuja en la capa superior, encima de cualquier ventana, y cada vez que se muestra sube al frente. Sale **arriba a la derecha** en computadora y **arriba, a lo ancho,** en celular. Vale para todos los módulos, porque todos usan el mismo `toast()` de `public/app.js`. En Catálogo, guardar cambios de un curso, edición o promoción **existente** cierra la ventana; lo recién creado y los borradores por aprobar (flyers, plantillas) la dejan abierta porque falta un paso. Sólo interfaz. **Sin publicar.**
+- **Evidencia:** en local, escritorio y 375 px, con una ventana abierta: el aviso se ve encima; tras guardar, la ventana se cierra.
+- **Nota para quien edite ediciones:** una edición publicada necesita una fecha de inicio futura para volver a guardarse («Para publicar, indica una fecha futura»).
+
+## Pasarela de prueba a pantalla completa (publicado en `main`, 11 nov 2026)
 
 - **Qué se hizo (bloque 2):** el pago de prueba deja de ser una ventana sobre el chat: ocupa toda la pantalla, pasa por «Procesando tu pago…» y termina en **aprobado** (con comprobante de ejemplo y «Volver al chat») o **rechazado** (sin cargo, «Intentar con otra tarjeta»). Misma acción de pago de siempre; sólo interfaz. Detalle: [PLAN_PASARELA_DE_PRUEBA.md](PLAN_PASARELA_DE_PRUEBA.md). **Sin publicar.**
 - **Evidencia:** en local, a 375 px y escritorio: rechazo → reintento → aprobado → de vuelta al chat con «Pago confirmado». Falta verlo en producción y en un teléfono.

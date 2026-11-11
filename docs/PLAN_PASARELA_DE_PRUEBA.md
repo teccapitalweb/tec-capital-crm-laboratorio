@@ -1,6 +1,6 @@
 # Pasarela de prueba a pantalla completa (11 nov 2026)
 
-Rama `feat/pasarela-de-prueba`. Sólo interfaz; sin esquema ni rutas nuevas. Bloque 2 de [PLAN_APP_DE_PRUEBA.md](PLAN_APP_DE_PRUEBA.md).
+Publicado en `main` (11 nov 2026; visto en producción: pago aprobado con comprobante y confirmación en el chat). Sólo interfaz; sin esquema ni rutas nuevas. Bloque 2 de [PLAN_APP_DE_PRUEBA.md](PLAN_APP_DE_PRUEBA.md).
 
 ## Para qué
 

@@ -23,6 +23,8 @@ test('app de prueba del cliente: la portada instala el chat (no el CRM) y el equ
  const home=await (await fetch(origin+'/')).text(),crm=await (await fetch(origin+'/crm')).text();
  assert.match(home,/href="\/manifest-cliente\.webmanifest"/);assert.match(home,/apple-mobile-web-app-title" content="Chat de prueba"/);assert.doesNotMatch(home,/href="\/manifest\.webmanifest"/);
  assert.match(crm,/href="\/manifest\.webmanifest"/);assert.doesNotMatch(crm,/manifest-cliente/);
+ // los avisos van en la capa superior del navegador para verse encima de las ventanas abiertas
+ assert.match(crm,/<div id="toast" popover="manual" role="status" aria-live="polite">/);assert.match(home,/id="toast" popover="manual"/);
  const mr=await fetch(origin+'/manifest-cliente.webmanifest');assert.equal(mr.status,200);assert.match(mr.headers.get('content-type'),/manifest\+json/);const m=await mr.json();
  assert.equal(m.start_url,'/');assert.equal(m.display,'standalone');assert.equal(m.short_name,'Chat de prueba');assert.match(m.description,/No es WhatsApp/);assert.ok(m.icons.length>=2);
  const team=await (await fetch(origin+'/manifest.webmanifest')).json();assert.equal(team.start_url,'/crm');assert.notEqual(m.id,team.id||team.start_url,'son dos apps distintas para el navegador');

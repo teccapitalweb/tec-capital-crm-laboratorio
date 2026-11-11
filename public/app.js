@@ -43,7 +43,15 @@
   function icons(){if(window.lucide)window.lucide.createIcons({attrs:{'stroke-width':1.7}});}
   function provider(channel){const c=channels[channel];return `<span class="provider ${channel}">${channel==='facebook'?'<b class="f" aria-hidden="true">f</b>':icon(c.icon)}</span>`;}
   function avatar(name,channel){return `<span class="identity"><span class="avatar">${esc(initials(name))}</span>${provider(channel)}</span>`;}
-  function toast(text){clearTimeout(toastTimer);const el=$('#toast');el.textContent=text;el.classList.add('visible');toastTimer=setTimeout(()=>el.classList.remove('visible'),4300);}
+  // Aviso breve. Va en la capa superior del navegador (popover manual) para verse ENCIMA de una ventana abierta; volver a mostrarlo lo sube al
+  // frente aunque la ventana se haya abierto después. Sin soporte de popover se comporta como antes.
+  let toastHide=null;
+  function toast(text){
+    clearTimeout(toastTimer);clearTimeout(toastHide);const el=$('#toast');el.textContent=text;
+    try{if(el.matches(':popover-open'))el.hidePopover();el.showPopover();}catch{}
+    el.classList.remove('visible');void el.offsetWidth;el.classList.add('visible');
+    toastTimer=setTimeout(()=>{el.classList.remove('visible');toastHide=setTimeout(()=>{try{if(el.matches(':popover-open'))el.hidePopover();}catch{}},260);},4300);
+  }
   async function api(path,options={}){
     const response=await fetch(path,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...options.headers},body:options.body===undefined?undefined:JSON.stringify(options.body)});
     const data=await response.json();if(!response.ok){const error=new Error(data.error||'Ocurrió un error.');error.status=response.status;error.code=data.code;error.activeOpportunityId=data.activeOpportunityId;throw error;}return data;

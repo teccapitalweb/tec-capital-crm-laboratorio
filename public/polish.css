@@ -195,3 +195,10 @@ label.field input[type=file]{display:block;width:100%;min-height:64px;padding:11
   .workspace.customer-skin .compose .primary{order:3;flex:none;width:44px;min-width:44px;height:44px;padding:0;border-radius:50%;display:grid;place-items:center}
   .workspace.customer-skin .compose .primary svg{width:18px;height:18px}
 }
+
+/* Avisos (toast): en la capa superior, por encima de las ventanas; a un lado en computadora y arriba en celular */
+#toast{inset:auto;top:18px;right:18px;left:auto;bottom:auto;margin:0;border:0;width:max-content;height:auto;overflow:visible;max-width:min(92vw,380px);padding:12px 16px;border-radius:12px;background:#223641;color:#fff;font-size:13px;line-height:1.5;box-shadow:0 10px 30px rgba(20,36,46,.22);transform:translate(14px,0);opacity:0;pointer-events:none}
+#toast.visible{opacity:1;transform:translate(0,0)}
+#toast::backdrop{display:none}
+@media(max-width:680px){#toast{top:calc(10px + env(safe-area-inset-top));left:12px;right:12px;width:auto;max-width:none;text-align:center;transform:translate(0,-10px)}#toast.visible{transform:translate(0,0)}}
+@media(prefers-reduced-motion:reduce){#toast{transition:opacity .2s}}
