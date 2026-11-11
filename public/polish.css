@@ -147,3 +147,51 @@ label.field input[type=file]{display:block;width:100%;min-height:64px;padding:11
 .compose-expand[aria-pressed="true"]{background:var(--accent-soft,#e8f0f4);border-color:var(--accent-line,#c4d7e0)}
 @media(max-width:680px){#message-input{font-size:16px}}
 @media(prefers-reduced-motion:reduce){#message-input{transition:none}}
+
+/* ===== App de prueba del cliente (docs/PLAN_APP_DE_PRUEBA.md) =====
+   La experiencia del cliente toma el aspecto de una app de mensajería: fondo de conversación, burbujas, cabecera de contacto y barra de
+   escribir abajo. Sólo aplica con .customer-skin (vista de cliente); el CRM del equipo conserva Niebla. Es un canal de prueba con identidad
+   propia: no copia el nombre, el logotipo ni el diseño de ningún servicio real. */
+.workspace.customer-skin .history{background-color:#eaeff2;background-image:radial-gradient(rgba(47,111,143,.09) 1px,transparent 1.5px);background-size:22px 22px}
+.workspace.customer-skin .message .bubble{background:#fff;border:0;box-shadow:0 1px 1.5px rgba(26,45,56,.13);border-radius:16px 16px 16px 5px;font-size:14px;line-height:1.5}
+.workspace.customer-skin .message.outgoing .bubble{background:#d7e9f1;border-radius:16px 16px 5px 16px}
+.workspace.customer-skin .message-meta{font-size:11px;color:var(--text-3)}
+.workspace.customer-skin .invite-note{display:none}
+/* Invitar a probar (equipo) */
+.invite-grid{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:start;margin:6px 0 14px}.invite-qr{padding:10px;border:1px solid var(--line);border-radius:14px;background:#fff;line-height:0}.invite-qr svg{width:176px;height:176px;display:block}
+@media(max-width:680px){.invite-grid{grid-template-columns:minmax(0,1fr)}.invite-qr{justify-self:center}}
+@media(max-width:680px){
+  /* con un chat abierto, la pantalla entera es la conversación (sin la barra del laboratorio) */
+  .workspace.customer-skin.mobile-chat>.sidebar,.workspace.customer-skin.mobile-chat .topbar{display:none}
+  .workspace.customer-skin.mobile-chat .main{height:100dvh}
+  .workspace.customer-skin.mobile-chat .chat{height:100dvh}
+  .workspace.customer-skin .chat-head{background:var(--accent);color:#fff;border:0;padding:8px 10px 8px 4px;min-height:58px;gap:6px}
+  .workspace.customer-skin .chat-head strong{color:#fff;font-size:15px}
+  .workspace.customer-skin .chat-head small,.workspace.customer-skin .chat-head .channel-name{color:rgba(255,255,255,.88);font-size:11.5px}
+  .workspace.customer-skin .chat-head .icon-btn{color:#fff;background:transparent;border-color:transparent}
+  .workspace.customer-skin .chat-head .icon-btn:hover{background:rgba(255,255,255,.14)}
+  .workspace.customer-skin .chat-head .identity{width:40px;height:40px}
+  .workspace.customer-skin .chat-head .avatar{background:#fff;color:var(--accent);width:40px;height:40px;font-size:15px;font-weight:700}
+  .workspace.customer-skin .chat-head .provider{width:18px;height:18px;right:-3px;bottom:-2px;border:2px solid var(--accent);border-radius:50%}
+  .workspace.customer-skin .chat-head .provider svg{width:10px;height:10px}
+  .workspace.customer-skin .chat-context{padding:6px 12px;gap:8px;flex-wrap:nowrap;font-size:11.5px;background:#f6f9fa;border-bottom:1px solid var(--line);min-height:0}
+  .workspace.customer-skin .chat-context>span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .workspace.customer-skin .chat-context .pill{flex:none;font-size:11px}
+  .workspace.customer-skin .history{padding:12px 10px}
+  .workspace.customer-skin .message{max-width:86%}
+  .workspace.customer-skin .chat-bottom{padding:6px 8px calc(8px + env(safe-area-inset-bottom));background:#eaeff2;border-top:0}
+  .workspace.customer-skin .assist-row{justify-content:center;margin:0 0 6px}
+  .workspace.customer-skin .assist-label{font-size:11px;background:rgba(255,255,255,.85);border-radius:999px;padding:3px 10px;color:var(--text-2)}
+  .workspace.customer-skin .quick-replies{flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:0 0 6px;margin:0;scrollbar-width:none}
+  .workspace.customer-skin .quick-replies::-webkit-scrollbar{display:none}
+  .workspace.customer-skin .quick-replies button{flex:none;border-radius:999px;background:#fff;border:1px solid var(--accent-line);color:var(--accent);min-height:40px;padding:0 14px;font-size:13px}
+  .workspace.customer-skin .compose{display:flex;align-items:flex-end;gap:6px;padding:0;border:0;background:transparent;box-shadow:none;border-radius:0;flex-wrap:wrap}
+  .workspace.customer-skin .compose .attachment-preview{flex:1 0 100%;order:0}
+  .workspace.customer-skin .compose-footer{display:contents}
+  .workspace.customer-skin .compose-left{order:1;display:flex;align-items:center;gap:0;flex:none}
+  .workspace.customer-skin .compose-left .compose-expand,.workspace.customer-skin .compose-left .channel-name,.workspace.customer-skin .compose-left>span,.workspace.customer-skin .compose-left>small{display:none}
+  .workspace.customer-skin .compose-left .icon-btn{width:44px;height:44px;border-radius:50%;background:#fff;border:0;box-shadow:0 1px 1.5px rgba(26,45,56,.13)}
+  .workspace.customer-skin #message-input{order:2;flex:1;min-width:0;min-height:44px;max-height:132px;border-radius:22px;background:#fff;padding:11px 16px;font-size:16px;line-height:1.35;border:0;box-shadow:0 1px 1.5px rgba(26,45,56,.13)}
+  .workspace.customer-skin .compose .primary{order:3;flex:none;width:44px;min-width:44px;height:44px;padding:0;border-radius:50%;display:grid;place-items:center}
+  .workspace.customer-skin .compose .primary svg{width:18px;height:18px}
+}

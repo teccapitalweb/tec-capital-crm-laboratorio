@@ -1,0 +1,17 @@
+{
+  "id": "/?app=chat-de-prueba",
+  "name": "TEC Capital · Chat de prueba",
+  "short_name": "Chat de prueba",
+  "description": "Chat de prueba de TEC Capital: escribe como cliente a un canal simulado. No es WhatsApp ni un canal real.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eef2f4",
+  "theme_color": "#2f6f8f",
+  "lang": "es-MX",
+  "icons": [
+    {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}
+  ]
+}

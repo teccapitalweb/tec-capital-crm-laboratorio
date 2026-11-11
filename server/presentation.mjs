@@ -15,6 +15,7 @@ export function parseRates(text){
 }
 const money=(n,currency='MXN')=>new Intl.NumberFormat('es-MX',{style:'currency',currency}).format(n);
 
+import {qrSvg} from './qr.mjs';
 export function createPresentation({db,crm,json,now=Date.now,env=process.env}){
   const ph=ids=>ids.map(()=>'?').join(',')||'NULL';
   function period(params){const days=Number(params.get('days')||30);if(!Number.isInteger(days)||days<1||days>366)throw fail(400,'Elige un periodo de 1 a 366 días.');return {from:now()-days*DAY,to:now(),days};}
@@ -83,7 +84,25 @@ export function createPresentation({db,crm,json,now=Date.now,env=process.env}){
       response:{bot:dist(botTimes),human:dist(humanTimes)},sales,messages,replies,byBrand,demo,catalogue,coordination,certificates,script:steps,readySteps:steps.filter(s=>s.ready).length,
       notes:['Cifras del laboratorio: ventas, inscripciones y costos son de práctica.','El costo por mensaje es una estimación con tarifas orientativas (MESSAGE_RATES); el proveedor real cobrará según su tarifario vigente.','«Sin intervención humana» = conversaciones con respuestas automáticas y ningún mensaje de una persona en el periodo.']};
   }
+  // Enlace y código QR para invitar a alguien a probar un curso desde su celular (docs/PLAN_APP_DE_PRUEBA.md). Sólo equipo y sólo marcas a su alcance.
+  // El enlace no lleva secretos: es la portada del laboratorio con el curso y el canal elegidos; quien lo abre crea su propio perfil de prueba.
+  function inviteBase(req){
+    const o=String(env.APP_ORIGIN||'').split(',')[0].trim().replace(/\/+$/,'');if(/^https?:\/\/[^\s/]+$/.test(o))return o;
+    const host=String(req.headers.host||'').replace(/[^a-zA-Z0-9.:\-\[\]]/g,'');
+    return (req.socket?.encrypted||req.headers['x-forwarded-proto']==='https'?'https':'http')+'://'+host;
+  }
+  function invite(req,res,user){
+    if(req.method!=='GET')throw fail(405,'Método no permitido.');
+    const current=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);
+    if(!current||current.disabled||!['admin','agent'].includes(current.role))throw fail(403,'Invitar a probar es para el equipo de atención.');
+    const q=new URL(req.url,'http://localhost').searchParams,course=db.prepare('SELECT id,brand_id,title FROM courses WHERE id=? AND active=1').get(String(q.get('course')||'').slice(0,60));
+    if(!course||!crm.canBrand(user,course.brand_id))throw fail(404,'Curso no disponible.');
+    const channel=['whatsapp','instagram','facebook'].includes(q.get('channel'))?q.get('channel'):'whatsapp';
+    const url=inviteBase(req)+'/?curso='+encodeURIComponent(course.id)+'&canal='+channel;
+    json(res,200,{url,courseId:course.id,course:course.title,channel,svg:qrSvg(url,{scale:5})});
+  }
   async function handle(req,res,path,user){
+    if(path==='/api/presentation/invite'){invite(req,res,user);return true;}
     if(path!=='/api/presentation')return false;
     if(req.method!=='GET')throw fail(405,'Método no permitido.');
     const current=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);

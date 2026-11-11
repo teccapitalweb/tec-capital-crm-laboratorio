@@ -48,6 +48,7 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 4zz. [Activar la IA en producción](docs/ACTIVAR_IA_PRODUCCION.md): guía paso a paso (clave sólo en Railway, tope, conocimiento, «Sugerir», evaluación con IA real) y pantalla de estado Operación → Sistema → Inteligencia artificial, sólo lectura y sin secretos (sin esquema nuevo; publicado en `main`).
 4z. [API pública y webhooks](docs/PLAN_API_PUBLICA.md): llaves de lectura por marca (`/api/v1`) y destinos de webhooks HTTPS con firma HMAC, reintentos y rechazo de redes internas (**esquema 35**; publicado en `main`, con sus correcciones de seguridad).
 4zzz. [Motor de respuestas más preciso](docs/PLAN_MOTOR_PRECISO.md): cómo ahorra tokens el motor (reglas → conocimiento aprobado → Claude), el banco de 49 frases con el que se midió y las reglas de intención que se estrecharon; el chat marca «Automatización · IA» (sin esquema nuevo; publicado en `main`).
+4zzzz. [App de prueba para celular](docs/PLAN_APP_DE_PRUEBA.md): el chat del cliente con aspecto de app de mensajería, app instalable «Chat de prueba» que abre el chat y «Invitar a probar» con enlace y QR por curso y canal; no imita a WhatsApp ni a ningún servicio real (sin esquema nuevo; rama `feat/app-de-prueba`, sin publicar).
 4b. [Visión de la plataforma](docs/VISION_PLATAFORMA.md): el CRM como módulo de la plataforma de toda la empresa (IPCIL, Academia, finanzas, canales reales); diagnóstico, arquitectura objetivo y fases.
 5. [README](README.md) y [ROADMAP](ROADMAP.md): recorridos del producto y planificación general.
 

@@ -34,7 +34,14 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Corrección: «ya pagué» ya no recibe las formas de pago (rama `fix/aviso-de-pago`, 11 nov 2026)
+## App de prueba para celular (rama `feat/app-de-prueba`, 11 nov 2026)
+
+- **Qué pidió el usuario:** probar con distintas personas desde el teléfono, «como WhatsApp», y que el pago se valide solo. El pago simulado con validación automática **ya existía** (botón «Abrir pago de prueba»: tarjeta u OXXO de prueba, aprueba o rechaza, confirma la inscripción); se comprobó en local.
+- **Qué se hizo (bloque 1):** el chat del cliente toma aspecto de app de mensajería en celular (pantalla completa, cabecera de contacto, burbujas, barra de escribir de una línea); la portada instala una app propia «Chat de prueba» que abre el chat y no el CRM; y el equipo tiene **Invitar a probar** con enlace y código QR por curso y canal. Sin esquema nuevo. Detalle: [PLAN_APP_DE_PRUEBA.md](PLAN_APP_DE_PRUEBA.md). **Sin publicar.**
+- **Límite deliberado:** no se copia el nombre, logotipo ni diseño de WhatsApp ni de Stripe; es un canal y una pasarela de prueba con identidad propia.
+- **Pendiente:** instalarla en un teléfono real; bloque 2, pasarela de prueba a pantalla completa.
+
+## Corrección: «ya pagué» ya no recibe las formas de pago (publicado en `main`, 11 nov 2026)
 
 - **Qué pasó:** en producción el usuario escribió «ya pagué, ahora qué hago» y el asistente le repitió «Puedes pagar con tarjeta, transferencia SPEI u OXXO…» antes de pasar el chat a una persona. El motor buscaba primero una respuesta aprobada del tema «pago» y sólo después marcaba el traspaso.
 - **Qué se hizo:** quien avisa que **ya pagó** (comprobante, pagué, transferí, deposité) recibe un acuse: una persona revisará el pago, no se confirma nada de forma automática, y si hay un pedido vigente se dice su estado («todavía aparece sin pago confirmado» o «ya está en revisión»); el chat pasa a una persona como antes. Quien pregunta **cómo** pagar sigue recibiendo la respuesta aprobada. El pedido no cambia por decir que se pagó. Sin esquema nuevo. **Sin publicar.**
