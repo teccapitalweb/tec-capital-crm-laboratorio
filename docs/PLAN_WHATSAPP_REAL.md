@@ -61,7 +61,7 @@ Las tres quedan vacías hasta que alguien escribe a un número real: migrar no c
 | `META_WABA_ID` | No | Hará falta para las plantillas aprobadas |
 | `META_GRAPH_VERSION` | No | Versión de la API; por omisión `v25.0` |
 
-`META_GRAPH_URL` sólo existe para las pruebas (un Meta de mentira) y **se ignora en producción**: el token únicamente viaja a `graph.facebook.com`, y los archivos sólo se descargan de servidores de Meta.
+`META_GRAPH_URL` sólo existe para las pruebas (un Meta de mentira) y **se ignora en producción**: el token únicamente viaja a `graph.facebook.com`, y los archivos sólo se descargan de servidores de Meta. «Producción» es `NODE_ENV=production`, que ya fija el `Dockerfile`; no hay que cambiarlo en Railway.
 
 ## Cuidados
 
@@ -71,6 +71,11 @@ Las tres quedan vacías hasta que alguien escribe a un número real: migrar no c
 - **Datos personales**: la bitácora de conectores guarda sólo metadatos del entrante (ni el texto ni el número completo). El usuario interno del cliente no lleva el teléfono; vive en el contacto de la marca y en la conversación. La persona no puede iniciar sesión: su contraseña es aleatoria y no la conoce nadie.
 - **Alcance por marca**: el número decide la marca; los archivos sólo los ve el equipo de esa marca.
 - **Red fuera de transacciones**: descargas, subidas y envíos ocurren fuera de la transacción de SQLite.
+- **Límites detrás del proxy**: en Railway todas las peticiones llegan desde la misma IP, así que el webhook se limita por proveedor **después** de comprobar la firma (una avalancha sin firma no bloquea a Meta) y el pago sin sesión se limita por pedido.
+- **Entrantes que no pueden entrar**: con `CHANNEL_CONNECTOR=meta` pero faltando datos, el webhook responde 503 y Meta reintenta. Con WhatsApp real apagado, el mensaje sólo se anota (sin texto ni número) y no entra.
+- **Envío en dos partes** (archivo + texto de más de 1024 caracteres): si el archivo salió y el texto no, el mensaje queda enviado con la nota en su historial de entrega; no se marca fallido porque reintentarlo duplicaría el archivo.
+- **Cambiar un número de marca**: no se permite mientras tenga conversaciones abiertas; y un entrante sólo continúa una conversación de la marca del número.
+- **Persona única**: el teléfono del contacto pasa por el mismo enlace de persona que una edición desde el CRM.
 - **México**: Meta entrega `521XXXXXXXXXX`; si al responder dice «no está en la lista de destinatarios» (número de prueba), se reintenta una sola vez como `52XXXXXXXXXX`.
 
 ## Límites de esta primera versión
@@ -88,6 +93,7 @@ Las tres quedan vacías hasta que alguien escribe a un número real: migrar no c
 
 - `test/whatsapp-real.test.mjs` (3 pruebas), con un Meta de mentira: errores en español, token mal pegado, texto/botones/archivos; flujo completo (número sin marca, asignación, cliente y conversación nuevos, respuesta del asistente por la API, estados, duplicados, firma falsa, audio, imagen descargada, respuesta del equipo con archivo, rechazo y reintento, ventana de 24 h, reintento de México, venta con pago sin sesión, laboratorio intacto, segunda marca, pausa); y apagado por omisión.
 - Suite completa: 202 pruebas.
+- Revisión independiente del código (seguridad, entrega, integridad): cuatro fallos corregidos (límites detrás del proxy, entrantes perdidos con Meta incompleto, duplicado al reintentar un envío parcial, número que cambia de marca con conversaciones abiertas) y uno probable (teléfono sin enlace de persona). Cada uno con su prueba.
 - En el navegador, con servidor local y Meta simulado: panel de Conectores (prueba de conexión y asignación), conversación real en la Bandeja, y pago sin sesión a tamaño de celular.
 
 ## Pendiente

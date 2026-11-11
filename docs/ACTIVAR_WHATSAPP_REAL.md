@@ -78,7 +78,7 @@ En <https://business.facebook.com> → **Configuración del negocio → Usuarios
 
 ## Volver atrás
 
-Cambia `CHANNEL_CONNECTOR` a `simulated` (o bórrala) en Railway. Deja de entrar y de salir todo lo real; las conversaciones reales quedan guardadas y sus mensajes nuevos fallan con el motivo «WhatsApp real está apagado». Para pausar un solo número: Conectores → **Pausar**.
+Cambia `CHANNEL_CONNECTOR` a `simulated` (o bórrala) en Railway. Deja de entrar y de salir todo lo real (lo que escriban en ese tiempo no entra al CRM); las conversaciones reales quedan guardadas y sus mensajes nuevos fallan con el motivo «WhatsApp real está apagado». Para pausar un solo número: Conectores → **Pausar**.
 
 ## Pasar a clientes reales (después)
 

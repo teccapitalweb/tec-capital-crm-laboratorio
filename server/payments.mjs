@@ -313,9 +313,9 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
   // Devuelve la vista del cliente, sin datos del contacto ni de la conversación; con límite por IP.
   async function handlePublic(req,res,path,ip){
     const x=path.match(/^\/api\/pay\/([a-f0-9-]{36})\/(customer|pay)$/);if(!x)return false;
-    rate('pay-public:'+ip,240);
     const o=get(x[1]),c=o?db.prepare('SELECT customer_id,wa_number FROM conversations WHERE id=?').get(o.conversation_id):null;
     if(!o||!c||!c.wa_number)throw fail(404,'Pedido no disponible.');
+    rate('pay-public:'+o.id,60);   // por pedido: detrás del proxy la IP es la misma para todos y un límite por IP bloquearía a cada cliente
     const owner={id:c.customer_id,role:'customer'},open=order=>({...customerView(order,owner),conversationId:undefined,couponEntry:false,coupon:null});
     if(x[2]==='customer'&&req.method==='GET'){json(res,200,{order:open(o)});return true;}
     if(x[2]==='pay'&&req.method==='POST'){pay(o,owner,await body(req));json(res,200,{order:open(get(o.id))});return true;}

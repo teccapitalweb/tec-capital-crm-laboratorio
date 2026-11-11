@@ -28,6 +28,9 @@ test('adaptador de Meta: explica los errores en español, no acepta un token mal
   await meta.send({to:'5215512345678',text:'Tu comprobante',media:{buffer:PNG,mime:'image/png',filename:'recibo.png'}});
   assert.ok(calls[1].url.endsWith('/'+NUMBER+'/media'));assert.ok(calls[1].init.body instanceof FormData);const image=JSON.parse(calls[2].init.body);assert.equal(image.type,'image');assert.deepEqual(image.image,{id:'m1',caption:'Tu comprobante'});
   await meta.send({to:'5215512345678',text:'',media:{buffer:Buffer.from('%PDF-1.4'),mime:'application/pdf',filename:'temario.pdf'}});assert.deepEqual(JSON.parse(calls[4].init.body).document,{id:'m1',filename:'temario.pdf'});
+  let step=0;const half=metaChannel({env,fetchImpl:async url=>{step++;if(String(url).endsWith('/media'))return {ok:true,status:200,json:async()=>({id:'m9'})};return step===2?ok('wamid.file'):{ok:false,status:400,json:async()=>({error:{code:131009,message:'bad'}})};}});
+  const partial=await half.send({to:'5215512345678',text:'x'.repeat(1100),media:{buffer:PNG,mime:'image/png',filename:'a.png'}});
+  assert.equal(partial.state,'sent');assert.equal(partial.providerRef,'wamid.file');assert.match(partial.reason,/Sólo salió una parte/);
   await assert.rejects(meta.send({to:'5215512345678',text:''}),/no tiene texto/);await assert.rejects(meta.send({to:'',text:'x'}),/número de WhatsApp de destino/);
   // un token con otra variable pegada (o con espacios) se rechaza antes de salir y el error no lo repite
   const bad=metaChannel({env:{...env,META_ACCESS_TOKEN:TOKEN+' AI_MODEL=otra-cosa'},fetchImpl:async()=>{throw new Error('no debe salir');}});
@@ -108,7 +111,8 @@ test('WhatsApp real de punta a punta con un Meta de mentira: entra un mensaje, s
   assert.equal(person.role,'customer');assert.equal(person.name,'María López');assert.match(person.username,/^wa-[a-f0-9]{16}$/);assert.equal(person.username.includes('5512345678'),false,'el usuario no lleva el teléfono');
   const conv=db.prepare('SELECT * FROM conversations WHERE customer_id=?').get(person.id);
   assert.equal(conv.brand_id,'globalvet');assert.equal(conv.course_id,'aves');assert.equal(conv.channel,'whatsapp');assert.equal(conv.wa_number,NUMBER);assert.equal(conv.wa_peer,'5215512345678');
-  assert.equal(db.prepare('SELECT phone,source FROM contacts WHERE source_user_id=? AND brand_id=?').get(person.id,'globalvet').phone,'+5215512345678');
+  const waContact=db.prepare('SELECT * FROM contacts WHERE source_user_id=? AND brand_id=?').get(person.id,'globalvet');assert.equal(waContact.phone,'+5215512345678');
+  assert.ok(db.prepare("SELECT 1 FROM persons WHERE id=? AND phone!=''").get(waContact.persona_id),'la persona del contacto conoce su teléfono');
   const inMsg=db.prepare("SELECT * FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(conv.id);assert.equal(inMsg.text,'Hola, ¿cuánto cuesta el curso?');assert.equal(inMsg.client_ref,'meta:wamid.in2');
   const reply=await until(()=>db.prepare("SELECT * FROM messages WHERE conversation_id=? AND sender_kind='automation' AND provider_ref IS NOT NULL").get(conv.id),'la respuesta del asistente sale por Meta');
   assert.match(reply.text,/\$\s?379|379/);assert.equal(reply.delivery_state,'sent');assert.match(reply.provider_ref,/^wamid\.out/);
@@ -204,6 +208,8 @@ test('WhatsApp real de punta a punta con un Meta de mentira: entra un mensaje, s
   assert.equal((await call('/api/payments/orders/'+labOrder.id+'/customer',stranger.cookie)).order.status,'pending');
 
   // 14) un segundo número para otra marca: la misma persona es el mismo cliente, con su conversación y su contacto en esa marca
+  const mine=(await call('/api/whatsapp',admin.cookie)).numbers.find(x=>x.phoneNumberId===NUMBER);
+  assert.match((await call('/api/whatsapp/numbers/'+NUMBER,admin.cookie,{brandId:'odonteck',courseId:null,expectedRevision:mine.revision},'PUT',409)).error,/conversaciones abiertas en GlobalVet/);
   await call('/api/whatsapp/numbers/'+OTHER,admin.cookie,{brandId:'odonteck',expectedRevision:0},'PUT');
   await textIn('5215512345678','Hola, me interesa',{to:OTHER});
   const convs=db.prepare('SELECT brand_id,wa_number FROM conversations WHERE customer_id=? ORDER BY created_at').all(person.id);assert.deepEqual(convs.map(c=>c.brand_id),['globalvet','odonteck']);assert.equal(convs[1].wa_number,OTHER);
@@ -229,6 +235,6 @@ test('WhatsApp real apagado por omisión: sin CHANNEL_CONNECTOR=meta el webhook 
   const ping=await post('/api/whatsapp/ping',admin.cookie,{});assert.equal(ping.body.ok,false);assert.match(ping.body.error,/CHANNEL_CONNECTOR=meta/);
   const raw=JSON.stringify({entry:[{changes:[{field:'messages',value:{metadata:{phone_number_id:NUMBER},contacts:[{wa_id:'5215512345678',profile:{name:'María'}}],messages:[{id:'wamid.x1',from:'5215512345678',type:'text',text:{body:'Hola'}}]}}]}]});
   const r=await fetch(origin+'/api/webhooks/channel/meta',{method:'POST',headers:{'Content-Type':'application/json','x-hub-signature-256':'sha256='+hmacHex(SECRET,raw)},body:raw});
-  assert.equal(r.status,200);assert.match((await r.json()).results[0].result,/^registrado: entrante recibido/);
-  const db=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(db.prepare('SELECT count(*) n FROM wa_identities').get().n,0);assert.equal(db.prepare('SELECT count(*) n FROM conversations').get().n,0);}finally{db.close();}
+  assert.equal(r.status,200);assert.match((await r.json()).results[0].result,/^registrado: WhatsApp real está apagado/);
+  const db=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{const p=db.prepare("SELECT payload FROM connector_events WHERE event_id='wamid.x1'").get().payload;assert.equal(p.includes('Hola'),false);assert.equal(p.includes('5215512345678'),false);assert.equal(db.prepare('SELECT count(*) n FROM wa_identities').get().n,0);assert.equal(db.prepare('SELECT count(*) n FROM conversations').get().n,0);}finally{db.close();}
 });

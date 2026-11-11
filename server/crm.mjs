@@ -185,5 +185,5 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
     let id;
     transaction(db,()=>{const row=db.prepare('SELECT r.*,u.disabled FROM recovery_tokens r JOIN users u ON u.id=r.user_id WHERE r.token_hash=? AND r.used_at IS NULL AND r.expires_at>? AND u.username=?').get(tokenHash(token),Date.now(),username);if(!row||row.disabled)throw fail(400,'El código no es válido, venció o ya fue utilizado.');id=row.user_id;db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(value,id);db.prepare('UPDATE recovery_tokens SET used_at=? WHERE id=?').run(Date.now(),row.id);db.prepare('DELETE FROM sessions WHERE user_id=?').run(id);audit(null,'recovery.completed',id);});disconnect(id);
   }
-  return {handle,canBrand,requireBrand,brandsFor,syncConversation,assignConversation,setStage,inviteFor,acceptInvite,recover,setAssignmentGuard:guard=>{assignmentGuard=guard;},setStageHook:fn=>{stageHook=fn;},setContactHook:fn=>{contactHook=fn;}};
+  return {handle,canBrand,requireBrand,brandsFor,syncConversation,assignConversation,setStage,inviteFor,acceptInvite,recover,setAssignmentGuard:guard=>{assignmentGuard=guard;},setStageHook:fn=>{stageHook=fn;},setContactHook:fn=>{contactHook=fn;},contactChanged:id=>{const c=db.prepare('SELECT * FROM contacts WHERE id=?').get(id);if(c)contactHook(c);}};
 }

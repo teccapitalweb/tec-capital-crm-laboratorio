@@ -115,6 +115,9 @@ test('proveedor real seleccionado sin accesos: el CRM sigue con el simulado y lo
  const r=await fetch(origin+'/api/webhooks/channel/meta',{method:'POST',headers:{'Content-Type':'application/json','x-hub-signature-256':'sha256='+hmacHex('app-secret',raw)},body:raw});
  const j=await r.json();assert.equal(r.status,200);assert.equal(j.received,1);assert.match(j.results[0].result,/^ignorado: no hay mensaje/);
  assert.equal((await fetch(origin+'/api/webhooks/channel/meta',{method:'POST',headers:{'x-hub-signature-256':'sha256=mal'},body:raw})).status,401);
+ // un mensaje entrante con WhatsApp real elegido pero incompleto NO se da por procesado: 503 para que Meta lo reintente cuando esté completo
+ const inRaw=JSON.stringify({entry:[{changes:[{field:'messages',value:{metadata:{phone_number_id:'1090001'},messages:[{id:'wamid.in-x',from:'5215512345678',type:'text',text:{body:'Hola'}}]}}]}]});
+ assert.equal((await fetch(origin+'/api/webhooks/channel/meta',{method:'POST',headers:{'Content-Type':'application/json','x-hub-signature-256':'sha256='+hmacHex('app-secret',inRaw)},body:inRaw})).status,503);
  // Stripe sin secreto de webhook: desactivado; simulado sin secreto de laboratorio: desactivado
  assert.equal((await fetch(origin+'/api/webhooks/payment/stripe',{method:'POST',body:'{}'})).status,404);
  assert.equal((await fetch(origin+'/api/webhooks/payment/simulated',{method:'POST',body:'{}'})).status,404);

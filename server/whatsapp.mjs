@@ -70,7 +70,7 @@ export function createWhatsApp({db,env=process.env,crm,catalogue,payments,replie
       }else db.prepare("UPDATE wa_identities SET last_seen=?,profile_name=CASE WHEN ?!='' THEN ? ELSE profile_name END WHERE wa_id=?").run(t,text(d.name,60),text(d.name,60),waId);
       db.prepare('UPDATE users SET last_seen=? WHERE id=?').run(t,userId);
       // 3) conversación abierta con ese número; si no hay, una nueva en el curso que toca
-      let c=db.prepare("SELECT * FROM conversations WHERE customer_id=? AND wa_number=? AND status!='resolved' ORDER BY updated_at DESC LIMIT 1").get(userId,number.phone_number_id),created=false;
+      let c=db.prepare("SELECT * FROM conversations WHERE customer_id=? AND wa_number=? AND brand_id=? AND status!='resolved' ORDER BY updated_at DESC LIMIT 1").get(userId,number.phone_number_id,number.brand_id),created=false;
       if(!c){
         const p=pick(number);if(!p)return {skip:'ignorado: la marca no tiene un curso activo con edición para recibir conversaciones'};
         let id=db.prepare("SELECT id FROM conversations WHERE customer_id=? AND course_id=? AND channel='whatsapp' AND status!='resolved'").get(userId,p.courseId)?.id||null;
@@ -81,7 +81,8 @@ export function createWhatsApp({db,env=process.env,crm,catalogue,payments,replie
         }
         c=db.prepare('SELECT * FROM conversations WHERE id=?').get(id);
         crm.syncConversation(c);
-        db.prepare("UPDATE contacts SET phone=?,source='whatsapp',updated_at=? WHERE source_user_id=? AND brand_id=? AND phone=''").run('+'+waId,t,userId,c.brand_id);
+        const contact=db.prepare("SELECT id FROM contacts WHERE source_user_id=? AND brand_id=? AND phone=''").get(userId,c.brand_id);
+        if(contact){db.prepare("UPDATE contacts SET phone=?,source='whatsapp',updated_at=? WHERE id=?").run('+'+waId,t,contact.id);crm.contactChanged(contact.id);}   // identidad única de persona por teléfono
       }
       // 4) mensaje, igual que el de un perfil de prueba: comprobante si hay pedido vigente, y si no, el asistente responde
       let attachmentId=null;
@@ -141,6 +142,7 @@ export function createWhatsApp({db,env=process.env,crm,catalogue,payments,replie
     if(!db.prepare('SELECT 1 FROM brands WHERE id=?').get(brandId))throw fail(400,'Elige la marca que atiende este número.');
     if(courseId&&!db.prepare('SELECT 1 FROM courses WHERE id=? AND brand_id=? AND active=1').get(courseId,brandId))throw fail(400,'El curso por omisión debe ser un curso activo de esa marca.');
     const current=numberRow(id),t=now(),label=text(input.label,60),enabled=input.enabled===undefined?(current?current.enabled:1):input.enabled?1:0;
+    if(current&&current.brand_id!==brandId&&db.prepare("SELECT 1 FROM conversations WHERE wa_number=? AND status!='resolved' LIMIT 1").get(id))throw fail(409,'Este número tiene conversaciones abiertas en '+(db.prepare('SELECT name FROM brands WHERE id=?').get(current.brand_id)?.name||current.brand_id)+': ciérralas antes de pasarlo a otra marca.');
     if(!Number.isInteger(input.expectedRevision)||input.expectedRevision!==(current?current.revision:0))throw fail(409,'El número cambió. Recarga la pantalla.');
     if(current)db.prepare('UPDATE wa_numbers SET brand_id=?,course_id=?,label=?,enabled=?,revision=revision+1,updated_by=?,updated_at=? WHERE phone_number_id=? AND revision=?').run(brandId,courseId,label,enabled,user.id,t,id,current.revision);
     else db.prepare('INSERT INTO wa_numbers(phone_number_id,brand_id,course_id,label,enabled,updated_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').run(id,brandId,courseId,label,enabled,user.id,t,t);

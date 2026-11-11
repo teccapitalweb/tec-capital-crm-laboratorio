@@ -132,7 +132,11 @@ export function metaChannel({env,fetchImpl=(...a)=>fetch(...a)}){
       }else if(!text)throw fail(422,'Este mensaje no tiene texto ni un archivo que WhatsApp admita.');
       else if(buttons.length&&text.length<=1024)parts.push({type:'interactive',interactive:{type:'button',body:{text},action:{buttons:buttons.map((title,i)=>({type:'reply',reply:{id:'b'+(i+1),title}}))}}});
       else parts.push({type:'text',text:{body:text,preview_url:false}});
-      let ref=null;for(const part of parts)ref=(await post(from,to,part)).messages?.[0]?.id||ref;
+      let ref=null;
+      for(const part of parts){
+        try{ref=(await post(from,to,part)).messages?.[0]?.id||ref;}
+        catch(e){if(!ref)throw e;return {providerRef:ref,state:'sent',reason:'Sólo salió una parte del mensaje (el archivo); el texto no: '+String(e?.message||'').slice(0,140)};}   // la persona ya recibió el archivo: reintentar lo duplicaría
+      }
       if(!ref)throw fail(502,'Meta aceptó la petición pero no devolvió la referencia del mensaje.');
       return {providerRef:ref,state:'sent',reason:null};
     },
@@ -234,11 +238,12 @@ export function createConnectors({db,env=process.env,channel,payments,body,json,
     let result;
     try{
       if(kind==='channel'&&ev.type==='message.status'){const r=channel.applyStatus(ev.data);result=r?'aplicado: mensaje '+r:'ignorado: no hay mensaje con esa referencia del proveedor';}
-      else if(kind==='channel'&&ev.type==='message.inbound')result='registrado: entrante recibido; el laboratorio no mapea identidades de clientes reales';
+      else if(kind==='channel'&&ev.type==='message.inbound')result=provider==='meta'?'registrado: WhatsApp real está apagado (CHANNEL_CONNECTOR no es «meta»); el mensaje no entró al CRM':'registrado: entrante recibido; el laboratorio no mapea identidades de clientes reales';
       else if(kind==='payment'&&(ev.type==='payment.succeeded'||ev.type==='payment.failed'))result=payments.providerEvent(ev,provider);
       else result='ignorado: tipo de evento no contemplado para este conector';
     }catch(e){result='error: '+String(e?.message||e).slice(0,160);}
-    db.prepare('INSERT OR IGNORE INTO connector_events(kind,provider,event_id,type,payload,result,created_at) VALUES(?,?,?,?,?,?,?)').run(kind,provider,String(ev.id).slice(0,200),String(ev.type).slice(0,80),JSON.stringify(ev).slice(0,4000),result,now());
+    const payload=ev.type==='message.inbound'?{id:ev.id,type:ev.type,data:{to:ev.data?.to||null,from:'…'+String(ev.data?.from||'').slice(-4),kind:ev.data?.kind||'text'}}:ev;   // de un entrante nunca se guarda el texto ni el número completo
+    db.prepare('INSERT OR IGNORE INTO connector_events(kind,provider,event_id,type,payload,result,created_at) VALUES(?,?,?,?,?,?,?)').run(kind,provider,String(ev.id).slice(0,200),String(ev.type).slice(0,80),JSON.stringify(payload).slice(0,4000),result,now());
     return {result};
   }
   // Entrante real de WhatsApp. A diferencia de apply(): es asíncrono (descarga archivos) y un fallo inesperado NO marca el evento como
@@ -256,15 +261,16 @@ export function createConnectors({db,env=process.env,channel,payments,body,json,
   async function handlePublic(req,res,path,url,ip){
     const x=path.match(/^\/api\/webhooks\/(channel|payment)\/([a-z]+)$/);if(!x)return false;
     const kind=x[1],adapter=adapters[kind][x[2]];if(!adapter)throw fail(404,'Proveedor no reconocido.');
-    rate('webhook:'+ip,600,60000);
-    if(req.method==='GET'){const ch=adapter.challenge(url.searchParams);if(ch===null||ch===undefined)throw fail(403,'Verificación rechazada.');res.writeHead(200,{'Content-Type':'text/plain; charset=utf-8'});res.end(String(ch));return true;}
+    if(req.method==='GET'){rate('webhook-get:'+x[2],60,60000);const ch=adapter.challenge(url.searchParams);if(ch===null||ch===undefined)throw fail(403,'Verificación rechazada.');res.writeHead(200,{'Content-Type':'text/plain; charset=utf-8'});res.end(String(ch));return true;}
     if(req.method!=='POST')throw fail(405,'Método no permitido.');
     if(!adapter.webhooksEnabled())throw fail(404,'Webhooks desactivados para este proveedor: falta su secreto en el entorno.');
     const raw=await rawBody(req);
     if(!adapter.verifyWebhook(req.headers,raw))throw fail(401,'Firma del webhook no válida.');
+    rate('webhook:'+kind+':'+x[2],1200,60000);   // por proveedor y sólo con firma válida: detrás del proxy todas las IP son la misma
     let parsed;try{parsed=JSON.parse(raw.toString('utf8')||'{}');}catch{throw fail(400,'Cuerpo del webhook no válido.');}
     const events=adapter.parseWebhook(parsed),results=[];
     for(const ev of events){
+      if(kind==='channel'&&x[2]==='meta'&&ev.type==='message.inbound'&&channelProvider==='meta'&&!metaLive())throw fail(503,'WhatsApp real está elegido pero le faltan datos ('+adapters.channel.meta.missing.join(', ')+'); Meta reintentará el mensaje.');
       if(kind==='channel'&&x[2]==='meta'&&ev.type==='message.inbound'&&inbound&&metaLive()){
         try{results.push({id:ev.id,type:ev.type,...await applyInbound(x[2],ev)});}
         catch(e){log.error('Entrante de WhatsApp sin procesar:',e?.name||'Error',String(e?.message||'').slice(0,120));throw fail(503,'El entrante no se pudo procesar; reinténtalo.');}

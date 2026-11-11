@@ -78,7 +78,7 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
     transaction(db,()=>{for(const {m,r} of results){
       if(m.wa_number){
         if(r.state==='failed'){if(!db.prepare("UPDATE messages SET delivery_state='failed',failed_reason=? WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL").run(r.reason||'Meta no aceptó el mensaje',m.id).changes)continue;event(m,'failed',r.reason||null,null,at);emit(m,'failed',r.reason,null);}
-        else{db.prepare('UPDATE messages SET failed_reason=NULL WHERE id=? AND provider_ref=?').run(m.id,r.providerRef);event(m,'sent',null,null,at);}
+        else{db.prepare('UPDATE messages SET failed_reason=NULL WHERE id=? AND provider_ref=?').run(m.id,r.providerRef);event(m,'sent',r.reason||null,null,at);}   // una nota de envío parcial queda en el historial de entrega
         touched.add(m.conversation_id);continue;
       }
       const state=r.state==='failed'?'failed':'delivered';if(!db.prepare("UPDATE messages SET delivery_state=?,delivered_at=?,failed_reason=?,provider_ref=COALESCE(?,provider_ref) WHERE id=? AND delivery_state='sent'").run(state,state==='delivered'?at:null,r.reason||null,r.providerRef||null,m.id).changes)continue;event(m,state,r.reason||null,null,at);emit(m,state,r.reason,r.providerRef);touched.add(m.conversation_id);}});
