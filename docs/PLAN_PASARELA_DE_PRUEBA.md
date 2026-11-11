@@ -19,6 +19,10 @@ Al abrir un pedido pendiente («Abrir pago de prueba» o el enlace `/?pay=<pedid
 
 El pago sigue yendo por la misma acción de siempre (`POST /api/payments/orders/:id/pay`). No se envían ni guardan datos de tarjeta: sólo se aceptan los números de prueba y del número sólo se usan, en el navegador, los últimos 4 dígitos para el comprobante.
 
+## Ajuste: sin campos de tarjeta
+
+Visto en producción: Chrome ofreció guardar la tarjeta de prueba, porque el formulario parecía un pago real. Se quitaron los campos: la tarjeta de prueba se **elige** (una que aprueba, otra que rechaza). Así el navegador no guarda nada ni ofrece autocompletar una tarjeta real, y nadie puede teclear una por error.
+
 ## Límites deliberados
 
 - Es una simulación y lo dice en cada pantalla; el comprobante aclara que no es un documento fiscal ni prueba de un cobro real, y la autorización es decorativa.

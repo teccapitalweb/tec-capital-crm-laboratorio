@@ -34,7 +34,13 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Corrección: avisos encima de las ventanas y a un lado; el catálogo cierra al guardar (rama `fix/avisos-y-guardado`, 11 nov 2026)
+## Corrección: la pasarela de prueba ya no tiene campos de tarjeta (rama `fix/tarjetas-de-prueba`, 11 nov 2026)
+
+- **Qué pasó:** al pagar en producción, Chrome mostró «Tarjeta guardada solo en el dispositivo»: tomó el formulario simulado por un pago real y **guardó la tarjeta de prueba** en el navegador del usuario. Con el mismo criterio podía ofrecer autocompletar una tarjeta real. El formulario la habría rechazado y nunca envió datos, pero nadie debe llegar a escribir una tarjeta real en una simulación.
+- **Qué se hizo:** se quitaron los campos (nombre, número, vencimiento, CVC). Ahora se **elige con un toque** una de dos tarjetas de prueba dibujadas como tarjetas: «Aprueba el pago» (···· 4242, elegida por omisión) y «Rechaza el pago» (···· 0002). Sin `<input>` de tarjeta el navegador no detecta un formulario de pago. El resto del recorrido (procesando, aprobado con comprobante, rechazado) no cambia. Sólo interfaz. **Sin publicar.**
+- **Evidencia:** en local a 375 px: rechazo → reintento → aprobado; ningún `<input>` en la pantalla de pago. `test/checkout-states.test.mjs` lo fija.
+
+## Corrección: avisos encima de las ventanas y a un lado; el catálogo cierra al guardar (publicado en `main`, 11 nov 2026)
 
 - **Qué reportó el usuario** al editar una edición en producción: el aviso «Datos guardados» salía **debajo** de la ventana (un `<dialog>` vive en la capa superior del navegador y el aviso no), la ventana **no se cerraba** al guardar, y pidió que los avisos salgan a un lado.
 - **Qué se hizo:** el aviso (`#toast`) es ahora un *popover* manual: se dibuja en la capa superior, encima de cualquier ventana, y cada vez que se muestra sube al frente. Sale **arriba a la derecha** en computadora y **arriba, a lo ancho,** en celular. Vale para todos los módulos, porque todos usan el mismo `toast()` de `public/app.js`. En Catálogo, guardar cambios de un curso, edición o promoción **existente** cierra la ventana; lo recién creado y los borradores por aprobar (flyers, plantillas) la dejan abierta porque falta un paso. Sólo interfaz. **Sin publicar.**

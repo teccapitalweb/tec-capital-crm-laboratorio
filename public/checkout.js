@@ -1,6 +1,7 @@
 // Pago simulado con aspecto de pasarela (docs/PLAN_PAGO_SIMULADO.md). Muestra cómo se verá el pago real cuando haya pasarela:
-// resumen del pedido, tarjeta u OXXO. Es una SIMULACIÓN: nada se cobra, los datos de la tarjeta NO se envían ni se guardan
-// (los campos no tienen "name" y sólo se leen aquí, en el navegador) y sólo se aceptan números de tarjeta de prueba.
+// resumen del pedido, tarjeta u OXXO. Es una SIMULACIÓN: nada se cobra. NO hay campos para escribir una tarjeta: se elige una de dos
+// tarjetas de prueba con un toque. Así nadie puede teclear una tarjeta real por error y el navegador no detecta un formulario de pago
+// (antes ofrecía guardar la tarjeta de prueba y podía ofrecer autocompletar una real).
 // Al pagar se usa la misma acción de siempre (pay-sim → POST /api/payments/orders/:id/pay con método y resultado).
 window.simCheckout=(()=>{
   const TEST={'4242424242424242':'approved','5555555555554444':'approved','4000000000000002':'declined'};
@@ -38,13 +39,11 @@ window.simCheckout=(()=>{
         <button type="button" role="tab" aria-selected="false" data-pg-tab="oxxo">${icon('store')} OXXO</button>
       </div>
       <div class="pg-panel" data-pg-panel="card" role="tabpanel">
-        <label class="field">Nombre en la tarjeta<input id="pg-name" autocomplete="off" maxlength="60" placeholder="Nombre y apellido"></label>
-        <label class="field">Número de tarjeta<input id="pg-number" inputmode="numeric" autocomplete="off" maxlength="19" placeholder="4242 4242 4242 4242"></label>
-        <div class="pg-row">
-          <label class="field">Vence (MM/AA)<input id="pg-exp" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="12/34"></label>
-          <label class="field">CVC<input id="pg-cvc" inputmode="numeric" autocomplete="off" maxlength="3" placeholder="123"></label>
+        <div class="pg-cards" role="radiogroup" aria-label="Tarjeta de prueba">
+          <button type="button" class="pg-card${true?' selected':''}" role="radio" aria-checked="${true}" data-pg-card="4242424242424242" ${preview?'disabled':''}><span class="pg-card-chip" aria-hidden="true"></span><span class="pg-card-number">···· ···· ···· 4242</span><span class="pg-card-meta"><span>Tarjeta de prueba</span><span>12/34</span></span><span class="pg-card-tag ok">Aprueba el pago</span></button>
+          <button type="button" class="pg-card${false?' selected':''}" role="radio" aria-checked="${false}" data-pg-card="4000000000000002" ${preview?'disabled':''}><span class="pg-card-chip" aria-hidden="true"></span><span class="pg-card-number">···· ···· ···· 0002</span><span class="pg-card-meta"><span>Tarjeta de prueba</span><span>12/34</span></span><span class="pg-card-tag bad">Rechaza el pago</span></button>
         </div>
-        <div class="pg-fill"><span>Tarjetas de prueba:</span><button type="button" class="btn" data-pg-fill="ok">Una que aprueba</button><button type="button" class="btn" data-pg-fill="declined">Una que rechaza</button></div>
+        <p class="pg-cards-hint">Elige una tarjeta de prueba. Aquí no se escribe ninguna tarjeta: no uses una real.</p>
         <div id="pg-error" role="alert"></div>
         <button type="button" class="btn primary wide ${preview?'':'pg-pay'}" ${preview?'disabled':`data-action="pay-sim" data-id="${esc(o.id)}" data-method="card"`}>${icon('lock')} Pagar ${esc(o.amountLabel)}</button>
       </div>
@@ -84,29 +83,21 @@ window.simCheckout=(()=>{
   }
   const $=s=>document.querySelector(s);
   function validate(){
-    const name=$('#pg-name').value.trim(),num=digits($('#pg-number').value),exp=$('#pg-exp').value,cvc=digits($('#pg-cvc').value);
-    if(name.length<2)return {error:'Escribe el nombre que aparece en la tarjeta.',field:'#pg-name'};
-    if(!TEST[num])return {error:'Esto es una simulación: usa una tarjeta de prueba (por ejemplo 4242 4242 4242 4242) y no escribas una tarjeta real.',field:'#pg-number'};
-    const m=exp.match(/^(\d{2})\/(\d{2})$/);if(!m||+m[1]<1||+m[1]>12)return {error:'Escribe el vencimiento como MM/AA, por ejemplo 12/34.',field:'#pg-exp'};
-    if(cvc.length!==3)return {error:'El CVC tiene 3 números; en la simulación sirve cualquiera, por ejemplo 123.',field:'#pg-cvc'};
-    return {outcome:TEST[num]};
+    const num=document.querySelector('.pg-card[aria-checked="true"]')?.dataset.pgCard||'';
+    if(!TEST[num])return {error:'Elige una de las tarjetas de prueba.'};
+    return {outcome:TEST[num],last4:num.slice(-4)};
   }
   document.addEventListener('click',e=>{
     const tab=e.target.closest('[data-pg-tab]');
     if(tab){const co=tab.closest('.pg');co.querySelectorAll('[data-pg-tab]').forEach(b=>b.setAttribute('aria-selected',String(b===tab)));co.querySelectorAll('[data-pg-panel]').forEach(p=>{p.hidden=p.dataset.pgPanel!==tab.dataset.pgTab;});return;}
-    const fill=e.target.closest('[data-pg-fill]');
-    if(fill){$('#pg-name').value=$('#pg-name').value||'Cliente de prueba';$('#pg-number').value=fill.dataset.pgFill==='declined'?'4000 0000 0000 0002':'4242 4242 4242 4242';$('#pg-exp').value='12/34';$('#pg-cvc').value='123';$('#pg-error').innerHTML='';return;}
+    const card=e.target.closest('[data-pg-card]');
+    if(card){card.closest('.pg-cards').querySelectorAll('[data-pg-card]').forEach(b=>{const on=b===card;b.setAttribute('aria-checked',String(on));b.classList.toggle('selected',on);});const box=$('#pg-error');if(box)box.textContent='';return;}
     const pay=e.target.closest('.pg-pay');
     if(pay){
       const r=validate();
-      if(r.error){e.stopImmediatePropagation();e.stopPropagation();e.preventDefault();const box=$('#pg-error');box.textContent='';const msg=document.createElement('div');msg.className='form-error';msg.textContent=r.error;box.append(msg);$(r.field).focus();return;}
-      pay.dataset.outcome=r.outcome;pay.dataset.last4=digits($('#pg-number').value).slice(-4);
+      if(r.error){e.stopImmediatePropagation();e.stopPropagation();e.preventDefault();const box=$('#pg-error');box.textContent='';const msg=document.createElement('div');msg.className='form-error';msg.textContent=r.error;box.append(msg);return;}
+      pay.dataset.outcome=r.outcome;pay.dataset.last4=r.last4;
     }
   },true);
-  document.addEventListener('input',e=>{
-    if(e.target.id==='pg-number')e.target.value=groups(digits(e.target.value).slice(0,16),4);
-    if(e.target.id==='pg-exp'){const d=digits(e.target.value).slice(0,4);e.target.value=d.length>2?d.slice(0,2)+'/'+d.slice(2):d;}
-    if(e.target.id==='pg-cvc')e.target.value=digits(e.target.value).slice(0,3);
-  });
   return {html,processing,result,failed};
 })();

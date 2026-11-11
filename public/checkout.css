@@ -15,8 +15,6 @@
 .pg-panel[hidden]{display:none}
 .pg-panel .field input{min-height:44px}
 .pg-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.pg-fill{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:11px;color:var(--text-3)}
-.pg-fill .btn{min-height:40px;font-size:11px}
 .pg-voucher{border:1.5px dashed var(--accent-line);border-radius:14px;padding:18px;display:grid;gap:8px;justify-items:center;text-align:center;background:#fff}
 .pg-voucher small{font-size:11px;color:var(--text-3)}
 .pg-voucher strong{font-size:20px;letter-spacing:1px;font-variant-numeric:tabular-nums}
@@ -48,3 +46,16 @@ dialog.pay-page .pg{background:#fff;border:1px solid var(--line);border-radius:1
 .pg-receipt{width:100%;margin:6px 0 0;padding:4px 14px;border:1px dashed var(--accent-line);border-radius:14px;background:var(--accent-tint,#f5f9fb);text-align:left;display:grid}
 .pg-receipt>div{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}.pg-receipt>div:last-child{border-bottom:0}
 .pg-receipt dt{color:var(--text-3);font-size:12px;flex:none}.pg-receipt dd{margin:0;text-align:right;min-width:0;overflow-wrap:anywhere}
+
+/* Tarjetas de prueba para elegir (sin campos de tarjeta: el navegador no ve un formulario de pago y nadie teclea una tarjeta real) */
+.pg-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pg-card{display:grid;gap:8px;text-align:left;padding:14px;min-height:118px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(145deg,#fff,var(--accent-tint,#f3f8fa));color:var(--ink)}
+.pg-card.selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.pg-card:disabled{opacity:.7;cursor:default}
+.pg-card-chip{width:30px;height:22px;border-radius:5px;background:linear-gradient(135deg,#d9c58a,#b9a05a)}
+.pg-card-number{font-size:14px;letter-spacing:1.5px;font-variant-numeric:tabular-nums}
+.pg-card-meta{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--text-3)}
+.pg-card-tag{justify-self:start;font-size:11px;font-weight:600;border-radius:999px;padding:3px 9px}
+.pg-card-tag.ok{background:#e6f4ea;color:#1f6b38}.pg-card-tag.bad{background:#fbeceb;color:#96352a}
+.pg-cards-hint{margin:0;font-size:12px;line-height:1.5;color:var(--text-2)}
+@media(max-width:420px){.pg-cards{grid-template-columns:1fr}.pg-card{min-height:0}}

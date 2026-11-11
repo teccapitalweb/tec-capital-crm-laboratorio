@@ -16,6 +16,13 @@ const order={id:'1afa5c80-3856-410e-95c2-dda4300a3140',reference:'TC-F53D5D',cou
 test('pasarela de prueba: estados de procesando, aprobado con comprobante de ejemplo, rechazado y error',async()=>{
  const {sc,esc,icon}=await load();
  assert.deepEqual(Object.keys(sc).sort(),['failed','html','processing','result']);
+ // la pantalla de pago no tiene campos para escribir una tarjeta: se elige una de dos tarjetas de prueba (el navegador no ve un formulario de pago)
+ const form=sc.html({...order,expiresAt:Date.UTC(2026,10,13,16,30),status:'pending'},{esc,icon});
+ assert.doesNotMatch(form,/<input|<textarea|autocomplete=|cc-number|Número de tarjeta|CVC/i,'sin campos de tarjeta');
+ assert.equal((form.match(/data-pg-card="/g)||[]).length,2);assert.match(form,/data-pg-card="4242424242424242"[^>]*>/);assert.match(form,/data-pg-card="4000000000000002"/);
+ assert.match(form,/role="radiogroup"/);assert.match(form,/aria-checked="true" data-pg-card="4242424242424242"/,'la que aprueba viene elegida');assert.match(form,/Aprueba el pago/);assert.match(form,/Rechaza el pago/);
+ assert.doesNotMatch(form,/4242 4242 4242 4242|4242424242424242<|>4000/,'en pantalla sólo se ven los últimos 4 dígitos');assert.match(form,/data-action="pay-sim"[^>]*data-method="card"/);
+ const preview=sc.html({...order,expiresAt:Date.UTC(2026,10,13,16,30),status:'pending'},{esc,icon,preview:true});assert.equal((preview.match(/data-pg-card="[^"]+" disabled/g)||[]).length,2,'en la vista previa del equipo no se eligen');assert.doesNotMatch(preview,/data-action="pay-sim"/);
  const p=sc.processing({esc,icon});assert.match(p,/Procesando tu pago/);assert.match(p,/role="status"/);assert.match(p,/no se cobra nada/);
 
  const at=Date.UTC(2026,10,11,17,16);
