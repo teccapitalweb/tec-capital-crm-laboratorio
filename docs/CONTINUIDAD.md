@@ -34,6 +34,11 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Motor de respuestas más preciso (rama `feat/motor-preciso`, 11 nov 2026)
+
+- **Qué pasó:** el 11 nov el usuario completó en producción el recorrido en automático de GlobalVet (precio por reglas, una pregunta redactada por Claude, pedido con enlace de pago de prueba) y preguntó si el motor ahorra tokens. Se midió con 49 frases realistas: sólo 6 llegaban a la IA, pero 14 tomaban una ruta distinta a la esperada y **8 recibían una respuesta equivocada por reglas demasiado amplias** («¿vale la pena?» → precio; «¿qué sabré hacer cuando termine?» → fechas; «¿cuánto tiempo tengo para pagar?» → duración del curso).
+- **Qué se hizo:** reglas de intención más estrechas y con condiciones, el conocimiento aprobado ya no cruza temas reconocidos, y el chat marca **«Automatización · IA»** en lo que redactó Claude. Tras el cambio: 0 respuestas equivocadas en el banco, 7 de 49 llegan a la IA. El banco quedó como prueba (`test/replies-intents.test.mjs`). Detalle y tabla: [PLAN_MOTOR_PRECISO.md](PLAN_MOTOR_PRECISO.md). Sin esquema nuevo. **Sin publicar.** La etiqueta «IA» no se ha visto todavía en un navegador.
+
 ## Corrección: un chat en espera por «Sugerir» se reanuda cuando la marca pasa a responder (rama `fix/reanudar-automatico`, 10 nov 2026)
 
 - **Qué pasó:** con Claude ya funcionando, el usuario pasó GlobalVet a «Autónomo» y siguió escribiendo como cliente en el mismo chat: nadie contestó. En «Apagado» y «Sugerir» el primer mensaje deja el chat en `waiting` con `bot_enabled=0`, y cambiar el nivel de la marca no lo devolvía al asistente; había que pulsar «automatizar» chat por chat o abrir otro.

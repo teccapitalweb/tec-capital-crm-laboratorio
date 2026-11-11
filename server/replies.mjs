@@ -17,22 +17,30 @@ const SITUATION=/\b(que pasa si|y si|si no puedo|no puedo|no alcanzo|no me deja|
 const CATALOGUE_INTENTS=['schedule','syllabus','duration'];
 // Un primer mensaje con una pregunta concreta merece respuesta, no sólo la bienvenida.
 const looksLikeQuestion=raw=>/[?¿]/.test(raw)||normalize(raw).split(' ').filter(Boolean).length>=6;
+// Cada regla: [intención, expresión, confianza, condición opcional sobre el texto normalizado]. El orden importa: gana la primera que coincide.
+// Una regla demasiado amplia contesta MAL sin costo («¿vale la pena?» no es una pregunta de precio; «¿qué sabré hacer cuando termine?» no es de
+// fechas): ante la duda, la pregunta debe caer en «unknown» y resolverse con el conocimiento aprobado o la IA, no con la ficha equivocada.
+const words=t=>t.split(' ').filter(Boolean).length;
 const PATTERNS=[
-  ['human',/\b(asesor|humano|persona|alguien|atencion|hablar con)\b/,.9],
+  // «persona» y «alguien» sueltos no piden un asesor («¿aplica para alguien que apenas empieza?»): sólo cuando se pide que alguien atienda.
+  ['human',/\b(asesor|asesora|humano|atencion|hablar con|persona real|(con|a) (una|alguna) persona|una persona del equipo|con alguien|alguien (que )?(me )?(atienda|ayude|llame|explique|responda|conteste)|alguien me (puede|podria)|llamenme|llamame|llamada|(pueden|podrian|puedes|podria) (llamar|marcar)(me)?)\b/,.9],
   ['refund',/\b(reembolso|devolucion|devolver|queja|molest|pesimo|fraude|engan)/,.9],
-  ['enroll',/\b(inscrib|registr|apuntar|quiero el curso|me anoto|como me inscribo)/,.85],
-  ['payment',/\b(comprobante|pague|pago|transferencia|deposito|tarjeta|oxxo|spei|factura|meses sin intereses)\b/,.85],
-  // Duración va antes que precio: «¿cuánto dura?» no es una pregunta de precio.
-  ['duration',/\b(duracion|cuanto dura|cuantas (horas|sesiones|clases)|cuanto tiempo)\b/,.8],
-  ['price',/\b(precio|cuesta|costo|cuanto|promocion|descuento|oferta|vale)\b/,.85],
-  ['schedule',/\b(fecha|horario|cuando|empieza|inicia|calendario|(que|cual|primer|ultimo|proximo) dias?)\b/,.8],
+  ['enroll',/\b(inscrib|registr|apuntar|apuntarme|apunto|anotarme|quiero el curso|quiero entrar|quiero tomarlo|me anoto|como me inscribo)/,.85],
+  // «¿Cuánto hay que pagar?» pregunta el precio, no una forma de pago: va antes que «payment».
+  ['price',/\bcuanto (se |hay que |tengo que |debo |es lo que hay que )?(pag(a|ar|o)|cobran)\b/,.85],
+  ['payment',/\b(comprobante|pague|pago|pagos|pagar|transferencia|deposito|tarjeta|oxxo|spei|factura|meses sin intereses)\b/,.85],
+  // Duración va antes que precio: «¿cuánto dura?» no es una pregunta de precio. «¿Cuánto tiempo tengo para…?» tampoco es de duración.
+  ['duration',/\b(duracion|cuanto dura|cuantas (horas|sesiones|clases|semanas)|cuanto tiempo (dura|es|son|tarda|lleva|toma))\b/,.8],
+  ['price',/\b(precio|precios|cuesta|costo|costos|inversion|promo|promos|promocion|promociones|descuento|descuentos|oferta|cuanto (cuesta|vale|sale|es|seria|cobran|me queda|queda)|en cuanto|que vale)\b|^cuanto$/,.85],
+  ['schedule',/\b(fecha|fechas|horario|horarios|calendario|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|a que hora|que hora|(que|cual|primer|ultimo|proximo) dias?|cuando (es|son|seria|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|abren|hay|toca)|para cuando|quien (da|dara|imparte|ensena)|docente|docentes|profesor|profesora|maestro|maestra|instructor|ponente)\b|^cuando$/,.8],
   ['syllabus',/\b(temario|incluye|temas?|contenido|que voy a aprender|programa)\b/,.8],
   ['certificate',/\b(certificad|constancia|diploma|aval|validez|reconocimiento)/,.85],
   ['requirements',/\b(requisito|conocimientos previos|necesito saber|que necesito)\b/,.8],
-  ['modality',/\b(modalidad|en linea|online|presencial|virtual|zoom|meet|donde es|donde se imparte)\b/,.8],
-  ['recording',/\b(grabaci|grabad|no puedo asistir|repeticion|ver despues)/,.8],
+  ['modality',/\b(modalidad|en linea|online|presencial|virtual|zoom|meet|plataforma|donde es|donde se imparte|donde me conecto|como me conecto|por donde (es|son|se da))\b/,.8],
+  ['recording',/\b(grabaci|grabad|graban?\b|grabar\b|no puedo asistir|repeticion|ver despues)/,.8],
   ['greeting',/\b(hola|buen[oa]s?|informacion|info|flyer|imagen|me interesa|saludos)\b/,.6],
-  ['thanks',/\b(gracias|perfecto|ok|vale|listo|entendido)\b/,.5],
+  // Un agradecimiento no es una pregunta: «¿el curso vale la pena?» debe resolverse con conocimiento o IA, no con «¡con gusto!».
+  ['thanks',/\b(gracias|perfecto|ok|vale|listo|entendido)\b/,.5,(t,raw)=>!/vale la pena/.test(t)&&(words(t)<=4||!/[?¿]/.test(raw))],
 ];
 
 // Motor de respuestas v2. Reglas del proyecto que cumple: precios/fechas/cupos sólo del catálogo; nunca confirma pagos ni
@@ -49,7 +57,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
   function classify(raw){
     if(contacts.isOptOutText(raw))return {intent:'opt_out',confidence:.95};
     const t=normalize(raw);
-    for(const [intent,re,confidence] of PATTERNS)if(re.test(t))return {intent,confidence};
+    for(const [intent,re,confidence,when] of PATTERNS)if(re.test(t)&&(!when||when(t,String(raw||''))))return {intent,confidence};
     return {intent:'unknown',confidence:0};
   }
   const unknownStreak=conversationId=>{let n=0;for(const r of db.prepare("SELECT intent,action FROM reply_log WHERE conversation_id=? AND action IN ('replied','suggested') ORDER BY created_at DESC LIMIT 5").all(conversationId)){if(r.intent==='unknown')n++;else break;}return n;};
@@ -66,7 +74,10 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const kb=approved(c.brand_id,c.course_id);
     // Bienvenida con la ficha vigente del curso (o la de anuncio): saludo, primer mensaje sin pregunta y respaldo del primer mensaje.
     const welcome=()=>{out.prepared=catalogue.prepare(c,{kind:'flyer'});const ad=c.referral&&count===1?content?.render('ad_welcome',c.brand_id,{courseId:course.id,editionId:c.edition_id,name:first}):null;out.reply=ad?ad.text:course.welcome.replaceAll('{{nombre}}',first).replaceAll('{{curso}}',course.title)+'\n\n'+out.prepared.text;out.sources.push(catalogueSource,ad?{type:'template',kind:'ad_welcome',id:ad.templateId}:{type:'template',kind:'welcome'});out.buttons=['Precio','Temario','Fechas'];out.reason=count===1?'Primer mensaje: bienvenida con la ficha vigente del curso.':'Saludo o petición de información: ficha vigente del curso.';};
-    const fromKnowledge=(threshold=.5)=>{const hit=bestMatch(trigger.text,kb,threshold)||(TOPIC_INTENTS.includes(intent)?{entry:kb.find(k=>k.topic===intent),score:1}:null);if(!hit?.entry)return false;out.reply=hit.entry.answer;out.sources.push({type:'knowledge',id:hit.entry.id,revision:hit.entry.revision,question:hit.entry.question});out.reason='Conocimiento aprobado «'+hit.entry.question+'»'+(hit.score<1?' (parecido '+Math.round(hit.score*100)+'%)':'')+'.';return true;};
+    // Con un tema reconocido (pago, certificado, grabación…) no se usa una respuesta aprobada de OTRO tema reconocido aunque se parezca en palabras:
+    // «¿cuánto tiempo tengo para pagar?» no se contesta con «¿cuánto dura el curso?».
+    const pool=TOPIC_INTENTS.includes(intent)?kb.filter(k=>k.topic===intent||!TOPIC_INTENTS.includes(k.topic)):kb;
+    const fromKnowledge=(threshold=.5)=>{const hit=bestMatch(trigger.text,pool,threshold)||(TOPIC_INTENTS.includes(intent)?{entry:kb.find(k=>k.topic===intent),score:1}:null);if(!hit?.entry)return false;out.reply=hit.entry.answer;out.sources.push({type:'knowledge',id:hit.entry.id,revision:hit.entry.revision,question:hit.entry.question});out.reason='Conocimiento aprobado «'+hit.entry.question+'»'+(hit.score<1?' (parecido '+Math.round(hit.score*100)+'%)':'')+'.';return true;};
     if(intent==='opt_out'){out.reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';out.reason='El cliente pidió la baja; se registra y se confirma una sola vez.';}
     else if(intent==='human'||intent==='refund'){out.reply=intent==='refund'?'Lamento la molestia. Una persona del equipo revisará tu caso y te responderá por aquí.':'Ya avisé al equipo. Un asesor puede tomar esta conversación para continuar contigo.';out.handoff=true;out.reason=intent==='refund'?'Queja o reembolso: siempre lo atiende una persona.':'El cliente pidió hablar con una persona.';}
     else if(ctx.reason){out.reply=ctx.reason+'. Un asesor puede ayudarte a revisar otra edición disponible.';out.handoff=true;out.reason='La edición no está disponible según el catálogo.';out.sources.push(catalogueSource);}
