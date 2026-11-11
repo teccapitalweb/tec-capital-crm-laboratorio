@@ -34,7 +34,17 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## El asistente contesta varias preguntas de un mismo mensaje (rama `feat/varias-preguntas`, 11 nov 2026)
+## Aprender de la IA, selector de nivel, mensaje para quien prueba y resultados de la prueba (rama `feat/aprender-y-pulir`, 11 nov 2026)
+
+El usuario pidió «mete todo eso» sobre la lista propuesta. Cuatro piezas, sin esquema nuevo. **Sin publicar.**
+
+- **Aprender de la IA:** una respuesta de Claude aceptada queda como **borrador de conocimiento**; aprobada, esa pregunta se contesta sola sin llamar a la IA. Con cuidados de datos personales (la revisión de seguridad del commit pidió endurecerlos y se hizo): [PLAN_APRENDER_DE_LA_IA.md](PLAN_APRENDER_DE_LA_IA.md).
+- **Selector de nivel en Seguimientos:** la tarjeta de «Respuestas automáticas a clientes» muestra el nivel vigente como etiqueta, el selector a todo el ancho y una línea que explica cada nivel. Antes el selector quedaba cortado («Sugerir a…») y no se notaba en qué nivel estaba la marca.
+- **Mensaje para quien prueba:** «Invitar a probar» incluye un texto listo para enviar con el enlace y cinco pasos (crear perfil, qué escribir, cómo pagar con la tarjeta de prueba, cómo instalar la app).
+- **Resultados de la prueba** en Actividad: personas que entraron → escribieron → pidieron inscribirse → pagaron (últimos 30 días), y cómo se atendió (reglas, IA, persona) más los borradores de la IA por revisar. `GET /api/presentation/funnel`, sólo equipo y por marca. Se corrigió el aviso de Actividad que aún decía «no hay un modelo de IA conectado».
+- **No se pudo hacer aquí:** dejar OdonTeck y Dermalysse en «Autónomo» es configuración de producción (nivel, venta de prueba, fechas de edición y conocimiento); la hace el usuario con su sesión.
+
+## El asistente contesta varias preguntas de un mismo mensaje (publicado en `main`, 11 nov 2026)
 
 - **Qué pasó:** desde su teléfono (primera prueba en un celular real: el chat se ve como app de mensajería) el usuario escribió «¿Qué temas incluye, y tiene certificado oficial?» y el asistente sólo contestó el temario. El motor tomaba la **primera** intención reconocida y descartaba el resto.
 - **Qué se hizo:** `classifyAll()` junta todas las intenciones del mensaje y, si hay dos o más **informativas** (precio, fechas, temario, certificado, requisitos, modalidad, grabación, duración, formas de pago) unidas por «y», una coma o dos signos de pregunta, se contestan juntas: los cuerpos del catálogo y las respuestas aprobadas del conocimiento, con un solo cierre (`copy.several`). Tope de tres por mensaje. Pedir un asesor, una queja, inscribirse o avisar de un pago **no se mezclan**: siguen su camino. Una sola pregunta que usa palabras de dos temas («¿cuánto hay que pagar?») se contesta como una. Sin esquema nuevo. **Sin publicar.**

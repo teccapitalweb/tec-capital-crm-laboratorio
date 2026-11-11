@@ -49,3 +49,22 @@ test('invitación a probar: con APP_ORIGIN el enlace usa el dominio público, no
  const inv=await call('/api/presentation/invite?course=aves',admin.cookie);
  assert.equal(inv.url,'https://laboratorio.ejemplo.test/?curso=aves&canal=whatsapp','el enlace sale del origen configurado, sin depender de Host');
 });
+
+test('resultados de la prueba: embudo por personas, sólo equipo y sólo las marcas a su alcance',async t=>{
+ const {call,admin,password}=await start(t);
+ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+ const zero=await call('/api/presentation/funnel',admin.cookie);assert.deepEqual({people:zero.people,wrote:zero.wrote,requested:zero.requested,paid:zero.paid,aiDrafts:zero.aiDrafts,days:zero.days},{people:0,wrote:0,requested:0,paid:0,aiDrafts:0,days:30});
+ const ana=await call('/api/auth/register','',{username:'ana',name:'Ana',password}),beto=await call('/api/auth/register','',{username:'beto',name:'Beto',password});
+ await call('/api/presentation/funnel','',undefined,'GET',401);await call('/api/presentation/funnel',ana.cookie,undefined,'GET',403);await call('/api/presentation/funnel',admin.cookie,{},'POST',405);
+ // Ana entra y escribe en GlobalVet; Beto sólo abre una conversación en OdonTeck
+ const c=(await call('/api/conversations',ana.cookie,{courseId:'aves',channel:'whatsapp'})).conversation;await call('/api/conversations',beto.cookie,{courseId:'odontologia',channel:'instagram'});
+ await call('/api/conversations/'+c.id+'/messages',ana.cookie,{text:'¿Cuánto cuesta?',clientRef:randomUUID()},'POST',201);
+ let f;for(let i=0;i<40;i++){await sleep(150);f=await call('/api/presentation/funnel',admin.cookie);if(f.replies.rules>=1)break;}
+ assert.equal(f.people,2);assert.equal(f.wrote,1);assert.equal(f.requested,0);assert.equal(f.paid,0);assert.equal(f.replies.rules,1);assert.equal(f.replies.ai,0);
+ const gv=await call('/api/presentation/funnel?brand=globalvet&days=7',admin.cookie);assert.equal(gv.people,1);assert.equal(gv.wrote,1);assert.equal(gv.days,7);
+ assert.equal((await call('/api/presentation/funnel?days=9999',admin.cookie)).days,90,'el periodo tiene tope');
+ // un asesor sólo ve sus marcas, aunque pida otra
+ const otro=await call('/api/auth/register','',{username:'otro',name:'Otro',password});const inv=await call('/api/team/invites',admin.cookie,{username:'otro',brandIds:['odonteck']},'POST',201);await call('/api/team/accept',otro.cookie,{token:inv.token});
+ const mine=await call('/api/presentation/funnel',otro.cookie);assert.equal(mine.people,1);assert.equal(mine.wrote,0);assert.equal(mine.replies.rules,0);
+ const foreign=await call('/api/presentation/funnel?brand=globalvet',otro.cookie);assert.equal(foreign.people,0,'pedir una marca ajena no la muestra');
+});

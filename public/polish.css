@@ -202,3 +202,13 @@ label.field input[type=file]{display:block;width:100%;min-height:64px;padding:11
 #toast::backdrop{display:none}
 @media(max-width:680px){#toast{top:calc(10px + env(safe-area-inset-top));left:12px;right:12px;width:auto;max-width:none;text-align:center;transform:translate(0,-10px)}#toast.visible{transform:translate(0,0)}}
 @media(prefers-reduced-motion:reduce){#toast{transition:opacity .2s}}
+
+/* Actividad: resultados de la prueba (embudo) y mensaje de invitación */
+.funnel{margin:18px 0;padding:16px 18px;border:1px solid var(--line);border-radius:16px;background:#fff}
+.funnel-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}.funnel-head h2{margin:0;font-size:15px;font-weight:600}.funnel-head small{color:var(--text-3);font-size:12px}
+.funnel-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.funnel-steps li{display:grid;gap:2px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--accent-tint,#f5f9fb)}
+.funnel-steps strong{font-size:24px;font-weight:600;letter-spacing:-.5px}.funnel-steps span{font-size:12px;color:var(--text-2)}.funnel-steps small{font-size:11px;color:var(--text-3)}
+.funnel-how{margin:12px 0 0;font-size:13px;line-height:1.6;color:var(--text-2)}
+.invite-message textarea{width:100%;min-height:150px;font-size:12px;line-height:1.5;resize:vertical}
+@media(max-width:680px){.funnel-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.invite-message textarea{font-size:16px}}

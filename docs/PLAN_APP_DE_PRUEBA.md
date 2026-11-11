@@ -17,6 +17,11 @@ El usuario quiere probar el recorrido completo (atención automática, pedido y 
    - `GET /api/presentation/invite?course=&channel=` (sólo equipo, curso activo y marca a su alcance) devuelve `{url, svg}`; el QR se dibuja en el servidor (`server/qr.mjs`).
    - El enlace usa `APP_ORIGIN` si está configurado; no lleva secretos ni crea nada por sí solo.
 
+## Mensaje para quien prueba y resultados
+
+- **Invitar a probar** incluye un **mensaje con instrucciones** listo para copiar y enviar: el enlace y cinco pasos (crear perfil con datos inventados, qué escribir, pagar con la tarjeta de prueba que aprueba, instalar la app).
+- **Actividad → Resultados de la prueba**: embudo por personas de los últimos 30 días (entraron → escribieron → pidieron inscribirse → pagaron) y cómo se atendió (por reglas, con IA o por una persona). `GET /api/presentation/funnel?brand=&days=` (sólo equipo y marcas a su alcance; conteos, sin nombres ni mensajes).
+
 ## Límites deliberados
 
 - **No imita a ningún servicio real.** No usa el nombre, el logotipo ni el diseño de WhatsApp ni de ninguna otra app: es «Chat de prueba», con la identidad del laboratorio, y los canales siguen rotulados «Canal de prueba».

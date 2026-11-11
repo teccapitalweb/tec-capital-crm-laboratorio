@@ -101,8 +101,32 @@ export function createPresentation({db,crm,json,now=Date.now,env=process.env}){
     const url=inviteBase(req)+'/?curso='+encodeURIComponent(course.id)+'&canal='+channel;
     json(res,200,{url,courseId:course.id,course:course.title,channel,svg:qrSvg(url,{scale:5})});
   }
+  // Resultados de la prueba (docs/PLAN_APP_DE_PRUEBA.md): cuántas personas entraron, escribieron, pidieron inscribirse y pagaron, y cómo se
+  // atendieron (reglas, IA o una persona). Sólo equipo y sólo las marcas a su alcance; son conteos, sin nombres ni mensajes.
+  function funnel(req,res,user){
+    if(req.method!=='GET')throw fail(405,'Método no permitido.');
+    const current=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);
+    if(!current||current.disabled||!['admin','agent'].includes(current.role))throw fail(403,'Los resultados de la prueba son para el equipo de atención.');
+    const q=new URL(req.url,'http://localhost').searchParams,wanted=q.get('brand'),days=Math.min(90,Math.max(1,Number(q.get('days'))||30)),since=now()-days*86400000;
+    const ids=crm.brandsFor(user).map(b=>b.id).filter(id=>!wanted||id===wanted);
+    const empty={days,people:0,wrote:0,requested:0,paid:0,replies:{rules:0,ai:0,person:0,suggested:0},aiDrafts:0};
+    if(!ids.length)return json(res,200,empty);
+    const marks=ids.map(()=>'?').join(','),one=(sql,...args)=>db.prepare(sql).get(...args).n;
+    json(res,200,{days,
+      people:one(`SELECT count(DISTINCT customer_id) n FROM conversations WHERE brand_id IN (${marks}) AND created_at>=?`,...ids,since),
+      wrote:one(`SELECT count(DISTINCT c.customer_id) n FROM conversations c JOIN messages m ON m.conversation_id=c.id AND m.sender_kind='customer' WHERE c.brand_id IN (${marks}) AND c.created_at>=?`,...ids,since),
+      requested:one(`SELECT count(DISTINCT c.customer_id) n FROM orders o JOIN conversations c ON c.id=o.conversation_id WHERE o.brand_id IN (${marks}) AND o.created_at>=?`,...ids,since),
+      paid:one(`SELECT count(DISTINCT c.customer_id) n FROM orders o JOIN conversations c ON c.id=o.conversation_id WHERE o.brand_id IN (${marks}) AND o.created_at>=? AND o.status='paid'`,...ids,since),
+      replies:{
+        rules:one(`SELECT count(*) n FROM reply_log WHERE brand_id IN (${marks}) AND created_at>=? AND action='replied' AND reason NOT LIKE 'Proveedor de IA:%'`,...ids,since),
+        ai:one(`SELECT count(*) n FROM reply_log WHERE brand_id IN (${marks}) AND created_at>=? AND action='replied' AND reason LIKE 'Proveedor de IA:%'`,...ids,since),
+        person:one(`SELECT count(*) n FROM reply_log WHERE brand_id IN (${marks}) AND created_at>=? AND action='escalated'`,...ids,since),
+        suggested:one(`SELECT count(*) n FROM reply_log WHERE brand_id IN (${marks}) AND created_at>=? AND action='suggested'`,...ids,since)},
+      aiDrafts:one(`SELECT count(*) n FROM knowledge_entries WHERE brand_id IN (${marks}) AND status='draft' AND created_by IS NULL`,...ids)});
+  }
   async function handle(req,res,path,user){
     if(path==='/api/presentation/invite'){invite(req,res,user);return true;}
+    if(path==='/api/presentation/funnel'){funnel(req,res,user);return true;}
     if(path!=='/api/presentation')return false;
     if(req.method!=='GET')throw fail(405,'Método no permitido.');
     const current=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);
