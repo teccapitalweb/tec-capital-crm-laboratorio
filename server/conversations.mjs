@@ -6,7 +6,7 @@ export function conversationPage(db,user,options={},online=()=>false){
   if(cursor&&!match)throw Object.assign(new Error('Página de conversaciones no válida.'),{status:400});
   const params={user:user.id,admin:user.role==='admin'?1:0,agent:user.role==='agent'?1:0,
     query,brand:options.brand||'all',channel:options.channel||'all',filter:options.filter||'all',
-    onlyOwn:options.mode==='customer'?1:0,id:options.id||'',tag:isStaff&&/^[a-f0-9-]{36}$/.test(String(options.tag||''))?String(options.tag):'',limit:size+1,offset:options.offset||0,
+    onlyOwn:options.mode==='customer'?1:0,staff:isStaff?1:0,id:options.id||'',tag:isStaff&&/^[a-f0-9-]{36}$/.test(String(options.tag||''))?String(options.tag):'',limit:size+1,offset:options.offset||0,
     cursorTime:match?Number(match[1]):Number.MAX_SAFE_INTEGER,cursorId:match?.[2]||'',hasCursor:match?1:0};
   const rows=db.prepare(`SELECT c.*,COALESCE(o.stage,CASE WHEN c.stage='inscrito' THEN 'ganada' ELSE c.stage END) AS stage,
     e.name edition_name,o.id opportunity_id,o.contact_id contact_id,o.revision opportunity_revision,u.name customer_name,u.test_number,b.name brand_name,k.title course_title,
@@ -23,7 +23,7 @@ export function conversationPage(db,user,options={},online=()=>false){
     AND (@brand='all' OR c.brand_id=@brand) AND (@channel='all' OR c.channel=@channel)
     AND (@tag='' OR EXISTS(SELECT 1 FROM contact_tag_links tl JOIN contact_tags tt ON tt.id=tl.tag_id WHERE tl.contact_id=o.contact_id AND tl.tag_id=@tag AND tt.brand_id=c.brand_id))
     AND (@filter='all' OR (@filter='waiting' AND c.status='waiting') OR (@filter='mine' AND c.assigned_to=@user) OR (@filter='open' AND c.status!='resolved') OR (@filter='resolved' AND c.status='resolved'))
-    AND (@query='' OR instr(search_text(u.name||' '||u.test_number||' '||b.name||' '||k.title||' '||COALESCE(e.name,'')),search_text(@query))>0
+    AND (@query='' OR instr(search_text(u.name||' '||u.test_number||' '||b.name||' '||k.title||' '||COALESCE(e.name,'')||' '||CASE WHEN @staff=1 THEN COALESCE(c.wa_peer,'') ELSE '' END),search_text(@query))>0
       OR EXISTS(SELECT 1 FROM messages sm WHERE sm.conversation_id=c.id AND instr(search_text(sm.text),search_text(@query))>0))
     AND (@hasCursor=0 OR c.updated_at<@cursorTime OR (c.updated_at=@cursorTime AND c.id<@cursorId))
     ORDER BY c.updated_at DESC,c.id DESC LIMIT @limit OFFSET @offset`).all(params);

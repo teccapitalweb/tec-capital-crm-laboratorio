@@ -34,7 +34,19 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Aprender de la IA, selector de nivel, mensaje para quien prueba y resultados de la prueba (rama `feat/aprender-y-pulir`, 11 nov 2026)
+## WhatsApp real por la API de Meta (rama `feat/whatsapp-real`, 11 nov 2026)
+
+El usuario preguntó qué hacía falta para conectar WhatsApp de verdad y aprobó empezar con el número de prueba de Meta («Sí, empieza»). **Esquema 38. Sin publicar.** Detalle: [PLAN_WHATSAPP_REAL.md](PLAN_WHATSAPP_REAL.md); guía de activación: [ACTIVAR_WHATSAPP_REAL.md](ACTIVAR_WHATSAPP_REAL.md).
+
+- **Decisión de diseño:** lo real convive con el laboratorio. Una conversación es real si tiene `wa_number`/`wa_peer`; sólo esas salen por Meta. Los perfiles de prueba siguen simulados aunque `CHANNEL_CONNECTOR=meta`. Antes, con Meta seleccionado y completo, *todo* habría intentado salir por Meta.
+- **Entrantes:** número → marca (`wa_numbers`), persona → cliente (`wa_identities`), conversación en el curso por omisión del número, y de ahí el camino de siempre (respuestas automáticas, comprobantes, memoria). Imágenes y PDF se descargan; audios, videos y stickers dejan una nota y el asistente pide que lo escriban.
+- **Salientes:** texto, botones, imagen y documento por la Cloud API, en orden y sin duplicar; estados por webhook; errores de Meta explicados en español.
+- **Pago sin sesión** para pedidos de conversaciones reales (`/api/pay/<pedido>`): quien llega por WhatsApp no tiene perfil.
+- **Pantalla:** Operación → Sistema → Conectores → «WhatsApp real · Meta» (estado, probar conexión, números por marca).
+- **Sin verificar contra Meta de verdad:** todo se probó con una API de Meta simulada (202 pruebas) y en el navegador con servidor local. Falta que el usuario cree la app en Meta, ponga las variables en Railway y escriba al número de prueba.
+- **Siguiente:** plantillas aprobadas por Meta para escribir fuera de las 24 horas; audios; Instagram y Messenger.
+
+## Aprender de la IA, selector de nivel, mensaje para quien prueba y resultados de la prueba (publicado en `main`, 11 nov 2026)
 
 El usuario pidió «mete todo eso» sobre la lista propuesta. Cuatro piezas, sin esquema nuevo. **Sin publicar.**
 

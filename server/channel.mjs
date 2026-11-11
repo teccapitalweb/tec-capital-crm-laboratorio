@@ -16,24 +16,31 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
   const defaults=b=>({brand_id:b,enabled:0,enforce_window:1,delivery_delay_ms:1500,failure_rate:0,revision:0,updated_by:null,updated_at:null});
   const settings=b=>db.prepare('SELECT * FROM channel_settings WHERE brand_id=?').get(b)||defaults(b);
   let connectorOf=null;const useConnector=fn=>{connectorOf=fn;};   // lo fija connectors.mjs; sin él se simula aquí mismo
+  let outboundOf=null;const useOutbound=fn=>{outboundOf=fn;};   // lo fija whatsapp.mjs: arma lo que viaja a un número real (texto, botones, archivo)
+  const WA_UNSENT='No se entregó: pasaron más de 24 horas desde el último mensaje de la persona y las plantillas aprobadas por Meta todavía no están conectadas. Saldrá un mensaje nuevo cuando vuelva a escribir.';
+  const WA_CLOSED='Pasaron más de 24 horas desde el último mensaje de esta persona: WhatsApp sólo permite escribirle cuando ella vuelva a escribir. Las plantillas aprobadas por Meta todavía no están conectadas.';
   const requireAdmin=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||u.role!=='admin')throw fail(403,'El canal simulado lo configura un administrador.');};
 
   // Ventana de servicio: 24 h desde el último mensaje del cliente; si llegó por anuncio, además 72 h desde su primer mensaje.
   function windowOf(c,{lastCustomerAt,firstCustomerAt}={},cache=null){
     if(lastCustomerAt===undefined){const r=db.prepare("SELECT MIN(created_at) f,MAX(created_at) l FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id);lastCustomerAt=r.l;firstCustomerAt=r.f;}
     const referral=typeof c.referral==='string'?parseReferral(c.referral):c.referral||null;
-    const byCustomer=lastCustomerAt?lastCustomerAt+DAY:0,byReferral=referral&&firstCustomerAt?firstCustomerAt+FREE_ENTRY:0,until=Math.max(byCustomer,byReferral)||null;
+    const real=Boolean(c.wa_number),byCustomer=lastCustomerAt?lastCustomerAt+DAY:0,byReferral=!real&&referral&&firstCustomerAt?firstCustomerAt+FREE_ENTRY:0,until=Math.max(byCustomer,byReferral)||null;
     const s=cache?.get(c.brand_id)||settings(c.brand_id);if(cache)cache.set(c.brand_id,s);
-    return {enabled:Boolean(s.enabled),enforced:Boolean(s.enabled&&s.enforce_window),until,open:until!==null&&until>now(),source:until?(byReferral>=byCustomer?'referral':'customer'):null};
+    return {enabled:real||Boolean(s.enabled),enforced:real||Boolean(s.enabled&&s.enforce_window),real,until,open:until!==null&&until>now(),source:until?(byReferral>=byCustomer?'referral':'customer'):null};
   }
   const decorate=rows=>{const cache=new Map();return rows.map(c=>({...c,referral:parseReferral(c.referral),window:windowOf(c,{lastCustomerAt:c.last_customer_at,firstCustomerAt:c.first_customer_at},cache)}));};
   const categoryOf=(kind,prepared,flyer)=>kind==='customer'||kind==='system'?null:(prepared?.flyerSnapshot||flyer)?'marketing':prepared?'utility':'service';
 
   // Antes de insertar un mensaje saliente. Devuelve lo que debe guardarse; lanza 409 si la ventana está cerrada y el mensaje es libre.
   function before(c,kind,{category,buttons}){
-    const s=settings(c.brand_id);
-    if(!s.enabled||!category)return {category,buttons:null};
-    if(s.enforce_window&&category==='service'&&!windowOf(c).open)throw fail(409,'La ventana de servicio de 24 h está cerrada en el canal simulado: envía una plantilla aprobada (temario, precio, fechas o flyer) o espera a que el cliente escriba.');
+    const s=settings(c.brand_id),real=Boolean(c.wa_number);
+    // Conversación real de WhatsApp: la regla de 24 h es de Meta y no depende del canal simulado de la marca. Con la ventana cerrada se rechaza
+    // aquí lo que escribe una persona del equipo y los textos libres. Los avisos del negocio (confirmación de pago, certificado, recordatorio,
+    // campaña) SÍ se guardan —un pago nunca debe fallar por esto— y quedan «no entregados» con el motivo al intentar salir (ver tick).
+    if(real&&category&&(kind==='agent'||category==='service')&&!windowOf(c).open)throw fail(409,WA_CLOSED);
+    if((!s.enabled&&!real)||!category)return {category,buttons:null};
+    if(!real&&s.enforce_window&&category==='service'&&!windowOf(c).open)throw fail(409,'La ventana de servicio de 24 h está cerrada en el canal simulado: envía una plantilla aprobada (temario, precio, fechas o flyer) o espera a que el cliente escriba.');
     const list=Array.isArray(buttons)?buttons.map(b=>text(b,20)).filter(Boolean).slice(0,3):[];
     return {category,buttons:list.length?JSON.stringify(list):null};
   }
@@ -41,17 +48,40 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
   // Índice común: sólo entregado y fallido (los estados intermedios quedan en channel_events).
   const emit=(m,state,reason,providerRef)=>{if(!domainEvents||!['delivered','failed'].includes(state))return;domainEvents.publish({type:state==='failed'?'mensaje.fallido':'mensaje.entregado',brandId:m.brand_id,entityKind:'message',entityId:m.id,payload:{conversationId:m.conversation_id,category:m.category||null,reason:reason||undefined,providerRef:providerRef||undefined},source:'channel',dedupeKey:(state==='failed'?'mensaje.fallido':'mensaje.entregado')+':'+m.id+':'+(providerRef||'')});};
 
-  // Entrega simulada: pasado el retraso de la marca, cada mensaje saliente queda entregado o, según la tasa configurada, fallido.
-  // Entrega: pasado el retraso de la marca, cada saliente se manda al conector (fuera de transacción); el resultado
-  // (entregado o fallido, con referencia del proveedor) se aplica después en una sola transacción.
+  // Entrega: cada saliente se manda a su conector fuera de transacción y el resultado se aplica después en una sola transacción.
+  //  · Laboratorio (canal simulado encendido en la marca): pasado el retraso, queda entregado o fallido según la tasa configurada.
+  //  · Conversación REAL (wa_number): sale por Meta sin esperar ni depender del canal simulado. Meta devuelve su referencia y el mensaje
+  //    sigue «enviado» hasta que el webhook diga entregado o leído; provider_ref IS NULL es lo que marca «todavía no ha salido».
+  // Un mensaje o una conversación real en vuelo no se vuelve a tomar: así no hay envíos dobles ni mensajes fuera de orden.
+  const flying=new Set(),busy=new Set();
   async function tick(){
     const t=now();
-    const rows=db.prepare("SELECT m.id,m.conversation_id,c.brand_id,c.channel,m.category,s.failure_rate FROM messages m JOIN conversations c ON c.id=m.conversation_id JOIN channel_settings s ON s.brand_id=c.brand_id WHERE s.enabled=1 AND m.delivery_state='sent' AND m.sender_kind IN ('agent','automation') AND m.created_at<=?-s.delivery_delay_ms ORDER BY m.seq LIMIT 100").all(t);
+    const rows=db.prepare("SELECT m.id,m.conversation_id,c.brand_id,c.channel,m.category,COALESCE(s.failure_rate,0) failure_rate,c.wa_number,c.wa_peer FROM messages m JOIN conversations c ON c.id=m.conversation_id LEFT JOIN channel_settings s ON s.brand_id=c.brand_id WHERE m.delivery_state='sent' AND m.sender_kind IN ('agent','automation') AND ((c.wa_number IS NOT NULL AND m.provider_ref IS NULL) OR (c.wa_number IS NULL AND s.enabled=1 AND m.created_at<=?-s.delivery_delay_ms)) ORDER BY m.seq LIMIT 100").all(t).filter(m=>!flying.has(m.id)&&!(m.wa_number&&busy.has(m.conversation_id)));
     if(!rows.length)return [];
-    const connector=connectorOf?connectorOf():null;
-    const results=await Promise.all(rows.map(async m=>{try{return {m,r:connector?await connector.send({id:m.id,conversationId:m.conversation_id,brandId:m.brand_id,channel:m.channel,category:m.category,failureRate:m.failure_rate}):simulate(m)};}catch(e){return {m,r:{providerRef:null,state:'failed',reason:String(e?.message||e).slice(0,160)}};}}));
+    const one=async m=>{
+      try{
+        if(!m.wa_number){const connector=connectorOf?connectorOf(null):null;return {m,r:connector?await connector.send({id:m.id,conversationId:m.conversation_id,brandId:m.brand_id,channel:m.channel,category:m.category,failureRate:m.failure_rate}):simulate(m)};}
+        if(!connectorOf||!outboundOf)throw fail(503,'WhatsApp real no está disponible en este servidor.');
+        if(!windowOf({id:m.conversation_id,brand_id:m.brand_id,wa_number:m.wa_number}).open)throw fail(409,WA_UNSENT);   // no se le pide a Meta lo que va a rechazar
+        const out=await outboundOf(m),r=await connectorOf(out).send(out);
+        // la referencia de Meta se guarda en cuanto llega: su aviso de «entregado» puede venir antes de que termine el resto del lote
+        if(r.state!=='failed'&&r.providerRef)db.prepare("UPDATE messages SET provider_ref=? WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL").run(r.providerRef,m.id);
+        return {m,r};
+      }catch(e){return {m,r:{providerRef:null,state:'failed',reason:String(e?.message||e).slice(0,200)}};}
+    };
+    const lab=rows.filter(m=>!m.wa_number),real=new Map();for(const m of rows)if(m.wa_number){if(!real.has(m.conversation_id))real.set(m.conversation_id,[]);real.get(m.conversation_id).push(m);}
+    for(const m of rows)flying.add(m.id);for(const id of real.keys())busy.add(id);
+    let results=[];
+    try{results=(await Promise.all([...lab.map(one),...[...real.values()].map(async list=>{const done=[];for(const m of list)done.push(await one(m));return done;})])).flat();}
+    finally{for(const m of rows)flying.delete(m.id);for(const id of real.keys())busy.delete(id);}
     const touched=new Set(),at=now();
-    transaction(db,()=>{for(const {m,r} of results){const state=r.state==='failed'?'failed':'delivered';if(!db.prepare("UPDATE messages SET delivery_state=?,delivered_at=?,failed_reason=?,provider_ref=COALESCE(?,provider_ref) WHERE id=? AND delivery_state='sent'").run(state,state==='delivered'?at:null,r.reason||null,r.providerRef||null,m.id).changes)continue;event(m,state,r.reason||null,null,at);emit(m,state,r.reason,r.providerRef);touched.add(m.conversation_id);}});
+    transaction(db,()=>{for(const {m,r} of results){
+      if(m.wa_number){
+        if(r.state==='failed'){if(!db.prepare("UPDATE messages SET delivery_state='failed',failed_reason=? WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL").run(r.reason||'Meta no aceptó el mensaje',m.id).changes)continue;event(m,'failed',r.reason||null,null,at);emit(m,'failed',r.reason,null);}
+        else{db.prepare('UPDATE messages SET failed_reason=NULL WHERE id=? AND provider_ref=?').run(m.id,r.providerRef);event(m,'sent',null,null,at);}
+        touched.add(m.conversation_id);continue;
+      }
+      const state=r.state==='failed'?'failed':'delivered';if(!db.prepare("UPDATE messages SET delivery_state=?,delivered_at=?,failed_reason=?,provider_ref=COALESCE(?,provider_ref) WHERE id=? AND delivery_state='sent'").run(state,state==='delivered'?at:null,r.reason||null,r.providerRef||null,m.id).changes)continue;event(m,state,r.reason||null,null,at);emit(m,state,r.reason,r.providerRef);touched.add(m.conversation_id);}});
     for(const id of touched)broadcast('conversation',id);
     return [...touched];
   }
@@ -73,7 +103,8 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
     const m=db.prepare('SELECT m.*,c.brand_id FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=?').get(messageId);
     if(!m)throw fail(404,'Mensaje no disponible.');const c=accessConversation(m.conversation_id,user);crm.requireBrand(user,c.brand_id);
     if(m.delivery_state!=='failed')throw fail(409,'Sólo se reintenta un mensaje que falló.');
-    const t=now();transaction(db,()=>{db.prepare("UPDATE messages SET delivery_state='sent',failed_reason=NULL,delivered_at=NULL WHERE id=? AND delivery_state='failed'").run(m.id);event(m,'retry',null,user.id,t);});
+    if(c.wa_number&&!windowOf(c).open)throw fail(409,WA_CLOSED);
+    const t=now();transaction(db,()=>{db.prepare("UPDATE messages SET delivery_state='sent',failed_reason=NULL,delivered_at=NULL,provider_ref=CASE WHEN ? THEN NULL ELSE provider_ref END WHERE id=? AND delivery_state='failed'").run(c.wa_number?1:0,m.id);event(m,'retry',null,user.id,t);});
     audit(user,'message.retry',m.id);broadcast('conversation',m.conversation_id);
     return db.prepare('SELECT id,delivery_state,failed_reason FROM messages WHERE id=?').get(m.id);
   }
@@ -110,5 +141,5 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
     }
     return false;
   }
-  return {settings,windowOf,decorate,categoryOf,before,tick,markRead,retry,events,setSettings,referralInput,handle,useConnector,applyStatus};
+  return {settings,windowOf,decorate,categoryOf,before,tick,markRead,retry,events,setSettings,referralInput,handle,useConnector,useOutbound,applyStatus};
 }

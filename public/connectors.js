@@ -6,8 +6,33 @@ window.createConnectorsUI=function({state,api,esc,icon,showModal,toast}){
   const note=copy=>`<p class="crm-hint">${copy}</p>`;
   const PROVIDER={simulated:'Simulado',meta:'Meta',stripe:'Stripe',conekta:'Conekta'};
   const CAP={templates:'plantillas',buttons:'botones',media:'imágenes y PDF',readReceipts:'confirmaciones de lectura',referral:'origen por anuncio',inboundWebhook:'entrantes por webhook',card:'tarjeta',oxxo:'OXXO',spei:'SPEI',transferReceipt:'comprobante de transferencia',refunds:'reembolsos'};
-  let data=null,core=null;
-  async function load(){data=await api('/api/connectors');try{core=await api('/api/core');}catch{core=null;}}
+  let data=null,core=null,wa=null,waPing=null,waEdit=null;
+  async function load(){data=await api('/api/connectors');try{core=await api('/api/core');}catch{core=null;}try{wa=await api('/api/whatsapp');}catch{wa=null;}}
+  // WhatsApp real (Meta · Cloud API): estado, prueba de conexión y números por marca. docs/PLAN_WHATSAPP_REAL.md
+  function waPanel(){
+    if(!wa)return '';
+    const edit=waEdit?wa.numbers.find(n=>n.phoneNumberId===waEdit):null,suggest=!edit&&wa.envNumber&&!wa.envNumberAssigned?wa.envNumber:'';
+    const todo=[];
+    if(!wa.selected)todo.push('En Railway → Variables, pon <code class="cn-code">CHANNEL_CONNECTOR=meta</code>.');
+    if(wa.missing.length)todo.push('Faltan en Railway: '+wa.missing.map(m=>'<code class="cn-code">'+esc(m)+'</code>').join(', ')+'.');
+    if(!wa.numbers.length)todo.push('Asigna el número de WhatsApp a una marca en el formulario de abajo.');
+    const ping=!waPing?'':'<p class="ais-ping '+(waPing.ok?'ok':'bad')+'" role="status">'+icon(waPing.ok?'check-circle':'alert-triangle')+'<span>'+(waPing.ok?'<strong>Meta respondió.</strong> Número '+esc(waPing.displayPhone||waPing.phoneNumberId)+(waPing.verifiedName?' · «'+esc(waPing.verifiedName)+'»':'')+(waPing.quality?' · calidad '+esc(waPing.quality):'')+'. El token y el número funcionan.':'<strong>Meta no respondió bien.</strong> '+esc(waPing.error||''))+' <small>'+esc(stamp(waPing.at))+'</small></span></p>';
+    const rows=wa.numbers.map(n=>'<div class="wa-number"><div class="wa-number-main"><strong>'+esc(n.label||'Número de WhatsApp')+'</strong><code class="cn-code">'+esc(n.phoneNumberId)+'</code><small>'+esc(n.brandName)+' · '+esc(n.courseTitle?'recibe en «'+n.courseTitle+'»':'recibe en el primer curso con fechas disponibles')+' · '+n.people+' persona'+(n.people===1?'':'s')+' · '+n.conversations+' conversaci'+(n.conversations===1?'ón':'ones')+'</small></div>'+chip(n.enabled?'Recibiendo':'En pausa',n.enabled?'ok':'warn')+btn('wa-edit','Editar',n.phoneNumberId)+btn('wa-toggle',n.enabled?'Pausar':'Reanudar',n.phoneNumberId)+'</div>').join('');
+    const opt=(v,l,sel)=>'<option value="'+esc(v)+'"'+(sel?' selected':'')+'>'+esc(l)+'</option>';
+    const brandName=id=>wa.brands.find(b=>b.id===id)?.name||id;
+    return '<section class="crm-panel wa-panel"><div class="ops-card-top"><h2>WhatsApp real · Meta</h2>'+(wa.live?chip('Activo','ok'):wa.selected?chip('Faltan datos','warn'):chip('Apagado'))+(wa.live?btn('wa-ping',icon('zap')+' Probar conexión con Meta'):'')+'</div>'
+      +note('Cuando está activo, lo que una persona escribe a un número de WhatsApp de la empresa entra a la Bandeja como una conversación real y el asistente o el equipo le responden por la API de Meta. Los perfiles de prueba del laboratorio siguen simulados. El token y el secreto viven sólo en Railway: aquí nunca se muestran.')
+      +ping
+      +(todo.length?'<p class="crm-hint">Para activarlo falta:</p><ol class="cn-list">'+todo.map(t=>'<li>'+t+'</li>').join('')+'</ol>':'<p class="crm-hint">'+(wa.live?'Listo: escribe al número desde un teléfono y la conversación aparecerá en la Bandeja con el número de la persona.':'')+'</p>')
+      +'<p class="crm-hint">Webhook para Meta (URL de devolución de llamada): <code class="cn-code">'+esc(location.origin+wa.webhookPath)+'</code> · token de verificación: el valor que pusiste en <code class="cn-code">META_VERIFY_TOKEN</code> · campo a suscribir: <code class="cn-code">messages</code>'+(wa.webhookReady?'':' · <strong>todavía no responde: faltan META_APP_SECRET y META_VERIFY_TOKEN</strong>')+'</p>'
+      +(rows?'<div class="wa-numbers">'+rows+'</div>':'')
+      +'<form id="cn-wa-form" class="form-grid"><h3>'+(edit?'Editar número':'Asignar un número a una marca')+'</h3><div class="cat-form-columns">'
+      +'<label class="field">Identificador del número (el que muestra Meta, sólo dígitos)<input name="phoneNumberId" inputmode="numeric" pattern="[0-9]{5,25}" maxlength="25" required value="'+esc(edit?edit.phoneNumberId:suggest)+'"'+(edit?' readonly':'')+' placeholder="Por ejemplo 109000000000001"></label>'
+      +'<label class="field">Marca que atiende<select name="brandId" required>'+wa.brands.map(b=>opt(b.id,b.name,edit?edit.brandId===b.id:false)).join('')+'</select></label>'
+      +'<label class="field">Curso con el que empieza la conversación<select name="courseId">'+opt('','El primero con fechas disponibles',!edit||!edit.courseId)+wa.courses.map(k=>opt(k.id,brandName(k.brand_id)+' · '+k.title,edit?edit.courseId===k.id:false)).join('')+'</select></label>'
+      +'<label class="field">Nombre para reconocerlo<input name="label" maxlength="60" value="'+esc(edit?edit.label:'')+'" placeholder="Número de prueba, Ventas GlobalVet…"></label></div>'
+      +'<div class="actions"><button type="submit" class="btn primary">'+icon('save')+' '+(edit?'Guardar cambios':'Asignar número')+'</button>'+(edit?btn('wa-cancel','Cancelar'):'')+'</div></form></section>';
+  }
   function corePanel(){
     if(!core)return '';const st=core.stats,sim=core.mode==='simulated';
     return `<section class="crm-panel"><div class="ops-card-top"><h2>Núcleo compartido · Postgres/Supabase</h2>${sim?chip('Simulado · nada sale del servidor'):chip('Conectado a '+core.sinkHost,core.secretSet?'ok':'warn')}${!sim&&!core.secretSet?chip('Sin secreto HMAC','warn'):''}</div>${note('Cada hecho del negocio (eventos de dominio) se envía al núcleo como un sobre firmado con el evento y los registros implicados en la forma del esquema compartido (<code class="cn-code">nucleo/esquema-v1.sql</code>): consultoras, personas, cursos, ediciones, sesiones, pagos, inscripciones y certificados. Nunca viajan textos de mensajes, comentarios de encuestas ni adjuntos. Con reintento y espera creciente; «Reproducir historial» crea las entregas de todos los eventos anteriores a la conexión. Se activa con <code class="cn-code">CORE_SINK_URL</code> y <code class="cn-code">CORE_SINK_SECRET</code> en el entorno (docs/NUCLEO.md).')}
@@ -35,11 +60,15 @@ window.createConnectorsUI=function({state,api,esc,icon,showModal,toast}){
   }
   function html(){
     if(!data)return '<div class="loading-message">Cargando…</div>';
-    return `<div class="crm-toolbar"><p>Contrato de conectores v${esc(data.contractVersion)}: el CRM habla con una interfaz única; hoy la cumplen adaptadores simulados y mañana Meta y la pasarela de pago, sin tocar el resto.</p></div><div class="cn-grid">${card('channel','Canal · WhatsApp, Instagram, Facebook',data.channel)}${card('payment','Pago · tarjeta, OXXO, transferencia',data.payment)}</div>${corePanel()}${testBox()}${events()}${requirements()}`;
+    return `<div class="crm-toolbar"><p>Contrato de conectores v${esc(data.contractVersion)}: el CRM habla con una interfaz única; hoy la cumplen adaptadores simulados y mañana Meta y la pasarela de pago, sin tocar el resto.</p></div><div class="cn-grid">${card('channel','Canal · WhatsApp, Instagram, Facebook',data.channel)}${card('payment','Pago · tarjeta, OXXO, transferencia',data.payment)}</div>${waPanel()}${corePanel()}${testBox()}${events()}${requirements()}`;
   }
-  async function action(name){
+  async function action(name,el){
     if(name==='cn-reload')return 'reload';
     try{
+      if(name==='cn-wa-ping'){try{waPing=await api('/api/whatsapp/ping',{method:'POST',body:{}});}catch(e){waPing={ok:false,error:e.message};}waPing.at=Date.now();return 'reload';}
+      if(name==='cn-wa-edit'){waEdit=el?.dataset.id||null;return 'reload';}
+      if(name==='cn-wa-cancel'){waEdit=null;return 'reload';}
+      if(name==='cn-wa-toggle'){const n=wa?.numbers.find(x=>x.phoneNumberId===el?.dataset.id);if(!n)return 'reload';await api('/api/whatsapp/numbers/'+n.phoneNumberId,{method:'PUT',body:{brandId:n.brandId,courseId:n.courseId,label:n.label,enabled:!n.enabled,expectedRevision:n.revision}});toast(n.enabled?'Número en pausa: lo que le escriban no entrará al CRM.':'Número recibiendo de nuevo.');return 'reload';}
       if(name==='cn-core-ping'){const r=await api('/api/core/ping',{method:'POST',body:{}});toast(r.ok?'El núcleo respondió HTTP '+r.status+'.':'Sin respuesta válida del núcleo: '+r.error);return 'reload';}
       if(name==='cn-core-retry'){const r=await api('/api/core/retry',{method:'POST',body:{}});toast(r.queued+' entrega(s) reprogramadas.');return 'reload';}
       if(name==='cn-core-replay'){const r=await api('/api/core/replay',{method:'POST',body:{}});toast(r.queued+' evento(s) del historial encolados hacia el núcleo.');return 'reload';}
@@ -47,6 +76,12 @@ window.createConnectorsUI=function({state,api,esc,icon,showModal,toast}){
     return false;
   }
   async function submit(form,input){
+    if(form.getAttribute('id')==='cn-wa-form'){
+      const id=String(input.phoneNumberId||'').trim(),current=wa?.numbers.find(n=>n.phoneNumberId===id);
+      if(!/^\d{5,25}$/.test(id)){toast('El identificador son sólo dígitos: cópialo de Meta → WhatsApp → Configuración de la API.');return true;}
+      await api('/api/whatsapp/numbers/'+id,{method:'PUT',body:{brandId:input.brandId,courseId:input.courseId||null,label:input.label||'',expectedRevision:current?current.revision:0}});
+      waEdit=null;toast(current?'Número actualizado.':'Número asignado. Ya puede recibir mensajes.');return 'reload';
+    }
     if(form.getAttribute('id')!=='cn-test-form')return false;
     const payload=input.kind==='payment'?{kind:'payment',type:input.outcome==='failed'?'payment.failed':'payment.succeeded',order:input.order}:{kind:'channel',state:input.outcome};
     const r=await api('/api/connectors/test',{method:'POST',body:payload});

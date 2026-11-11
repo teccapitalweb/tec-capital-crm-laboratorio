@@ -9,8 +9,8 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
 | Versión publicada | **0.34.0** en `main` (etiquetas en la bandeja). `/api/health` de producción devuelve `0.34.0` |
 | Pendiente de publicar | **Corrección de la evaluación con IA** (rama `fix/evaluacion-ia`: el puntaje se leía como fracción y daba «Lista para responder» con 5,9 %; en «Sugerir» el banco nunca podía pasar), sin esquema nuevo. También: **Auditoría de celular, ronda 3** (áreas táctiles de 40 px en casillas, horas, resúmenes desplegables, tachar tareas y botones de ícono; tablas que se salían de su panel; sólo CSS), rama `feat/mejora-diseno-3`. Ya publicados desde la v0.34.0 (todos sobre `main`, `/api/health` sigue diciendo 0.34.0): menú por grupos y Operación por áreas, mensajes programados (esquema 32) con avisos, panel en Mi día y **materiales del catálogo** (esquema 37), agenda de citas (33) y vista semanal, cupones (34) y cupón escrito por el cliente (36), API pública y webhooks (35, con su corrección de seguridad), estado de la IA y guía de activación, resumen de conversación (31), Aliados (30), Pauta (29) y lo anterior. El usuario ya confirmó en producción el menú agrupado, Agenda y «Mis citas» con una cita real |
-| Esquema SQLite | **37** (publicado). Respaldo previo al migrar: `backups/before-crm-v37-*` |
-| Pruebas | 199 aprobadas (`npm test`); `npm run check` limpio |
+| Esquema SQLite | **37** (publicado). La rama `feat/whatsapp-real` (sin publicar) lo sube a **38**. Respaldo previo al migrar: `backups/before-crm-v37-*` |
+| Pruebas | 199 aprobadas en `main`; **202** en la rama `feat/whatsapp-real` (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |
 | Experiencia del cliente | <https://crm-laboratorio-production.up.railway.app/> |
 | Repositorio | <https://github.com/teccapitalweb/tec-capital-crm-laboratorio>, rama `main` (público: nada de secretos) |
@@ -69,6 +69,7 @@ Ninguna función por marca está encendida en producción. Apagar un interruptor
 | Verificación en dos pasos | Mi configuración → Acceso y seguridad (cada persona) | Sólo contraseña |
 | Núcleo compartido | `CORE_SINK_URL` y `CORE_SINK_SECRET` en el entorno | Outbox simulado: nada sale del servidor |
 | Conectores reales | `CHANNEL_CONNECTOR`, `PAYMENT_CONNECTOR` y sus secretos en el entorno | Todo simulado |
+| WhatsApp real (rama `feat/whatsapp-real`, sin publicar) | `CHANNEL_CONNECTOR=meta` + `META_ACCESS_TOKEN`, `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_PHONE_NUMBER_ID`; cada número se asigna a su marca en Operación → Conectores | Apagado: nada entra ni sale por Meta |
 | IA real | `AI_PROVIDER=claude` y `ANTHROPIC_API_KEY` en el entorno; modelo `AI_MODEL` (por omisión `claude-sonnet-5-5`), topes `AI_MONTHLY_CALL_LIMIT` / `AI_MONTHLY_TOKEN_LIMIT` y `AI_KB_TOP_K` (entradas de conocimiento por llamada, 6) y `AI_SUMMARY_MODEL` (resúmenes, `claude-haiku-5-5`) | Simulador local sin costo |
 
 Variables y respaldos: [OPERACION_Y_PRUEBAS.md](OPERACION_Y_PRUEBAS.md). Secretos: sólo en el entorno de Railway, nunca en el repositorio.

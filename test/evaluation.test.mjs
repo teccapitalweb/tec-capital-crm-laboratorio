@@ -95,6 +95,6 @@ test('banco de evaluación por API: siembra, casos, ejecución con el nivel vige
   d2.prepare("UPDATE editions SET status='draft' WHERE course_id IN (SELECT id FROM courses WHERE brand_id='globalvet')").run();
   const none=await call('/api/replies/test',admin.cookie,{brandId:'globalvet',text:'¿Cuánto cuesta?'});assert.equal(none.result.handoff,true);assert.match(none.result.reason,/no está disponible/);
  }finally{d2.close();}}
- const d=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,37);assert.equal(d.prepare('SELECT count(*) n FROM eval_runs').get().n,5);}finally{d.close();}
+ const d=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,38);assert.equal(d.prepare('SELECT count(*) n FROM eval_runs').get().n,5);}finally{d.close();}
  assert.equal(logs.includes('failed'),false,logs);
 });

@@ -212,3 +212,6 @@ label.field input[type=file]{display:block;width:100%;min-height:64px;padding:11
 .funnel-how{margin:12px 0 0;font-size:13px;line-height:1.6;color:var(--text-2)}
 .invite-message textarea{width:100%;min-height:150px;font-size:12px;line-height:1.5;resize:vertical}
 @media(max-width:680px){.funnel-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.invite-message textarea{font-size:16px}}
+
+/* Pago sin sesión (quien llega por WhatsApp real): portada mínima detrás de la pasarela de prueba */
+.pay-public{gap:10px;text-align:center;padding:24px}.pay-public strong{font-size:17px}.pay-public p{margin:0;max-width:340px;font-size:14px;line-height:1.55;color:var(--text-2)}.pay-public-msg{display:flex;gap:8px;align-items:flex-start;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fff}.pay-public-msg svg{width:16px;height:16px;flex:none;margin-top:3px}.pay-public .btn{min-height:44px;margin-top:6px}

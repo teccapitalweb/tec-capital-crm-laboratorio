@@ -42,6 +42,8 @@ import {migrateEvaluation,seedBrandEvaluation} from './evaluation-schema.mjs';
 import {createEvaluation} from './evaluation.mjs';
 import {migrateConnectors} from './connectors-schema.mjs';
 import {createConnectors} from './connectors.mjs';
+import {createWhatsApp} from './whatsapp.mjs';
+import {migrateWhatsApp} from './whatsapp-schema.mjs';
 import {migrateCoordination} from './coordination-schema.mjs';
 import {createEvents} from './events.mjs';
 import {createCoordination} from './coordination.mjs';
@@ -121,6 +123,7 @@ migrateCoupons(db);
 migrateIntegrations(db);
 migrateCouponEntry(db);
 migrateScheduledMaterial(db);
+migrateWhatsApp(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -213,6 +216,8 @@ aiProvider.useBudget(createAiBudget({db}));   // tope mensual de llamadas y toke
 const replies=createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider:aiProvider,payments,content});
 // Estado de la IA para administraciÛn (server/ai-status.mjs): proveedor, clave (sÌ/no), gasto del mes y quÈ falta por marca; sin secretos.
 const aiStatus=createAiStatus({db,crm,provider:aiProvider,json});
+// WhatsApp real (server/whatsapp.mjs): entrantes de Meta -> cliente, conversacion y mensaje; salientes de conversaciones reales. Apagado sin CHANNEL_CONNECTOR=meta.
+const whatsapp=createWhatsApp({db,crm,catalogue,payments,replies,events,channel,connectors,broadcast,audit,body,json,rate,insertMessage,passwordHash,attachmentData,defaultEditionId,dataDir,root});
 const knowledgeImport=createKnowledgeImport({db,replies,crm,body,json,audit});
 // Pauta (server/ads.mjs): el panel de tr·fico de IPCIL dentro del CRM; administraciÛn y la funciÛn de trafiquer.
 const ads=createAds({db,crm,body,json,audit});
@@ -329,6 +334,7 @@ const server=http.createServer(async(req,res)=>{
   try{
     if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.34.0',transport:'websocket',mode:'laboratorio'});}
     if(await connectors.handlePublic(req,res,path,url,req.socket.remoteAddress||'unknown'))return;   // webhooks de proveedores: firma propia, sin sesi√≥n ni Origin
+    if(await payments.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // pago sin sesion de un pedido de WhatsApp real (/api/pay/<pedido>)
     if(await certificates.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // verificaci√≥n p√∫blica de certificados por folio, con l√≠mite por IP
     if(await integrations.handlePublic(req,res,path,url,req.socket.remoteAddress||'unknown'))return;   // API v1 de lectura: llave propia, sin sesiÛn ni Origin
     if(await allies.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // postulaciÛn p˙blica de aliados (/aliados), apagada por omisiÛn, con lÌmite por IP
@@ -363,6 +369,7 @@ const server=http.createServer(async(req,res)=>{
     if(path.startsWith('/api/')){
       const user=requireUser(req);
       if(await connectors.handle(req,res,path,user))return;
+      if(await whatsapp.handle(req,res,path,user))return;
       if(await coordination.handle(req,res,path,user))return;
       if(await finance.handle(req,res,path,user))return;
       if(await persons.handle(req,res,path,user))return;

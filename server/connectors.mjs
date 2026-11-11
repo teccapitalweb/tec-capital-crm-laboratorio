@@ -26,10 +26,10 @@ export const REQUIREMENTS={
     {env:'META_APP_SECRET',title:'Secreto de la app de Meta',who:'Equipo técnico',note:'Con él se verifica la firma X-Hub-Signature-256 de cada webhook.'},
     {env:'META_VERIFY_TOKEN',title:'Token de verificación del webhook',who:'Equipo técnico',note:'Cadena que elegimos nosotros; Meta la repite al registrar la URL del webhook.'},
     {env:'META_PHONE_NUMBER_ID',title:'ID del número de WhatsApp',who:'Consultora',note:'Número dedicado (no puede seguir en la app WhatsApp Business del celular), con nombre para mostrar aprobado.'},
-    {env:'META_WABA_ID',title:'ID de la cuenta de WhatsApp Business (WABA)',who:'Consultora',note:'Empresa verificada en Business Manager; plantillas de utilidad y marketing enviadas a aprobación.'},
-    {env:'META_PAGE_ID',title:'ID de la página de Facebook',who:'Consultora',note:'Página conectada a la app, con la pestaña de mensajes habilitada.'},
-    {env:'META_IG_ACCOUNT_ID',title:'ID de la cuenta profesional de Instagram',who:'Consultora',note:'Cuenta profesional vinculada a la página; «Permitir acceso a mensajes» activado en la app de Instagram.'},
-  ],notes:['La ventana de servicio de 24 h y las categorías de plantilla ya se simulan igual que en Meta: el equipo no notará el cambio de reglas.','Cada marca puede tener su propio número/página; el CRM guarda alcance por marca.','Meta cobra por mensaje según categoría; el costo estimado del modo presentación usa tarifas orientativas.']},
+    {env:'META_WABA_ID',title:'ID de la cuenta de WhatsApp Business (WABA)',who:'Consultora',optional:true,note:'Opcional para enviar y recibir; hará falta para las plantillas aprobadas por Meta (utilidad y marketing).'},
+    {env:'META_PAGE_ID',title:'ID de la página de Facebook',who:'Consultora',optional:true,note:'Página conectada a la app, con la pestaña de mensajes habilitada.'},
+    {env:'META_IG_ACCOUNT_ID',title:'ID de la cuenta profesional de Instagram',who:'Consultora',optional:true,note:'Cuenta profesional vinculada a la página; «Permitir acceso a mensajes» activado en la app de Instagram.'},
+  ],notes:['WhatsApp real ya envía y recibe (texto, botones, imágenes y PDF) con CHANNEL_CONNECTOR=meta; cada número se asigna a su marca en Operación → Conectores. Instagram, Messenger y las plantillas aprobadas por Meta llegan después.','La ventana de servicio de 24 h es la misma regla que ya se simula: el equipo no notará el cambio.','Las conversaciones del laboratorio (perfiles de prueba) siguen simuladas aunque Meta esté activo.','Meta cobra por mensaje según categoría; el costo estimado del modo presentación usa tarifas orientativas.']},
   stripe:{label:'Stripe · tarjeta, OXXO y SPEI',kind:'payment',items:[
     {env:'STRIPE_SECRET_KEY',title:'Clave secreta (modo prueba primero)',who:'Consultora o administración',note:'Cuenta Stripe de la razón social que factura; sk_test_… para ensayar, sk_live_… para cobrar.'},
     {env:'STRIPE_WEBHOOK_SECRET',title:'Secreto del endpoint de webhook',who:'Equipo técnico',note:'whsec_… del endpoint registrado para checkout.session.completed y pagos fallidos.'},
@@ -52,19 +52,120 @@ export function simulatedChannel({env}){
     parseWebhook(body){const list=Array.isArray(body?.events)?body.events:body?.type?[body]:[];return list.map(e=>({id:String(e.id||''),type:String(e.type||''),data:e.data&&typeof e.data==='object'?e.data:{}}));},
     challenge:()=>null};
 }
-export function metaChannel({env}){
-  const missing=missingOf(env,['META_ACCESS_TOKEN','META_APP_SECRET','META_VERIFY_TOKEN','META_PHONE_NUMBER_ID','META_WABA_ID']);
+// Errores de Meta en palabras del equipo. Nunca incluyen el token; el texto de Meta se recorta y sólo se usa cuando no hay una explicación propia.
+const META_ERRORS={
+  190:'El token de Meta venció o no es válido. Los tokens temporales duran 24 horas: genera uno nuevo o usa uno permanente de usuario de sistema (META_ACCESS_TOKEN).',
+  10:'Al token de Meta le falta permiso para este número (whatsapp_business_messaging y whatsapp_business_management).',
+  200:'Al token de Meta le falta permiso para este número (whatsapp_business_messaging y whatsapp_business_management).',
+  4:'Meta está limitando las peticiones de la app. Espera unos minutos.',
+  80007:'Meta está limitando las peticiones de la cuenta de WhatsApp Business. Espera unos minutos.',
+  368:'Meta bloqueó temporalmente la cuenta por incumplir sus políticas.',
+  130429:'Se alcanzó el límite de velocidad de envío de WhatsApp. Reintenta en un momento.',
+  130472:'Meta no entregó el mensaje a este número (forma parte de un experimento de Meta).',
+  131000:'Meta tuvo un error interno. Reintenta en un momento.',
+  131005:'Al token de Meta le falta permiso para este número.',
+  131008:'A la petición le faltó un dato obligatorio.',
+  131009:'Meta rechazó un dato del mensaje (número, texto o archivo).',
+  131016:'El servicio de WhatsApp no está disponible por ahora. Reintenta en un momento.',
+  131021:'El destinatario no puede ser el mismo número que envía.',
+  131026:'No se pudo entregar: ese número no tiene WhatsApp, no ha aceptado sus condiciones o usa una versión muy antigua.',
+  131030:'Ese número no está en la lista de destinatarios permitidos del número de prueba. Agrégalo en Meta → WhatsApp → Configuración de la API → «Para».',
+  131031:'Meta bloqueó la cuenta de WhatsApp Business.',
+  131042:'Hay un problema con el método de pago de la cuenta de WhatsApp Business en Meta.',
+  131045:'El número de WhatsApp todavía no está registrado en la API de la nube.',
+  131047:'Pasaron más de 24 horas desde el último mensaje de la persona: Meta sólo acepta una plantilla aprobada.',
+  131048:'Meta limitó los envíos de este número por reportes de spam.',
+  131049:'Meta decidió no entregar este mensaje para cuidar la experiencia de la persona. Inténtalo más tarde.',
+  131051:'WhatsApp no admite este tipo de mensaje.',
+  131052:'No se pudo descargar el archivo que envió la persona.',
+  131053:'WhatsApp no aceptó el archivo (formato o tamaño).',
+  131056:'Se enviaron demasiados mensajes seguidos a este número. Espera un momento.',
+  131057:'La cuenta de WhatsApp Business está en mantenimiento.',
+  133010:'El número de WhatsApp no está registrado en la API de la nube.',
+};
+export function explainMeta(error,status=0){
+  const code=Number(error?.code)||0,sub=Number(error?.error_subcode)||0;
+  if(code===100)return sub===33||/does not exist|cannot be loaded/i.test(String(error?.message||''))?'Meta no encuentra ese número: revisa META_PHONE_NUMBER_ID (es el «Identificador del número de teléfono», no el número) y que el token tenga acceso a él.':'Meta rechazó la petición por un dato no válido'+(error?.error_data?.details?': '+String(error.error_data.details).slice(0,140):'.');
+  if(META_ERRORS[code])return META_ERRORS[code];
+  if(code>=200&&code<300)return META_ERRORS[200];
+  if(status===401)return META_ERRORS[190];
+  const detail=String(error?.error_data?.details||error?.title||error?.message||'').replace(/\s+/g,' ').slice(0,140);
+  return 'Meta rechazó la operación'+(code?' (código '+code+')':status?' (HTTP '+status+')':'')+(detail?': '+detail:'.');
+}
+const IMAGE_MIME=new Set(['image/jpeg','image/png']),MEDIA_HOSTS=['fbsbx.com','facebook.com','fbcdn.net','whatsapp.net','whatsapp.com'];
+export function metaChannel({env,fetchImpl=(...a)=>fetch(...a)}){
+  const missing=missingOf(env,['META_ACCESS_TOKEN','META_APP_SECRET','META_VERIFY_TOKEN','META_PHONE_NUMBER_ID']);
   const STATE={sent:'sent',delivered:'delivered',read:'read',failed:'failed'};
-  return {provider:'meta',kind:'channel',channels:['whatsapp','instagram','facebook'],capabilities:{templates:true,buttons:true,media:true,readReceipts:true,referral:true,inboundWebhook:true},
+  const production=env.NODE_ENV==='production';
+  // En producción el token sólo viaja a graph.facebook.com; META_GRAPH_URL existe para las pruebas con un Meta de mentira.
+  const base=()=>String((!production&&env.META_GRAPH_URL)||'https://graph.facebook.com').replace(/\/+$/,'')+'/'+(/^v\d{1,3}\.\d$/.test(String(env.META_GRAPH_VERSION||''))?env.META_GRAPH_VERSION:'v25.0');
+  const token=()=>{const t=String(env.META_ACCESS_TOKEN||'').trim();if(!/^[A-Za-z0-9_|.\-]{20,}$/.test(t))throw fail(503,'META_ACCESS_TOKEN no parece un token de Meta: revisa que la variable tenga sólo el token, sin espacios ni otras variables pegadas.');return t;};
+  const numberId=v=>{const id=String(v||env.META_PHONE_NUMBER_ID||'').trim();if(!/^\d{5,25}$/.test(id))throw fail(503,'El identificador del número de WhatsApp no es válido: son sólo dígitos (META_PHONE_NUMBER_ID).');return id;};
+  async function graph(path,{method='GET',payload,form,timeout=15000}={}){
+    const auth='Bearer '+token();let r;
+    try{r=await fetchImpl(base()+path,{method,headers:payload?{Authorization:auth,'Content-Type':'application/json'}:{Authorization:auth},body:payload?JSON.stringify(payload):form,signal:AbortSignal.timeout(timeout)});}
+    catch(e){throw Object.assign(fail(502,'No se pudo conectar con Meta ('+(e?.name==='TimeoutError'?'tiempo de espera agotado':'error de red')+').'),{network:true});}
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok||data?.error)throw Object.assign(fail(r.status>=400?r.status:502,explainMeta(data?.error,r.status)),{metaCode:Number(data?.error?.code)||0});
+    return data;
+  }
+  const digits=v=>String(v||'').replace(/\D/g,'');
+  // México: el webhook entrega 521XXXXXXXXXX, pero la lista de destinatarios de un número de prueba suele tener 52XXXXXXXXXX.
+  // Se envía tal como llegó y, sólo si Meta dice «no está en la lista» (131030), se reintenta una vez sin el 1.
+  async function post(from,to,message){
+    const send=dest=>graph('/'+from+'/messages',{method:'POST',payload:{messaging_product:'whatsapp',recipient_type:'individual',to:dest,...message}});
+    try{return await send(to);}catch(e){if(e.metaCode===131030&&/^521\d{10}$/.test(to))return await send('52'+to.slice(3));throw e;}
+  }
+  return {provider:'meta',kind:'channel',channels:['whatsapp'],capabilities:{templates:false,buttons:true,media:true,readReceipts:true,referral:true,inboundWebhook:true},
     configured:missing.length===0,missing,webhooksEnabled:()=>Boolean(env.META_APP_SECRET),
-    async send(){if(missing.length)throw fail(503,'Conector de Meta sin configurar: faltan '+missing.join(', ')+'.');throw fail(501,'El envío real por la Cloud API se habilita con los accesos de la consultora; mientras tanto se usa el simulado.');},
+    // m: {to, from?, text, buttons?, media?:{buffer,mime,filename}}. Devuelve la referencia de Meta (wamid); el estado «entregado»/«leído» llega después por webhook.
+    async send(m){
+      if(missing.length)throw fail(503,'Conector de Meta sin configurar: faltan '+missing.join(', ')+'.');
+      const to=digits(m.to),from=numberId(m.from);if(!/^\d{7,20}$/.test(to))throw fail(400,'La conversación no tiene un número de WhatsApp de destino.');
+      const text=String(m.text||'').trim().slice(0,4096),buttons=(Array.isArray(m.buttons)?m.buttons:[]).map(b=>String(b||'').trim().slice(0,20)).filter(Boolean).slice(0,3),parts=[];
+      if(m.media){
+        const form=new FormData();form.set('messaging_product','whatsapp');form.set('type',m.media.mime);form.set('file',new Blob([m.media.buffer],{type:m.media.mime}),m.media.filename||'archivo');
+        const id=(await graph('/'+from+'/media',{method:'POST',form,timeout:30000})).id;if(!id)throw fail(502,'Meta no devolvió el identificador del archivo.');
+        const kind=IMAGE_MIME.has(m.media.mime)?'image':'document',caption=text.length<=1024?text:'';
+        parts.push({type:kind,[kind]:{id,...(caption?{caption}:{}),...(kind==='document'?{filename:String(m.media.filename||'archivo').slice(0,120)}:{})}});
+        if(text&&!caption)parts.push({type:'text',text:{body:text,preview_url:false}});
+      }else if(!text)throw fail(422,'Este mensaje no tiene texto ni un archivo que WhatsApp admita.');
+      else if(buttons.length&&text.length<=1024)parts.push({type:'interactive',interactive:{type:'button',body:{text},action:{buttons:buttons.map((title,i)=>({type:'reply',reply:{id:'b'+(i+1),title}}))}}});
+      else parts.push({type:'text',text:{body:text,preview_url:false}});
+      let ref=null;for(const part of parts)ref=(await post(from,to,part)).messages?.[0]?.id||ref;
+      if(!ref)throw fail(502,'Meta aceptó la petición pero no devolvió la referencia del mensaje.');
+      return {providerRef:ref,state:'sent',reason:null};
+    },
+    // Descarga un archivo que envió la persona: primero su URL temporal y después los bytes, siempre con el token y sólo desde servidores de Meta.
+    async fetchMedia(id,{maxBytes=4*1024*1024}={}){
+      const info=await graph('/'+encodeURIComponent(String(id)));
+      if(Number(info.file_size)>maxBytes)throw fail(413,'El archivo supera el tamaño admitido.');
+      let u;try{u=new URL(String(info.url||''));}catch{throw fail(502,'Meta no devolvió la dirección del archivo.');}
+      if(production&&(u.protocol!=='https:'||!MEDIA_HOSTS.some(h=>u.hostname===h||u.hostname.endsWith('.'+h))))throw fail(502,'La dirección del archivo no es de Meta.');
+      let r;try{r=await fetchImpl(u.href,{headers:{Authorization:'Bearer '+token()},signal:AbortSignal.timeout(20000)});}catch{throw fail(502,'No se pudo descargar el archivo desde Meta.');}
+      if(!r.ok)throw fail(502,'Meta no entregó el archivo (HTTP '+r.status+').');
+      const buffer=Buffer.from(await r.arrayBuffer());if(!buffer.length||buffer.length>maxBytes)throw fail(413,'El archivo supera el tamaño admitido.');
+      return {buffer,mime:String(info.mime_type||'').split(';')[0].trim()};
+    },
+    // Comprueba token y número sin enviar nada: lee los datos públicos del número.
+    async ping(id){
+      if(missing.length)throw fail(503,'Conector de Meta sin configurar: faltan '+missing.join(', ')+'.');
+      const d=await graph('/'+numberId(id)+'?fields=display_phone_number,verified_name,quality_rating');
+      return {phoneNumberId:numberId(id),displayPhone:String(d.display_phone_number||''),verifiedName:String(d.verified_name||''),quality:String(d.quality_rating||'')};
+    },
     verifyWebhook:(headers,raw)=>Boolean(env.META_APP_SECRET)&&safeEqual(headers['x-hub-signature-256'],'sha256='+hmacHex(env.META_APP_SECRET,raw)),
     // Traduce el formato de Meta (entry[].changes[].value.statuses[] / messages[]) a eventos normalizados.
     parseWebhook(body){
       const out=[];
       for(const entry of body?.entry||[])for(const change of entry.changes||[]){const v=change.value||{};
-        for(const s of v.statuses||[])out.push({id:s.id+':'+s.status,type:'message.status',data:{providerRef:s.id,state:STATE[s.status]||'sent',reason:s.errors?.[0]?.title||s.errors?.[0]?.message||null,at:s.timestamp?Number(s.timestamp)*1000:null}});
-        for(const m of v.messages||[])out.push({id:m.id,type:'message.inbound',data:{channel:change.field==='messages'?'whatsapp':(change.field||'whatsapp'),from:m.from,text:m.text?.body||m.button?.text||m.interactive?.button_reply?.title||'',providerRef:m.id,referral:m.referral?{source:'ad',ad:m.referral.headline||m.referral.source_id||'anuncio',campaign:m.referral.source_type||null,headline:m.referral.body||null}:null}});
+        for(const s of v.statuses||[])out.push({id:s.id+':'+s.status,type:'message.status',data:{providerRef:s.id,state:STATE[s.status]||'sent',reason:s.errors?.[0]?explainMeta(s.errors[0]):null,at:s.timestamp?Number(s.timestamp)*1000:null}});
+        for(const m of v.messages||[]){
+          const kind=String(m.type||'text'),media=['image','document','audio','video','sticker'].includes(kind)?m[kind]||{}:null,loc=m.location;
+          const text=m.text?.body||m.button?.text||m.interactive?.button_reply?.title||m.interactive?.list_reply?.title||media?.caption||(loc?'Ubicación compartida: '+([loc.name,loc.address].filter(Boolean).join(', ')||loc.latitude+', '+loc.longitude):'')||(Array.isArray(m.contacts)?'Contacto compartido: '+m.contacts.map(c=>c?.name?.formatted_name).filter(Boolean).join(', '):'')||'';
+          out.push({id:m.id,type:'message.inbound',data:{channel:change.field==='messages'?'whatsapp':(change.field||'whatsapp'),from:m.from,to:v.metadata?.phone_number_id||null,name:String((v.contacts||[]).find(c=>c?.wa_id===m.from)?.profile?.name||v.contacts?.[0]?.profile?.name||''),kind,text:String(text),
+            media:media?.id?{id:String(media.id),mime:String(media.mime_type||'').split(';')[0].trim(),filename:media.filename?String(media.filename):null}:null,providerRef:m.id,at:m.timestamp?Number(m.timestamp)*1000:null,
+            referral:m.referral?{source:'ad',ad:m.referral.headline||m.referral.source_id||'anuncio',campaign:m.referral.source_type||null,headline:m.referral.body||null}:null}});
+        }
       }
       return out;
     },
@@ -113,9 +214,14 @@ export function createConnectors({db,env=process.env,channel,payments,body,json,
   const effective=kind=>selected[kind].configured?selected[kind]:adapters[kind].simulated;
   if(selected.channel.provider!=='simulated'&&!selected.channel.configured)log.warn('Conector de canal',selected.channel.provider,'sin configurar: faltan',selected.channel.missing.join(', '),'· se usa el simulado');
   if(selected.payment.provider!=='simulated'&&!selected.payment.configured)log.warn('Conector de pago',selected.payment.provider,'sin configurar: faltan',selected.payment.missing.join(', '),'· se usa el simulado');
-  channel.useConnector(()=>effective('channel'));payments.useConnector(()=>effective('payment'));
+  // Cada mensaje elige su camino: una conversación REAL (con número de WhatsApp de destino) sale por Meta; las del laboratorio siguen simuladas
+  // aunque Meta esté activo. Una conversación real con Meta apagado o incompleto falla con un motivo claro: nunca se «entrega» de mentira.
+  const metaLive=()=>channelProvider==='meta'&&adapters.channel.meta.configured;
+  const metaOff={provider:'meta',async send(){throw fail(503,channelProvider==='meta'?'WhatsApp real sin configurar: faltan '+adapters.channel.meta.missing.join(', ')+'.':'WhatsApp real está apagado (CHANNEL_CONNECTOR no es «meta»): el mensaje no salió.');}};
+  channel.useConnector(m=>m&&m.to?(metaLive()?adapters.channel.meta:metaOff):adapters.channel.simulated);payments.useConnector(()=>effective('payment'));
+  let inbound=null;const useInbound=fn=>{inbound=fn;};   // lo fija whatsapp.mjs: convierte un entrante real en cliente, conversación y mensaje
   const requireAdmin=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||u.role!=='admin')throw fail(403,'Los conectores los administra un administrador.');};
-  const describe=kind=>{const s=selected[kind],e=effective(kind);return {selected:s.provider,effective:e.provider,configured:s.configured,missing:s.missing,fallback:s.provider!==e.provider,capabilities:s.capabilities,channels:s.channels||null,webhooksEnabled:s.webhooksEnabled(),webhookPath:'/api/webhooks/'+kind+'/'+s.provider};};
+  const describe=kind=>{const s=selected[kind],e=effective(kind);return {live:kind==='channel'?metaLive():undefined,selected:s.provider,effective:e.provider,configured:s.configured,missing:s.missing,fallback:s.provider!==e.provider,capabilities:s.capabilities,channels:s.channels||null,webhooksEnabled:s.webhooksEnabled(),webhookPath:'/api/webhooks/'+kind+'/'+s.provider};};
   function status(){
     return {contractVersion:CONTRACT_VERSION,channel:describe('channel'),payment:describe('payment'),requirements:REQUIREMENTS,
       env:{CHANNEL_CONNECTOR:channelProvider,PAYMENT_CONNECTOR:paymentProvider,hasLabSecret:Boolean(env.CONNECTOR_WEBHOOK_SECRET)},
@@ -135,6 +241,16 @@ export function createConnectors({db,env=process.env,channel,payments,body,json,
     db.prepare('INSERT OR IGNORE INTO connector_events(kind,provider,event_id,type,payload,result,created_at) VALUES(?,?,?,?,?,?,?)').run(kind,provider,String(ev.id).slice(0,200),String(ev.type).slice(0,80),JSON.stringify(ev).slice(0,4000),result,now());
     return {result};
   }
+  // Entrante real de WhatsApp. A diferencia de apply(): es asíncrono (descarga archivos) y un fallo inesperado NO marca el evento como
+  // procesado, para que Meta lo reintente. En la bitácora sólo quedan metadatos: ni el texto ni el número completo.
+  async function applyInbound(provider,ev){
+    if(!ev.id)return {result:'rechazado: evento sin id o tipo'};
+    if(db.prepare('SELECT 1 FROM connector_events WHERE provider=? AND event_id=?').get(provider,ev.id))return {result:'duplicado: ya se había procesado',duplicate:true};
+    const result=await inbound(ev.data,adapters.channel.meta);
+    const safe={id:ev.id,type:ev.type,data:{to:ev.data?.to||null,from:'…'+String(ev.data?.from||'').slice(-4),kind:ev.data?.kind||'text',media:Boolean(ev.data?.media)}};
+    db.prepare('INSERT OR IGNORE INTO connector_events(kind,provider,event_id,type,payload,result,created_at) VALUES(?,?,?,?,?,?,?)').run('channel',provider,String(ev.id).slice(0,200),'message.inbound',JSON.stringify(safe),String(result).slice(0,300),now());
+    return {result};
+  }
   async function rawBody(req){let size=0;const chunks=[];for await(const c of req){size+=c.length;if(size>1_000_000)throw fail(413,'Webhook demasiado grande.');chunks.push(c);}return Buffer.concat(chunks);}
   // Rutas públicas (sin sesión ni comprobación de origen): verificación GET y recepción POST firmada.
   async function handlePublic(req,res,path,url,ip){
@@ -147,7 +263,13 @@ export function createConnectors({db,env=process.env,channel,payments,body,json,
     const raw=await rawBody(req);
     if(!adapter.verifyWebhook(req.headers,raw))throw fail(401,'Firma del webhook no válida.');
     let parsed;try{parsed=JSON.parse(raw.toString('utf8')||'{}');}catch{throw fail(400,'Cuerpo del webhook no válido.');}
-    const events=adapter.parseWebhook(parsed),results=events.map(ev=>({id:ev.id,type:ev.type,...apply(kind,x[2],ev)}));
+    const events=adapter.parseWebhook(parsed),results=[];
+    for(const ev of events){
+      if(kind==='channel'&&x[2]==='meta'&&ev.type==='message.inbound'&&inbound&&metaLive()){
+        try{results.push({id:ev.id,type:ev.type,...await applyInbound(x[2],ev)});}
+        catch(e){log.error('Entrante de WhatsApp sin procesar:',e?.name||'Error',String(e?.message||'').slice(0,120));throw fail(503,'El entrante no se pudo procesar; reinténtalo.');}
+      }else results.push({id:ev.id,type:ev.type,...apply(kind,x[2],ev)});
+    }
     json(res,200,{received:events.length,results});return true;
   }
   // Prueba firmada desde la interfaz: construye un evento real del laboratorio y lo manda al propio webhook simulado.
@@ -173,5 +295,5 @@ export function createConnectors({db,env=process.env,channel,payments,body,json,
     if(path==='/api/connectors/test'&&req.method==='POST'){json(res,200,await test(await body(req),user));return true;}
     throw fail(404,'Ruta de conectores no encontrada.');
   }
-  return {status,handle,handlePublic,apply,effective,selected,adapters};
+  return {status,handle,handlePublic,apply,effective,selected,adapters,useInbound,metaLive};
 }

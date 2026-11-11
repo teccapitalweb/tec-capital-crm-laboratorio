@@ -77,6 +77,8 @@ export const thanks=name=>'¡Con gusto'+hi(name)+'! Aquí sigo por si quieres ve
 export const fallback=ctx=>'Esa no la tengo a la mano, pero puedo contarte el precio, el temario o las fechas de '+ctx.course.title+'. Si prefieres hablar con una persona, escribe «asesor».';
 export const escalate='No quiero hacerte perder tiempo: le paso tu pregunta a una persona del equipo para que te responda bien. Te escribe por aquí en cuanto pueda.';
 export const human=name=>'¡Claro'+hi(name)+'! Ya le avisé al equipo: un asesor te escribe por aquí en cuanto esté disponible.';
+// WhatsApp real: llega un audio, un video o un sticker sin texto. Se pide por escrito en lugar de adivinar.
+export const unsupportedMedia=what=>'Por ahora no puedo abrir '+what+' por aquí. ¿Me lo escribes en un mensaje, por favor? Así te respondo enseguida.';
 export const refund=name=>'Lamento mucho la molestia'+hi(name)+'. Ya pasé tu caso a una persona del equipo para que lo revise y te responda por aquí.';
 export const unavailable=reason=>'Por ahora esta edición no está disponible ('+String(reason||'').charAt(0).toLowerCase()+String(reason||'').slice(1)+'). Ya le avisé a un asesor para que te proponga otra opción.';
 

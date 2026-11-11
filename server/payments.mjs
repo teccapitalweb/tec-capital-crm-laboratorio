@@ -308,6 +308,19 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     audit(user,'payment.settings',brandId);broadcast('crm',null,{brandId});return settings(brandId);
   }
 
+  // Pago sin sesión (docs/PLAN_WHATSAPP_REAL.md): quien llega por WhatsApp real no tiene perfil ni contraseña. Su enlace /?pay=<pedido> abre
+  // sólo ESE pedido: el identificador es aleatorio (122 bits) y sólo viajó a su WhatsApp. Los pedidos del laboratorio siguen pidiendo sesión.
+  // Devuelve la vista del cliente, sin datos del contacto ni de la conversación; con límite por IP.
+  async function handlePublic(req,res,path,ip){
+    const x=path.match(/^\/api\/pay\/([a-f0-9-]{36})\/(customer|pay)$/);if(!x)return false;
+    rate('pay-public:'+ip,240);
+    const o=get(x[1]),c=o?db.prepare('SELECT customer_id,wa_number FROM conversations WHERE id=?').get(o.conversation_id):null;
+    if(!o||!c||!c.wa_number)throw fail(404,'Pedido no disponible.');
+    const owner={id:c.customer_id,role:'customer'},open=order=>({...customerView(order,owner),conversationId:undefined,couponEntry:false,coupon:null});
+    if(x[2]==='customer'&&req.method==='GET'){json(res,200,{order:open(o)});return true;}
+    if(x[2]==='pay'&&req.method==='POST'){pay(o,owner,await body(req));json(res,200,{order:open(get(o.id))});return true;}
+    throw fail(405,'Método no permitido.');
+  }
   async function handle(req,res,path,user){
     let x;const url=new URL(req.url,'http://localhost');
     if((x=path.match(/^\/api\/conversations\/([a-f0-9-]+)\/orders(?:\/(preview))?$/))){
@@ -337,5 +350,5 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     }
     throw fail(404,'Ruta de pagos no encontrada.');
   }
-  return {handle,settings,createOrder,linkMessage,confirm,attachReceipt,tick,openOrder,view,list,useConnector,providerEvent,createSessionOrder,sendSessionLink,voidSessionOrders};
+  return {handle,handlePublic,settings,createOrder,linkMessage,confirm,attachReceipt,tick,openOrder,view,list,useConnector,providerEvent,createSessionOrder,sendSessionLink,voidSessionOrders};
 }
