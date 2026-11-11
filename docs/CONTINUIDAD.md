@@ -34,7 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## App de prueba para celular (rama `feat/app-de-prueba`, 11 nov 2026)
+## Pasarela de prueba a pantalla completa (rama `feat/pasarela-de-prueba`, 11 nov 2026)
+
+- **Qué se hizo (bloque 2):** el pago de prueba deja de ser una ventana sobre el chat: ocupa toda la pantalla, pasa por «Procesando tu pago…» y termina en **aprobado** (con comprobante de ejemplo y «Volver al chat») o **rechazado** (sin cargo, «Intentar con otra tarjeta»). Misma acción de pago de siempre; sólo interfaz. Detalle: [PLAN_PASARELA_DE_PRUEBA.md](PLAN_PASARELA_DE_PRUEBA.md). **Sin publicar.**
+- **Evidencia:** en local, a 375 px y escritorio: rechazo → reintento → aprobado → de vuelta al chat con «Pago confirmado». Falta verlo en producción y en un teléfono.
+
+## App de prueba para celular (publicado en `main`, 11 nov 2026)
 
 - **Qué pidió el usuario:** probar con distintas personas desde el teléfono, «como WhatsApp», y que el pago se valide solo. El pago simulado con validación automática **ya existía** (botón «Abrir pago de prueba»: tarjeta u OXXO de prueba, aprueba o rechaza, confirma la inscripción); se comprobó en local.
 - **Qué se hizo (bloque 1):** el chat del cliente toma aspecto de app de mensajería en celular (pantalla completa, cabecera de contacto, burbujas, barra de escribir de una línea); la portada instala una app propia «Chat de prueba» que abre el chat y no el CRM; y el equipo tiene **Invitar a probar** con enlace y código QR por curso y canal. Sin esquema nuevo. Detalle: [PLAN_APP_DE_PRUEBA.md](PLAN_APP_DE_PRUEBA.md). **Sin publicar.**

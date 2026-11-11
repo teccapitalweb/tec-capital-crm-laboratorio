@@ -61,6 +61,27 @@ window.simCheckout=(()=>{
       <p class="pg-foot">Pasarela simulada del laboratorio. Los pagos reales llegarán cuando cada consultora conecte su cuenta.</p>
     </div>`;
   }
+  // Estados de la pasarela a pantalla completa (docs/PLAN_PASARELA_DE_PRUEBA.md). Siguen siendo una simulación: el comprobante lo dice y el
+  // código de autorización es decorativo (sale del identificador del pedido).
+  const authCode=id=>('SIM-'+digits(id)+'000000').slice(0,10);
+  function processing({esc,icon}){
+    return `<div class="pg pg-state" aria-live="polite"><div class="pg-spinner" role="status" aria-label="Procesando el pago"></div><h3>Procesando tu pago…</h3><p>No cierres esta pantalla. Es una simulación: no se cobra nada.</p></div>`;
+  }
+  function result(o,{status,method,last4='',esc,icon,at=Date.now()}){
+    const when=new Date(at).toLocaleString('es-MX',{dateStyle:'medium',timeStyle:'short'});
+    const how=method==='oxxo'?'OXXO (simulado)':'Tarjeta de prueba'+(last4?' ···· '+esc(last4):'');
+    if(status==='paid')return `<div class="pg pg-state ok" aria-live="polite"><div class="pg-mark ok">${icon('check')}</div><h3>Pago aprobado</h3><p>Tu inscripción de práctica quedó registrada. La confirmación ya está en tu chat.</p>
+      <dl class="pg-receipt" aria-label="Comprobante de ejemplo"><div><dt>Concepto</dt><dd>${esc(o.course||'')}${o.edition?' · '+esc(o.edition):''}</dd></div><div><dt>Monto</dt><dd><strong>${esc(o.amountLabel||'')}</strong></dd></div><div><dt>Referencia</dt><dd>${esc(o.reference||'')}</dd></div><div><dt>Método</dt><dd>${how}</dd></div><div><dt>Fecha</dt><dd>${esc(when)}</dd></div><div><dt>Autorización de ejemplo</dt><dd>${esc(authCode(o.id))}</dd></div></dl>
+      <div class="info-box pg-sim"><strong>Simulación.</strong> Este comprobante es de ejemplo: no es un documento fiscal ni prueba de un cobro real.</div>
+      <button type="button" class="btn primary wide" data-action="pay-done">${icon('message-circle')} Volver al chat</button></div>`;
+    return `<div class="pg pg-state bad" aria-live="polite"><div class="pg-mark bad">${icon('x')}</div><h3>Pago rechazado</h3><p>La tarjeta de prueba fue rechazada. No se hizo ningún cargo y tu pedido ${esc(o.reference||'')} sigue vigente.</p>
+      <button type="button" class="btn primary wide" data-action="pay-open" data-id="${esc(o.id)}">${icon('credit-card')} Intentar con otra tarjeta</button>
+      <button type="button" class="btn wide" data-action="pay-done">Volver al chat</button></div>`;
+  }
+  function failed(message,{esc,icon,id=''}){
+    return `<div class="pg pg-state bad" aria-live="polite"><div class="pg-mark bad">${icon('alert-triangle')}</div><h3>No se pudo completar el pago</h3><p>${esc(message||'Vuelve a intentarlo.')}</p>
+      ${id?`<button type="button" class="btn primary wide" data-action="pay-open" data-id="${esc(id)}">Volver a la pantalla de pago</button>`:''}<button type="button" class="btn wide" data-action="pay-done">Volver al chat</button></div>`;
+  }
   const $=s=>document.querySelector(s);
   function validate(){
     const name=$('#pg-name').value.trim(),num=digits($('#pg-number').value),exp=$('#pg-exp').value,cvc=digits($('#pg-cvc').value);
@@ -79,7 +100,7 @@ window.simCheckout=(()=>{
     if(pay){
       const r=validate();
       if(r.error){e.stopImmediatePropagation();e.stopPropagation();e.preventDefault();const box=$('#pg-error');box.textContent='';const msg=document.createElement('div');msg.className='form-error';msg.textContent=r.error;box.append(msg);$(r.field).focus();return;}
-      pay.dataset.outcome=r.outcome;
+      pay.dataset.outcome=r.outcome;pay.dataset.last4=digits($('#pg-number').value).slice(-4);
     }
   },true);
   document.addEventListener('input',e=>{
@@ -87,5 +108,5 @@ window.simCheckout=(()=>{
     if(e.target.id==='pg-exp'){const d=digits(e.target.value).slice(0,4);e.target.value=d.length>2?d.slice(0,2)+'/'+d.slice(2):d;}
     if(e.target.id==='pg-cvc')e.target.value=digits(e.target.value).slice(0,3);
   });
-  return {html};
+  return {html,processing,result,failed};
 })();

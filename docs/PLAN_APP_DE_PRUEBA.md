@@ -1,6 +1,6 @@
 # App de prueba para celular (11 nov 2026)
 
-Rama `feat/app-de-prueba`. Sin esquema nuevo.
+Publicado en `main` (11 nov 2026). Sin esquema nuevo.
 
 ## Para qué
 
@@ -38,4 +38,4 @@ El usuario quiere probar el recorrido completo (atención automática, pedido y 
 
 ## Siguiente (bloque 2)
 
-Pasarela de pago de prueba a pantalla completa (hoy es una ventana sobre el chat): página aparte con «procesando», aprobado o rechazado, comprobante y regreso al chat.
+Pasarela de pago de prueba a pantalla completa: hecha en [PLAN_PASARELA_DE_PRUEBA.md](PLAN_PASARELA_DE_PRUEBA.md).
