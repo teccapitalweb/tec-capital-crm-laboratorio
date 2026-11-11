@@ -175,10 +175,21 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
   const AI_DRAFT_CAP=30;
   function learnFromDraft(c,trigger,answer){
     try{
-      const q=String(trigger?.text||'').replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g,' ').replace(/\+?\d[\d\s().-]{6,}\d/g,' ').replace(/\s+/g,' ').trim().slice(0,200);
+      // Datos de la persona que NO deben llegar al conocimiento: su nombre (el proveedor recibe su memoria y puede usarlo en cualquier parte del
+      // texto), correos y teléfonos (con o sin separadores). La pregunta se limpia; una RESPUESTA que los traiga, o que hable de la historia de
+      // esa persona («como ya preguntaste…», «tu pedido»), no se guarda: no sirve como respuesta general.
+      const EMAIL=/[\w.+-]+@[\w-]+\.[\w.-]+/g,PHONE=/\+?\d[\d\s().-]{6,}\d/g;
+      const person=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id)?.name||'';
+      const names=[...new Set(normalize(person).split(' ').filter(w=>w.length>=3))];
+      const hasName=t=>{const words=new Set(normalize(t).split(' '));return names.some(n=>words.has(n));};
+      let q=String(trigger?.text||'').replace(EMAIL,' ').replace(PHONE,' ');
+      for(const n of String(person).split(/\s+/).filter(w=>w.length>=3))q=q.replace(new RegExp('(^|[^\\p{L}])'+n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![\\p{L}])','giu'),'$1');
+      q=q.replace(/\s+/g,' ').replace(/\s+([,.;:?!])/g,'$1').trim().slice(0,200);
       const a=String(answer||'').replace(/^¡?\s*hola[^.!?\n]{0,40}[.!]\s*/i,'').trim().slice(0,1500);
-      if(q.length<8||a.length<10)return null;
-      if(/\$\s?\d|\d+\s?(pesos|mxn|usd)/i.test(a)||/[\w.+-]+@[\w-]+\.[\w.-]+|\d{7,}/.test(a))return null;
+      if(q.length<8||a.length<10||hasName(q))return null;
+      if(/\$\s?\d|\d+\s?(pesos|mxn|usd)/i.test(a))return null;                       // precios: sólo del catálogo
+      if(EMAIL.test(a)||PHONE.test(a)||/\d{7,}/.test(a)||hasName(a))return null;          // datos de una persona
+      if(/\b(como (ya )?(me |nos )?(comentaste|preguntaste|dijiste|mencionaste|contaste)|la vez pasada|anteriormente|tu pedido|tu pago|tu inscripcion|tu comprobante|ya estas inscrit)/.test(normalize(a)))return null;   // habla de la historia de esa persona
       const all=db.prepare("SELECT * FROM knowledge_entries WHERE brand_id=? AND status!='archived'").all(c.brand_id).map(view);
       if(all.length>=300||all.filter(e=>e.status==='draft'&&e.created_by===null).length>=AI_DRAFT_CAP)return null;
       if(all.some(e=>normalize(e.answer)===normalize(a))||bestMatch(q,all,.6))return null;
@@ -290,6 +301,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
   function setStatus(user,id,input,status){
     if(user.role!=='admin')throw fail(403,'Aprobar o archivar conocimiento requiere un administrador.');
     return transaction(db,()=>{const e=entry(id);guard(e,input);crm.requireBrand(user,e.brand_id);if(e.status===status)throw fail(409,'La entrada ya está en ese estado.');
+      if(status==='archived'&&e.created_by===null&&e.approved_at===null&&e.status==='draft'){db.prepare('DELETE FROM knowledge_versions WHERE entry_id=?').run(id);db.prepare('DELETE FROM knowledge_entries WHERE id=?').run(id);return {...view(e),status:'archived',deleted:true};}
       db.prepare('UPDATE knowledge_entries SET status=?,approved_by=?,approved_at=?,revision=revision+1,updated_at=? WHERE id=?').run(status,status==='approved'?user.id:e.approved_by,status==='approved'?now():e.approved_at,now(),id);snapshot(id,user.id);return view(entry(id));});
   }
   function setSettings(user,brandId,input){

@@ -47,6 +47,16 @@ test('aprender de la IA: una respuesta de Claude aceptada queda como borrador, s
  // 3) lo que no debe volverse conocimiento no se guarda: precios (los rechaza el validador) y datos de contacto
  answer='El curso cuesta $500 pesos y lo puedes tomar desde cualquier lugar.';const priced=await ask('¿Sirve si trabajo en otro estado de la república y viajo mucho?');assert.match(priced.log.reason,/Proveedor descartado/);assert.equal(drafts().length,1);
  answer='Claro, para eso escríbenos al 5512345678 y te explicamos todo con detalle.';await ask('¿Atienden dudas los fines de semana por otro medio distinto?');assert.equal(drafts().length,1,'una respuesta con un teléfono no queda como borrador');
+ // 3b) datos de la persona en la RESPUESTA (el proveedor recibe su memoria): aunque el motor la acepte y el cliente la reciba, no se aprende de ella
+ answer='Claro, Ana: el curso es en línea y lo puedes tomar desde tu casa sin problema.';const named=await ask('¿Lo puedo tomar desde mi casa sin ir a ningún lado?');assert.match(named.log.reason,/^Proveedor de IA:/);assert.equal(drafts().length,1,'una respuesta que nombra al cliente no queda como borrador');
+ answer='Sí, llámanos al 55 1234 5678 y con gusto te orientamos sobre el curso.';const phoned=await ask('¿Tienen algún medio para orientarme mejor sobre esto?');assert.match(phoned.log.reason,/^Proveedor de IA:/);assert.equal(drafts().length,1,'un teléfono con separadores tampoco');
+ answer='Como ya preguntaste antes, el curso es totalmente en línea.';const history=await ask('¿Me repites si hace falta ir a algún sitio?');assert.match(history.log.reason,/^Proveedor de IA:/);assert.equal(drafts().length,1,'una respuesta que habla de la historia del cliente tampoco');
+ // 3c) el nombre del cliente dentro de su PREGUNTA se quita antes de guardarla
+ answer='Este curso está enfocado en aves de corral; para otras especies conviene revisar otro programa.';await ask('Soy Ana Pérez y trabajo con ganado, ¿este curso aplica para bovinos también?');
+ d=drafts();assert.equal(d.length,2);const second=d.find(x=>x.id!==draft.id);assert.doesNotMatch(second.question,/\bana\b|p[eé]rez/i,'sin el nombre de quien preguntó');assert.match(second.question,/trabajo con ganado, ¿este curso aplica para bovinos también\?$/);
+ // 3d) descartar un borrador de la IA que nunca se aprobó lo BORRA con su historial (no se conserva texto salido de una conversación)
+ const gone=await call('/api/replies/knowledge/'+second.id+'/archive',admin.cookie,{expectedRevision:second.revision});assert.equal(gone.entry.deleted,true);
+ assert.equal(db.prepare('SELECT count(*) n FROM knowledge_entries WHERE id=?').get(second.id).n,0);assert.equal(db.prepare('SELECT count(*) n FROM knowledge_versions WHERE entry_id=?').get(second.id).n,0);assert.equal(drafts().length,1);
  const before=calls;
 
  // 4) al aprobarlo, esa pregunta se contesta sola con el conocimiento: ya no llama a la IA
