@@ -13,6 +13,7 @@ const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
 export const STATUS={pending:'Pendiente de pago',review:'Comprobante en revisión',paid:'Pagado',cancelled:'Cancelado',expired:'Vencido'};
 export const METHODS={card:'Tarjeta (simulada)',oxxo:'OXXO (simulado)',transfer:'Transferencia con comprobante'};
+import {orderLink,paymentConfirmed} from './reply-copy.mjs';
 const money=(cents,currency)=>new Intl.NumberFormat('es-MX',{style:'currency',currency:currency||'MXN'}).format(cents/100);
 const stamp=t=>new Intl.DateTimeFormat('es-MX',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Mexico_City'}).format(t);
 
@@ -40,7 +41,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
   function linkMessage(o){
     const n=names(o),promo=o.coupon_code&&o.discount_cents>0?' Incluye tu cupón '+o.coupon_code+' (−'+money(o.discount_cents,o.currency)+').':'';
     const t=content?.render('payment_pending',o.brand_id,{courseId:o.course_id,editionId:o.edition_id,name:n.contact.split(' ')[0],extra:{pedido:o.reference,importe:money(o.amount_cents,o.currency),enlace_pago:linkFor(o),vigencia_pago:stamp(o.expires_at),plan_pago:planLabel(o)}});if(t)return t.text+promo;
-    return `Pedido de práctica ${o.reference}: ${n.course} · ${n.edition} por ${money(o.amount_cents,o.currency)}${o.plan==='per_session'?' (plan por sesión: este pago cubre tu primera sesión; las siguientes se cobran antes de cada clase)':n.promotion?' ('+n.promotion+')':''}.${promo}\nPaga aquí (simulado): ${linkFor(o)}\nVigente hasta ${stamp(o.expires_at)}. También puedes enviar tu comprobante de transferencia por este chat y una persona lo valida.\nLaboratorio: no se realizan cobros reales.`;
+    return orderLink({reference:o.reference,course:n.course,edition:n.edition,amount:money(o.amount_cents,o.currency),note:o.plan==='per_session'?' (plan por sesión: este pago cubre tu primera sesión; las siguientes se cobran antes de cada clase)':n.promotion?' ('+n.promotion+')':'',coupon:promo,link:linkFor(o),until:stamp(o.expires_at)});
   }
   // Enlace de pago de una sesión (plan por sesión): mismo recorrido de cobro, un pedido por sesión e inscripción.
   function sessionLinkMessage(o){
@@ -95,7 +96,7 @@ export function createPayments({db,crm,catalogue,insertMessage,body,json,audit,b
     emit('pago.confirmado',o,{method,providerRef,kind:'course',plan,enrollmentId,opportunityId:o.opportunity_id,courseTitle:n.course,editionName:n.edition},actor);
     events?.publish({type:'inscripcion.activada',brandId:o.brand_id,entityKind:'enrollment',entityId:enrollmentId,payload:{orderId:o.id,reference:o.reference,editionId:o.edition_id,courseId:o.course_id,courseTitle:n.course,editionName:n.edition,contactId:o.contact_id,plan},actorId:actor?.id||null,source:'payments'});
     const tpl=content?.render('payment_confirmed',o.brand_id,{courseId:o.course_id,editionId:o.edition_id,name:n.contact.split(' ')[0],extra:{pedido:o.reference,importe:money(o.amount_cents,o.currency),plan_pago:planLabel(o)}});
-    say(c,tpl?tpl.text:`Pago confirmado (laboratorio) · ${o.reference}. Quedaste inscrito en ${n.course} · ${n.edition}${plan==='per_session'?' con plan por sesión: este pago cubre tu primera sesión y el enlace de pago de cada sesión siguiente llegará por aquí antes de la clase':''}. El equipo coordinador te enviará los accesos y recordatorios por aquí. No se realizó ningún cobro real.`,'order:'+o.id+':paid');
+    say(c,tpl?tpl.text:paymentConfirmed({name:n.contact,reference:o.reference,course:n.course,edition:n.edition,perSession:plan==='per_session'}),'order:'+o.id+':paid');
     notifyStaff(c,'payment','Pago confirmado · '+n.contact+' · '+n.course+' · '+money(o.amount_cents,o.currency),'order:'+o.id+':paid');
     return get(o.id);
   }

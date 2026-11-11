@@ -75,7 +75,7 @@ test('outbox hacia el núcleo con receptor local: sobres firmados con registros 
   assert.ok(await until(async()=>(await call('/api/core',admin.cookie)).stats.pending===0),'todo entregado');
   const st1=await call('/api/core',admin.cookie);assert.equal(st1.stats.failed,0);assert.ok(st1.stats.done>=5);assert.equal(st1.stats.missing,0);assert.equal(st1.recent[0].modo,'http');assert.equal(st1.recent[0].estado,200);
   const types=new Set([...received.values()].map(r=>r.sobre.tipo));for(const x of ['conversacion.abierta','pedido.creado','pago.confirmado','inscripcion.activada'])assert.ok(types.has(x),x);
-  assert.ok(![...received.values()].some(r=>JSON.stringify(r.sobre).includes('Pedido de práctica')),'no viaja texto de mensajes');
+  assert.ok(![...received.values()].some(r=>/Paga aquí|Pedido TC-/.test(JSON.stringify(r.sobre))),'no viaja texto de mensajes');
 
   // reintento ante 5xx: la siguiente entrega falla una vez y se completa sola (espera base de 5 s)
   failNext=1;const before=received.size;

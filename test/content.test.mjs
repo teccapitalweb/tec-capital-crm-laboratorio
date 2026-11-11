@@ -67,14 +67,14 @@ test('contenido por API: funciones de diseño y aprobación, plantillas por even
  await call('/api/payments/brands/globalvet',admin.cookie,{enabled:true,expectedRevision:0},'PATCH');
  const conv=(await call('/api/conversations',cl.cookie,{courseId:'aves',channel:'whatsapp'})).conversation;
  const o=(await call('/api/conversations/'+conv.id+'/orders',admin.cookie,{},'POST',201)).order;
- const link=(await call(msgs(conv.id),cl.cookie)).messages.at(-1);assert.match(link.text,/^Pedido de práctica/,'sin plantilla de pago pendiente se conserva el texto fijo');
+ const link=(await call(msgs(conv.id),cl.cookie)).messages.at(-1);assert.match(link.text,/^Pedido TC-/,'sin plantilla de pago pendiente se conserva el texto fijo');
  await call('/api/payments/orders/'+o.id+'/pay',cl.cookie,{method:'card'});
  const paid=(await call(msgs(conv.id),cl.cookie)).messages.at(-1);assert.equal(paid.text,'¡Gracias, Ana! Tu pago '+o.reference+' por $379.00 quedó confirmado. Ya estás en Plan sanitario para aves · Edición general. Te escribimos por aquí con los accesos.');assert.equal(paid.category,'utility');
  // pausar el mapa → vuelve el texto fijo
  await call('/api/content/events/globalvet/payment_confirmed',approver.cookie,{templateId:created.id,enabled:false,expectedRevision:1},'PUT');
  const cl2=await call('/api/auth/register','',{username:'alumno2',name:'Luis Gómez',password});
  const conv2=(await call('/api/conversations',cl2.cookie,{courseId:'aves',channel:'instagram'})).conversation;const o2=(await call('/api/conversations/'+conv2.id+'/orders',admin.cookie,{},'POST',201)).order;await call('/api/payments/orders/'+o2.id+'/pay',cl2.cookie,{method:'oxxo'});
- assert.match((await call(msgs(conv2.id),cl2.cookie)).messages.at(-1).text,/^Pago confirmado \(laboratorio\)/);
+ assert.match((await call(msgs(conv2.id),cl2.cookie)).messages.at(-1).text,/^✅ ¡Pago confirmado, [^!]+! Tu inscripción a .+ quedó lista\. Pedido TC-/);
 
  // recordatorio de sesión y certificado por plantilla; grabación sólo con plantilla
  const mk=async(scenario,text)=>{const it=(await call('/api/catalogue/templates',designer.cookie,{brandId:'globalvet',title:'Plantilla '+scenario,scenario,channel:'all',text},'POST',201)).item;await call('/api/catalogue/templates/'+it.id+'/approve',approver.cookie,{expectedRevision:it.revision});return it;};

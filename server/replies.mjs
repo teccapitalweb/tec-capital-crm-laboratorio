@@ -5,6 +5,7 @@ import {seedBrandKnowledge} from './replies-schema.mjs';
 import {isOpen,openingLabel} from './service-hours.mjs';
 import {rankKnowledge} from './retrieval.mjs';
 import {customerMemory} from './memory.mjs';
+import * as copy from './reply-copy.mjs';
 
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
@@ -73,19 +74,19 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const catalogueSource={type:'catalogue',courseId:course.id,editionId:ctx.edition.id,promotionId:ctx.promotion?.id||null,priceCents:ctx.priceCents,currency:ctx.currency};
     const kb=approved(c.brand_id,c.course_id);
     // Bienvenida con la ficha vigente del curso (o la de anuncio): saludo, primer mensaje sin pregunta y respaldo del primer mensaje.
-    const welcome=()=>{out.prepared=catalogue.prepare(c,{kind:'flyer'});const ad=c.referral&&count===1?content?.render('ad_welcome',c.brand_id,{courseId:course.id,editionId:c.edition_id,name:first}):null;out.reply=ad?ad.text:course.welcome.replaceAll('{{nombre}}',first).replaceAll('{{curso}}',course.title)+'\n\n'+out.prepared.text;out.sources.push(catalogueSource,ad?{type:'template',kind:'ad_welcome',id:ad.templateId}:{type:'template',kind:'welcome'});out.buttons=['Precio','Temario','Fechas'];out.reason=count===1?'Primer mensaje: bienvenida con la ficha vigente del curso.':'Saludo o petición de información: ficha vigente del curso.';};
+    const welcome=()=>{out.prepared=catalogue.prepare(c,{kind:'flyer'});const ad=c.referral&&count===1?content?.render('ad_welcome',c.brand_id,{courseId:course.id,editionId:c.edition_id,name:first}):null;out.reply=ad?ad.text:copy.welcome(ctx,user?.name);out.sources.push(catalogueSource,ad?{type:'template',kind:'ad_welcome',id:ad.templateId}:{type:'template',kind:'welcome'});out.buttons=['Precio','Temario','Fechas'];out.reason=count===1?'Primer mensaje: bienvenida con la ficha vigente del curso.':'Saludo o petición de información: ficha vigente del curso.';};
     // Con un tema reconocido (pago, certificado, grabación…) no se usa una respuesta aprobada de OTRO tema reconocido aunque se parezca en palabras:
     // «¿cuánto tiempo tengo para pagar?» no se contesta con «¿cuánto dura el curso?».
     const pool=TOPIC_INTENTS.includes(intent)?kb.filter(k=>k.topic===intent||!TOPIC_INTENTS.includes(k.topic)):kb;
     const fromKnowledge=(threshold=.5)=>{const hit=bestMatch(trigger.text,pool,threshold)||(TOPIC_INTENTS.includes(intent)?{entry:kb.find(k=>k.topic===intent),score:1}:null);if(!hit?.entry)return false;out.reply=hit.entry.answer;out.sources.push({type:'knowledge',id:hit.entry.id,revision:hit.entry.revision,question:hit.entry.question});out.reason='Conocimiento aprobado «'+hit.entry.question+'»'+(hit.score<1?' (parecido '+Math.round(hit.score*100)+'%)':'')+'.';return true;};
     if(intent==='opt_out'){out.reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';out.reason='El cliente pidió la baja; se registra y se confirma una sola vez.';}
-    else if(intent==='human'||intent==='refund'){out.reply=intent==='refund'?'Lamento la molestia. Una persona del equipo revisará tu caso y te responderá por aquí.':'Ya avisé al equipo. Un asesor puede tomar esta conversación para continuar contigo.';out.handoff=true;out.reason=intent==='refund'?'Queja o reembolso: siempre lo atiende una persona.':'El cliente pidió hablar con una persona.';}
-    else if(ctx.reason){out.reply=ctx.reason+'. Un asesor puede ayudarte a revisar otra edición disponible.';out.handoff=true;out.reason='La edición no está disponible según el catálogo.';out.sources.push(catalogueSource);}
+    else if(intent==='human'||intent==='refund'){out.reply=intent==='refund'?copy.refund(user?.name):copy.human(user?.name);out.handoff=true;out.reason=intent==='refund'?'Queja o reembolso: siempre lo atiende una persona.':'El cliente pidió hablar con una persona.';}
+    else if(ctx.reason){out.reply=copy.unavailable(ctx.reason);out.handoff=true;out.reason='La edición no está disponible según el catálogo.';out.sources.push(catalogueSource);}
     else if(intent==='enroll'){
       const open=payments?.openOrder(c.id);
-      if(open){out.reply='Ya tienes el pedido '+open.reference+' vigente.\n\n'+payments.linkMessage(open);out.stage='inscripcion';out.reason='Ya existía un pedido vigente: se recuerda el enlace de pago.';out.sources.push(catalogueSource);}
-      else if(payments?.settings(c.brand_id).enabled){out.order=true;out.reply='¡Qué gusto! Anoté tu interés en '+course.title+' · '+ctx.edition.name+'.\n\n{{pedido}}';out.stage='inscripcion';out.reason='Solicitud de inscripción con venta activa: se genera un pedido con enlace de pago simulado; un comprobante siempre lo valida una persona.';out.sources.push(catalogueSource);}
-      else{out.reply='Anoté tu interés en '+course.title+' · '+ctx.edition.name+'. Un asesor continuará con tu inscripción de práctica. En este laboratorio no se realizan cobros ni inscripciones reales.';out.stage='inscripcion';out.handoff=true;out.reason='Solicitud de inscripción: avanza la etapa y pasa a una persona; nunca se confirma sola.';out.sources.push(catalogueSource);}
+      if(open){out.reply=copy.orderReminder(open.reference)+payments.linkMessage(open);out.stage='inscripcion';out.reason='Ya existía un pedido vigente: se recuerda el enlace de pago.';out.sources.push(catalogueSource);}
+      else if(payments?.settings(c.brand_id).enabled){out.order=true;out.reply=copy.enrollWithOrder(ctx,user?.name);out.stage='inscripcion';out.reason='Solicitud de inscripción con venta activa: se genera un pedido con enlace de pago simulado; un comprobante siempre lo valida una persona.';out.sources.push(catalogueSource);}
+      else{out.reply=copy.enrollWithAdvisor(ctx,user?.name);out.stage='inscripcion';out.handoff=true;out.reason='Solicitud de inscripción: avanza la etapa y pasa a una persona; nunca se confirma sola.';out.sources.push(catalogueSource);}
     }
     else if(intent==='payment'){
       // Quien avisa que YA pagó no pregunta cómo pagar: se le agradece, se le dice el estado de su pedido y pasa a una persona, que es quien valida.
@@ -95,13 +96,16 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
         out.reply='Gracias por avisar. Una persona del equipo revisará tu pago y te confirmará por aquí; no confirmamos pagos de forma automática.'+(open?' Tu pedido '+open.reference+(open.status==='review'?' ya está en revisión.':' todavía aparece sin pago confirmado.'):'')+' Si tienes tu comprobante, puedes enviarlo en este chat.';
         out.handoff=true;out.reason='Menciona un pago realizado: lo valida una persona.';
       }
-      else{if(!fromKnowledge(.6))out.reply='Gracias. El equipo revisará tu consulta de pago. No confirmamos pagos automáticamente y aquí no se realizan cobros reales.';out.reason=(out.reason?out.reason+' ':'')+'Información general de pago.';}
+      else{
+        if(!fromKnowledge(.6)){if(payments?.settings(c.brand_id).enabled)out.reply=copy.paymentMethods;else{out.reply=copy.paymentWithAdvisor;out.handoff=true;}}
+        out.reason=(out.reason?out.reason+' ':'')+(out.handoff?'Consulta de pago sin respuesta aprobada ni venta activa: la atiende una persona.':'Información general de pago.');
+      }
     }
-    else if(intent==='price'){out.prepared=catalogue.prepare(c,{kind:'price'});out.reply=out.prepared.text.replace(/^Precio de ejemplo:/,'El precio de ejemplo de '+course.title+' es');out.stage='interesado';out.sources.push(catalogueSource);out.reason='Precio y promoción vigentes consultados en el catálogo al responder.';}
-    else if(intent==='syllabus'){out.prepared=catalogue.prepare(c,{kind:'syllabus'});out.reply=out.prepared.text;out.sources.push(catalogueSource);out.reason='Temario del curso en el catálogo.';}
-    else if(intent==='schedule'){out.prepared=catalogue.prepare(c,{kind:'schedule'});out.reply=out.prepared.text;out.sources.push(catalogueSource);out.reason='Fecha, horario y docente de la edición en el catálogo.';}
+    else if(intent==='price'){out.prepared=catalogue.prepare(c,{kind:'price'});out.reply=copy.price(ctx);out.stage='interesado';out.sources.push(catalogueSource);out.reason='Precio y promoción vigentes consultados en el catálogo al responder.';}
+    else if(intent==='syllabus'){out.prepared=catalogue.prepare(c,{kind:'syllabus'});out.reply=copy.syllabus(ctx);out.sources.push(catalogueSource);out.reason='Temario del curso en el catálogo.';}
+    else if(intent==='schedule'){out.prepared=catalogue.prepare(c,{kind:'schedule'});out.reply=copy.schedule(ctx);out.sources.push(catalogueSource);out.reason='Fecha, horario y docente de la edición en el catálogo.';}
     else if(intent==='greeting'||(count===1&&!asks))welcome();
-    else if(intent==='thanks'){out.reply='¡Con gusto! Si quieres, puedo ayudarte con el precio, las fechas o la inscripción de práctica.';out.reason='Agradecimiento o cierre.';}
+    else if(intent==='thanks'){out.reply=copy.thanks(user?.name);out.reason='Agradecimiento o cierre.';}
     else if(fromKnowledge(.5)){/* respondido con conocimiento */}
     else{
       // A la IA sólo se le manda lo relevante (BM25 + sinónimos del negocio), no todo el conocimiento (server/retrieval.mjs)
@@ -111,10 +115,10 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
       out.retrieval={considered:picked.considered,sent:picked.sent,mode:picked.mode,truncated:picked.truncated};
       out.needsProvider=Boolean(s.provider_enabled)&&picked.sent>0;
       if(out.needsProvider&&c.id!=='simulacion')out.memory=customerMemory(db,c,{now}).text;
-      out.reply='Puedo ayudarte con el precio, el temario o la fecha de este curso. Si prefieres, escribe “asesor” y el equipo continuará contigo.';
+      out.reply=copy.fallback(ctx);
       out.reason='Sin intención reconocida ni conocimiento parecido.'+(s.provider_enabled&&kb.length?(picked.sent?' Contexto para la IA: '+picked.sent+' de '+picked.considered+' entradas.':' Ninguna entrada del conocimiento se parece a la pregunta: no se consultó a la IA.'):'');
       if(count===1){welcome();if(out.needsProvider){out.prepared=null;out.buttons=null;}out.reason='Primer mensaje sin respuesta en el conocimiento: bienvenida con la ficha vigente del curso.'+(out.needsProvider?' Si el proveedor de IA responde con fuentes aprobadas, se usa su respuesta.':'');}
-      if(unknownStreak(c.id)+1>=s.max_unknown){out.handoff=true;out.reply='No quiero hacerte perder tiempo: le paso tu pregunta a una persona del equipo para que te responda con precisión.';out.reason+=' Se alcanzó el máximo de respuestas sin reconocer ('+s.max_unknown+'): se escala.';}
+      if(unknownStreak(c.id)+1>=s.max_unknown){out.handoff=true;out.reply=copy.escalate;out.reason+=' Se alcanzó el máximo de respuestas sin reconocer ('+s.max_unknown+'): se escala.';}
     }
     if(out.mode==='templates'&&out.needsProvider){out.needsProvider=false;out.reason+=' (El proveedor de IA sólo se usa en modo autónomo.)';}
     return out;

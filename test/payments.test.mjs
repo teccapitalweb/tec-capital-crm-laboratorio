@@ -48,7 +48,7 @@ test('venta con pago simulado: apagada por omisión, cobro desde el chat, pago s
  assert.match((await call(msgs(conv.id),client.cookie)).messages.at(-1).text,/no se completó/);
  const paid=(await call('/api/payments/orders/'+made.order.id+'/pay',client.cookie,{method:'oxxo'})).order;
  assert.equal(paid.status,'paid');assert.equal(paid.method,'oxxo');assert.match(paid.provider_ref,/^sim_/);assert.equal(paid.confirmed_by,null);
- assert.match((await call(msgs(conv.id),client.cookie)).messages.at(-1).text,/Pago confirmado \(laboratorio\)/);
+ assert.match((await call(msgs(conv.id),client.cookie)).messages.at(-1).text,/¡Pago confirmado.*Pedido TC-[\s\S]*Pago de prueba: no se realizó ningún cobro real\./);
  assert.equal(stageOf(conv.id),'ganada');
  {const d=db();try{assert.equal(d.prepare('SELECT count(*) n FROM enrollments WHERE order_id=?').get(made.order.id).n,1);assert.equal(d.prepare("SELECT count(*) n FROM notifications WHERE kind='payment' AND event_key=?").get('order:'+made.order.id+':paid').n,1);}finally{d.close();}}
  await call('/api/payments/orders/'+made.order.id+'/pay',client.cookie,{method:'card'},'POST',409);
@@ -62,12 +62,12 @@ test('venta con pago simulado: apagada por omisión, cobro desde el chat, pago s
  await call(msgs(conv2.id),other.cookie,{text:'Hola',clientRef:randomUUID()},'POST',201);
  assert.ok(await until(async()=>(await call(msgs(conv2.id),other.cookie)).messages.find(m=>m.sender_kind==='automation')));
  await call(msgs(conv2.id),other.cookie,{text:'Quiero inscribirme al curso',clientRef:randomUUID()},'POST',201);
- const offer=await until(async()=>(await call(msgs(conv2.id),other.cookie)).messages.find(m=>m.sender_kind==='automation'&&/Pedido de práctica TC-/.test(m.text)));
+ const offer=await until(async()=>(await call(msgs(conv2.id),other.cookie)).messages.find(m=>m.sender_kind==='automation'&&/Pedido TC-/.test(m.text)));
  assert.ok(offer,'el motor envió el pedido');assert.equal(offer.text.includes('{{pedido}}'),false);
  const o2=(await call('/api/payments/orders?brand=globalvet&status=pending',admin.cookie)).orders.find(o=>o.conversation_id===conv2.id);assert.equal(o2.source,'bot');
  assert.equal((await call('/api/conversations/'+conv2.id,admin.cookie)).conversation.status,'open');assert.equal(stageOf(conv2.id),'inscripcion');
  await call(msgs(conv2.id),other.cookie,{text:'Quiero inscribirme',clientRef:randomUUID()},'POST',201);
- assert.ok(await until(async()=>(await call(msgs(conv2.id),other.cookie)).messages.find(m=>m.sender_kind==='automation'&&/Ya tienes el pedido/.test(m.text))),'recuerda el pedido vigente sin crear otro');
+ assert.ok(await until(async()=>(await call(msgs(conv2.id),other.cookie)).messages.find(m=>m.sender_kind==='automation'&&/Tu pedido sigue vigente/.test(m.text))),'recuerda el pedido vigente sin crear otro');
  const before=(await call(msgs(conv2.id),other.cookie)).messages.length;
  const up=await call(msgs(conv2.id),other.cookie,{text:'',clientRef:randomUUID(),attachment:{name:'comprobante.png',type:'image/png',base64:PNG}},'POST',201);
  await sleep(1500);

@@ -34,7 +34,13 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Corrección: la pasarela de prueba ya no tiene campos de tarjeta (rama `fix/tarjetas-de-prueba`, 11 nov 2026)
+## Mensajes del asistente más amables (rama `feat/mensajes-amables`, 11 nov 2026)
+
+- **Qué pidió el usuario:** que los mensajes automáticos sean más amigables, con la información necesaria y que lleven a inscribirse.
+- **Qué se hizo:** todos los textos fijos del asistente pasaron a `server/reply-copy.mjs` (funciones puras) y se reescribieron: bienvenida con ficha en renglones, precio con siguiente paso, temario en viñetas, fechas en palabras con su zona, pedido y confirmación más claros, y frases de asesor, queja, gracias y «no la tengo» con nombre y diciendo qué sigue. Lo que no se sabe se omite («Docente: Por confirmar» ya no aparece en la ficha). La nota de laboratorio se dice una vez y en corto. Un cambio de comportamiento: la consulta general de pago sin respuesta aprobada ya no promete una revisión que nadie hacía. Detalle y tabla antes/después: [PLAN_MENSAJES_AMABLES.md](PLAN_MENSAJES_AMABLES.md). Sin esquema nuevo. **Sin publicar.**
+- **No cambió:** los materiales que envía el equipo (botones Precio, Temario, Fechas) ni las plantillas aprobadas de Contenido, que siguen ganando sobre estos textos.
+
+## Corrección: la pasarela de prueba ya no tiene campos de tarjeta (publicado en `main`, 11 nov 2026)
 
 - **Qué pasó:** al pagar en producción, Chrome mostró «Tarjeta guardada solo en el dispositivo»: tomó el formulario simulado por un pago real y **guardó la tarjeta de prueba** en el navegador del usuario. Con el mismo criterio podía ofrecer autocompletar una tarjeta real. El formulario la habría rechazado y nunca envió datos, pero nadie debe llegar a escribir una tarjeta real en una simulación.
 - **Qué se hizo:** se quitaron los campos (nombre, número, vencimiento, CVC). Ahora se **elige con un toque** una de dos tarjetas de prueba dibujadas como tarjetas: «Aprueba el pago» (···· 4242, elegida por omisión) y «Rechaza el pago» (···· 0002). Sin `<input>` de tarjeta el navegador no detecta un formulario de pago. El resto del recorrido (procesando, aprobado con comprobante, rechazado) no cambia. Sólo interfaz. **Sin publicar.**
