@@ -24,3 +24,6 @@
 .kn-gap div{display:grid;gap:2px;min-width:0}.kn-gap strong{font-size:13px;font-weight:600;overflow-wrap:anywhere}.kn-gap small{font-size:11px;color:var(--text-3)}
 .kn-gap .btn{flex:none;min-height:40px}
 @media(max-width:560px){.kn-gap{flex-wrap:wrap}.kn-gap .btn{width:100%}}
+
+/* Conocimiento: borradores propuestos por la IA */
+.cat-badge.kn-ai{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent-strong,var(--accent))}.kn-ai-hint{margin:6px 0 0;font-size:12px;line-height:1.5}

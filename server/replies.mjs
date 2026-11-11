@@ -168,11 +168,31 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     insertMessage(c,null,tpl.text,'automation','away:'+trigger.id,null,null,null,{category:'service'});
   }
 
+  // ---- aprender de la IA (docs/PLAN_APRENDER_DE_LA_IA.md): cuando el proveedor redacta una respuesta y el motor la acepta, la pregunta y la
+  // respuesta quedan como BORRADOR de conocimiento. Un borrador no se usa para responder: una persona lo revisa y lo aprueba; desde entonces esa
+  // pregunta se contesta sola, sin llamar a la IA. Cuidados: se quitan correos y teléfonos de la pregunta y el saludo con nombre de la respuesta;
+  // no se guarda nada con precios o datos de contacto; no se repite lo que ya existe; y hay tope de borradores sin revisar por marca.
+  const AI_DRAFT_CAP=30;
+  function learnFromDraft(c,trigger,answer){
+    try{
+      const q=String(trigger?.text||'').replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g,' ').replace(/\+?\d[\d\s().-]{6,}\d/g,' ').replace(/\s+/g,' ').trim().slice(0,200);
+      const a=String(answer||'').replace(/^¡?\s*hola[^.!?\n]{0,40}[.!]\s*/i,'').trim().slice(0,1500);
+      if(q.length<8||a.length<10)return null;
+      if(/\$\s?\d|\d+\s?(pesos|mxn|usd)/i.test(a)||/[\w.+-]+@[\w-]+\.[\w.-]+|\d{7,}/.test(a))return null;
+      const all=db.prepare("SELECT * FROM knowledge_entries WHERE brand_id=? AND status!='archived'").all(c.brand_id).map(view);
+      if(all.length>=300||all.filter(e=>e.status==='draft'&&e.created_by===null).length>=AI_DRAFT_CAP)return null;
+      if(all.some(e=>normalize(e.answer)===normalize(a))||bestMatch(q,all,.6))return null;
+      const id=randomUUID(),t=now();
+      db.prepare("INSERT INTO knowledge_entries(id,brand_id,course_id,topic,question,variants,answer,created_by,created_at,updated_at) VALUES(?,?,?,'general',?,'[]',?,NULL,?,?)").run(id,c.brand_id,c.course_id||null,q,a,t,t);
+      snapshot(id,null);return id;
+    }catch{return null;}   // aprender nunca debe impedir que la respuesta salga
+  }
+
   // Aplica el plan dentro de una transacción del llamador. Revalida que nadie respondió ya a este mensaje.
   function commit(c,trigger,p,draft=null){
     const ref='automation:'+trigger.id;if(db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref))return {action:'skipped',reason:'Ya existía una respuesta para este mensaje.'};
     const t=now(),sources=[...p.sources];let reply=p.reply,model=null,reason=p.reason;
-    if(draft){model=draft.model;const v=validateDraft(draft,p.knowledge);if(v.ok){reply=v.text;reason='Proveedor de IA: '+draft.reason+(p.retrieval?' Contexto: '+p.retrieval.sent+' de '+p.retrieval.considered+' entradas del conocimiento.':'')+(p.memory?' Memoria del cliente enviada: «'+p.memory+'»':'');for(const id of v.usedIds)sources.push({type:'knowledge',id});}else reason+=' Proveedor descartado: '+v.reason+(draft.text?'':' ('+draft.reason+')');}
+    if(draft){model=draft.model;const v=validateDraft(draft,p.knowledge);if(v.ok){reply=v.text;if(provider.name==='claude')learnFromDraft(c,trigger,v.text);reason='Proveedor de IA: '+draft.reason+(p.retrieval?' Contexto: '+p.retrieval.sent+' de '+p.retrieval.considered+' entradas del conocimiento.':'')+(p.memory?' Memoria del cliente enviada: «'+p.memory+'»':'');for(const id of v.usedIds)sources.push({type:'knowledge',id});}else reason+=' Proveedor descartado: '+v.reason+(draft.text?'':' ('+draft.reason+')');}
     const log=(action,replyMessageId=null)=>{const id=randomUUID();db.prepare('INSERT INTO reply_log(id,conversation_id,brand_id,trigger_message_id,reply_message_id,intent,confidence,mode,action,reply_text,sources,model,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,trigger.id,replyMessageId,p.intent,p.confidence,p.mode,action,reply,JSON.stringify(sources),model,reason,t);return id;};
     if(p.mode==='off'){log('skipped');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);return {action:'skipped',reason:'Respuestas automáticas apagadas para la marca: pasa a una persona.'};}
     if(p.mode==='suggest'){log('suggested');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);return {action:'suggested',reply,reason};}
