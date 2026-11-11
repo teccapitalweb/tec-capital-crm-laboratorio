@@ -1,6 +1,6 @@
 # WhatsApp real · Meta Cloud API (11 nov 2026)
 
-Rama `feat/whatsapp-real`. **Esquema 38.** Sin publicar. Guía para encenderlo: [ACTIVAR_WHATSAPP_REAL.md](ACTIVAR_WHATSAPP_REAL.md).
+**Esquema 38.** Publicado en `main` (apagado hasta poner las variables de Meta en Railway). Guía para encenderlo: [ACTIVAR_WHATSAPP_REAL.md](ACTIVAR_WHATSAPP_REAL.md).
 
 ## Para qué
 

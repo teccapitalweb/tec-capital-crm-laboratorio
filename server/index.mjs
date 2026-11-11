@@ -87,7 +87,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<37&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v37-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<38&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v38-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);

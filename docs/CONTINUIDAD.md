@@ -34,9 +34,9 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## WhatsApp real por la API de Meta (rama `feat/whatsapp-real`, 11 nov 2026)
+## WhatsApp real por la API de Meta (publicado en `main`, 11 nov 2026)
 
-El usuario preguntó qué hacía falta para conectar WhatsApp de verdad y aprobó empezar con el número de prueba de Meta («Sí, empieza»). **Esquema 38. Sin publicar.** Detalle: [PLAN_WHATSAPP_REAL.md](PLAN_WHATSAPP_REAL.md); guía de activación: [ACTIVAR_WHATSAPP_REAL.md](ACTIVAR_WHATSAPP_REAL.md).
+El usuario preguntó qué hacía falta para conectar WhatsApp de verdad y aprobó empezar con el número de prueba de Meta («Sí, empieza»). **Esquema 38. Publicado** (el usuario dijo «Sí, publicar»); apagado hasta poner las variables de Meta en Railway. Detalle: [PLAN_WHATSAPP_REAL.md](PLAN_WHATSAPP_REAL.md); guía de activación: [ACTIVAR_WHATSAPP_REAL.md](ACTIVAR_WHATSAPP_REAL.md).
 
 - **Decisión de diseño:** lo real convive con el laboratorio. Una conversación es real si tiene `wa_number`/`wa_peer`; sólo esas salen por Meta. Los perfiles de prueba siguen simulados aunque `CHANNEL_CONNECTOR=meta`. Antes, con Meta seleccionado y completo, *todo* habría intentado salir por Meta.
 - **Entrantes:** número → marca (`wa_numbers`), persona → cliente (`wa_identities`), conversación en el curso por omisión del número, y de ahí el camino de siempre (respuestas automáticas, comprobantes, memoria). Imágenes y PDF se descargan; audios, videos y stickers dejan una nota y el asistente pide que lo escriban.

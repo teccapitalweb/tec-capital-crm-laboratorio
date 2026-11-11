@@ -109,7 +109,7 @@ Copia una fila por marca cuando empiece la recolección de accesos.
 4. Comprobar en Operación → Conectores que el proveedor aparece **Configurado** y que llegan eventos; hacer una venta de prueba completa con una marca de pruebas.
 5. Sólo entonces pasar a claves/números reales, marca por marca, con alcance por marca en el CRM.
 
-**WhatsApp real ya está construido** (rama `feat/whatsapp-real`, esquema 38): envío por la Cloud API, entrantes convertidos en cliente y conversación, estados, imágenes y PDF, un número por marca y pago sin sesión. Cómo funciona: [PLAN_WHATSAPP_REAL.md](PLAN_WHATSAPP_REAL.md); cómo encenderlo con el número de prueba: [ACTIVAR_WHATSAPP_REAL.md](ACTIVAR_WHATSAPP_REAL.md). Las conversaciones del laboratorio siguen simuladas aunque Meta esté activo.
+**WhatsApp real ya está publicado** (esquema 38, apagado por omisión): envío por la Cloud API, entrantes convertidos en cliente y conversación, estados, imágenes y PDF, un número por marca y pago sin sesión. Cómo funciona: [PLAN_WHATSAPP_REAL.md](PLAN_WHATSAPP_REAL.md); cómo encenderlo con el número de prueba: [ACTIVAR_WHATSAPP_REAL.md](ACTIVAR_WHATSAPP_REAL.md). Las conversaciones del laboratorio siguen simuladas aunque Meta esté activo.
 
 Lo que todavía **no** existe: las plantillas aprobadas por Meta (escribir fuera de las 24 horas), Instagram y Messenger, la creación real de sesiones de Stripe/Conekta y los reembolsos.
 
