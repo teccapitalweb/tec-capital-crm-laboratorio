@@ -1,6 +1,6 @@
 # Motor de respuestas más preciso (11 nov 2026)
 
-Rama `feat/motor-preciso`. Sin esquema nuevo.
+Publicado en `main` (11 nov 2026). Sin esquema nuevo.
 
 ## Por qué
 
@@ -43,6 +43,10 @@ Las 6 diferencias que quedan no son respuestas falsas: «¿Hay descuentos?» res
 - `fromKnowledge`: con un tema reconocido no se usa una respuesta aprobada de **otro** tema reconocido aunque se parezca en palabras.
 - Chat: los mensajes que redactó la IA dicen **«Automatización · IA»** (antes todos decían «Reglas»). `messageList` añade `ai_drafted` a partir de `reply_log` (motivo «Proveedor de IA: …»).
 - `test/replies-intents.test.mjs`: el banco de frases como prueba, para que una regla futura no vuelva a ensancharse sin que se note.
+
+## Ajuste posterior: «ya pagué»
+
+Visto en producción el mismo día: «ya pagué, ahora qué hago» recibía las formas de pago. Ahora recibe un acuse con el estado de su pedido y pasa a una persona; nunca se confirma un pago desde el asistente (rama `fix/aviso-de-pago`).
 
 ## Para gastar todavía menos
 

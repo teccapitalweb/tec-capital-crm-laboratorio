@@ -87,7 +87,16 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
       else if(payments?.settings(c.brand_id).enabled){out.order=true;out.reply='¡Qué gusto! Anoté tu interés en '+course.title+' · '+ctx.edition.name+'.\n\n{{pedido}}';out.stage='inscripcion';out.reason='Solicitud de inscripción con venta activa: se genera un pedido con enlace de pago simulado; un comprobante siempre lo valida una persona.';out.sources.push(catalogueSource);}
       else{out.reply='Anoté tu interés en '+course.title+' · '+ctx.edition.name+'. Un asesor continuará con tu inscripción de práctica. En este laboratorio no se realizan cobros ni inscripciones reales.';out.stage='inscripcion';out.handoff=true;out.reason='Solicitud de inscripción: avanza la etapa y pasa a una persona; nunca se confirma sola.';out.sources.push(catalogueSource);}
     }
-    else if(intent==='payment'){if(!fromKnowledge(.6))out.reply='Gracias. El equipo revisará tu consulta de pago. No confirmamos pagos automáticamente y aquí no se realizan cobros reales.';out.handoff=/comprobante|pague|ya pague|transferi|deposite/.test(normalize(trigger.text));out.reason=(out.reason?out.reason+' ':'')+(out.handoff?'Menciona un pago realizado: lo valida una persona.':'Información general de pago.');}
+    else if(intent==='payment'){
+      // Quien avisa que YA pagó no pregunta cómo pagar: se le agradece, se le dice el estado de su pedido y pasa a una persona, que es quien valida.
+      // Nunca se confirma un pago desde aquí.
+      if(/comprobante|pague|ya pague|transferi|deposite/.test(normalize(trigger.text))){
+        const open=payments?.openOrder(c.id);
+        out.reply='Gracias por avisar. Una persona del equipo revisará tu pago y te confirmará por aquí; no confirmamos pagos de forma automática.'+(open?' Tu pedido '+open.reference+(open.status==='review'?' ya está en revisión.':' todavía aparece sin pago confirmado.'):'')+' Si tienes tu comprobante, puedes enviarlo en este chat.';
+        out.handoff=true;out.reason='Menciona un pago realizado: lo valida una persona.';
+      }
+      else{if(!fromKnowledge(.6))out.reply='Gracias. El equipo revisará tu consulta de pago. No confirmamos pagos automáticamente y aquí no se realizan cobros reales.';out.reason=(out.reason?out.reason+' ':'')+'Información general de pago.';}
+    }
     else if(intent==='price'){out.prepared=catalogue.prepare(c,{kind:'price'});out.reply=out.prepared.text.replace(/^Precio de ejemplo:/,'El precio de ejemplo de '+course.title+' es');out.stage='interesado';out.sources.push(catalogueSource);out.reason='Precio y promoción vigentes consultados en el catálogo al responder.';}
     else if(intent==='syllabus'){out.prepared=catalogue.prepare(c,{kind:'syllabus'});out.reply=out.prepared.text;out.sources.push(catalogueSource);out.reason='Temario del curso en el catálogo.';}
     else if(intent==='schedule'){out.prepared=catalogue.prepare(c,{kind:'schedule'});out.reply=out.prepared.text;out.sources.push(catalogueSource);out.reason='Fecha, horario y docente de la edición en el catálogo.';}

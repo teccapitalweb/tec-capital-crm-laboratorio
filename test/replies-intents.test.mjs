@@ -58,6 +58,9 @@ test('reglas de intención: cada frase del banco va a la ruta correcta y las res
  const pay=await sim('cuanto tiempo tengo para pagar');assert.doesNotMatch(pay.reason,/Cuánto dura/,'no se contesta con la duración del curso');
  const who=await sim('¿Quién da el curso?');assert.doesNotMatch(who.reason,/Para quién es el curso/);
  const notes=await sim('¿dan apuntes de las clases?');assert.equal(notes.stage,null,'«apuntes» no avanza a inscripción');
+ // quien avisa que YA pagó no recibe las formas de pago: se le agradece y pasa a una persona; quien pregunta cómo pagar sí las recibe
+ const paid=await sim('ya pague ahora que hago');assert.equal(paid.intent,'payment');assert.equal(paid.handoff,true);assert.match(paid.reply,/revisará tu pago/);assert.match(paid.reply,/no confirmamos pagos de forma automática/);assert.doesNotMatch(paid.reply,/Puedes pagar con|formas de pago/i);
+ const how=await sim('disculpa y cuantos metodos de pago tienen');assert.equal(how.intent,'payment');assert.equal(how.handoff,false);assert.equal(route(how),'kb');assert.doesNotMatch(how.reply,/revisará tu pago/);
 
  // en el chat: lo que redactó la IA se marca aparte de lo que salió por reglas
  const ana=await call('/api/auth/register','',{username:'ana',name:'Ana Pérez',password});
@@ -69,4 +72,12 @@ test('reglas de intención: cada frase del banco va a la ruta correcta y las res
  {const last=db.prepare("SELECT id FROM reply_log WHERE conversation_id=? AND reply_message_id IS NOT NULL ORDER BY created_at DESC,rowid DESC LIMIT 1").get(conv);db.prepare("UPDATE reply_log SET model='claude-sonnet-5-5',reason='Proveedor de IA: Redactado por el proveedor con 1 fuente(s); confianza 90%.' WHERE id=?").run(last.id);}
  const seen=u=>call('/api/conversations/'+conv+'/messages',u.cookie).then(r=>r.messages.filter(m=>m.sender_kind==='automation').map(m=>m.ai_drafted));
  assert.deepEqual(await seen(admin),[0,1],'el equipo ve cuál respuesta redactó la IA');assert.deepEqual(await seen(ana),[0,1],'y el cliente también');
+
+ // con un pedido vigente, «ya pagué» dice el estado del pedido, no confirma nada y deja el chat con una persona
+ const ps=(await call('/api/payments/settings',admin.cookie)).settings.find(x=>x.brand_id==='globalvet');await call('/api/payments/brands/globalvet',admin.cookie,{enabled:true,expectedRevision:ps.revision},'PATCH');
+ await say('Quiero inscribirme');const order=db.prepare('SELECT reference,status FROM orders WHERE conversation_id=?').get(conv);assert.equal(order.status,'pending');
+ await say('ya pague ahora que hago');const last=db.prepare("SELECT text FROM messages WHERE conversation_id=? AND sender_kind='automation' ORDER BY seq DESC LIMIT 1").get(conv).text;
+ assert.match(last,/Gracias por avisar/);assert.ok(last.includes('Tu pedido '+order.reference+' todavía aparece sin pago confirmado'),last);assert.doesNotMatch(last,/Pago confirmado|Puedes pagar con/);
+ assert.equal(db.prepare('SELECT status FROM orders WHERE conversation_id=?').get(conv).status,'pending','el pedido no cambia por decir que ya se pagó');
+ assert.deepEqual({...db.prepare('SELECT status,bot_enabled FROM conversations WHERE id=?').get(conv)},{status:'waiting',bot_enabled:0});
 });
