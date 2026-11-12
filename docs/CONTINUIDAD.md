@@ -39,7 +39,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 El usuario pasó la verificación de Meta, creó la app «CRM TEC Capital» con el portafolio «TEC Capital» y puso las variables en Railway. **Comprobado contra Meta de verdad:** «Probar conexión con Meta» respondió con el número de prueba (+1 555 177 4444), el webhook se verificó y un evento de prueba de Meta llegó firmado y se procesó («ignorado: el número 123456123 no tiene una marca asignada», que es lo esperado con el ejemplo de Meta).
 
 - **Hallazgo:** Meta ya no entrega mensajes reales a una app **sin publicar**, ni siquiera los del propio administrador; sólo los de prueba del panel. Publicar pide únicamente una URL de política de privacidad.
-- Por eso se creó la página pública `/privacidad` (rama `feat/aviso-privacidad`, sin publicar): [PLAN_AVISO_PRIVACIDAD.md](PLAN_AVISO_PRIVACIDAD.md). Es un texto base que la empresa debe revisar.
+- Por eso se creó la página pública `/privacidad` (publicada en `main` con «Sí, publicar»): [PLAN_AVISO_PRIVACIDAD.md](PLAN_AVISO_PRIVACIDAD.md). Es un texto base que la empresa debe revisar.
 - **Pendiente detectado:** los webhooks v27 de Meta contemplan personas que escriben con nombre de usuario y sin teléfono visible (BSUID). El CRM identifica por número; habrá que adaptarlo.
 - El token usado es temporal (dura cerca de un día): falta crear el permanente de usuario del sistema.
 

@@ -1,6 +1,6 @@
 # Aviso de privacidad público (12 nov 2026)
 
-Rama `feat/aviso-privacidad`. Sin esquema nuevo. Sin publicar.
+Sin esquema nuevo. Publicado en `main`.
 
 ## Para qué
 
