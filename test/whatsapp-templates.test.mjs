@@ -148,6 +148,22 @@ test('plantillas de WhatsApp de punta a punta: crear, aprobar, enviar desde el c
   const waiting=await until(()=>db.prepare("SELECT * FROM messages WHERE conversation_id=? AND wa_hold IS NOT NULL").get(paco.id),'la confirmación de Paco en espera');
   db.prepare('UPDATE messages SET created_at=created_at-8*86400000 WHERE id=?').run(waiting.id);
   const expired=await until(()=>{const m=db.prepare('SELECT * FROM messages WHERE id=?').get(waiting.id);return m.delivery_state==='failed'?m:null;},'el mensaje en espera caduca');assert.match(expired.failed_reason,/caducó/);assert.equal(expired.wa_hold,null);
+  assert.deepEqual(db.prepare('SELECT state FROM channel_events WHERE message_id=? ORDER BY seq').all(waiting.id).map(e=>e.state),['held','failed'],'la caducidad queda en el historial de entrega');
+  assert.ok(db.prepare("SELECT 1 FROM domain_events WHERE type='mensaje.fallido' AND entity_id=?").get(waiting.id),'y avisa al resto del sistema como cualquier fallo');
+
+  // 7b) si el AVISO falla, lo que esperaba no se queda colgado: pasa a «no entregado» con el motivo; al reintentarlo, el aviso vuelve a salir y espera de nuevo
+  await textIn('5215500000005','Quiero inscribirme','Beto');
+  const link4=await until(()=>sent.find(m=>m.to==='5215500000005'&&/\?pay=/.test(m.text?.body||'')),'el enlace de Beto'),order4=link4.text.body.match(/\?pay=([a-f0-9-]{36})/)[1],beto=convOf('5215500000005');await settled(beto.id);closeWindow(beto.id);
+  rejectTemplate='aviso_novedad';await anon('/api/pay/'+order4+'/pay',{method:'card',outcome:'approved'});
+  const stuck=await until(()=>db.prepare("SELECT * FROM messages WHERE conversation_id=? AND wa_template IS NULL AND delivery_state='failed'").get(beto.id),'la confirmación de Beto deja de esperar');
+  assert.match(stuck.failed_reason,/no se pudo enviar el aviso/);assert.equal(stuck.wa_hold,null);assert.equal(db.prepare("SELECT delivery_state FROM messages WHERE conversation_id=? AND wa_template IS NOT NULL").get(beto.id).delivery_state,'failed');
+  rejectTemplate='';const tries=tplSends('aviso_novedad').filter(m=>m.to==='5215500000005').length;await call('/api/messages/'+stuck.id+'/retry',admin.cookie,{});
+  await until(()=>db.prepare("SELECT 1 FROM messages WHERE conversation_id=? AND wa_template IS NOT NULL AND provider_ref IS NOT NULL").get(beto.id)&&db.prepare('SELECT wa_hold FROM messages WHERE id=?').get(stuck.id).wa_hold,'el aviso vuelve a salir y la confirmación espera otra vez');
+  assert.equal(tplSends('aviso_novedad').filter(m=>m.to==='5215500000005').length,tries+1);assert.equal(db.prepare("SELECT count(*) n FROM messages WHERE conversation_id=? AND wa_template IS NOT NULL").get(beto.id).n,1,'es el mismo aviso, no uno nuevo');
+  await textIn('5215500000005','¿Qué pasó?','Beto');await until(()=>db.prepare('SELECT provider_ref FROM messages WHERE id=?').get(stuck.id).provider_ref,'la confirmación de Beto sale al responder');
+  // sincronizar no toca un borrador que todavía no existe en Meta aunque coincida el nombre
+  const twin=(await call('/api/whatsapp/templates',admin.cookie,{brandId:'odonteck',name:'promo_con_imagen',category:'marketing',body:'Hola {{nombre}}, tenemos un curso nuevo en {{marca}} que te puede interesar.'},'POST',201)).template;
+  await call('/api/whatsapp/templates/sync',admin.cookie,{});assert.equal((await call('/api/whatsapp/templates',admin.cookie)).templates.find(x=>x.id===twin.id).status,'draft');
 
   // 8) quitar una plantilla sólo la quita del CRM; los mensajes ya enviados conservan su texto
   await call('/api/whatsapp/templates/'+hello.id,admin.cookie,undefined,'DELETE');assert.equal((await call('/api/conversations/'+maria.id+'/wa-templates',admin.cookie)).templates.some(x=>x.name==='hello_world'),false);

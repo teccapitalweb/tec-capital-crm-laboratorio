@@ -149,11 +149,12 @@ export function createWhatsApp({db,env=process.env,crm,catalogue,payments,replie
     const params=varsOf(t).map(k=>clean(values[k]));
     return {params,text:String(t.body).replace(/\{\{(\d+)\}\}/g,(_,n)=>params[Number(n)-1]??'')};
   }
-  const noticeFor=(brandId,category)=>db.prepare("SELECT * FROM wa_templates WHERE brand_id=? AND purpose='notice' AND status='approved' AND category=? ORDER BY updated_at DESC LIMIT 1").get(brandId,category);
+  const noticeFor=(brandId,category)=>db.prepare("SELECT * FROM wa_templates WHERE brand_id=? AND purpose='notice' AND status='approved' AND category=? ORDER BY created_at DESC,id LIMIT 1").get(brandId,category);
   // Un solo aviso por periodo cerrado (desde el último mensaje de la persona), aunque haya varios mensajes en espera.
   function ensureNotice(c,t){
     const last=db.prepare("SELECT MAX(created_at) t FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id).t||0,ref='wa-notice:'+c.id+':'+last;
-    if(db.prepare('SELECT 1 FROM messages WHERE client_ref=?').get(ref))return false;
+    const prev=db.prepare('SELECT id,delivery_state FROM messages WHERE client_ref=?').get(ref);
+    if(prev){if(prev.delivery_state==='failed'&&db.prepare("UPDATE messages SET delivery_state='sent',failed_reason=NULL,provider_ref=NULL WHERE id=? AND delivery_state='failed'").run(prev.id).changes)broadcast('conversation',c.id);return false;}   // el aviso anterior falló: vuelve a salir
     const made=transaction(db,()=>{if(db.prepare('SELECT 1 FROM messages WHERE client_ref=?').get(ref))return false;const r=render(t,c);insertMessage(c,null,r.text,'automation',ref,null,null,null,{category:t.category,template:{name:t.name,language:t.language,params:r.params,templateId:t.id,notice:true}});return true;});
     if(made)broadcast('conversation',c.id);return made;
   }
@@ -176,10 +177,10 @@ export function createWhatsApp({db,env=process.env,crm,catalogue,payments,replie
   let remote=[],syncedAt=null;
   async function syncTemplates(user){
     const list=await connectors.adapters.channel.meta.listTemplates(),t=now(),known=db.prepare('SELECT * FROM wa_templates').all();let updated=0;
-    for(const k of known){const r=list.find(x=>x.name===k.name&&x.language===k.language);
+    for(const k of known){if(k.status==='draft')continue;const r=list.find(x=>x.name===k.name&&x.language===k.language);   // un borrador aún no existe en Meta: aunque coincida el nombre, no es la misma plantilla
       if(r){db.prepare('UPDATE wa_templates SET status=?,meta_id=?,reject_reason=?,category=CASE WHEN ? IN (\'utility\',\'marketing\') THEN ? ELSE category END,synced_at=?,updated_at=? WHERE id=?').run(r.status,r.metaId||k.meta_id,r.reason,r.category,r.category,t,t,k.id);updated++;}
       else if(k.status!=='draft')db.prepare("UPDATE wa_templates SET status='missing',synced_at=?,updated_at=? WHERE id=?").run(t,t,k.id);}
-    remote=list.filter(r=>!known.some(k=>k.name===r.name&&k.language===r.language));syncedAt=t;audit(user,'whatsapp.template.sync',String(list.length));
+    remote=list.filter(r=>!known.some(k=>k.status!=='draft'&&k.name===r.name&&k.language===r.language));syncedAt=t;audit(user,'whatsapp.template.sync',String(list.length));
     return {found:list.length,updated};
   }
   async function submitTemplate(id,user){

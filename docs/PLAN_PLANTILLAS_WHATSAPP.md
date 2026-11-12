@@ -31,6 +31,8 @@ Un aviso que el CRM genera solo (confirmación de pago, certificado, recordatori
 3. Cuando la persona responde, los mensajes en espera salen en orden, antes que la respuesta del asistente.
 4. Si nadie responde en 7 días (`WA_HOLD_DAYS`), el mensaje caduca y queda «no entregado».
 
+Si el aviso mismo falla (Meta lo rechaza o no hay red), lo que esperaba pasa a «no entregado» con el motivo; al pulsar «Reintentar» el aviso vuelve a salir y el mensaje espera de nuevo. La caducidad y este fallo quedan en el historial de entrega y avisan al resto del sistema como cualquier otro fallo.
+
 Sin plantilla de aviso aprobada, el mensaje queda «no entregado» con el motivo, como antes. En ningún caso falla la operación del negocio (el pago se registra igual).
 
 Un aviso de utilidad usa la plantilla de aviso de utilidad; uno de marketing (campañas, flyers), la de marketing. Así no se usa una plantilla de utilidad para promocionar, que Meta sanciona.
@@ -68,6 +70,7 @@ Un aviso de utilidad usa la plantilla de aviso de utilidad; uno de marketing (ca
 
 - `test/whatsapp-templates.test.mjs` (2 pruebas): formato exacto de lo que viaja a Meta; validaciones al escribir; envío a aprobación y sincronización; adoptar una plantilla existente y rechazar las complejas; envío desde el chat con la ventana cerrada, sin duplicar y con el autor a cargo; aviso único con el mensaje en espera y su salida en orden al responder; rechazo de Meta y reintento; sin plantilla de aviso; caducidad; quitar una plantilla.
 - Suite completa: 204 pruebas.
+- Revisión independiente del código: sin fallos graves; se corrigieron dos de gravedad media (un aviso fallido dejaba el mensaje esperando una respuesta que nadie pidió; la caducidad no dejaba rastro) y tres riesgos menores (marcar leído un mensaje en espera, cuál aviso se usa tras sincronizar, borradores con el mismo nombre que una plantilla de Meta).
 - En el navegador con servidor local y Meta simulado: panel de plantillas (crear, enviar a aprobación, sincronizar) y «Enviar plantilla» en el chat, en computadora y a tamaño de celular.
 
 ## Pendiente

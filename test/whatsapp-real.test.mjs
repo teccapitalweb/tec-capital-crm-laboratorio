@@ -194,7 +194,8 @@ test('WhatsApp real de punta a punta con un Meta de mentira: entra un mensaje, s
   assert.equal((await anon('/api/pay/'+rosaOrder+'/pay',{method:'card',outcome:'approved'})).body.order.status,'paid');
   const unsent=await until(()=>db.prepare("SELECT * FROM messages WHERE conversation_id=? AND sender_kind='automation' AND delivery_state='failed'").get(rosa.id),'la confirmación queda como no entregada');
   assert.match(unsent.failed_reason,/más de 24 horas/);assert.equal(unsent.provider_ref,null);assert.equal(sent.filter(m=>m.to==='5215500000002').length,toRosa,'no se le pide a Meta un envío que va a rechazar');
-  await call('/api/messages/'+unsent.id+'/retry',admin.cookie,{},'POST',409);
+  // reintentarlo no lo manda a Meta: sin plantilla de aviso vuelve a quedar como no entregado, con el motivo
+  await call('/api/messages/'+unsent.id+'/retry',admin.cookie,{});await until(()=>db.prepare('SELECT delivery_state FROM messages WHERE id=?').get(unsent.id).delivery_state==='failed','el reintento sin plantilla vuelve a fallar');assert.equal(sent.filter(m=>m.to==='5215500000002').length,toRosa);
 
   // 13) el laboratorio sigue simulado aunque Meta esté activo: el perfil de prueba conversa sin que nada salga a Meta
   const total=sent.length,lab=(await call('/api/conversations',stranger.cookie,{courseId:'aves',channel:'whatsapp'})).conversation;assert.equal(lab.wa_number,null);

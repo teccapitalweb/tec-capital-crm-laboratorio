@@ -54,10 +54,15 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
   //    sigue «enviado» hasta que el webhook diga entregado o leído; provider_ref IS NULL es lo que marca «todavía no ha salido».
   // Un mensaje o una conversación real en vuelo no se vuelve a tomar: así no hay envíos dobles ni mensajes fuera de orden.
   const flying=new Set(),busy=new Set();
+  // Un mensaje en espera pasa a «no entregado» con el mismo rastro que cualquier otro fallo (historial de entrega y evento de dominio).
+  const failHeld=(m,reason,t)=>{if(!db.prepare("UPDATE messages SET delivery_state='failed',failed_reason=?,wa_hold=NULL WHERE id=? AND wa_hold IS NOT NULL AND provider_ref IS NULL AND delivery_state='sent'").run(reason,m.id).changes)return false;event(m,'failed',reason,null,t);emit(m,'failed',reason,null);return true;};
   async function tick(){
     const t=now();
     // Un mensaje en espera que nadie liberó en WA_HOLD_DAYS (7) días ya no tiene sentido: queda como no entregado.
-    if(t-sweptAt>SWEEP_MS){sweptAt=t;db.prepare("UPDATE messages SET delivery_state='failed',failed_reason='No se entregó: la persona no respondió al aviso y el mensaje caducó.',wa_hold=NULL WHERE wa_hold IS NOT NULL AND provider_ref IS NULL AND delivery_state='sent' AND created_at<?").run(t-HOLD_MS);}
+    if(t-sweptAt>SWEEP_MS){sweptAt=t;
+      const old=db.prepare("SELECT m.id,m.conversation_id,m.category,c.brand_id FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.wa_hold IS NOT NULL AND m.provider_ref IS NULL AND m.delivery_state='sent' AND m.created_at<? LIMIT 200").all(t-HOLD_MS);
+      if(old.length){transaction(db,()=>{for(const m of old)failHeld(m,'No se entregó: la persona no respondió al aviso y el mensaje caducó.',t);});for(const id of new Set(old.map(m=>m.conversation_id)))broadcast('conversation',id);}
+    }
     const rows=db.prepare("SELECT m.id,m.conversation_id,c.brand_id,c.channel,m.category,COALESCE(s.failure_rate,0) failure_rate,c.wa_number,c.wa_peer FROM messages m JOIN conversations c ON c.id=m.conversation_id LEFT JOIN channel_settings s ON s.brand_id=c.brand_id WHERE m.delivery_state='sent' AND m.sender_kind IN ('agent','automation') AND ((c.wa_number IS NOT NULL AND m.provider_ref IS NULL AND (m.wa_hold IS NULL OR EXISTS(SELECT 1 FROM messages x WHERE x.conversation_id=m.conversation_id AND x.sender_kind='customer' AND x.created_at>m.wa_hold))) OR (c.wa_number IS NULL AND s.enabled=1 AND m.created_at<=?-s.delivery_delay_ms)) ORDER BY m.seq LIMIT 100").all(t).filter(m=>!flying.has(m.id)&&!(m.wa_number&&busy.has(m.conversation_id)));
     if(!rows.length)return [];
     const one=async m=>{
@@ -83,7 +88,8 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
     transaction(db,()=>{for(const {m,r} of results){
       if(m.wa_number){
         if(r.state==='held'){event(m,'held',null,null,at);touched.add(m.conversation_id);continue;}
-        if(r.state==='failed'){if(!db.prepare("UPDATE messages SET delivery_state='failed',failed_reason=?,wa_hold=NULL WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL").run(r.reason||'Meta no aceptó el mensaje',m.id).changes)continue;event(m,'failed',r.reason||null,null,at);emit(m,'failed',r.reason,null);}
+        if(r.state==='failed'){if(!db.prepare("UPDATE messages SET delivery_state='failed',failed_reason=?,wa_hold=NULL WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL").run(r.reason||'Meta no aceptó el mensaje',m.id).changes)continue;event(m,'failed',r.reason||null,null,at);emit(m,'failed',r.reason,null);
+          if(/"notice":true/.test(db.prepare('SELECT wa_template FROM messages WHERE id=?').get(m.id)?.wa_template||''))for(const h of db.prepare("SELECT m.id,m.conversation_id,m.category,c.brand_id FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.conversation_id=? AND m.wa_hold IS NOT NULL AND m.provider_ref IS NULL AND m.delivery_state='sent'").all(m.conversation_id))failHeld(h,'No se entregó: no se pudo enviar el aviso a la persona ('+String(r.reason||'Meta lo rechazó').slice(0,140)+'). Pulsa «Reintentar» para avisarle de nuevo.',at);}
         else{db.prepare('UPDATE messages SET failed_reason=NULL WHERE id=? AND provider_ref=?').run(m.id,r.providerRef);event(m,'sent',r.reason||null,null,at);}   // una nota de envío parcial queda en el historial de entrega
         touched.add(m.conversation_id);continue;
       }
@@ -103,13 +109,13 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
     event(m,state,reason||null,null,now());emit(m,state,reason,providerRef);broadcast('conversation',m.conversation_id);return state;
   }
   // Lectura del cliente: los salientes hasta ese punto pasan a «leído» (si ya estaban entregados o enviados).
-  function markRead(conversationId,upTo){db.prepare("UPDATE messages SET delivery_state='read' WHERE conversation_id=? AND seq<=? AND sender_kind IN ('agent','automation') AND delivery_state IN ('sent','delivered')").run(conversationId,upTo);}
+  function markRead(conversationId,upTo){db.prepare("UPDATE messages SET delivery_state='read' WHERE conversation_id=? AND seq<=? AND sender_kind IN ('agent','automation') AND delivery_state IN ('sent','delivered') AND wa_hold IS NULL").run(conversationId,upTo);}
 
   function retry(messageId,user){
     const m=db.prepare('SELECT m.*,c.brand_id FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=?').get(messageId);
     if(!m)throw fail(404,'Mensaje no disponible.');const c=accessConversation(m.conversation_id,user);crm.requireBrand(user,c.brand_id);
     if(m.delivery_state!=='failed')throw fail(409,'Sólo se reintenta un mensaje que falló.');
-    if(c.wa_number&&!m.wa_template&&!windowOf(c).open)throw fail(409,WA_CLOSED);
+    if(c.wa_number&&!m.wa_template&&m.sender_kind!=='automation'&&!windowOf(c).open)throw fail(409,WA_CLOSED);
     const t=now();transaction(db,()=>{db.prepare("UPDATE messages SET delivery_state='sent',failed_reason=NULL,delivered_at=NULL,provider_ref=CASE WHEN ? THEN NULL ELSE provider_ref END WHERE id=? AND delivery_state='failed'").run(c.wa_number?1:0,m.id);event(m,'retry',null,user.id,t);});
     audit(user,'message.retry',m.id);broadcast('conversation',m.conversation_id);
     return db.prepare('SELECT id,delivery_state,failed_reason FROM messages WHERE id=?').get(m.id);
