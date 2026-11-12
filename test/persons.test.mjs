@@ -163,6 +163,6 @@ test('personas por API: dos conversaciones de la misma persona en marcas distint
  // exportación con identificador de persona
  const csv=await (await fetch(origin+'/api/crm/export/contacts.csv?brand=globalvet',{headers:{Cookie:admin.cookie,Origin:origin}})).text();
  assert.match(csv.split('\r\n')[0],/,persona$/);assert.ok(csv.split('\r\n').some(l=>l.startsWith('GlobalVet,Ana Pérez')&&l.endsWith(','+p.id)));
- const d=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,38);assert.equal(d.prepare('SELECT count(*) n FROM contacts WHERE persona_id IS NULL').get().n,0,'todo contacto cuelga de una persona');assert.equal(d.prepare('SELECT count(*) n FROM person_merges').get().n,2);}finally{d.close();}
+ const d=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,39);assert.equal(d.prepare('SELECT count(*) n FROM contacts WHERE persona_id IS NULL').get().n,0,'todo contacto cuelga de una persona');assert.equal(d.prepare('SELECT count(*) n FROM person_merges').get().n,2);}finally{d.close();}
  void y1;
 });

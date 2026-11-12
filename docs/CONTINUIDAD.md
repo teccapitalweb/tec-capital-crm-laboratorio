@@ -34,6 +34,16 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Plantillas de WhatsApp aprobadas por Meta (rama `feat/plantillas-whatsapp`, 12 nov 2026)
+
+Mientras el usuario resuelve la verificación de su cuenta de desarrollador en Meta (no le llega el SMS), eligió avanzar con esto («Sí, plantillas»). **Esquema 39. Sin publicar.** Detalle: [PLAN_PLANTILLAS_WHATSAPP.md](PLAN_PLANTILLAS_WHATSAPP.md).
+
+- **Administración** en Conectores: escribir una plantilla con `{{nombre}}`, `{{curso}}`, `{{edicion}}`, `{{marca}}`; enviarla a aprobación; sincronizar su estado; adoptar una que ya existe en Meta.
+- **Desde el chat:** botón «Enviar plantilla» cuando la ventana de 24 h está cerrada.
+- **Avisos del negocio:** con una plantilla de «aviso» aprobada, el mensaje queda en espera, sale un solo aviso y el mensaje se entrega cuando la persona responde; caduca a los 7 días.
+- **Decisión:** el aviso es genérico y el contenido real sale al responder. Se descartó envolver cualquier texto en una plantilla de puras variables: Meta las rechaza. Las plantillas específicas por tipo de aviso quedan para después.
+- **Sin verificar contra Meta de verdad** (204 pruebas con una API simulada y revisión en el navegador).
+
 ## WhatsApp real por la API de Meta (publicado en `main`, 11 nov 2026)
 
 El usuario preguntó qué hacía falta para conectar WhatsApp de verdad y aprobó empezar con el número de prueba de Meta («Sí, empieza»). **Esquema 38. Publicado** (el usuario dijo «Sí, publicar»); apagado hasta poner las variables de Meta en Railway. Detalle: [PLAN_WHATSAPP_REAL.md](PLAN_WHATSAPP_REAL.md); guía de activación: [ACTIVAR_WHATSAPP_REAL.md](ACTIVAR_WHATSAPP_REAL.md).

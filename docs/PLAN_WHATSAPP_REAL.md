@@ -80,7 +80,7 @@ Las tres quedan vacías hasta que alguien escribe a un número real: migrar no c
 
 ## Límites de esta primera versión
 
-- **Fuera de las 24 horas no sale nada.** Las plantillas aprobadas por Meta todavía no están conectadas. Con la ventana cerrada, lo que escribe una persona del equipo se rechaza al momento (409, con la explicación). Los avisos del negocio (confirmación de pago, certificado, recordatorio, seguimiento, campaña) **sí se guardan** —un pago nunca falla por esto— y quedan «no entregados» con el motivo, sin pedírselo a Meta. Es el siguiente paso.
+- **Fuera de las 24 horas sólo salen plantillas aprobadas por Meta** ([PLAN_PLANTILLAS_WHATSAPP.md](PLAN_PLANTILLAS_WHATSAPP.md), rama `feat/plantillas-whatsapp`). Con la ventana cerrada, el texto libre del equipo se rechaza al momento (409) y el chat ofrece «Enviar plantilla». Los avisos del negocio (confirmación de pago, certificado, recordatorio, seguimiento, campaña) **sí se guardan** —un pago nunca falla por esto—: con una plantilla de aviso aprobada quedan en espera hasta que la persona responde; sin ella, «no entregados» con el motivo.
 - Sólo WhatsApp. Instagram y Messenger siguen simulados.
 - Un solo token para todos los números. Consultoras con cuentas de Meta distintas necesitarán un token por cuenta.
 - Audios, videos y stickers no se abren en el CRM. Las reacciones se ignoran.
@@ -99,7 +99,7 @@ Las tres quedan vacías hasta que alguien escribe a un número real: migrar no c
 ## Pendiente
 
 1. Probar con el número de prueba de Meta en producción ([guía](ACTIVAR_WHATSAPP_REAL.md)).
-2. Plantillas aprobadas por Meta para escribir fuera de las 24 horas.
+2. Plantillas aprobadas por Meta: construidas en la rama `feat/plantillas-whatsapp`; falta probarlas con Meta.
 3. Audios (reproducirlos o transcribirlos).
 4. Instagram y Messenger.
 5. Token por cuenta de Meta cuando haya consultoras con Business Manager propio.

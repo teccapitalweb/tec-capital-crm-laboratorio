@@ -215,3 +215,9 @@ label.field input[type=file]{display:block;width:100%;min-height:64px;padding:11
 
 /* Pago sin sesión (quien llega por WhatsApp real): portada mínima detrás de la pasarela de prueba */
 .pay-public{gap:10px;text-align:center;padding:24px}.pay-public strong{font-size:17px}.pay-public p{margin:0;max-width:340px;font-size:14px;line-height:1.55;color:var(--text-2)}.pay-public-msg{display:flex;gap:8px;align-items:flex-start;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fff}.pay-public-msg svg{width:16px;height:16px;flex:none;margin-top:3px}.pay-public .btn{min-height:44px;margin-top:6px}
+
+/* WhatsApp real: plantillas aprobadas desde el chat y mensajes en espera */
+.chat-window .wa-template-open{margin-left:auto;display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:4px 12px;border:1px solid currentColor;border-radius:99px;background:#fff;font-size:12px;font-weight:600;color:inherit;cursor:pointer}.chat-window .wa-template-open svg{width:14px;height:14px}
+.wa-tpl-list{display:grid;gap:10px;margin-top:10px}.wa-tpl{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff}.wa-tpl-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}.wa-tpl-top strong{font-size:13px;overflow-wrap:anywhere}.wa-tpl p{margin:0 0 10px;font-size:13px;line-height:1.5;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}
+.held{display:inline-flex;align-items:center;gap:4px;color:var(--warn)}.held svg{width:13px;height:13px}.wa-tpl-mark{font-size:11px;color:var(--text-3);margin-right:6px}
+@media(max-width:650px){.chat-window .wa-template-open{min-height:40px;margin-left:0}}

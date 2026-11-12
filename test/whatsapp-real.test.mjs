@@ -87,7 +87,7 @@ test('WhatsApp real de punta a punta con un Meta de mentira: entra un mensaje, s
 
   const admin=await call('/api/auth/register','',{username:'admin',name:'Administración',password,inviteCode:code});
   db=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version,38);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version,39);
 
   // 1) estado: Meta activo y completo, el número del entorno todavía sin marca; sólo administración
   let st=await call('/api/whatsapp',admin.cookie);

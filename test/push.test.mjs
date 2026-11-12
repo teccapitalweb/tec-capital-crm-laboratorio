@@ -120,6 +120,6 @@ test('push por API: permisos, claves VAPID firmadas, suscripción validada, env�
   assert.equal(received.length,base,'no se envía un aviso de una marca a la que ya no tiene acceso');assert.equal(one('SELECT count(*) n FROM push_subscriptions WHERE user_id=?',agentId).n,1);
   run('UPDATE users SET disabled=1 WHERE id=?',agentId);await sleep(5500);
   assert.equal(one('SELECT count(*) n FROM push_subscriptions WHERE user_id=?',agentId).n,0,'una cuenta deshabilitada pierde sus dispositivos');
-  assert.equal(one('PRAGMA user_version').user_version,38);
+  assert.equal(one('PRAGMA user_version').user_version,39);
   assert.ok(one("SELECT count(*) n FROM audit WHERE action IN ('push.subscribe','push.unsubscribe')").n>=3);
 });

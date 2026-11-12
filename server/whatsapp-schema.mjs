@@ -17,3 +17,15 @@ export function migrateWhatsApp(db){
     PRAGMA user_version=38;`);
   });
 }
+
+// Esquema v39: plantillas de WhatsApp aprobadas por Meta (docs/PLAN_PLANTILLAS_WHATSAPP.md). Con la ventana de 24 h cerrada sólo puede salir una plantilla.
+//   wa_templates          plantilla por marca: nombre e idioma en Meta, categoría, para qué se usa (manual o aviso), texto con {{1}}… y qué dato llena cada variable.
+//   messages.wa_template  el mensaje sale como plantilla (nombre, idioma y valores ya resueltos al guardarlo).
+//   messages.wa_hold      el mensaje espera a que la persona vuelva a escribir (se le mandó un aviso); NULL = no espera.
+export function migrateWhatsAppTemplates(db){
+  if(db.prepare('PRAGMA user_version').get().user_version>=39)return;
+  transaction(db,()=>{
+    db.exec("CREATE TABLE wa_templates(id TEXT PRIMARY KEY,brand_id TEXT NOT NULL REFERENCES brands(id),name TEXT NOT NULL,language TEXT NOT NULL,category TEXT NOT NULL CHECK(category IN ('utility','marketing')),purpose TEXT NOT NULL DEFAULT 'manual' CHECK(purpose IN ('manual','notice')),body TEXT NOT NULL,variables TEXT NOT NULL DEFAULT '[]',status TEXT NOT NULL DEFAULT 'draft',meta_id TEXT,reject_reason TEXT NOT NULL DEFAULT '',revision INTEGER NOT NULL DEFAULT 1,created_by TEXT REFERENCES users(id),created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,synced_at INTEGER,UNIQUE(name,language));"
+      +"CREATE INDEX wa_templates_brand ON wa_templates(brand_id,status);ALTER TABLE messages ADD COLUMN wa_template TEXT;ALTER TABLE messages ADD COLUMN wa_hold INTEGER;CREATE INDEX messages_wa_hold ON messages(wa_hold) WHERE wa_hold IS NOT NULL;PRAGMA user_version=39;");
+  });
+}

@@ -68,3 +68,6 @@
 
 /* Conectores: WhatsApp real (números por marca) */
 .wa-panel h3{margin:18px 0 8px;font-size:13px}.wa-numbers{display:grid;gap:8px;margin:12px 0}.wa-number{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff}.wa-number-main{flex:1 1 240px;min-width:0;display:grid;gap:2px}.wa-number-main strong{font-size:13px}.wa-number-main code{font-size:12px;color:var(--text-2)}.wa-number-main small{font-size:12px;color:var(--text-3);line-height:1.45}.wa-panel ol.cn-list{padding-left:20px}.wa-panel input[readonly]{background:var(--soft);color:var(--text-2)}
+
+/* Conectores: plantillas de WhatsApp */
+.wa-tpl-row{align-items:flex-start}.wa-tpl-body{margin:6px 0 0;font-size:13px;line-height:1.5;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}.wa-tpl-row .field{flex:0 1 180px;margin:0}

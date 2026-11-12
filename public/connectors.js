@@ -6,8 +6,32 @@ window.createConnectorsUI=function({state,api,esc,icon,showModal,toast}){
   const note=copy=>`<p class="crm-hint">${copy}</p>`;
   const PROVIDER={simulated:'Simulado',meta:'Meta',stripe:'Stripe',conekta:'Conekta'};
   const CAP={templates:'plantillas',buttons:'botones',media:'imágenes y PDF',readReceipts:'confirmaciones de lectura',referral:'origen por anuncio',inboundWebhook:'entrantes por webhook',card:'tarjeta',oxxo:'OXXO',spei:'SPEI',transferReceipt:'comprobante de transferencia',refunds:'reembolsos'};
-  let data=null,core=null,wa=null,waPing=null,waEdit=null;
-  async function load(){data=await api('/api/connectors');try{core=await api('/api/core');}catch{core=null;}try{wa=await api('/api/whatsapp');}catch{wa=null;}}
+  let data=null,core=null,wa=null,waPing=null,waEdit=null,tp=null;
+  async function load(){data=await api('/api/connectors');try{core=await api('/api/core');}catch{core=null;}try{wa=await api('/api/whatsapp');}catch{wa=null;}try{tp=wa?await api('/api/whatsapp/templates'):null;}catch{tp=null;}}
+  // Plantillas de WhatsApp aprobadas por Meta. docs/PLAN_PLANTILLAS_WHATSAPP.md
+  const TPL_STATUS={draft:['Borrador',''],pending:['En revisión de Meta','warn'],approved:['Aprobada','ok'],rejected:['Rechazada','warn'],paused:['Pausada por Meta','warn'],disabled:['Desactivada por Meta','warn'],missing:['Ya no está en Meta','warn'],in_appeal:['En apelación','warn']};
+  function tplPanel(){
+    if(!tp)return '';
+    const opt=(v,l,sel)=>'<option value="'+esc(v)+'"'+(sel?' selected':'')+'>'+esc(l)+'</option>',keys=Object.entries(tp.keys),keyOpts=keys.map(([k,l])=>opt(k,l)).join('');
+    const rows=tp.templates.map(t=>{const st=TPL_STATUS[t.status]||[t.status,'warn'];return '<article class="wa-number wa-tpl-row"><div class="wa-number-main"><strong>'+esc(t.name)+'</strong><small>'+esc(t.brandName)+' · '+(t.category==='marketing'?'Marketing':'Utilidad')+' · '+esc(t.language)+' · '+(t.purpose==='notice'?'aviso automático cuando un mensaje no puede salir':'la envía el equipo desde el chat')+'</small><p class="wa-tpl-body">'+esc(t.preview)+'</p>'+(t.rejectReason?'<small class="ais-warn">Motivo de Meta: '+esc(t.rejectReason)+'</small>':'')+'</div>'+chip(st[0],st[1])
+      +(['draft','rejected'].includes(t.status)?btn('tpl-submit',icon('send')+' Enviar a aprobación',t.id,tp.wabaSet&&tp.live?'':'disabled'):'')+btn('tpl-purpose',t.purpose==='notice'?'Dejar sólo manual':'Usar como aviso',t.id)+btn('tpl-remove','Quitar',t.id)+'</article>';}).join('');
+    const remote=tp.remote.filter(r=>!r.complex&&['utility','marketing'].includes(r.category)).map((r,i)=>'<form class="wa-number wa-tpl-row" id="cn-tpl-adopt-'+i+'" data-name="'+esc(r.name)+'" data-language="'+esc(r.language)+'"><div class="wa-number-main"><strong>'+esc(r.name)+'</strong><small>'+(r.category==='marketing'?'Marketing':'Utilidad')+' · '+esc(r.language)+' · '+esc((TPL_STATUS[r.status]||[r.status])[0])+'</small><p class="wa-tpl-body">'+esc(r.body)+'</p></div><label class="field">Marca<select name="brandId">'+wa.brands.map(b=>opt(b.id,b.name)).join('')+'</select></label>'
+      +Array.from({length:r.variables},(_,n)=>'<label class="field">Dato {{'+(n+1)+'}}<select name="v'+n+'">'+keyOpts+'</select></label>').join('')+'<button type="submit" class="btn">Usar en el CRM</button></form>').join('');
+    return '<section class="crm-panel wa-panel"><div class="ops-card-top"><h2>Plantillas de WhatsApp</h2>'+chip(tp.templates.filter(t=>t.status==='approved').length+' aprobadas',tp.templates.some(t=>t.status==='approved')?'ok':'')+btn('tpl-sync',icon('refresh-cw')+' Sincronizar con Meta','',tp.wabaSet&&tp.live?'':'disabled')+'</div>'
+      +note('Cuando una persona lleva más de 24 horas sin escribir, WhatsApp sólo deja enviarle una <strong>plantilla aprobada por Meta</strong>. Aquí se escriben, se mandan a aprobación y se ve su estado. Una plantilla «manual» la envía el equipo desde el chat. Una de «aviso» la manda el CRM cuando un mensaje del negocio (una confirmación de pago, un recordatorio) no puede salir: ese mensaje queda en espera y sale cuando la persona responde.')
+      +(tp.wabaSet?'':'<p class="crm-hint"><strong>Falta <code class="cn-code">META_WABA_ID</code> en Railway</strong> (el «Identificador de la cuenta de WhatsApp Business» de Meta). Puedes escribir borradores, pero no mandarlos a aprobación ni sincronizar.</p>')
+      +(tp.wabaSet&&!tp.live?'<p class="crm-hint">WhatsApp real está apagado: enciéndelo arriba para mandar plantillas a aprobación.</p>':'')
+      +(rows?'<div class="wa-numbers">'+rows+'</div>':'<p class="crm-hint">Todavía no hay plantillas.</p>')
+      +(remote?'<h3>Plantillas que ya existen en Meta</h3>'+note('Aparecieron en la última sincronización y el CRM todavía no las usa. Indica la marca y qué dato llena cada variable.')+'<div class="wa-numbers">'+remote+'</div>':'')
+      +'<form id="cn-tpl-form" class="form-grid"><h3>Nueva plantilla</h3><div class="cat-form-columns">'
+      +'<label class="field">Marca<select name="brandId" required>'+wa.brands.map(b=>opt(b.id,b.name)).join('')+'</select></label>'
+      +'<label class="field">Nombre en Meta (minúsculas y guion bajo)<input name="name" required maxlength="60" pattern="[a-z0-9_]{3,60}" placeholder="aviso_novedad"></label>'
+      +'<label class="field">Tipo<select name="category">'+opt('utility','Utilidad: avisos sobre algo que la persona pidió')+opt('marketing','Marketing: promociones y retomar el interés')+'</select></label>'
+      +'<label class="field">Quién la envía<select name="purpose">'+opt('manual','El equipo, desde el chat')+opt('notice','El CRM, como aviso automático')+'</select></label></div>'
+      +'<label class="field">Texto<textarea name="body" rows="4" required maxlength="1024" placeholder="Hola {{nombre}}, tenemos una novedad sobre tu inscripción en {{curso}}. Responde a este mensaje para verla."></textarea></label>'
+      +'<p class="crm-hint">Datos disponibles: '+keys.map(([k,l])=>'<code class="cn-code">{{'+esc(k)+'}}</code> '+esc(l.toLowerCase())).join(' · ')+'. El texto no puede empezar ni terminar con un dato. Meta suele revisar en minutos, a veces tarda hasta un día.</p>'
+      +'<div class="actions"><button type="submit" class="btn primary">'+icon('save')+' Guardar borrador</button></div></form></section>';
+  }
   // WhatsApp real (Meta · Cloud API): estado, prueba de conexión y números por marca. docs/PLAN_WHATSAPP_REAL.md
   function waPanel(){
     if(!wa)return '';
@@ -60,12 +84,16 @@ window.createConnectorsUI=function({state,api,esc,icon,showModal,toast}){
   }
   function html(){
     if(!data)return '<div class="loading-message">Cargando…</div>';
-    return `<div class="crm-toolbar"><p>Contrato de conectores v${esc(data.contractVersion)}: el CRM habla con una interfaz única; hoy la cumplen adaptadores simulados y mañana Meta y la pasarela de pago, sin tocar el resto.</p></div><div class="cn-grid">${card('channel','Canal · WhatsApp, Instagram, Facebook',data.channel)}${card('payment','Pago · tarjeta, OXXO, transferencia',data.payment)}</div>${waPanel()}${corePanel()}${testBox()}${events()}${requirements()}`;
+    return `<div class="crm-toolbar"><p>Contrato de conectores v${esc(data.contractVersion)}: el CRM habla con una interfaz única; hoy la cumplen adaptadores simulados y mañana Meta y la pasarela de pago, sin tocar el resto.</p></div><div class="cn-grid">${card('channel','Canal · WhatsApp, Instagram, Facebook',data.channel)}${card('payment','Pago · tarjeta, OXXO, transferencia',data.payment)}</div>${waPanel()}${tplPanel()}${corePanel()}${testBox()}${events()}${requirements()}`;
   }
   async function action(name,el){
     if(name==='cn-reload')return 'reload';
     try{
       if(name==='cn-wa-ping'){try{waPing=await api('/api/whatsapp/ping',{method:'POST',body:{}});}catch(e){waPing={ok:false,error:e.message};}waPing.at=Date.now();return 'reload';}
+      if(name==='cn-tpl-sync'){const r=await api('/api/whatsapp/templates/sync',{method:'POST',body:{}});toast('Meta tiene '+r.found+' plantilla(s); se actualizaron '+r.updated+' del CRM.');return 'reload';}
+      if(name==='cn-tpl-submit'){const r=await api('/api/whatsapp/templates/'+el.dataset.id+'/submit',{method:'POST',body:{}});toast(r.template.status==='approved'?'Meta la aprobó.':'Enviada a Meta. Pulsa «Sincronizar con Meta» en unos minutos para ver si la aprobó.');return 'reload';}
+      if(name==='cn-tpl-purpose'){const t=tp?.templates.find(x=>x.id===el.dataset.id);if(!t)return 'reload';await api('/api/whatsapp/templates/'+t.id,{method:'PATCH',body:{purpose:t.purpose==='notice'?'manual':'notice',expectedRevision:t.revision}});return 'reload';}
+      if(name==='cn-tpl-remove'){if(!confirm('¿Quitar esta plantilla del CRM? En Meta seguirá existiendo.'))return true;await api('/api/whatsapp/templates/'+el.dataset.id,{method:'DELETE'});toast('Plantilla quitada del CRM.');return 'reload';}
       if(name==='cn-wa-edit'){waEdit=el?.dataset.id||null;return 'reload';}
       if(name==='cn-wa-cancel'){waEdit=null;return 'reload';}
       if(name==='cn-wa-toggle'){const n=wa?.numbers.find(x=>x.phoneNumberId===el?.dataset.id);if(!n)return 'reload';await api('/api/whatsapp/numbers/'+n.phoneNumberId,{method:'PUT',body:{brandId:n.brandId,courseId:n.courseId,label:n.label,enabled:!n.enabled,expectedRevision:n.revision}});toast(n.enabled?'Número en pausa: lo que le escriban no entrará al CRM.':'Número recibiendo de nuevo.');return 'reload';}
@@ -76,6 +104,8 @@ window.createConnectorsUI=function({state,api,esc,icon,showModal,toast}){
     return false;
   }
   async function submit(form,input){
+    if(form.getAttribute('id')==='cn-tpl-form'){await api('/api/whatsapp/templates',{method:'POST',body:{brandId:input.brandId,name:input.name,category:input.category,purpose:input.purpose,body:input.body}});toast('Borrador guardado. Envíalo a aprobación cuando esté listo.');return 'reload';}
+    if(String(form.getAttribute('id')||'').startsWith('cn-tpl-adopt-')){const variables=[];for(let n=0;input['v'+n]!==undefined;n++)variables.push(input['v'+n]);await api('/api/whatsapp/templates/adopt',{method:'POST',body:{name:form.dataset.name,language:form.dataset.language,brandId:input.brandId,variables}});toast('Plantilla lista para usarse en el CRM.');return 'reload';}
     if(form.getAttribute('id')==='cn-wa-form'){
       const id=String(input.phoneNumberId||'').trim(),current=wa?.numbers.find(n=>n.phoneNumberId===id);
       if(!/^\d{5,25}$/.test(id)){toast('El identificador son sólo dígitos: cópialo de Meta → WhatsApp → Configuración de la API.');return true;}

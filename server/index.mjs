@@ -43,7 +43,7 @@ import {createEvaluation} from './evaluation.mjs';
 import {migrateConnectors} from './connectors-schema.mjs';
 import {createConnectors} from './connectors.mjs';
 import {createWhatsApp} from './whatsapp.mjs';
-import {migrateWhatsApp} from './whatsapp-schema.mjs';
+import {migrateWhatsApp,migrateWhatsAppTemplates} from './whatsapp-schema.mjs';
 import {migrateCoordination} from './coordination-schema.mjs';
 import {createEvents} from './events.mjs';
 import {createCoordination} from './coordination.mjs';
@@ -87,7 +87,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<38&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v38-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<39&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v39-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -124,6 +124,7 @@ migrateIntegrations(db);
 migrateCouponEntry(db);
 migrateScheduledMaterial(db);
 migrateWhatsApp(db);
+migrateWhatsAppTemplates(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -217,7 +218,7 @@ const replies=createReplies({db,catalogue,crm,contacts,operations,insertMessage,
 // Estado de la IA para administración (server/ai-status.mjs): proveedor, clave (sí/no), gasto del mes y qué falta por marca; sin secretos.
 const aiStatus=createAiStatus({db,crm,provider:aiProvider,json});
 // WhatsApp real (server/whatsapp.mjs): entrantes de Meta -> cliente, conversacion y mensaje; salientes de conversaciones reales. Apagado sin CHANNEL_CONNECTOR=meta.
-const whatsapp=createWhatsApp({db,crm,catalogue,payments,replies,events,channel,connectors,broadcast,audit,body,json,rate,insertMessage,passwordHash,attachmentData,defaultEditionId,dataDir,root});
+const whatsapp=createWhatsApp({db,crm,catalogue,payments,replies,events,channel,connectors,broadcast,audit,body,json,rate,insertMessage,passwordHash,attachmentData,defaultEditionId,dataDir,root,takeOver,accessConversation});
 const knowledgeImport=createKnowledgeImport({db,replies,crm,body,json,audit});
 // Pauta (server/ads.mjs): el panel de tráfico de IPCIL dentro del CRM; administración y la función de trafiquer.
 const ads=createAds({db,crm,body,json,audit});
@@ -264,11 +265,12 @@ function messageList(id,before=Number.MAX_SAFE_INTEGER){
 function takeOver(c,userId){replies.consumeSuggestions(c.id);crm.assignConversation(c,userId);db.prepare("UPDATE conversations SET bot_enabled=0,assigned_to=?,status='open' WHERE id=?").run(userId,c.id);db.prepare("UPDATE jobs SET state='cancelled' WHERE conversation_id=? AND state='pending'").run(c.id);cancelConversationSteps(db,c.id,'human_takeover');}
 function audit(user,action,id){db.prepare('INSERT INTO audit(user_id,action,entity_id,created_at) VALUES(?,?,?,?)').run(user?.id||null,action,id,Date.now());}
 function insertMessage(c,user,text,kind,ref,attachmentId=null,flyer=null,prepared=null,options={}){
-  const id=randomUUID(),now=Date.now(),gate=channel.before(c,kind,{category:options.category||channel.categoryOf(kind,prepared,flyer),buttons:options.buttons});
+  const id=randomUUID(),now=Date.now(),gate=channel.before(c,kind,{category:options.category||channel.categoryOf(kind,prepared,flyer),buttons:options.buttons,template:options.template});
   const snapshot=prepared?prepared.flyerSnapshot:flyer?{course:db.prepare('SELECT * FROM courses WHERE id=?').get(flyer),brand:db.prepare('SELECT * FROM brands WHERE id=?').get(c.brand_id)}:null;
   if(snapshot&&!prepared)snapshot.artworkId=courseArtwork(snapshot.course);
   db.prepare('INSERT INTO messages(category,buttons,id,conversation_id,sender_id,sender_kind,text,attachment_id,flyer_course_id,flyer_snapshot,client_ref,created_at,commercial_snapshot) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(gate.category,gate.buttons,id,c.id,user?.id||null,kind,text,attachmentId,flyer,JSON.stringify(snapshot),ref,now,prepared?JSON.stringify({...prepared.commercial,sentAt:now}):null);
   if(prepared){const link=db.prepare('SELECT opportunity_id FROM conversation_opportunities WHERE conversation_id=?').get(c.id);if(link){const value={...prepared.commercial,sentAt:now,messageId:id};db.prepare('UPDATE opportunities SET offer_snapshot=? WHERE id=?').run(JSON.stringify(value),link.opportunity_id);db.prepare("INSERT INTO crm_events(opportunity_id,actor_id,kind,details,created_at) VALUES(?,?,'offer',?,?)").run(link.opportunity_id,user?.id||null,JSON.stringify(value),now);}}
+  if(options.template)db.prepare('UPDATE messages SET wa_template=? WHERE id=?').run(JSON.stringify(options.template),id);   // sale como plantilla aprobada de WhatsApp
   db.prepare('UPDATE conversations SET updated_at=? WHERE id=?').run(now,c.id);
   operations.message(c,kind,user);
   if(kind==='customer')contacts.recordInbound(c,text);

@@ -130,14 +130,22 @@
     const w=c.window,ref=c.referral?`<span class="pill">${icon('megaphone')} Anuncio: ${esc(c.referral.ad)}</span>`:'';
     if(!w?.enabled)return ref?`<div class="chat-window">${ref}</div>`:'';
     const until=w.until?new Intl.DateTimeFormat('es-MX',{dateStyle:'short',timeStyle:'short'}).format(w.until):null;
-    if(w.real)return `<div class="chat-window ${w.open?'open':'closed'}">${ref}<span>${icon(w.open?'smartphone':'lock')} ${w.open?'WhatsApp real · puedes escribirle hasta '+until:'WhatsApp real · pasaron 24 h desde su último mensaje: hay que esperar a que vuelva a escribir'}</span></div>`;
+    if(w.real)return `<div class="chat-window ${w.open?'open':'closed'}">${ref}<span>${icon(w.open?'smartphone':'lock')} ${w.open?'WhatsApp real · puedes escribirle hasta '+until:'WhatsApp real · pasaron 24 h desde su último mensaje: sólo puedes enviarle una plantilla aprobada hasta que vuelva a escribir'}</span>${!w.open&&team?`<button type="button" class="meta-action wa-template-open" data-action="wa-template" data-id="${c.id}">${icon('file-text')} Enviar plantilla</button>`:''}</div>`;
     return `<div class="chat-window ${w.open?'open':'closed'}">${ref}<span>${icon(w.open?'clock-3':'lock')} ${w.open?'Ventana de servicio abierta hasta '+until+(w.source==='referral'?' (72 h por anuncio)':''):team?'Ventana de 24 h cerrada · sólo plantillas aprobadas (temario, precio, fechas o flyer)':'Canal simulado · el equipo sólo puede enviarte plantillas hasta que vuelvas a escribir'}</span></div>`;
   }
   function deliveryMark(m,c){
     if(!c.window?.enabled)return `<span class="${m.read_at?'read':''}" aria-label="${m.read_at?'Leído':'Enviado'}">${icon(m.read_at?'check-check':'check')}</span>`;
     const s=m.delivery_state||'sent',labels={sent:'Enviado',delivered:'Entregado',read:'Leído',failed:'No entregado'},cat={service:'servicio',utility:'plantilla de utilidad',marketing:'plantilla de marketing'};
+    if(m.wa_hold&&s==='sent'&&!m.provider_ref)return `<span class="held" title="Se le envió un aviso. Este mensaje sale cuando la persona responda; si no responde en unos días, caduca.">${icon('hourglass')} En espera de su respuesta</span>`;
     if(s==='failed')return `<span class="failed" title="${esc(m.failed_reason||'')}">${icon('triangle-alert')} ${labels.failed}</span>${agentMode()?`<button type="button" class="meta-action" data-action="msg-retry" data-id="${m.id}">Reintentar</button>`:''}`;
-    return `<span class="${s==='read'?'read':''}" aria-label="${labels[s]}" title="${labels[s]}${m.category?' · '+cat[m.category]:''}">${icon(s==='sent'?'check':'check-check')}</span>`;
+    return `${m.wa_template?'<span class="wa-tpl-mark">Plantilla</span>':''}<span class="${s==='read'?'read':''}" aria-label="${labels[s]}" title="${labels[s]}${m.category?' · '+cat[m.category]:''}">${icon(s==='sent'?'check':'check-check')}</span>`;
+  }
+  // Plantillas aprobadas por Meta: lo único que WhatsApp deja enviar cuando la persona lleva más de 24 h sin escribir.
+  let waTplRef=null;
+  async function waTemplateModal(id){
+    let r;try{r=await api('/api/conversations/'+id+'/wa-templates');}catch(e){toast(e.message);return;}
+    waTplRef=crypto.randomUUID();
+    showModal('Enviar una plantilla',r.templates.length?`<p class="crm-hint">Son mensajes que Meta ya aprobó. Se envían tal cual, con los datos de esta persona. Cuando responda, podrás escribirle libremente otra vez.</p><div class="wa-tpl-list">${r.templates.map(t=>`<article class="wa-tpl"><div class="wa-tpl-top"><strong>${esc(t.name)}</strong><span class="pill">${t.category==='marketing'?'Marketing':'Utilidad'}</span>${t.purpose==='notice'?'<span class="pill">Aviso automático</span>':''}</div><p>${esc(t.text)}</p><div class="actions"><button type="button" class="btn primary" data-action="wa-template-send" data-id="${id}" data-template="${t.id}">${icon('send')} Enviar esta</button></div></article>`).join('')}</div>`:`<div class="info-box">Esta marca todavía no tiene plantillas aprobadas por Meta. Administración las crea y las manda a aprobación en Operación → Sistema → Conectores → Plantillas de WhatsApp.</div>`);
   }
   function payLink(m,outgoing){const x=String(m.text||'').match(/\?pay=([a-f0-9-]{36})/);if(!x)return '';return agentMode()||outgoing?`<div class="msg-buttons"><span class="msg-button">${icon('credit-card')} Enlace de pago</span></div>`:`<div class="msg-buttons"><button type="button" class="msg-button" data-action="pay-open" data-id="${x[1]}">${icon('credit-card')} Abrir pago de prueba</button></div>`;}
   function surveyLink(m,outgoing){const x=String(m.text||'').match(/\/encuesta\/([a-f0-9]{32})/);if(!x)return '';return agentMode()||outgoing?`<div class="msg-buttons"><span class="msg-button">${icon('clipboard-list')} Encuesta</span></div>`:`<div class="msg-buttons"><button type="button" class="msg-button" data-action="survey-open" data-id="${x[1]}">${icon('clipboard-list')} Responder encuesta</button></div>`;}
@@ -256,6 +264,8 @@
     if(name==='order-copy-link'){try{await navigator.clipboard.writeText(element.dataset.link);toast('Enlace copiado.');}catch{toast('No se pudo copiar; selecciónalo y cópialo a mano.');}return;}
     if(name==='pay-coupon-apply'){const id=element.dataset.id,code=(document.querySelector('#pg-coupon')?.value||'').trim(),msg=document.querySelector('#pg-coupon-msg');if(!code){if(msg)msg.textContent='Escribe tu código de cupón.';return;}try{await api('/api/payments/orders/'+id+'/coupon',{method:'POST',body:{code}});toast('Cupón aplicado.');await openPayment(id);}catch(e){if(msg)msg.textContent=e.message;else toast(e.message);}return;}
     if(name==='pay-coupon-remove'){const id=element.dataset.id;try{await api('/api/payments/orders/'+id+'/coupon',{method:'DELETE'});toast('Cupón quitado.');await openPayment(id);}catch(e){toast(e.message);}return;}
+    if(name==='wa-template'){await waTemplateModal(element.dataset.id);return;}
+    if(name==='wa-template-send'){element.disabled=true;try{await api('/api/conversations/'+element.dataset.id+'/wa-templates',{method:'POST',body:{templateId:element.dataset.template,clientRef:waTplRef}});modal.close();toast('Plantilla enviada.');}catch(e){toast(e.message);element.disabled=false;}return refresh();}
     if(name==='pay-done'){modal.close();if(state.publicPay)return publicPayScreen(false);return refresh();}
     if(name==='public-pay-open'){if(state.publicPay)await openPayment(state.publicPay);return;}
     if(name==='pay-sim'){

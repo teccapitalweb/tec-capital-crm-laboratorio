@@ -13,6 +13,7 @@ Qué hace y sus límites: [PLAN_WHATSAPP_REAL.md](PLAN_WHATSAPP_REAL.md). Esta g
 | Clave secreta de la app | Meta → tu app → Configuración de la app → Básica | `META_APP_SECRET` |
 | Token de verificación | Lo inventas tú: una palabra larga sin espacios | `META_VERIFY_TOKEN` |
 | Encendido | — | `CHANNEL_CONNECTOR` = `meta` |
+| Identificador de la cuenta de WhatsApp Business (para las plantillas) | Meta → tu app → WhatsApp → Configuración de la API | `META_WABA_ID` |
 
 ## Paso 1 · Crear la app en Meta
 
@@ -60,6 +61,15 @@ En Meta → tu app → **WhatsApp → Configuración → Webhook**:
 4. Con la venta de prueba encendida en la marca, te llega el enlace de pago: se abre sin pedir perfil, eliges la tarjeta de prueba que aprueba y la confirmación te llega por WhatsApp.
 5. Contesta desde el CRM como asesor: el mensaje te llega al teléfono y sus marcas pasan a entregado y leído.
 
+## Paso 6 · Plantillas (para escribir después de 24 horas)
+
+Detalle: [PLAN_PLANTILLAS_WHATSAPP.md](PLAN_PLANTILLAS_WHATSAPP.md). Hace falta `META_WABA_ID` en Railway.
+
+1. En **Conectores → Plantillas de WhatsApp**, pulsa **Sincronizar con Meta**. Aparece `hello_world`, la plantilla de ejemplo del número de prueba: elige la marca y **Usar en el CRM**. Sirve para probar de inmediato.
+2. Escribe la tuya en **Nueva plantilla**, por ejemplo un aviso: «Hola {{nombre}}, tenemos una novedad sobre tu inscripción en {{curso}}. Responde a este mensaje para verla.». Elige «El CRM, como aviso automático» y **Guardar borrador**.
+3. **Enviar a aprobación.** Meta suele responder en minutos; vuelve a **Sincronizar con Meta** para ver si quedó «Aprobada» o el motivo del rechazo.
+4. Para probarla hay que tener una conversación con más de 24 horas sin mensaje de la persona: en el chat aparece **Enviar plantilla**.
+
 ## Si algo falla
 
 | Lo que ves | Qué significa | Qué hacer |
@@ -69,7 +79,7 @@ En Meta → tu app → **WhatsApp → Configuración → Webhook**:
 | «No parece un token de Meta» | La variable tiene espacios u otra variable pegada | Deja sólo el token en `META_ACCESS_TOKEN` |
 | «No está en la lista de destinatarios permitidos» | El número de prueba sólo escribe a teléfonos confirmados | Agrégalo en «Para» |
 | Escribes y no aparece nada en el CRM | El webhook no está suscrito a `messages`, o el número no tiene marca | Revisa el paso 4 y el paso 3; en Conectores → «Últimos eventos recibidos» se ve si llegó y por qué se ignoró |
-| «Pasaron más de 24 horas…» | Regla de WhatsApp | La persona debe volver a escribir; las plantillas aprobadas son el siguiente paso |
+| «Pasaron más de 24 horas…» | Regla de WhatsApp | Usa «Enviar plantilla» en el chat (hace falta una plantilla aprobada), o espera a que la persona escriba |
 | Mensaje «No entregado» en el chat | Meta lo rechazó; el motivo queda en el historial de entrega del mensaje | Corrige y pulsa reintentar |
 
 ## Token permanente (para que no venza cada día)
@@ -86,4 +96,4 @@ Cambia `CHANNEL_CONNECTOR` a `simulated` (o bórrala) en Railway. Deja de entrar
 2. Agregar un número propio (que deje de usarse en la app de WhatsApp del celular) y aprobar su nombre para mostrar.
 3. Poner un método de pago en la cuenta de WhatsApp Business.
 4. Asignar ese número a su marca en Conectores.
-5. Enviar a aprobación las plantillas para escribir fuera de las 24 horas (pendiente de construir en el CRM).
+5. Enviar a aprobación las plantillas de esa marca (paso 6).
