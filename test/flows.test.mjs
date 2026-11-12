@@ -70,14 +70,23 @@ test('flujo de bienvenida de punta a punta: saludo con menú, botones que navega
   const dates=await maria.say('Fechas y horario');assert.equal(dates.log.intent,'schedule');assert.deepEqual(dates.buttons,['Fechas y horario','Inscribirme','Hablar con asesor']);
   // texto libre: contesta el asistente de siempre y el flujo no estorba (ni pone botones ni pierde el paso)
   const free=await maria.say('¿Entregan certificado?');assert.equal(free.log.intent,'certificate');assert.equal(free.buttons,null);assert.equal(run(maria.conv),'mas');
-  // «Temario» ya no es un botón del paso en el que va: lo entiende el asistente como siempre, sin el menú
-  const syllabus=await maria.say('Temario');assert.equal(syllabus.log.intent,'syllabus');assert.equal(syllabus.buttons,null);
-  // inscribirse termina el recorrido (sin venta activa pasa a una persona)
-  const enroll=await maria.say('Inscribirme');assert.equal(enroll.log.intent,'enroll');assert.equal(enroll.log.action,'escalated');assert.equal(run(maria.conv),null);
+  // tras escribir otra cosa el menú sigue valiendo: «Inscribirme» termina el recorrido (sin venta activa pasa a una persona) y la respuesta ya no ofrece el menú
+  const enroll=await maria.say('Inscribirme');assert.equal(enroll.log.intent,'enroll');assert.equal(enroll.log.action,'escalated');assert.equal(enroll.buttons,null);assert.equal(run(maria.conv),null);
+  // dos mensajes seguidos que no son un botón terminan el recorrido: un «sí» suelto ya no se confunde con un botón
+  const ines=await person('Inés');await ines.say('Hola');assert.equal(run(ines.conv),'inicio');
+  const one=await ines.say('¿Entregan certificado?');assert.equal(one.buttons,null);assert.equal(run(ines.conv),'inicio');
+  const two=await ines.say('¿Y las clases quedan grabadas?');assert.equal(two.log.intent,'recording');assert.equal(run(ines.conv),null);
+  const stale=await ines.say('Más opciones');assert.notEqual(stale.log.intent,'flow','el menú ya no está activo');
 
   // 4) si lo primero que escribe es una pregunta concreta, se contesta y se le ofrece el menú
   const luis=await person('Luis'),first=await luis.say('¿Cuánto cuesta el curso?');assert.equal(first.log.intent,'price');assert.match(first.text,/379/);assert.deepEqual(first.buttons,['Precio','Temario','Más opciones']);assert.equal(run(luis.conv),'inicio');
   const human=await luis.say('Más opciones').then(()=>luis.say('Hablar con asesor'));assert.equal(human.log.intent,'human');assert.equal(human.log.action,'escalated');assert.equal(run(luis.conv),null);
+  // si lo primero que escribe no se entiende y la marca escala a la primera, pasa a una persona SIN menú
+  const rs=(await call('/api/replies/settings',admin.cookie)).settings.find(x=>x.brand_id==='globalvet');await call('/api/replies/brands/globalvet',admin.cookie,{maxUnknown:1,expectedRevision:rs.revision},'PATCH');
+  const lost=await person('Teo'),odd=await lost.say('Necesito que me expliquen lo del convenio con mi cooperativa');assert.equal(odd.log.action,'escalated');assert.equal(odd.buttons,null);assert.equal(run(lost.conv),null);
+  await call('/api/replies/brands/globalvet',admin.cookie,{maxUnknown:2,expectedRevision:rs.revision+1},'PATCH');
+  // un cuerpo vacío no rompe el servidor
+  await call('/api/flows/globalvet',admin.cookie,null,'PUT',400);
   // quien pide la baja en su primer mensaje no recibe un menú
   const out=await person('Sara'),bye=await out.say('Ya no quiero recibir mensajes');assert.equal(bye.log.intent,'opt_out');assert.equal(bye.buttons,null);assert.equal(run(out.conv),null);
 

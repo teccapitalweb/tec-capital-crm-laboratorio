@@ -11,7 +11,7 @@ export const DEFAULT_STEPS=[
   {id:'mas',text:'Claro. ¿Con qué te ayudo?',buttons:[{label:'Fechas y horario',go:'action:schedule'},{label:'Inscribirme',go:'action:enroll'},{label:'Hablar con asesor',go:'action:human'}]},
 ];
 export const LIMITS={steps:10,buttons:3,label:20,text:900};
-const RUN_TTL=24*3600000;
+const RUN_TTL=24*3600000,MAX_MISSES=2;
 // Compara lo que escribió la persona con el texto de un botón sin importar mayúsculas, acentos ni signos.
 export const norm=v=>String(v||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
 // Datos por su nombre. Sin nombre, «¡Hola, {{nombre}}!» queda «¡Hola!» en lugar de dejar una coma suelta.
@@ -66,10 +66,15 @@ export function createFlows({db,crm,body,json,audit,broadcast=()=>{},now=Date.no
   function apply(conversationId,state){
     if(!state)return;
     if(state.end){db.prepare('DELETE FROM flow_runs WHERE conversation_id=?').run(conversationId);return;}
-    db.prepare('INSERT INTO flow_runs(conversation_id,step_id,updated_at) VALUES(?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET step_id=excluded.step_id,updated_at=excluded.updated_at').run(conversationId,state.step,now());
+    // La persona escribió otra cosa: el menú sigue valiendo una vez más; a la segunda, el recorrido termina. Así un «sí» o un «hola»
+    // escrito mucho después de haber dejado el menú no se confunde con un botón.
+    if(state.miss){db.prepare('UPDATE flow_runs SET misses=misses+1 WHERE conversation_id=?').run(conversationId);db.prepare('DELETE FROM flow_runs WHERE conversation_id=? AND misses>=?').run(conversationId,MAX_MISSES);return;}
+    db.prepare('INSERT INTO flow_runs(conversation_id,step_id,misses,updated_at) VALUES(?,?,0,?) ON CONFLICT(conversation_id) DO UPDATE SET step_id=excluded.step_id,misses=0,updated_at=excluded.updated_at').run(conversationId,state.step,now());
   }
+  const running=conversationId=>Boolean(db.prepare('SELECT 1 FROM flow_runs WHERE conversation_id=?').get(String(conversationId)));
   function save(brandId,input,user){
     requireAdmin(user);if(!db.prepare('SELECT 1 FROM brands WHERE id=?').get(brandId))throw fail(404,'Marca no encontrada.');
+    if(!input||typeof input!=='object')throw fail(400,'Faltan los datos del flujo.');
     const current=row(brandId),steps=cleanSteps(input.steps),t=now();
     if(!Number.isInteger(input.expectedRevision)||input.expectedRevision!==(current?.revision||0))throw fail(409,'El flujo cambió en otra ventana. Recarga la pantalla.');
     const enabled=input.enabled?1:0,flyer=input.withFlyer===false?0:1;
@@ -88,5 +93,5 @@ export function createFlows({db,crm,body,json,audit,broadcast=()=>{},now=Date.no
     if((x=path.match(/^\/api\/flows\/([a-zA-Z0-9-]+)$/))&&req.method==='PUT'){json(res,200,{flow:save(x[1],await body(req),user)});return true;}
     throw fail(404,'Ruta de flujos no encontrada.');
   }
-  return {handle,active,pressed,apply,render,view};
+  return {handle,active,pressed,apply,running,render,view};
 }

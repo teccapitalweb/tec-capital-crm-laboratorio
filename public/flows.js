@@ -7,8 +7,8 @@ window.createFlowsUI=function({state,api,esc,icon,toast}){
   const clone=v=>JSON.parse(JSON.stringify(v));
   const current=()=>flows?.find(f=>f.brandId===brand)||flows?.[0]||null;
   const newId=()=>'p'+Math.random().toString(36).slice(2,8);
-  const startDraft=f=>{draft=f?{enabled:f.enabled,withFlyer:f.withFlyer,steps:clone(f.steps)}:null;dirty=false;sim=null;};
-  async function load(){const r=await api('/api/flows');flows=r.flows;actions=r.actions;limits=r.limits;if(!brand||!flows.some(f=>f.brandId===brand))brand=(state.brand&&state.brand!=='all'&&flows.some(f=>f.brandId===state.brand)?state.brand:flows[0]?.brandId)||null;if(!draft)startDraft(current());}   // el borrador (y la vista previa) sobreviven a cada redibujo; sólo se reinician al cambiar de marca, guardar o descartar
+  const startDraft=f=>{draft=f?{base:f.revision,enabled:f.enabled,withFlyer:f.withFlyer,steps:clone(f.steps)}:null;dirty=false;sim=null;};
+  async function load(){const r=await api('/api/flows');flows=r.flows;actions=r.actions;limits=r.limits;if(!brand||!flows.some(f=>f.brandId===brand))brand=(state.brand&&state.brand!=='all'&&flows.some(f=>f.brandId===state.brand)?state.brand:flows[0]?.brandId)||null;if(!draft||(!dirty&&draft.base!==current()?.revision))startDraft(current());}   // el borrador (y la vista previa) sobreviven a cada redibujo; sólo se reinician al cambiar de marca, guardar o descartar
   function setBrand(id){if(dirty&&!confirm('Hay cambios sin guardar en este flujo. ¿Cambiar de marca y descartarlos?'))return;brand=id;startDraft(current());}
   const touch=()=>{dirty=true;const c=document.querySelector('#fl-dirty');if(c)c.hidden=false;};
   // Lee lo tecleado en la pantalla y lo deja en el borrador (antes de cualquier acción que vuelva a dibujar).
@@ -71,7 +71,7 @@ window.createFlowsUI=function({state,api,esc,icon,toast}){
       return 'reload';
     }
     if(name==='fl-save'){
-      const f=current(),r=await api('/api/flows/'+encodeURIComponent(brand),{method:'PUT',body:{enabled:draft.enabled,withFlyer:draft.withFlyer,steps:draft.steps,expectedRevision:f.revision}});
+      const r=await api('/api/flows/'+encodeURIComponent(brand),{method:'PUT',body:{enabled:draft.enabled,withFlyer:draft.withFlyer,steps:draft.steps,expectedRevision:draft.base}});
       flows=flows.map(x=>x.brandId===brand?r.flow:x);startDraft(r.flow);toast(r.flow.enabled?'Flujo guardado y encendido.':'Flujo guardado. Está apagado: actívalo cuando quieras usarlo.');return 'reload';
     }
     return false;

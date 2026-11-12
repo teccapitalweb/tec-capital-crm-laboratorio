@@ -114,7 +114,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
       out.reason='Varias preguntas en un mensaje ('+asked.join(', ')+'): se contestan juntas con el catálogo vigente y el conocimiento aprobado.';
       return true;
     };
-    if(pressed?.kind==='step'){out.intent='flow';out.confidence=1;out.reply=flows.render(pressed.step.text,flowValues());menu(pressed.step);out.sources.push({type:'flow',step:pressed.step.id});out.reason='Flujo de bienvenida: la persona eligió «'+pressed.label+'».';}
+    if(pressed?.kind==='step'&&!ctx.reason){out.intent='flow';out.confidence=1;out.reply=flows.render(pressed.step.text,flowValues());menu(pressed.step);out.sources.push({type:'flow',step:pressed.step.id});out.reason='Flujo de bienvenida: la persona eligió «'+pressed.label+'».';}
     else if(intent==='opt_out'){out.reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';out.reason='El cliente pidió la baja; se registra y se confirma una sola vez.';}
     else if(intent==='human'||intent==='refund'){out.reply=intent==='refund'?copy.refund(user?.name):copy.human(user?.name);out.handoff=true;out.reason=intent==='refund'?'Queja o reembolso: siempre lo atiende una persona.':'El cliente pidió hablar con una persona.';}
     else if(ctx.reason){out.reply=copy.unavailable(ctx.reason);out.handoff=true;out.reason='La edición no está disponible según el catálogo.';out.sources.push(catalogueSource);}
@@ -158,10 +158,11 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
       if(unknownStreak(c.id)+1>=s.max_unknown){out.handoff=true;out.reply=copy.escalate;out.reason+=' Se alcanzó el máximo de respuestas sin reconocer ('+s.max_unknown+'): se escala.';}
     }
     if(flow){
-      if(out.handoff||forced==='enroll'||forced==='human'||intent==='opt_out')out.flow={end:true};   // pasa a una persona, se inscribe o pide la baja: el recorrido termina
+      if(out.handoff||forced==='enroll'||forced==='human'||intent==='opt_out'){out.flow={end:true};out.buttons=null;out.keepButtons=false;}   // pasa a una persona, se inscribe o pide la baja: el recorrido termina y ya no se ofrece el menú
       else if(forced){menu(pressed.step);out.reason+=' Opción «'+pressed.label+'» del flujo de bienvenida: el menú sigue a la vista.';}
       else if(!out.flow&&count===1&&!out.order)menu(flow.steps[0]);   // su primer mensaje fue una pregunta concreta: se contesta y se le ofrece el menú
       else if(out.flow&&!pressed)out.reason+=' Flujo de bienvenida de la marca.';
+      else if(!out.flow&&!pressed&&flows.running(c.id))out.flow={miss:true};   // escribió otra cosa: contesta el motor; el menú vale una vez más
     }
     if(out.mode==='templates'&&out.needsProvider){out.needsProvider=false;out.reason+=' (El proveedor de IA sólo se usa en modo autónomo.)';}
     return out;
