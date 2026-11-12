@@ -34,9 +34,9 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Constructor de flujos de bienvenida (rama `feat/flujo-bienvenida`, 12 nov 2026)
+## Constructor de flujos de bienvenida (publicado en `main`, 12 nov 2026)
 
-Con Meta detenido por la verificación de la cuenta del usuario, eligió avanzar con esto («Sí, flujos»). **Esquema 40. Sin publicar.** Detalle: [PLAN_FLUJO_BIENVENIDA.md](PLAN_FLUJO_BIENVENIDA.md).
+Con Meta detenido por la verificación de la cuenta del usuario, eligió avanzar con esto («Sí, flujos»). **Esquema 40. Publicado** («Sí, publicar»); apagado por omisión. Detalle: [PLAN_FLUJO_BIENVENIDA.md](PLAN_FLUJO_BIENVENIDA.md).
 
 - Cada marca arma su saludo y su menú con botones en Operación → Ventas y cobro → Flujo de bienvenida, con vista previa tipo teléfono.
 - **Decisión de diseño:** el flujo es una capa encima del motor, no un motor aparte. Un botón «el asistente responde» se convierte en la intención de siempre (precio, temario, fechas, inscribirse, asesor), así que precios y fechas siguen saliendo del catálogo. El texto libre lo atiende el motor de siempre.

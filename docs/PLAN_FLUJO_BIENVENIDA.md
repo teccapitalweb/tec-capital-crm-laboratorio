@@ -1,6 +1,6 @@
 # Constructor de flujos de bienvenida (12 nov 2026)
 
-Rama `feat/flujo-bienvenida`. **Esquema 40.** Sin publicar.
+**Esquema 40.** Publicado en `main` (apagado por omisión en todas las marcas).
 
 ## Para qué
 
