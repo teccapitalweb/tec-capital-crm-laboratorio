@@ -40,7 +40,9 @@
   const unread=c=>agentMode()?c.unread:c.customer_unread;
   const currency=n=>new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',maximumFractionDigits:0}).format(n);
   const time=n=>new Intl.DateTimeFormat('es-MX',{hour:'2-digit',minute:'2-digit'}).format(new Date(n));
-  function icons(){if(window.lucide)window.lucide.createIcons({attrs:{'stroke-width':1.7}});}
+  function icons(){if(window.lucide)window.lucide.createIcons({attrs:{'stroke-width':1.7}});tintAvatars();}
+// Cada persona conserva un tono suave propio (seis tonos de Niebla), calculado de sus iniciales: ayuda a reconocerla de un vistazo.
+function tintAvatars(){for(const el of document.querySelectorAll('.avatar:not([data-h])')){let h=0;for(const ch of el.textContent.trim())h=(h*31+ch.charCodeAt(0))>>>0;el.dataset.h=String(h%6);}}
   function provider(channel){const c=channels[channel];return `<span class="provider ${channel}">${channel==='facebook'?'<b class="f" aria-hidden="true">f</b>':icon(c.icon)}</span>`;}
   function avatar(name,channel){return `<span class="identity"><span class="avatar">${esc(initials(name))}</span>${provider(channel)}</span>`;}
   // Aviso breve. Va en la capa superior del navegador (popover manual) para verse ENCIMA de una ventana abierta; volver a mostrarlo lo sube al

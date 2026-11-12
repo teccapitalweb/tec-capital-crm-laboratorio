@@ -34,6 +34,10 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Pulido de diseño (rama `feat/pulido-diseno`, 12 nov 2026)
+
+El usuario pidió mejorar el diseño («que se vea súper cool y profesional»). Se afinó Niebla sin cambiar su identidad ni la composición general: chat con más espacio para la conversación, avatares con un tono por persona, sombras unificadas, cifras con más peso, menú con la sección activa marcada, color por etapa en el tablero y respuesta al cursor. Sólo interfaz (`public/polish.css` y `tintAvatars()` en `public/app.js`). Detalle y medidas: [DISENO_Y_AUDITORIA.md](DISENO_Y_AUDITORIA.md). **Sin publicar**: requiere la aprobación visual del usuario.
+
 ## Plantillas de WhatsApp aprobadas por Meta (publicado en `main`, 12 nov 2026)
 
 Mientras el usuario resuelve la verificación de su cuenta de desarrollador en Meta (no le llega el SMS), eligió avanzar con esto («Sí, plantillas»). **Esquema 39. Publicado** («Sí, publicar»). Detalle: [PLAN_PLANTILLAS_WHATSAPP.md](PLAN_PLANTILLAS_WHATSAPP.md).

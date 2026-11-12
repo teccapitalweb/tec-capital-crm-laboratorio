@@ -9,7 +9,7 @@ Niebla es la identidad del producto: blanco y gris, transparencias discretas, bo
 - **Excepciones permitidas a propósito (siguen suaves):** iconos decorativos, la casilla de tarea, precios tachados, tareas hechas y el texto de columnas vacías.
 - **Áreas táctiles:** al menos 40 px de alto en pantallas táctiles o de 680 px o menos; en texto-enlace se amplía el área con un pseudo-elemento sin mover la composición.
 - **Foco de teclado:** siempre visible (anillo de 2 px), nunca eliminado.
-- **Movimiento:** sólo al navegar entre vistas (`#page.enter`) y al abrir diálogos. **Nunca** animar en las actualizaciones en vivo (el contenido se vuelve a dibujar cada pocos segundos y parpadearía). Respetar `prefers-reduced-motion`.
+- **Movimiento:** sólo al navegar entre vistas (`#page.enter`) y al abrir diálogos. **Nunca** animar en las actualizaciones en vivo (el contenido se vuelve a dibujar cada pocos segundos y parpadearía). Respetar `prefers-reduced-motion`. Sí se permite la **respuesta al cursor**: transiciones de 160 ms de color, borde y sombra al pasar el cursor o pulsar (nada se desplaza ni cambia de tamaño); no se disparan al redibujar.
 - **Números:** `font-variant-numeric: tabular-nums` en contadores, tablas y métricas.
 - **Escritorio ancho:** el espacio de trabajo ocupa todo el ancho de la ventana (sin tope de 1800 px).
 - **Móvil (390 px):** sin desplazamiento horizontal de la página; tablas anchas se desplazan dentro de su contenedor.
@@ -78,6 +78,21 @@ Se recorrieron **todas** las pantallas del equipo (12 vistas y las 4 áreas de O
 ## Avisos (11 nov 2026)
 
 Los avisos breves (`toast`) se muestran en la capa superior del navegador (`popover="manual"`), por encima de las ventanas, **arriba a la derecha** en computadora y **arriba a lo ancho** en celular. No bloquean clics. Al guardar cambios de algo existente en Catálogo la ventana se cierra; si falta un paso (algo recién creado o un borrador por aprobar), sigue abierta.
+
+## Pulido de diseño (12 nov 2026)
+
+Pedido del usuario: «que se vea más profesional». Se mantuvo Niebla y se afinó el oficio. Todo vive en un bloque marcado al final de `public/polish.css` y en `tintAvatars()` de `public/app.js`; sin cambios de servidor ni de esquema. No toca la vista del cliente (`.customer-skin`).
+
+- **Chat del equipo, más conversación:** se compactaron la cabecera, la fila de interés, el resumen y la barra de ventana, y el cuadro de escribir arranca en dos renglones. En 1366 × 800 la conversación pasa de 167 px a 238 px de alto (+43 %). Los botones de apoyo (Equipo, Etiquetas, Respuestas…) son discretos, sin borde hasta pasar el cursor.
+- **Personas con color:** cada avatar toma uno de seis tonos suaves de Niebla según sus iniciales (`data-h` 0–5), siempre el mismo para la misma persona. Contraste medido de 5,1:1 a 7,1:1. La insignia del canal se redujo para no tapar las iniciales.
+- **Profundidad:** una sola sombra para tarjetas y paneles (`--shadow-card`) y otra al pasar el cursor (`--shadow-lift`).
+- **Cifras:** números con más peso y el icono en una pastilla.
+- **Menú:** la sección activa es una ficha blanca con una marca de acento a la izquierda (en pantallas de más de 850 px).
+- **Tablero de oportunidades:** un punto de color por etapa.
+- **Botones:** el principal con relieve; al pulsar se hunde un tono. Las filas de las tablas responden al cursor.
+- **Detalles:** barras de desplazamiento finas, color de selección y diálogos más despegados del fondo.
+
+Auditoría del 12 nov, en 1366 px y 375 px (Mi día, Conversaciones con chat abierto, Contactos, Oportunidades y vista del cliente): 0 textos de menos de 11 px, 0 px de desbordamiento, sin controles de menos de 40 px de alto en celular dentro del chat, contraste del botón principal 5,5:1. 204 pruebas aprobadas.
 
 ## Ideas de diseño que se dejaron fuera a propósito
 

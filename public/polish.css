@@ -221,3 +221,82 @@ label.field input[type=file]{display:block;width:100%;min-height:64px;padding:11
 .wa-tpl-list{display:grid;gap:10px;margin-top:10px}.wa-tpl{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff}.wa-tpl-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}.wa-tpl-top strong{font-size:13px;overflow-wrap:anywhere}.wa-tpl p{margin:0 0 10px;font-size:13px;line-height:1.5;color:var(--text-2);white-space:pre-wrap;overflow-wrap:anywhere}
 .held{display:inline-flex;align-items:center;gap:4px;color:var(--warn)}.held svg{width:13px;height:13px}.wa-tpl-mark{font-size:11px;color:var(--text-3);margin-right:6px}
 @media(max-width:650px){.chat-window .wa-template-open{min-height:40px;margin-left:0}}
+
+/* ============ Pulido de diseño (12 nov 2026) · docs/DISENO_Y_AUDITORIA.md ============ */
+/* Niebla, con más oficio: profundidad suave en las superficies, color discreto por persona y por etapa, más aire para la conversación
+   y respuesta inmediata al cursor. Sin movimiento propio: sólo cambian color, borde y sombra cuando la persona pasa el cursor o pulsa. */
+:root{--shadow-card:0 1px 2px #1d2e380a,0 10px 28px -18px #1d2e3829;--shadow-lift:0 2px 4px #1d2e380d,0 18px 36px -18px #1d2e3840;--ease:cubic-bezier(.2,.7,.2,1)}
+::selection{background:#cfe2ec;color:var(--ink)}
+*{scrollbar-width:thin;scrollbar-color:#cdd6dc transparent}
+
+/* Superficies: una sola sombra para tarjetas y paneles */
+.day-stat,.ops-stat,.an-kpi,.crm-panel,.course-card,.opportunity-card{box-shadow:var(--shadow-card)}
+@media(hover:hover){
+  .day-stat,.ops-stat,.an-kpi,.course-card,.opportunity-card,.btn,.nav button,.thread,.crm-table td,.quick-replies button,.compose{transition:box-shadow .16s var(--ease),border-color .16s var(--ease),background-color .16s var(--ease),color .16s var(--ease)}
+  .opportunity-card:hover,.course-card:hover,button.ops-stat:hover{box-shadow:var(--shadow-lift);border-color:var(--accent-line)}
+  .crm-table tbody tr:hover td{background:var(--accent-tint)}
+}
+@media(prefers-reduced-motion:reduce){.day-stat,.ops-stat,.an-kpi,.course-card,.opportunity-card,.btn,.nav button,.thread,.crm-table td,.quick-replies button,.compose{transition:none}}
+
+/* Cifras: el número manda; el icono, en su pastilla */
+.day-stat strong,.ops-stat strong,.an-kpi strong{font-weight:650;font-variant-numeric:tabular-nums}
+.day-stat>svg{width:32px;height:32px;padding:7px;border-radius:10px;background:var(--accent-soft);color:var(--accent-strong);box-sizing:border-box}
+.day-stat span,.ops-stat span{color:var(--text-2)}
+
+/* Personas: un tono suave y estable por persona (lo asigna icons() con data-h); el canal, en una insignia que no tapa las iniciales */
+.workspace:not(.customer-skin) .avatar,dialog .avatar{background:var(--av-bg,#e8ebf0);color:var(--av-fg,#454d5c);box-shadow:inset 0 0 0 1px #ffffffb3;font-weight:700;letter-spacing:.2px}
+.avatar[data-h="0"]{--av-bg:#e3eef3;--av-fg:#255a75}.avatar[data-h="1"]{--av-bg:#e4f1ea;--av-fg:#256b4e}.avatar[data-h="2"]{--av-bg:#f8eed9;--av-fg:#7d5710}
+.avatar[data-h="3"]{--av-bg:#efe7f3;--av-fg:#6a4580}.avatar[data-h="4"]{--av-bg:#f7e6e1;--av-fg:#9a4a34}.avatar[data-h="5"]{--av-bg:#e8ebf0;--av-fg:#454d5c}
+.workspace:not(.customer-skin) .identity .provider{width:18px;height:18px;right:-5px;bottom:-3px;border-radius:6px;border-width:2px}
+.workspace:not(.customer-skin) .identity .provider svg{width:10px;height:10px;stroke-width:2.2}
+
+/* Menú: la sección activa, como una ficha levantada con su marca */
+@media(min-width:851px){
+  .nav button{position:relative}
+  .nav button.active{background:#fff;box-shadow:var(--shadow-card),inset 0 0 0 1px var(--line)}
+  .nav button.active::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+}
+
+/* Botones: el principal, con relieve; al pulsar, se hunde un tono */
+.btn{box-shadow:0 1px 1px #1d2e3808}
+.btn.primary{box-shadow:inset 0 1px 0 #ffffff2e,0 1px 2px #255a7552}
+.btn:active:not(:disabled){box-shadow:inset 0 1px 2px #1d2e3826}
+.btn.primary:active:not(:disabled){background:#1f4d64;border-color:#1f4d64}
+
+/* Tablas: encabezado más firme */
+.crm-table th{font-weight:600;letter-spacing:.3px}
+
+/* Tablero: cada etapa con su color; la tarjeta responde al cursor */
+.pipeline-heading h2{display:flex;align-items:center;gap:8px}
+.pipeline-heading h2::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--stage,#8892a0);flex:none}
+.pipeline-column:nth-child(2){--stage:var(--accent)}.pipeline-column:nth-child(3){--stage:#b9851d}.pipeline-column:nth-child(4){--stage:#2f8a63}.pipeline-column:nth-child(5){--stage:#b3695f}
+.pipeline-heading span{font-variant-numeric:tabular-nums}
+.opportunity-card strong{letter-spacing:-.1px}
+
+/* Chat del equipo: menos barras, más conversación */
+.workspace:not(.customer-skin) .chat-head{padding-top:12px;padding-bottom:12px}
+.workspace:not(.customer-skin) .chat-context{padding-top:6px;padding-bottom:6px}
+.workspace:not(.customer-skin) .conv-summary{margin-bottom:6px}
+.workspace:not(.customer-skin) .sum-empty{padding:4px 6px 4px 12px;border-style:solid}
+.workspace:not(.customer-skin) .sum-empty .btn{padding:5px 10px}
+.workspace:not(.customer-skin) .chat-window{padding-top:5px;padding-bottom:5px}
+.workspace:not(.customer-skin) .assist-row{padding:6px 2px 8px}
+.workspace:not(.customer-skin) .quick-replies{margin-bottom:8px}
+.workspace:not(.customer-skin) .history{gap:14px;background:linear-gradient(#f8fafb,#f3f6f8)}
+.workspace:not(.customer-skin) .message .bubble{line-height:1.55;box-shadow:0 1px 2px #1d2e380a}
+.workspace:not(.customer-skin) .message:not(.outgoing) .bubble{background:#fff}
+.workspace:not(.customer-skin) .compose{background:#fff;box-shadow:var(--shadow-card)}
+.workspace:not(.customer-skin) .compose:focus-within{border-color:var(--accent-line);box-shadow:0 0 0 3px var(--accent-soft)}
+@media(min-width:681px){
+  .workspace:not(.customer-skin) #message-input{min-height:44px}
+  .workspace:not(.customer-skin) .compose{padding-top:10px;padding-bottom:8px}
+}
+@media(min-width:681px) and (hover:hover){
+  .workspace:not(.customer-skin) .quick-replies{gap:2px}
+  .workspace:not(.customer-skin) .quick-replies button{height:30px;padding:4px 9px;border-color:transparent;background:transparent;color:var(--text-2);border-radius:8px}
+  .workspace:not(.customer-skin) .quick-replies button svg{width:15px;height:15px;color:var(--accent)}
+  .workspace:not(.customer-skin) .quick-replies button:hover{background:var(--soft);color:var(--ink);border-color:var(--line)}
+}
+
+/* Diálogos: más despegados del fondo */
+dialog{box-shadow:0 1px 2px #1d2e3814,0 40px 90px -30px #1d2e3866}
