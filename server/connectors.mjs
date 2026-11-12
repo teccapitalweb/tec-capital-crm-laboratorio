@@ -141,9 +141,10 @@ export function metaChannel({env,fetchImpl=(...a)=>fetch(...a)}){
       if(m.media){
         const form=new FormData();form.set('messaging_product','whatsapp');form.set('type',m.media.mime);form.set('file',new Blob([m.media.buffer],{type:m.media.mime}),m.media.filename||'archivo');
         const id=(await graph('/'+from+'/media',{method:'POST',form,timeout:30000})).id;if(!id)throw fail(502,'Meta no devolvió el identificador del archivo.');
-        const kind=IMAGE_MIME.has(m.media.mime)?'image':'document',caption=text.length<=1024?text:'';
+        const kind=IMAGE_MIME.has(m.media.mime)?'image':'document',withButtons=Boolean(buttons.length&&text&&text.length<=1024),caption=!withButtons&&text.length<=1024?text:'';
         parts.push({type:kind,[kind]:{id,...(caption?{caption}:{}),...(kind==='document'?{filename:String(m.media.filename||'archivo').slice(0,120)}:{})}});
-        if(text&&!caption)parts.push({type:'text',text:{body:text,preview_url:false}});
+        if(withButtons)parts.push({type:'interactive',interactive:{type:'button',body:{text},action:{buttons:buttons.map((title,i)=>({type:'reply',reply:{id:'b'+(i+1),title}}))}}});
+        else if(text&&!caption)parts.push({type:'text',text:{body:text,preview_url:false}});
       }else if(!text)throw fail(422,'Este mensaje no tiene texto ni un archivo que WhatsApp admita.');
       else if(buttons.length&&text.length<=1024)parts.push({type:'interactive',interactive:{type:'button',body:{text},action:{buttons:buttons.map((title,i)=>({type:'reply',reply:{id:'b'+(i+1),title}}))}}});
       else parts.push({type:'text',text:{body:text,preview_url:false}});

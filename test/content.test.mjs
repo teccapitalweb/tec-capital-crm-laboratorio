@@ -137,5 +137,5 @@ test('contenido por API: funciones de diseño y aprobación, plantillas por even
  // administración ve las funciones; revocar diseño
  const members=(await call('/api/content/access',admin.cookie)).members;assert.ok(members.find(m=>m.id===designer.user.id).design);assert.ok(members.find(m=>m.id===approver.user.id).approve);
  await call('/api/content/access',admin.cookie,{userId:designer.user.id},'PUT');await call('/api/catalogue/templates',designer.cookie,tpl,'POST',403);
- const d=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,39);assert.equal(d.prepare("SELECT count(*) n FROM template_variants WHERE status='accepted'").get().n,1);assert.equal(d.prepare('SELECT count(*) n FROM content_sheets').get().n,1);}finally{d.close();}
+ const d=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});try{assert.equal(d.prepare('PRAGMA user_version').get().user_version,40);assert.equal(d.prepare("SELECT count(*) n FROM template_variants WHERE status='accepted'").get().n,1);assert.equal(d.prepare('SELECT count(*) n FROM content_sheets').get().n,1);}finally{d.close();}
 });

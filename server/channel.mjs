@@ -33,13 +33,13 @@ export function createChannel({db,crm,body,json,audit,broadcast,accessConversati
   const categoryOf=(kind,prepared,flyer)=>kind==='customer'||kind==='system'?null:(prepared?.flyerSnapshot||flyer)?'marketing':prepared?'utility':'service';
 
   // Antes de insertar un mensaje saliente. Devuelve lo que debe guardarse; lanza 409 si la ventana está cerrada y el mensaje es libre.
-  function before(c,kind,{category,buttons,template}){
+  function before(c,kind,{category,buttons,template,keep}){
     const s=settings(c.brand_id),real=Boolean(c.wa_number);
     // Conversación real de WhatsApp: la regla de 24 h es de Meta y no depende del canal simulado de la marca. Con la ventana cerrada se rechaza
     // aquí lo que escribe una persona del equipo y los textos libres. Los avisos del negocio (confirmación de pago, certificado, recordatorio,
     // campaña) SÍ se guardan —un pago nunca debe fallar por esto— y quedan «no entregados» con el motivo al intentar salir (ver tick).
     if(real&&category&&!template&&(kind==='agent'||category==='service')&&!windowOf(c).open)throw fail(409,WA_CLOSED);
-    if((!s.enabled&&!real)||!category)return {category,buttons:null};
+    if((!s.enabled&&!real&&!keep)||!category)return {category,buttons:null};   // «keep»: los botones de un flujo de bienvenida se guardan aunque la marca no simule el canal
     if(!real&&s.enforce_window&&category==='service'&&!windowOf(c).open)throw fail(409,'La ventana de servicio de 24 h está cerrada en el canal simulado: envía una plantilla aprobada (temario, precio, fechas o flyer) o espera a que el cliente escriba.');
     const list=Array.isArray(buttons)?buttons.map(b=>text(b,20)).filter(Boolean).slice(0,3):[];
     return {category,buttons:list.length?JSON.stringify(list):null};

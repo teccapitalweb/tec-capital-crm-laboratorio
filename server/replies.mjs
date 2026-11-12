@@ -47,7 +47,7 @@ const PATTERNS=[
 // Motor de respuestas v2. Reglas del proyecto que cumple: precios/fechas/cupos sólo del catálogo; nunca confirma pagos ni
 // inscripciones; cada decisión queda en reply_log con intención, fuentes y motivo; las llamadas al proveedor de IA van fuera
 // de las transacciones (plan() y commit() son síncronos; el proveedor se consulta entre ambos).
-export function createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider,payments=null,content=null,now=Date.now,env=process.env}){
+export function createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider,payments=null,content=null,flows=null,now=Date.now,env=process.env}){
   const TOP_K=Math.max(1,Math.min(20,Number(env.AI_KB_TOP_K)||6));   // entradas de conocimiento que recibe la IA por llamada
   const defaults=brandId=>({brand_id:brandId,mode:'templates',provider_enabled:0,max_unknown:2,revision:0,updated_by:null,updated_at:null});
   const settings=brandId=>db.prepare('SELECT * FROM reply_settings WHERE brand_id=?').get(brandId)||defaults(brandId);
@@ -72,15 +72,20 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
   // Plan síncrono: decide intención, texto, fuentes y si hace falta el proveedor. No escribe nada.
   function plan(c,trigger){
     const s=settings(c.brand_id),user=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id),first=(user?.name||'').split(' ')[0];
-    const ctx=catalogue.info(c.course_id,c.edition_id),course=ctx.course,cls=classify(trigger.text),situational=CATALOGUE_INTENTS.includes(cls.intent)&&SITUATION.test(normalize(trigger.text)),intent=situational?'unknown':cls.intent,confidence=situational?.3:cls.confidence;
+    // Flujo de bienvenida de la marca (server/flows.mjs): si la persona pulsó un botón del paso en el que va, ese botón manda. Un botón de acción
+    // (precio, temario, fechas, inscribirse, asesor) equivale a pedirlo con esas palabras: se responde por el camino de siempre.
+    const flow=flows?.active(c.brand_id)||null,pressed=flow?flows.pressed(flow,c.id,trigger.text):null,forced=pressed?.kind==='action'?pressed.target:null;
+    const ctx=catalogue.info(c.course_id,c.edition_id),course=ctx.course,cls=forced?{intent:forced,confidence:1}:classify(trigger.text),situational=!forced&&CATALOGUE_INTENTS.includes(cls.intent)&&SITUATION.test(normalize(trigger.text)),intent=situational?'unknown':cls.intent,confidence=situational?.3:cls.confidence;
     const count=db.prepare("SELECT count(*) n FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id).n;
     // ¿El cliente pregunta algo concreto? (un tema del conocimiento, o una pregunta sin intención reconocida)
     const asks=TOPIC_INTENTS.includes(intent)||(intent==='unknown'&&looksLikeQuestion(trigger.text));
     const out={mode:s.mode,intent,confidence,reply:'',sources:[],stage:null,handoff:false,prepared:null,reason:'',needsProvider:false,knowledge:[],buttons:null,order:false};
+    const flowValues=()=>({name:copy.firstName(user?.name),course:course.title,edition:ctx.edition.name,brand:ctx.brand.name});
+    const menu=step=>{out.buttons=step.buttons.length?step.buttons.map(b=>b.label):null;out.keepButtons=true;out.flow={step:step.id};};   // los botones del paso viajan con la respuesta
     const catalogueSource={type:'catalogue',courseId:course.id,editionId:ctx.edition.id,promotionId:ctx.promotion?.id||null,priceCents:ctx.priceCents,currency:ctx.currency};
     const kb=approved(c.brand_id,c.course_id);
     // Bienvenida con la ficha vigente del curso (o la de anuncio): saludo, primer mensaje sin pregunta y respaldo del primer mensaje.
-    const welcome=()=>{out.prepared=catalogue.prepare(c,{kind:'flyer'});const ad=c.referral&&count===1?content?.render('ad_welcome',c.brand_id,{courseId:course.id,editionId:c.edition_id,name:first}):null;out.reply=ad?ad.text:copy.welcome(ctx,user?.name);out.sources.push(catalogueSource,ad?{type:'template',kind:'ad_welcome',id:ad.templateId}:{type:'template',kind:'welcome'});out.buttons=['Precio','Temario','Fechas'];out.reason=count===1?'Primer mensaje: bienvenida con la ficha vigente del curso.':'Saludo o petición de información: ficha vigente del curso.';};
+    const welcome=()=>{out.prepared=catalogue.prepare(c,{kind:'flyer'});const ad=c.referral&&count===1?content?.render('ad_welcome',c.brand_id,{courseId:course.id,editionId:c.edition_id,name:first}):null;out.reply=ad?ad.text:copy.welcome(ctx,user?.name);out.sources.push(catalogueSource,ad?{type:'template',kind:'ad_welcome',id:ad.templateId}:{type:'template',kind:'welcome'});out.buttons=['Precio','Temario','Fechas'];if(flow){const st=flow.steps[0];if(!ad)out.reply=flows.render(st.text,flowValues());if(!flow.withFlyer)out.prepared=null;menu(st);out.sources.push({type:'flow',step:st.id});}out.reason=count===1?'Primer mensaje: bienvenida con la ficha vigente del curso.':'Saludo o petición de información: ficha vigente del curso.';};
     // Con un tema reconocido (pago, certificado, grabación…) no se usa una respuesta aprobada de OTRO tema reconocido aunque se parezca en palabras:
     // «¿cuánto tiempo tengo para pagar?» no se contesta con «¿cuánto dura el curso?».
     const pool=TOPIC_INTENTS.includes(intent)?kb.filter(k=>k.topic===intent||!TOPIC_INTENTS.includes(k.topic)):kb;
@@ -109,7 +114,8 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
       out.reason='Varias preguntas en un mensaje ('+asked.join(', ')+'): se contestan juntas con el catálogo vigente y el conocimiento aprobado.';
       return true;
     };
-    if(intent==='opt_out'){out.reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';out.reason='El cliente pidió la baja; se registra y se confirma una sola vez.';}
+    if(pressed?.kind==='step'){out.intent='flow';out.confidence=1;out.reply=flows.render(pressed.step.text,flowValues());menu(pressed.step);out.sources.push({type:'flow',step:pressed.step.id});out.reason='Flujo de bienvenida: la persona eligió «'+pressed.label+'».';}
+    else if(intent==='opt_out'){out.reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';out.reason='El cliente pidió la baja; se registra y se confirma una sola vez.';}
     else if(intent==='human'||intent==='refund'){out.reply=intent==='refund'?copy.refund(user?.name):copy.human(user?.name);out.handoff=true;out.reason=intent==='refund'?'Queja o reembolso: siempre lo atiende una persona.':'El cliente pidió hablar con una persona.';}
     else if(ctx.reason){out.reply=copy.unavailable(ctx.reason);out.handoff=true;out.reason='La edición no está disponible según el catálogo.';out.sources.push(catalogueSource);}
     else if(several()){/* varias preguntas: respondidas juntas */}
@@ -148,8 +154,14 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
       if(out.needsProvider&&c.id!=='simulacion')out.memory=customerMemory(db,c,{now}).text;
       out.reply=copy.fallback(ctx);
       out.reason='Sin intención reconocida ni conocimiento parecido.'+(s.provider_enabled&&kb.length?(picked.sent?' Contexto para la IA: '+picked.sent+' de '+picked.considered+' entradas.':' Ninguna entrada del conocimiento se parece a la pregunta: no se consultó a la IA.'):'');
-      if(count===1){welcome();if(out.needsProvider){out.prepared=null;out.buttons=null;}out.reason='Primer mensaje sin respuesta en el conocimiento: bienvenida con la ficha vigente del curso.'+(out.needsProvider?' Si el proveedor de IA responde con fuentes aprobadas, se usa su respuesta.':'');}
+      if(count===1){welcome();if(out.needsProvider){out.prepared=null;if(!flow)out.buttons=null;}out.reason='Primer mensaje sin respuesta en el conocimiento: bienvenida con la ficha vigente del curso.'+(out.needsProvider?' Si el proveedor de IA responde con fuentes aprobadas, se usa su respuesta.':'');}
       if(unknownStreak(c.id)+1>=s.max_unknown){out.handoff=true;out.reply=copy.escalate;out.reason+=' Se alcanzó el máximo de respuestas sin reconocer ('+s.max_unknown+'): se escala.';}
+    }
+    if(flow){
+      if(out.handoff||forced==='enroll'||forced==='human'||intent==='opt_out')out.flow={end:true};   // pasa a una persona, se inscribe o pide la baja: el recorrido termina
+      else if(forced){menu(pressed.step);out.reason+=' Opción «'+pressed.label+'» del flujo de bienvenida: el menú sigue a la vista.';}
+      else if(!out.flow&&count===1&&!out.order)menu(flow.steps[0]);   // su primer mensaje fue una pregunta concreta: se contesta y se le ofrece el menú
+      else if(out.flow&&!pressed)out.reason+=' Flujo de bienvenida de la marca.';
     }
     if(out.mode==='templates'&&out.needsProvider){out.needsProvider=false;out.reason+=' (El proveedor de IA sólo se usa en modo autónomo.)';}
     return out;
@@ -208,8 +220,9 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     if(p.mode==='off'){log('skipped');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);return {action:'skipped',reason:'Respuestas automáticas apagadas para la marca: pasa a una persona.'};}
     if(p.mode==='suggest'){log('suggested');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);return {action:'suggested',reply,reason};}
     if(p.order){const made=payments.createOrder(c,{user:null,source:'bot'});reply=reply.replace('{{pedido}}',payments.linkMessage(made.order));}
-    const messageId=insertMessage(c,null,reply,'automation',ref,null,p.prepared?.flyerSnapshot?c.course_id:null,p.prepared,{buttons:p.buttons,category:'service'});   // responde a un mensaje entrante: siempre dentro de la ventana de servicio
+    const messageId=insertMessage(c,null,reply,'automation',ref,null,p.prepared?.flyerSnapshot?c.course_id:null,p.prepared,{buttons:p.buttons,keepButtons:p.keepButtons,category:'service'});   // responde a un mensaje entrante: siempre dentro de la ventana de servicio
     log(p.handoff?'escalated':'replied',messageId);
+    if(p.flow)flows?.apply(c.id,p.flow);
     if(p.stage)crm.setStage(c,p.stage);
     if(p.handoff){db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);}
     return {action:p.handoff?'escalated':'replied',messageId,reply,reason};

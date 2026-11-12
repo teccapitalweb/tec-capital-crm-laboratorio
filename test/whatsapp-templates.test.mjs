@@ -61,7 +61,7 @@ test('plantillas de WhatsApp de punta a punta: crear, aprobar, enviar desde el c
   const tplSends=name=>sent.filter(m=>m.type==='template'&&m.template.name===name);
 
   const admin=await call('/api/auth/register','',{username:'admin',name:'Administración',password,inviteCode:code});
-  db=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});assert.equal(db.prepare('PRAGMA user_version').get().user_version,39);
+  db=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});assert.equal(db.prepare('PRAGMA user_version').get().user_version,40);
   await call('/api/whatsapp/numbers/'+NUMBER,admin.cookie,{brandId:'globalvet',courseId:'aves',expectedRevision:0},'PUT');
   const stranger=await call('/api/auth/register','',{username:'curiosa',name:'Persona curiosa',password});
 

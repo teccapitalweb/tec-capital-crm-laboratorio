@@ -81,5 +81,5 @@ test('históricos por API: vista previa con errores, importación idempotente li
  const removed=await call('/api/legacy/batches/'+csvApply.batch.id,admin.cookie,undefined,'DELETE');assert.equal(removed.removed,2);assert.equal(count('SELECT count(*) n FROM legacy_records'),10);assert.equal(count("SELECT count(*) n FROM persons WHERE name='Luis Ruiz'"),1);
  await call('/api/legacy/batches/'+csvApply.batch.id,admin.cookie,undefined,'DELETE',404);
  await call('/api/legacy/apply',agent.cookie,{brandId:'globalvet',format:'json',content:JSON.stringify(doc)},'POST',403);
- const x=db();try{assert.equal(x.prepare('PRAGMA user_version').get().user_version,39);}finally{x.close();}
+ const x=db();try{assert.equal(x.prepare('PRAGMA user_version').get().user_version,40);}finally{x.close();}
 });
