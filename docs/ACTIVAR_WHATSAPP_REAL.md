@@ -53,6 +53,14 @@ En Meta → tu app → **WhatsApp → Configuración → Webhook**:
 3. **Verificar y guardar.** Si falla, casi siempre es que Railway no terminó de desplegar o que la palabra no coincide.
 4. En los campos del webhook, **suscríbete a `messages`**.
 
+## Paso 4b · Publicar la app de Meta
+
+Meta avisa en la pantalla del webhook: mientras la app esté **sin publicar**, sólo entrega los webhooks de prueba de su panel; tus mensajes reales no llegan al CRM. Para comprobar el camino antes de publicar, en la fila **messages** pulsa **Probar → Enviar al servidor**: en Conectores → «Últimos eventos recibidos» debe aparecer «ignorado: el número 123456123 no tiene una marca asignada» (es un número de ejemplo).
+
+1. En Meta → tu app → **Publicar**. Lo único que pide es la **URL de la política de privacidad**.
+2. Pulsa **Ir a la configuración de la app** y pega `https://<tu-dominio>/privacidad` (la página del CRM, [PLAN_AVISO_PRIVACIDAD.md](PLAN_AVISO_PRIVACIDAD.md)) o la del sitio de la empresa. Guarda.
+3. Vuelve a **Publicar** y pulsa el botón **Publicar**.
+
 ## Paso 5 · Probar
 
 1. Desde un teléfono de la lista «Para», escribe por WhatsApp al número de prueba: «Hola, ¿cuánto cuesta?».

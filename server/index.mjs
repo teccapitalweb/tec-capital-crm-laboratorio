@@ -44,6 +44,7 @@ import {migrateConnectors} from './connectors-schema.mjs';
 import {createConnectors} from './connectors.mjs';
 import {createWhatsApp} from './whatsapp.mjs';
 import {createFlows} from './flows.mjs';
+import {createPrivacy} from './privacy.mjs';
 import {migrateFlows} from './flows-schema.mjs';
 import {migrateWhatsApp,migrateWhatsAppTemplates} from './whatsapp-schema.mjs';
 import {migrateCoordination} from './coordination-schema.mjs';
@@ -219,6 +220,7 @@ const aiProvider=createAiProvider();
 aiProvider.useBudget(createAiBudget({db}));   // tope mensual de llamadas y tokens (server/ai-budget.mjs)
 // Flujo de bienvenida por marca (server/flows.mjs): saludo y menu con botones; apagado por omision.
 const flows=createFlows({db,crm,body,json,audit,broadcast});
+const privacy=createPrivacy();   // aviso de privacidad publico (/privacidad): pagina estatica, sin sesion
 const replies=createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider:aiProvider,payments,content,flows});
 // Estado de la IA para administraciÛn (server/ai-status.mjs): proveedor, clave (sÌ/no), gasto del mes y quÈ falta por marca; sin secretos.
 const aiStatus=createAiStatus({db,crm,provider:aiProvider,json});
@@ -341,6 +343,7 @@ const server=http.createServer(async(req,res)=>{
   try{
     if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.34.0',transport:'websocket',mode:'laboratorio'});}
     if(await connectors.handlePublic(req,res,path,url,req.socket.remoteAddress||'unknown'))return;   // webhooks de proveedores: firma propia, sin sesi√≥n ni Origin
+    if(await privacy.handlePublic(req,res,path))return;
     if(await payments.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // pago sin sesion de un pedido de WhatsApp real (/api/pay/<pedido>)
     if(await certificates.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // verificaci√≥n p√∫blica de certificados por folio, con l√≠mite por IP
     if(await integrations.handlePublic(req,res,path,url,req.socket.remoteAddress||'unknown'))return;   // API v1 de lectura: llave propia, sin sesiÛn ni Origin

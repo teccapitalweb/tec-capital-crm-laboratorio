@@ -34,6 +34,15 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## WhatsApp real probado contra Meta y aviso de privacidad (12 nov 2026)
+
+El usuario pasó la verificación de Meta, creó la app «CRM TEC Capital» con el portafolio «TEC Capital» y puso las variables en Railway. **Comprobado contra Meta de verdad:** «Probar conexión con Meta» respondió con el número de prueba (+1 555 177 4444), el webhook se verificó y un evento de prueba de Meta llegó firmado y se procesó («ignorado: el número 123456123 no tiene una marca asignada», que es lo esperado con el ejemplo de Meta).
+
+- **Hallazgo:** Meta ya no entrega mensajes reales a una app **sin publicar**, ni siquiera los del propio administrador; sólo los de prueba del panel. Publicar pide únicamente una URL de política de privacidad.
+- Por eso se creó la página pública `/privacidad` (rama `feat/aviso-privacidad`, sin publicar): [PLAN_AVISO_PRIVACIDAD.md](PLAN_AVISO_PRIVACIDAD.md). Es un texto base que la empresa debe revisar.
+- **Pendiente detectado:** los webhooks v27 de Meta contemplan personas que escriben con nombre de usuario y sin teléfono visible (BSUID). El CRM identifica por número; habrá que adaptarlo.
+- El token usado es temporal (dura cerca de un día): falta crear el permanente de usuario del sistema.
+
 ## Constructor de flujos de bienvenida (publicado en `main`, 12 nov 2026)
 
 Con Meta detenido por la verificación de la cuenta del usuario, eligió avanzar con esto («Sí, flujos»). **Esquema 40. Publicado** («Sí, publicar»); apagado por omisión. Detalle: [PLAN_FLUJO_BIENVENIDA.md](PLAN_FLUJO_BIENVENIDA.md).
