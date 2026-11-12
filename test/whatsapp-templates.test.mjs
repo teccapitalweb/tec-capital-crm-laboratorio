@@ -30,7 +30,7 @@ test('adaptador de Meta: una plantilla viaja con nombre, idioma y datos sin salt
 
 test('plantillas de WhatsApp de punta a punta: crear, aprobar, enviar desde el chat con la ventana cerrada, y avisos del negocio en espera hasta que la persona responde',async t=>{
   // ---- Meta de mentira: mensajes y plantillas de la cuenta
-  const sent=[],created=[];let n=0,rejectTemplate='';
+  const sent=[],created=[];let n=0,rejectTemplate='',subscribedApp=false;
   const remoteTemplates=[{id:'t-hello',name:'hello_world',language:'en_US',status:'APPROVED',category:'UTILITY',components:[{type:'BODY',text:'Welcome and congratulations! This message demonstrates your ability to send a WhatsApp message.'}]},{id:'t-img',name:'promo_con_imagen',language:'es_MX',status:'APPROVED',category:'MARKETING',components:[{type:'HEADER',format:'IMAGE'},{type:'BODY',text:'Hola {{1}}, mira esto.'}]}];
   const stub=createServer((req,res)=>{const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>{
     const raw=Buffer.concat(chunks),u=new URL(req.url,'http://x'),send=(status,data)=>{res.writeHead(status,{'content-type':'application/json'});res.end(JSON.stringify(data));};
@@ -39,13 +39,16 @@ test('plantillas de WhatsApp de punta a punta: crear, aprobar, enviar desde el c
     if((x=u.pathname.match(/^\/v25\.0\/(\d+)\/messages$/))&&req.method==='POST'){const body=JSON.parse(raw.toString());sent.push({from:x[1],...body});
       if(body.type==='template'&&body.template.name===rejectTemplate)return send(400,{error:{code:132001,message:'Template name does not exist in the translation'}});
       return send(200,{messages:[{id:'wamid.out'+(++n)}]});}
+    if(u.pathname==='/v25.0/'+WABA+'/subscribed_apps'&&req.method==='GET')return send(200,{data:subscribedApp?[{whatsapp_business_api_data:{id:'1',name:'CRM TEC Capital'}}]:[]});
+    if(u.pathname==='/v25.0/'+WABA+'/subscribed_apps'&&req.method==='POST'){subscribedApp=true;return send(200,{success:true});}
+    if(/^\/v25\.0\/\d+$/.test(u.pathname)&&req.method==='GET')return send(200,{display_phone_number:'+1 555 010 0000',verified_name:'Test Number',quality_rating:'GREEN'});
     if(u.pathname==='/v25.0/'+WABA+'/message_templates'&&req.method==='GET')return send(200,{data:remoteTemplates});
     if(u.pathname==='/v25.0/'+WABA+'/message_templates'&&req.method==='POST'){const body=JSON.parse(raw.toString());created.push(body);remoteTemplates.push({id:'t-'+created.length,name:body.name,language:body.language,status:'PENDING',category:body.category,components:body.components});return send(200,{id:'t-'+created.length,status:'PENDING',category:body.category});}
     send(404,{error:{code:100,message:'ruta desconocida'}});
   });});
   await new Promise(r=>stub.listen(0,'127.0.0.1',r));
   const dir=await mkdtemp(join(tmpdir(),'crm-wa-tpl-')),code=randomUUID(),password='Password-plantillas-2026!';let logs='',db=null;
-  const server=spawn(process.execPath,['server/index.mjs'],{env:{...process.env,HOST:'127.0.0.1',PORT:'0',DATA_DIR:dir,ADMIN_INVITE_CODE:code,APP_ORIGIN:'',NODE_ENV:'test',AI_PROVIDER:'',CHANNEL_CONNECTOR:'meta',META_ACCESS_TOKEN:TOKEN,META_APP_SECRET:SECRET,META_VERIFY_TOKEN:'verifica-123',META_PHONE_NUMBER_ID:NUMBER,META_WABA_ID:WABA,META_GRAPH_URL:'http://127.0.0.1:'+stub.address().port,META_GRAPH_VERSION:'',WA_HOLD_SWEEP_MS:'300'},stdio:['ignore','pipe','pipe']});
+  const server=spawn(process.execPath,['server/index.mjs'],{env:{...process.env,HOST:'127.0.0.1',PORT:'0',DATA_DIR:dir,ADMIN_INVITE_CODE:code,APP_ORIGIN:'',NODE_ENV:'test',AI_PROVIDER:'',CHANNEL_CONNECTOR:'meta',META_ACCESS_TOKEN:TOKEN,META_APP_SECRET:SECRET,META_VERIFY_TOKEN:'verifica-123',META_PHONE_NUMBER_ID:NUMBER,META_WABA_ID:WABA,META_GRAPH_URL:'http://127.0.0.1:'+stub.address().port,META_GRAPH_VERSION:'',WA_HOLD_SWEEP_MS:'300',WA_PING_COOLDOWN_MS:'0'},stdio:['ignore','pipe','pipe']});
   const origin=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error(logs)),10000);server.stderr.on('data',b=>logs+=b);server.stdout.on('data',b=>{const m=String(b).match(/http:\/\/127.0.0.1:\d+/);if(m){clearTimeout(timer);resolve(m[0]);}});server.once('exit',()=>{clearTimeout(timer);reject(Error(logs));});});
   t.after(async()=>{try{db?.close();}catch{}if(server.exitCode===null)await new Promise(r=>{server.once('exit',r);server.kill();});await new Promise(r=>stub.close(r));await rm(dir,{recursive:true,force:true});});
   async function call(path,cookie='',body,method=body===undefined?'GET':'POST',expected=200){const r=await fetch(origin+path,{method,headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const result=await r.json();assert.equal(r.status,expected,path+': '+JSON.stringify(result));return {...result,cookie:r.headers.get('set-cookie')?.split(';')[0]};}
@@ -65,6 +68,11 @@ test('plantillas de WhatsApp de punta a punta: crear, aprobar, enviar desde el c
   await call('/api/whatsapp/numbers/'+NUMBER,admin.cookie,{brandId:'globalvet',courseId:'aves',expectedRevision:0},'PUT');
   const stranger=await call('/api/auth/register','',{username:'curiosa',name:'Persona curiosa',password});
 
+  // 0) verificar el webhook no basta: la app debe estar suscrita a los avisos de la cuenta o Meta no entrega los mensajes reales
+  let ping=await call('/api/whatsapp/ping',admin.cookie,{});assert.equal(ping.ok,true);assert.deepEqual(ping.delivery,{known:true,subscribed:false,apps:[]});assert.equal((await call('/api/whatsapp',admin.cookie)).wabaSet,true);
+  await call('/api/whatsapp/subscribe',stranger.cookie,{},'POST',403);
+  const sub=await call('/api/whatsapp/subscribe',admin.cookie,{});assert.deepEqual(sub,{ok:true,subscribed:true,apps:['CRM TEC Capital'],cookie:undefined});
+  ping=await call('/api/whatsapp/ping',admin.cookie,{});assert.deepEqual(ping.delivery,{known:true,subscribed:true,apps:['CRM TEC Capital']});
   // 1) administración: validaciones al escribir una plantilla y borrador con los datos por su nombre
   let st=await call('/api/whatsapp/templates',admin.cookie);assert.equal(st.wabaSet,true);assert.equal(st.live,true);assert.deepEqual(st.templates,[]);assert.deepEqual(Object.keys(st.keys),['nombre','curso','edicion','marca']);
   await call('/api/whatsapp/templates',stranger.cookie,undefined,'GET',403);

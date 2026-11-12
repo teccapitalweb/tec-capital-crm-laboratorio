@@ -78,6 +78,12 @@ Las tres quedan vacías hasta que alguien escribe a un número real: migrar no c
 - **Persona única**: el teléfono del contacto pasa por el mismo enlace de persona que una edición desde el CRM.
 - **México**: Meta entrega `521XXXXXXXXXX`; si al responder dice «no está en la lista de destinatarios» (número de prueba), se reintenta una sola vez como `52XXXXXXXXXX`.
 
+## Lo que se aprendió al conectar con Meta de verdad (12 nov 2026)
+
+- Una app **sin publicar** sólo recibe los webhooks de prueba del panel de Meta. Publicarla pide una URL de política de privacidad ([PLAN_AVISO_PRIVACIDAD.md](PLAN_AVISO_PRIVACIDAD.md)).
+- Aun publicada y con el webhook verificado, Meta **no entrega** los mensajes reales si la app no está suscrita a la cuenta de WhatsApp Business (`POST /<WABA>/subscribed_apps`). Se detectó en los registros HTTP de Railway: Meta mostraba los mensajes en su panel y el servidor no recibía ninguna llamada. El botón **Recibir mensajes reales** de Conectores hace esa suscripción, y «Probar conexión con Meta» informa si existe.
+- Los webhooks llegan en la versión v27.0 y ya contemplan personas con nombre de usuario y sin teléfono visible (BSUID); el CRM identifica por número y habrá que adaptarlo.
+
 ## Límites de esta primera versión
 
 - **Fuera de las 24 horas sólo salen plantillas aprobadas por Meta** ([PLAN_PLANTILLAS_WHATSAPP.md](PLAN_PLANTILLAS_WHATSAPP.md), publicado). Con la ventana cerrada, el texto libre del equipo se rechaza al momento (409) y el chat ofrece «Enviar plantilla». Los avisos del negocio (confirmación de pago, certificado, recordatorio, seguimiento, campaña) **sí se guardan** —un pago nunca falla por esto—: con una plantilla de aviso aprobada quedan en espera hasta que la persona responde; sin ella, «no entregados» con el motivo.

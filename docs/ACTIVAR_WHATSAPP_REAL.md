@@ -61,6 +61,14 @@ Meta avisa en la pantalla del webhook: mientras la app esté **sin publicar**, s
 2. Pulsa **Ir a la configuración de la app** y pega `https://<tu-dominio>/privacidad` (la página del CRM, [PLAN_AVISO_PRIVACIDAD.md](PLAN_AVISO_PRIVACIDAD.md)) o la del sitio de la empresa. Guarda.
 3. Vuelve a **Publicar** y pulsa el botón **Publicar**.
 
+## Paso 4c · Suscribir la app a los avisos de la cuenta
+
+Verificar el webhook y publicar la app **no basta**: Meta sólo entrega los mensajes reales de una cuenta de WhatsApp Business a las apps suscritas a ella. Sin ese paso los mensajes aparecen en el panel de Meta («Revisa los webhooks de prueba») pero nunca llegan al CRM.
+
+1. Hace falta `META_WABA_ID` en Railway.
+2. En el CRM → Conectores → «WhatsApp real · Meta», pulsa **Recibir mensajes reales**. El CRM suscribe la app con el token del entorno.
+3. **Probar conexión con Meta** debe decir «Meta entrega los mensajes reales a: (nombre de tu app)».
+
 ## Paso 5 · Probar
 
 1. Desde un teléfono de la lista «Para», escribe por WhatsApp al número de prueba: «Hola, ¿cuánto cuesta?».
@@ -86,7 +94,8 @@ Detalle: [PLAN_PLANTILLAS_WHATSAPP.md](PLAN_PLANTILLAS_WHATSAPP.md). Hace falta 
 | «Meta no encuentra ese número» | `META_PHONE_NUMBER_ID` no es el identificador | Copia el «Identificador del número de teléfono», no el teléfono |
 | «No parece un token de Meta» | La variable tiene espacios u otra variable pegada | Deja sólo el token en `META_ACCESS_TOKEN` |
 | «No está en la lista de destinatarios permitidos» | El número de prueba sólo escribe a teléfonos confirmados | Agrégalo en «Para» |
-| Escribes y no aparece nada en el CRM | El webhook no está suscrito a `messages`, o el número no tiene marca | Revisa el paso 4 y el paso 3; en Conectores → «Últimos eventos recibidos» se ve si llegó y por qué se ignoró |
+| Escribes y no aparece nada en el CRM, ni en «Últimos eventos recibidos» | La app no está publicada o no está suscrita a los avisos de la cuenta | Pasos 4b y 4c: publicar la app y pulsar «Recibir mensajes reales» |
+| Aparece en «Últimos eventos recibidos» como «ignorado» | El número no tiene marca asignada o está en pausa | Paso 3 |
 | «Pasaron más de 24 horas…» | Regla de WhatsApp | Usa «Enviar plantilla» en el chat (hace falta una plantilla aprobada), o espera a que la persona escriba |
 | Mensaje «No entregado» en el chat | Meta lo rechazó; el motivo queda en el historial de entrega del mensaje | Corrige y pulsa reintentar |
 

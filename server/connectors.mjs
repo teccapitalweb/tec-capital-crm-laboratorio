@@ -184,6 +184,10 @@ export function metaChannel({env,fetchImpl=(...a)=>fetch(...a)}){
       const d=await graph('/'+wabaId()+'/message_templates',{method:'POST',payload:{name,language,category:String(category).toUpperCase(),components:[{type:'BODY',text:body,...(examples.length?{example:{body_text:[examples.map(param)]}}:{})}]}});
       return {metaId:String(d.id||''),status:String(d.status||'PENDING').toLowerCase(),category:String(d.category||category).toLowerCase()};
     },
+    // ¿Qué apps reciben los avisos de la cuenta de WhatsApp Business? Si la lista está vacía, Meta no entrega los mensajes reales a nadie.
+    async subscription(){const d=await graph('/'+wabaId()+'/subscribed_apps'),apps=(Array.isArray(d.data)?d.data:[]).map(a=>String(a?.whatsapp_business_api_data?.name||a?.name||'app sin nombre').slice(0,60));return {subscribed:apps.length>0,apps:apps.slice(0,5)};},
+    // Suscribe ESTA app (la del token) a los avisos de la cuenta. Es lo que hace que los mensajes reales lleguen al webhook.
+    async subscribe(){const d=await graph('/'+wabaId()+'/subscribed_apps',{method:'POST',payload:{}});if(d?.success===false)throw fail(502,'Meta no confirmó la suscripción.');return {ok:true};},
     // Comprueba token y número sin enviar nada: lee los datos públicos del número.
     async ping(id){
       if(missing.length)throw fail(503,'Conector de Meta sin configurar: faltan '+missing.join(', ')+'.');

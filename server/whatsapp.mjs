@@ -238,7 +238,7 @@ export function createWhatsApp({db,env=process.env,crm,catalogue,payments,replie
   function status(){
     const meta=connectors.adapters.channel.meta,envNumber=/^\d{5,25}$/.test(String(env.META_PHONE_NUMBER_ID||'').trim())?String(env.META_PHONE_NUMBER_ID).trim():null,numbers=db.prepare('SELECT * FROM wa_numbers ORDER BY created_at').all();
     return {live:connectors.metaLive(),selected:connectors.selected.channel.provider==='meta',configured:meta.configured,missing:meta.missing,envNumber,envNumberAssigned:envNumber?numbers.some(n=>n.phone_number_id===envNumber):false,
-      webhookPath:'/api/webhooks/channel/meta',webhookReady:Boolean(env.META_APP_SECRET&&env.META_VERIFY_TOKEN),numbers:numbers.map(numberView),
+      wabaSet:wabaSet(),webhookPath:'/api/webhooks/channel/meta',webhookReady:Boolean(env.META_APP_SECRET&&env.META_VERIFY_TOKEN),numbers:numbers.map(numberView),
       brands:db.prepare('SELECT id,name FROM brands ORDER BY name').all(),courses:db.prepare('SELECT id,brand_id,title FROM courses WHERE active=1 ORDER BY title').all(),
       people:db.prepare('SELECT count(*) n FROM wa_identities').get().n};
   }
@@ -264,9 +264,18 @@ export function createWhatsApp({db,env=process.env,crm,catalogue,payments,replie
     if(pinging)throw fail(429,'Ya hay una prueba en curso.');if(now()-lastPing<COOLDOWN)throw fail(429,'Espera unos segundos antes de probar otra vez.');
     if(!connectors.selected.channel.provider||connectors.selected.channel.provider!=='meta')return {ok:false,error:'WhatsApp real está apagado: pon CHANNEL_CONNECTOR=meta en el entorno del servidor.'};
     pinging=true;
-    try{const r=await connectors.adapters.channel.meta.ping(input?.phoneNumberId&&/^\d{5,25}$/.test(String(input.phoneNumberId))?String(input.phoneNumberId):null);audit(user,'whatsapp.ping',r.phoneNumberId);return {ok:true,...r};}
+    try{const meta=connectors.adapters.channel.meta,r=await meta.ping(input?.phoneNumberId&&/^\d{5,25}$/.test(String(input.phoneNumberId))?String(input.phoneNumberId):null);audit(user,'whatsapp.ping',r.phoneNumberId);
+      // además: ¿la app está suscrita a los avisos de la cuenta? Sin eso Meta no entrega los mensajes reales (sólo si hay META_WABA_ID)
+      let delivery={known:false};if(wabaSet()){try{delivery={known:true,...await meta.subscription()};}catch(e){delivery={known:false,error:String(e?.message||'').slice(0,200)};}}
+      return {ok:true,...r,delivery};}
     catch(e){return {ok:false,error:String(e?.message||'Meta no respondió.').slice(0,300)};}
     finally{pinging=false;lastPing=now();}
+  }
+  const wabaSet=()=>/^\d{5,25}$/.test(String(env.META_WABA_ID||'').trim());
+  async function subscribe(user){
+    if(!connectors.metaLive())throw fail(409,'WhatsApp real no está activo.');
+    await connectors.adapters.channel.meta.subscribe();audit(user,'whatsapp.subscribed','waba');
+    return {ok:true,...await connectors.adapters.channel.meta.subscription()};
   }
   async function handle(req,res,path,user){
     let x;
@@ -287,6 +296,7 @@ export function createWhatsApp({db,env=process.env,crm,catalogue,payments,replie
       if(!x[2]&&req.method==='DELETE'){json(res,200,removeTemplate(x[1],user));return true;}
     }
     if(path==='/api/whatsapp'&&req.method==='GET'){json(res,200,status());return true;}
+    if(path==='/api/whatsapp/subscribe'&&req.method==='POST'){rate('wa-sub:'+user.id,6);json(res,200,await subscribe(user));return true;}
     if(path==='/api/whatsapp/ping'&&req.method==='POST'){rate('wa-ping:'+user.id,12);json(res,200,await ping(await body(req),user));return true;}
     if((x=path.match(/^\/api\/whatsapp\/numbers\/(\d{1,30})$/))){
       if(req.method==='PUT'){json(res,200,{number:saveNumber(x[1],await body(req),user)});return true;}
