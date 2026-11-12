@@ -123,7 +123,10 @@ export function metaChannel({env,fetchImpl=(...a)=>fetch(...a)}){
   // Se envía tal como llegó y, sólo si Meta dice «no está en la lista» (131030), se reintenta una vez sin el 1.
   async function post(from,to,message){
     const send=dest=>graph('/'+from+'/messages',{method:'POST',payload:{messaging_product:'whatsapp',recipient_type:'individual',to:dest,...message}});
-    try{return await send(to);}catch(e){if(e.metaCode===131030&&/^521\d{10}$/.test(to))return await send('52'+to.slice(3));throw e;}
+    // Se reintenta sin el 1 ante cualquier rechazo de Meta que no sea del token, de límites o de la ventana de 24 h (131030 es el habitual,
+    // pero Meta no siempre usa ese código). Si el reintento también falla, se informa el PRIMER motivo.
+    const SKIP=new Set([190,4,10,80007,130429,131047,131056]);
+    try{return await send(to);}catch(e){if(!e.metaCode||SKIP.has(e.metaCode)||!/^521\d{10}$/.test(to))throw e;try{return await send('52'+to.slice(3));}catch{throw e;}}
   }
   return {provider:'meta',kind:'channel',channels:['whatsapp'],capabilities:{templates:true,buttons:true,media:true,readReceipts:true,referral:true,inboundWebhook:true},
     configured:missing.length===0,missing,webhooksEnabled:()=>Boolean(env.META_APP_SECRET),

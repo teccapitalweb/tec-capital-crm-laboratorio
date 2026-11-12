@@ -139,7 +139,7 @@ function tintAvatars(){for(const el of document.querySelectorAll('.avatar:not([d
     if(!c.window?.enabled)return `<span class="${m.read_at?'read':''}" aria-label="${m.read_at?'Leído':'Enviado'}">${icon(m.read_at?'check-check':'check')}</span>`;
     const s=m.delivery_state||'sent',labels={sent:'Enviado',delivered:'Entregado',read:'Leído',failed:'No entregado'},cat={service:'servicio',utility:'plantilla de utilidad',marketing:'plantilla de marketing'};
     if(m.wa_hold&&s==='sent'&&!m.provider_ref)return `<span class="held" title="Se le envió un aviso. Este mensaje sale cuando la persona responda; si no responde en unos días, caduca.">${icon('hourglass')} En espera de su respuesta</span>`;
-    if(s==='failed')return `<span class="failed" title="${esc(m.failed_reason||'')}">${icon('triangle-alert')} ${labels.failed}</span>${agentMode()?`<button type="button" class="meta-action" data-action="msg-retry" data-id="${m.id}">Reintentar</button>`:''}`;
+    if(s==='failed')return `<span class="failed" title="${esc(m.failed_reason||'')}">${icon('triangle-alert')} ${labels.failed}</span>${agentMode()?`<button type="button" class="meta-action" data-action="msg-retry" data-id="${m.id}">Reintentar</button>`:''}${agentMode()&&m.failed_reason?`<span class="failed-why">${esc(m.failed_reason)}</span>`:''}`;
     return `${m.wa_template?'<span class="wa-tpl-mark">Plantilla</span>':''}<span class="${s==='read'?'read':''}" aria-label="${labels[s]}" title="${labels[s]}${m.category?' · '+cat[m.category]:''}">${icon(s==='sent'?'check':'check-check')}</span>`;
   }
   // Plantillas aprobadas por Meta: lo único que WhatsApp deja enviar cuando la persona lleva más de 24 h sin escribir.

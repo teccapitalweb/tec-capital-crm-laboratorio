@@ -300,3 +300,6 @@ label.field input[type=file]{display:block;width:100%;min-height:64px;padding:11
 
 /* Diálogos: más despegados del fondo */
 dialog{box-shadow:0 1px 2px #1d2e3814,0 40px 90px -30px #1d2e3866}
+
+/* El motivo de un mensaje no entregado se lee sin pasar el cursor (sólo equipo) */
+.message-meta{flex-wrap:wrap}.failed-why{flex-basis:100%;text-align:right;color:var(--bad);font-size:12px;line-height:1.45;margin-top:2px;overflow-wrap:anywhere}
