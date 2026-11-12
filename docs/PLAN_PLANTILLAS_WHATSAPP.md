@@ -1,6 +1,6 @@
 # Plantillas de WhatsApp aprobadas por Meta (12 nov 2026)
 
-Rama `feat/plantillas-whatsapp`. **Esquema 39.** Sin publicar. Continúa [PLAN_WHATSAPP_REAL.md](PLAN_WHATSAPP_REAL.md).
+**Esquema 39.** Publicado en `main` (sin efecto mientras WhatsApp real siga apagado). Continúa [PLAN_WHATSAPP_REAL.md](PLAN_WHATSAPP_REAL.md).
 
 ## Para qué
 

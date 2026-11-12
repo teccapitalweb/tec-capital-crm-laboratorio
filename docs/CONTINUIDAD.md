@@ -34,9 +34,9 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Plantillas de WhatsApp aprobadas por Meta (rama `feat/plantillas-whatsapp`, 12 nov 2026)
+## Plantillas de WhatsApp aprobadas por Meta (publicado en `main`, 12 nov 2026)
 
-Mientras el usuario resuelve la verificación de su cuenta de desarrollador en Meta (no le llega el SMS), eligió avanzar con esto («Sí, plantillas»). **Esquema 39. Sin publicar.** Detalle: [PLAN_PLANTILLAS_WHATSAPP.md](PLAN_PLANTILLAS_WHATSAPP.md).
+Mientras el usuario resuelve la verificación de su cuenta de desarrollador en Meta (no le llega el SMS), eligió avanzar con esto («Sí, plantillas»). **Esquema 39. Publicado** («Sí, publicar»). Detalle: [PLAN_PLANTILLAS_WHATSAPP.md](PLAN_PLANTILLAS_WHATSAPP.md).
 
 - **Administración** en Conectores: escribir una plantilla con `{{nombre}}`, `{{curso}}`, `{{edicion}}`, `{{marca}}`; enviarla a aprobación; sincronizar su estado; adoptar una que ya existe en Meta.
 - **Desde el chat:** botón «Enviar plantilla» cuando la ventana de 24 h está cerrada.
