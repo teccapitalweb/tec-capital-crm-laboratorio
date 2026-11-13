@@ -5,6 +5,9 @@
 // El motor de respuestas sólo llama a draft() FUERA de las transacciones de SQLite y con tiempo límite.
 
 const STOP=new Set(['el','la','los','las','un','una','unos','unas','de','del','al','a','en','y','o','que','por','para','con','sin','es','son','me','mi','te','su','se','lo','le','si','no','ya','hay','como','cual','cuales','cuando','donde','este','esta','esto','ese','esa','eso','pero','mas','muy','tengo','quiero','saber','sobre','curso','hola','buenas','buenos','dias','tardes','noches','gracias','favor','pueden','puedo','podria','quisiera']);
+// Palabras de relleno: cuentan en el tamaño de la pregunta, pero sólo suman como coincidencia si otra palabra con contenido también coincide.
+// Sin esto «¿tienen sucursal?» se contestaba con la entrada del certificado («tiene validez») y «a ver» con la de la grabación («ver después»).
+const WEAK=new Set(['tiene','tienen','ver','nada','algo','todo','bien','hacer','dan']);
 export const normalize=v=>String(v??'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9ñ\s]/g,' ');
 export const tokens=v=>normalize(v).split(/\s+/).filter(t=>t.length>=3&&!STOP.has(t));
 export const stem=t=>t.replace(/(ciones|cion|mente|idad|ando|iendo|ados|adas|ado|ada|es|s)$/,'');
@@ -12,10 +15,13 @@ export const stem=t=>t.replace(/(ciones|cion|mente|idad|ando|iendo|ados|adas|ado
 // Puntuación de parecido entre una pregunta y una entrada (pregunta + variantes + tema): fracción de términos de la
 // pregunta que aparecen en la entrada, con raíces simples para tolerar plurales y conjugaciones.
 export function similarity(question,entry){
-  const q=[...new Set(tokens(question).map(stem))];if(!q.length)return 0;
+  const q=new Map();for(const t of tokens(question)){const s=stem(t);q.set(s,(q.get(s)??true)&&WEAK.has(t));}
+  if(!q.size)return 0;
   const bag=new Set([entry.question,...(entry.variants||[]),entry.topic||''].flatMap(tokens).map(stem));
-  const hits=q.filter(t=>bag.has(t)||[...bag].some(b=>b.length>=5&&(b.startsWith(t)||t.startsWith(b)))).length;
-  return hits/q.length;
+  // Un trozo muy corto no cuenta como coincidencia por prefijo («entiendo» → «ent» no es «entregan»).
+  const hit=t=>bag.has(t)||(t.length>=4&&[...bag].some(b=>b.length>=5&&(b.startsWith(t)||t.startsWith(b))));
+  let strong=0,weak=0;for(const [t,isWeak] of q)if(hit(t)){if(isWeak)weak++;else strong++;}
+  return strong?(strong+weak)/q.size:0;
 }
 export function bestMatch(question,entries,threshold=0.5){
   let best=null;

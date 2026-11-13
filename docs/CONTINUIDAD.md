@@ -34,6 +34,13 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Asistente sin callejones (rama `feat/asistente-sin-callejones`, 13 nov 2026, sin publicar)
+
+- **Por qué:** el usuario vio en WhatsApp real que el asistente pasaba a un asesor («No quiero hacerte perder tiempo…») por mensajes cortos. Medido con 94 frases de trato: 79 caían en «no reconocida»; además, en Autónomo las respuestas buenas de la IA contaban como «sin reconocer» y la segunda seguida ya escalaba.
+- **Qué se hizo:** diez intenciones de trato por reglas; «sí»/«no» leídos contra el último mensaje del asistente; tres escalones cuando no hay respuesta (opciones → se pregunta si quiere una persona → pase); la cuenta sólo suma preguntas sin contestar; parecido con el conocimiento más estricto. Detalle, límites y verificación: [PLAN_ASISTENTE_SIN_CALLEJONES.md](PLAN_ASISTENTE_SIN_CALLEJONES.md).
+- **Decisiones:** inscribirse por contexto exige un «sí» claro (no «ok» ni «va») y una pregunta directa; el ajuste «máximo sin reconocer» ahora marca cuándo se **propone** una persona, y el pase ocurre en el siguiente; los pases obligatorios (asesor, queja, pago reportado, edición no disponible) no cambian.
+- **Evidencia:** 213 pruebas; revisión independiente con siete hallazgos corregidos; chat revisado en el demo local a 375 px. Falta verlo en producción y con WhatsApp real.
+
 ## WhatsApp real probado contra Meta y aviso de privacidad (12 nov 2026)
 
 El usuario pasó la verificación de Meta, creó la app «CRM TEC Capital» con el portafolio «TEC Capital» y puso las variables en Railway. **Comprobado contra Meta de verdad:** «Probar conexión con Meta» respondió con el número de prueba (+1 555 177 4444), el webhook se verificó y un evento de prueba de Meta llegó firmado y se procesó («ignorado: el número 123456123 no tiene una marca asignada», que es lo esperado con el ejemplo de Meta).

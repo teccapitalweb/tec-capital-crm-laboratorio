@@ -34,7 +34,7 @@ export function createSummaries({db,crm,provider,accessConversation,body,json,au
     const stage={nuevo:'nuevo interés',interesado:'interesado',inscripcion:'pidió inscribirse',ganada:'inscrito',perdida:'lo dejó pasar'}[opp?.stage]||null;
     const tasks=opp?db.prepare("SELECT title,due_at FROM tasks WHERE opportunity_id=? AND status='open' ORDER BY due_at LIMIT 3").all(opp.id):[];
     const pendingOrders=db.prepare("SELECT count(*) n FROM orders WHERE conversation_id=? AND status IN ('pending','review')").get(c.id).n;
-    const intents=db.prepare("SELECT intent FROM reply_log WHERE conversation_id=? AND intent NOT IN ('unknown','greeting','thanks','opt_out')").all(c.id).map(r=>r.intent);
+    const intents=db.prepare("SELECT intent FROM reply_log WHERE conversation_id=? AND intent NOT IN ('unknown','greeting','thanks','opt_out','affirm','decline','later','bye','help','menu','identity')").all(c.id).map(r=>r.intent);
     const topics=[...new Set(intents)].filter(i=>TOPIC_LABEL[i]).map(i=>TOPIC_LABEL[i]);
     const objections=[...new Set(customer.flatMap(m=>OBJECTIONS.filter(([re])=>re.test(normalize(m.text))).map(([,l])=>l)))];
     const questions=customer.filter(m=>m.text&&looksLikeQuestion(m.text)).slice(-3).map(m=>quote(m.text));

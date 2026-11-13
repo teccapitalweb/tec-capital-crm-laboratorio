@@ -39,6 +39,8 @@ Cambio de comportamiento (uno): una consulta general de pago **sin** respuesta a
 
 Cada respuesta se separó en **cuerpo** (el dato) y **cierre** (el siguiente paso): `priceBody`, `syllabusBody`, `scheduleBody`. Cuando el cliente pregunta dos o tres cosas a la vez («¿qué temas incluye, y tiene certificado?»), `several()` une los cuerpos y pone un solo cierre. Los temas del conocimiento (certificado, grabación, requisitos…) entran con su respuesta aprobada; si un tema no tiene respuesta aprobada, se omite y se contesta lo demás.
 
+> **13 nov 2026:** los textos de «sin respuesta» y los mensajes de trato («ok», «sí», «no», «espera», «¿eres un bot?») se ampliaron en [PLAN_ASISTENTE_SIN_CALLEJONES.md](PLAN_ASISTENTE_SIN_CALLEJONES.md) (rama sin publicar).
+
 ## Lo que no cambió
 
 - Los **materiales que envía el equipo** con los botones Precio, Temario y Fechas (y los programados) siguen igual: son `catalogue.prepare()`.

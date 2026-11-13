@@ -113,7 +113,12 @@ test('motor de respuestas v2: conocimiento, niveles por marca, bitácora, sugere
     assert.deepEqual(log.map(l=>l.intent).reverse(),['greeting','recording']);assert.ok(log[0].sources.some(s=>s.type==='knowledge'));assert.equal(log[0].action,'replied');assert.ok(log[0].reply_message_id);
     await call('/api/conversations/'+conv.id+'/replies',clients[0].cookie,undefined,'GET',403);await call('/api/conversations/'+conv.id+'/replies',other.cookie,undefined,'GET',404);
     await say(clients[0],conv,'xyzzy plugh');const r3=await waitReply(clients[0],conv,3);assert.match(r3[2].text,/precio, el temario o las fechas/);
-    await say(clients[0],conv,'qwerty asdf');const r4=await waitReply(clients[0],conv,4);assert.match(r4[3].text,/persona del equipo/);
+    // segunda sin respuesta: en lugar de pasar a una persona, se le PREGUNTA si la quiere; la conversación sigue con el asistente
+    await say(clients[0],conv,'qwerty asdf');const r4=await waitReply(clients[0],conv,4);assert.match(r4[3].text,/¿Quieres que te pase con una persona del equipo/);
+    const mid=(await call('/api/conversations/'+conv.id,clients[0].cookie)).conversation;assert.equal(mid.bot_enabled,1);assert.equal(mid.status,'open');
+    assert.equal((await call('/api/conversations/'+conv.id+'/replies',agent.cookie)).log[0].action,'replied');
+    // tercera sin respuesta después de la propuesta: ahora sí pasa a una persona
+    await say(clients[0],conv,'zxcvb mnbvc');const r5=await waitReply(clients[0],conv,5);assert.match(r5[4].text,/le paso tu conversación a una persona del equipo/);
     const after=(await call('/api/conversations/'+conv.id,clients[0].cookie)).conversation;assert.equal(after.bot_enabled,0);assert.equal(after.status,'waiting');
     assert.equal((await call('/api/conversations/'+conv.id+'/replies',agent.cookie)).log[0].action,'escalated');
   });

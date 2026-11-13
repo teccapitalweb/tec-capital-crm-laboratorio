@@ -74,8 +74,34 @@ export const paymentMethods='Puedes pagar con tarjeta u OXXO desde el enlace que
 export const paymentWithAdvisor='Con gusto te paso las formas de pago: ya le avisé a un asesor para que te escriba por aquí.';
 
 export const thanks=name=>'¡Con gusto'+hi(name)+'! Aquí sigo por si quieres ver el precio, las fechas o inscribirte.';
-export const fallback=ctx=>'Esa no la tengo a la mano, pero puedo contarte el precio, el temario o las fechas de '+ctx.course.title+'. Si prefieres hablar con una persona, escribe «asesor».';
-export const escalate='No quiero hacerte perder tiempo: le paso tu pregunta a una persona del equipo para que te responda bien. Te escribe por aquí en cuanto pueda.';
+// Segundo «gracias» u «ok» seguido: no se repite el mismo texto.
+export const thanksAgain='¡Perfecto! Cualquier cosa, aquí estoy.';
+
+// ---- Mensajes de trato (docs/PLAN_ASISTENTE_SIN_CALLEJONES.md): contestan «sí», «no», «espera», «¿sigues ahí?», «¿eres un bot?»… sin tratarlos
+// como una pregunta sin respuesta. Ninguno promete nada: no apartan lugares, no ofrecen descuentos y no dicen que ya viene una persona.
+export const affirm=ctx=>'¡Perfecto! ¿Qué te cuento de '+ctx.course.title+'?';
+export const decline=name=>'Sin problema'+hi(name)+'. Si más adelante quieres retomarlo, escríbeme por aquí y lo vemos con gusto.';
+export const later=name=>'¡Claro'+hi(name)+', sin prisa! Aquí te queda la información; cuando quieras seguir, escríbeme por este chat.';
+export const bye=name=>'¡Hasta pronto'+hi(name)+'! Aquí estaré si necesitas algo más.';
+export const help=ctx=>'Aquí estoy para ayudarte. Puedo contarte el precio, el temario o las fechas de '+ctx.course.title+', o ayudarte a inscribirte. ¿Qué necesitas saber?';
+export const menu=ctx=>'Esto es lo que te puedo contar de '+ctx.course.title+':';
+export const identity=ctx=>'Soy el asistente automático de '+ctx.brand.name+': respondo al momento sobre el precio, el temario y las fechas, y te ayudo a inscribirte. Si prefieres que te atienda una persona del equipo, escribe «asesor».';
+// Cupo: sólo lo que dice el catálogo. Con muchos lugares no se da la cifra; con pocos sí, sin decir que queda apartado.
+export function seats(ctx){
+  const n=ctx.edition.available_seats;
+  if(n===null||n===undefined)return 'Las inscripciones de '+title(ctx)+' están abiertas. No tengo a la mano el número exacto de lugares; si quieres que te lo confirme una persona, escribe «asesor».';
+  if(n<=0)return 'Por ahora no quedan lugares en '+title(ctx)+'. Si quieres que una persona te proponga otra fecha, escribe «asesor».';
+  return 'Todavía hay lugar en '+title(ctx)+(n<=10?': '+(n===1?'queda 1 lugar':'quedan '+n+' lugares')+' al momento de responderte':'')+'. '+ENROLL_CTA;
+}
+export const courses=(ctx,titles)=>titles.length
+  ?'En '+ctx.brand.name+' también tenemos:\n'+titles.map(t=>'• '+t).join('\n')+'\n\nEste chat es sobre '+ctx.course.title+'. Si te interesa otro, escribe «asesor» y una persona te da los detalles.'
+  :'Por ahora '+ctx.course.title+' es el curso que tenemos abierto en '+ctx.brand.name+'. ¿Te cuento el precio o las fechas?';
+export const objection=ctx=>'Te entiendo. El precio vigente de '+title(ctx)+' es de '+priceText(ctx)+'. Por este chat no puedo ofrecerte otro precio, pero una persona del equipo puede revisar las opciones contigo: escribe «asesor» y le aviso.\n'+PRICE_NOTE;
+
+// ---- Cuando no hay respuesta: primero opciones, después se PREGUNTA si quiere una persona, y sólo al final se pasa.
+export const fallback=ctx=>'Esa pregunta todavía no la tengo a la mano. Lo que sí puedo contarte ahora mismo es el precio, el temario o las fechas de '+ctx.course.title+'. Si prefieres que te responda una persona, escribe «asesor».';
+export const offerHuman='Perdona, no logré darte una buena respuesta. ¿Quieres que te pase con una persona del equipo para que te atienda directamente?';
+export const escalate='Para no hacerte dar más vueltas, le paso tu conversación a una persona del equipo. Te escribe por aquí en cuanto pueda.';
 export const human=name=>'¡Claro'+hi(name)+'! Ya le avisé al equipo: un asesor te escribe por aquí en cuanto esté disponible.';
 // WhatsApp real: llega un audio, un video o un sticker sin texto. Se pide por escrito en lugar de adivinar.
 export const unsupportedMedia=what=>'Por ahora no puedo abrir '+what+' por aquí. ¿Me lo escribes en un mensaje, por favor? Así te respondo enseguida.';

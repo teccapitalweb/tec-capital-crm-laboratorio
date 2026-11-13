@@ -56,7 +56,7 @@ window.createKnowledgeUI=function({state,api,esc,icon,showModal,toast,reload}){
 
 window.createReplyAssistUI=function({state,api,esc,icon,toast}){
   const $=s=>document.querySelector(s);
-  const INTENT={opt_out:'Baja',human:'Pide una persona',refund:'Queja o reembolso',enroll:'Quiere inscribirse',payment:'Pago',price:'Precio',schedule:'Fechas',syllabus:'Temario',certificate:'Certificado',requirements:'Requisitos',modality:'Modalidad',recording:'Grabación',duration:'Duración',greeting:'Saludo / información',thanks:'Agradecimiento',unknown:'No reconocida'};
+  const INTENT={opt_out:'Baja',human:'Pide una persona',refund:'Queja o reembolso',enroll:'Quiere inscribirse',payment:'Pago',price:'Precio',schedule:'Fechas',syllabus:'Temario',certificate:'Certificado',requirements:'Requisitos',modality:'Modalidad',recording:'Grabación',duration:'Duración',greeting:'Saludo / información',thanks:'Agradecimiento',unknown:'No reconocida',identity:'Pregunta si es un bot',decline:'No le interesa',objection:'Le parece caro',seats:'Cupo',courses:'Otros cursos',affirm:'Dice que sí',later:'Lo va a pensar',bye:'Despedida',help:'Pide ayuda',menu:'Pide opciones'};
   const ACTION={replied:'Respondió',suggested:'Sugirió',escalated:'Respondió y pasó a una persona',skipped:'No respondió (nivel apagado)'};
   const MODE={off:'Apagado',suggest:'Sugerir al asesor',templates:'Responder con plantillas',autonomous:'Autónomo con IA'};
   const source=s=>s.type==='catalogue'?'Catálogo (precio y fechas vigentes)':s.type==='knowledge'?'Conocimiento: '+esc(s.question||'entrada aprobada'):'Plantilla de bienvenida';

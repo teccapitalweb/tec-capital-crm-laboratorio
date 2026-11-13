@@ -39,10 +39,11 @@ export const PERSONAS={
     {say:['¿Necesito conocimientos previos?','¿Qué requisitos piden para tomarlo?'],wait:'reply'},
     {say:['Perfecto, gracias. Lo pienso y les aviso.']},
   ]},
-  desconocido:{label:'Pregunta fuera de guion',description:'Hace preguntas que el motor no reconoce; tras el máximo permitido se escala a una persona.',outcome:'escalado_a_persona',steps:[
+  desconocido:{label:'Pregunta fuera de guion',description:'Hace preguntas que el motor no reconoce; el asistente le propone una persona y, cuando acepta, pasa a un asesor.',outcome:'escalado_a_persona',steps:[
     {say:['Hola, buenas tardes.','Hola, ¿me pueden ayudar?'],wait:'reply'},
     {say:['¿Dan beca o apoyo para estudiantes de provincia?','¿Tienen convenio con universidades para dar créditos?'],wait:'reply'},
-    {say:['¿Y hacen cursos a la medida para equipos de trabajo?','¿Pueden impartirlo dentro de mi empresa para varios compañeros?'],wait:'human',onHuman:['Gracias, me interesa esa opción. ¿Me pueden enviar una propuesta?']},
+    {say:['¿Y hacen cursos a la medida para equipos de trabajo?','¿Pueden impartirlo dentro de mi empresa para varios compañeros?'],wait:'reply'},
+    {say:['Sí, con un asesor por favor.','Sí, prefiero que me atienda una persona.'],wait:'human',onHuman:['Gracias, me interesa esa opción. ¿Me pueden enviar una propuesta?']},
   ]},
   silencio:{label:'Se queda en silencio',description:'Saluda y deja de responder; si una receta de seguimiento lo reactiva, retoma la plática.',outcome:'silencio',steps:[
     {say:['Hola, me interesa {{curso}}.','Hola, quiero información de {{curso}}.'],wait:'reply'},

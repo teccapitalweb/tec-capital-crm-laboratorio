@@ -15,7 +15,7 @@ const BANK=[
  ['¿Cuándo empieza?','schedule','cat'],['que dia inicia','schedule','cat'],['¿Qué temas incluye?','syllabus','cat'],['Quiero inscribirme','enroll','cat'],
  ['Quiero hablar con un asesor','human','per'],['Quiero un reembolso','refund','per'],['Ya pagué, les mando el comprobante','payment','per'],
  ['¿Entregan certificado?','certificate','kb'],['¿Se graba la clase?','recording','kb'],['¿Cuánto dura el curso?','duration','kb'],['¿Aceptan tarjeta?','payment','kb'],
- ['Gracias, lo voy a pensar y les aviso.','thanks','cat'],['Ok, gracias. Lo platico en casa y les escribo.','thanks','cat'],['ok perfecto','thanks','cat'],
+ ['Gracias, lo voy a pensar y les aviso.','later','cat'],['Ok, gracias. Lo platico en casa y les escribo.','later','cat'],['ok perfecto','thanks','cat'],
  // precisión nueva: antes caían en la ficha equivocada
  ['¿Qué voy a saber hacer cuando termine?','unknown',null],        // «cuando» no es una pregunta de fechas
  ['cuando me mandan el link de la clase','unknown',null],
@@ -47,7 +47,7 @@ test('reglas de intención: cada frase del banco va a la ruta correcta y las res
  const rs=(await call('/api/replies/settings',admin.cookie)).settings.find(x=>x.brand_id==='globalvet');
  await call('/api/replies/brands/globalvet',admin.cookie,{mode:'autonomous',providerEnabled:true,expectedRevision:rs.revision},'PATCH');
  const sim=async text=>(await call('/api/replies/test',admin.cookie,{brandId:'globalvet',text})).result;
- const route=r=>{const types=[...new Set(r.sources.map(s=>s.type))];return r.handoff&&['human','refund','payment'].includes(r.intent)?'per':r.provider.used?'ia':types.includes('knowledge')?'kb':types.includes('catalogue')||['thanks','opt_out'].includes(r.intent)?'cat':'gen';};
+ const route=r=>{const types=[...new Set(r.sources.map(s=>s.type))];return r.handoff&&['human','refund','payment'].includes(r.intent)?'per':r.provider.used?'ia':types.includes('knowledge')?'kb':types.includes('catalogue')||['thanks','opt_out','later'].includes(r.intent)?'cat':'gen';};
  const wrong=[];
  for(const [text,intent,want] of BANK){const r=await sim(text),got=route(r);
   if(r.intent!==intent)wrong.push(text+' → intención «'+r.intent+'», esperaba «'+intent+'»');

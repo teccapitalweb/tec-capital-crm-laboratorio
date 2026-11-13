@@ -10,7 +10,17 @@ import * as copy from './reply-copy.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
 export const MODES=['off','suggest','templates','autonomous'];
-export const INTENTS=['opt_out','human','refund','enroll','payment','price','schedule','syllabus','certificate','requirements','modality','recording','duration','greeting','thanks','unknown'];
+export const INTENTS=['opt_out','human','refund','enroll','payment','price','schedule','syllabus','certificate','requirements','modality','recording','duration','greeting','thanks','identity','decline','objection','seats','courses','affirm','later','bye','help','menu','unknown'];
+// Mensajes de trato (saludo, gracias, «sí», «no», «espera», «¿sigues ahí?»…): se contestan con un texto fijo y NO cuentan como pregunta sin respuesta.
+export const SOFT_INTENTS=['greeting','thanks','affirm','decline','later','bye','help','menu','identity'];
+// Con el primer mensaje de una conversación estas intenciones se contestan tal cual; las demás de trato reciben la bienvenida.
+const DIRECT_INTENTS=['seats','courses','identity','objection'];
+// Respuestas cortas que se leen contra el último mensaje del asistente («sí» después de «¿Quieres apartar tu lugar?»).
+const FOLLOW_UP=['affirm','thanks','greeting','decline'];
+const YES=/^(si+|sip|simon|claro|claro que si|por supuesto|desde luego|si claro|por favor|porfa|porfavor|si por favor|si porfa|quiero|si quiero|lo quiero|si lo quiero|me interesa|si me interesa|adelante|dale|va|sale|sale va|orale|bueno|andale|juega|si gracias|hagamoslo|de acuerdo|esta bien|ok|okey|okay|oki|vale)$/;
+const STRONG_YES=/^(si+|sip|simon|claro que si|por supuesto|si claro|si por favor|si porfa|quiero|si quiero|lo quiero|si lo quiero|me interesa|si me interesa|adelante|dale|hagamoslo|si gracias)$/;
+const OPTIONS=['Precio','Temario','Fechas'],WITH_HUMAN=['Precio','Fechas','Hablar con asesor'],OFFER_BUTTONS=['Sí, con un asesor','Ver opciones'];
+const clean=raw=>normalize(raw).replace(/\s+/g,' ').trim();
 const TOPIC_INTENTS=['certificate','payment','requirements','modality','recording','duration'];
 // «¿Qué pasa si un día no puedo conectarme a la sesión?» menciona palabras de horario pero pregunta por una SITUACIÓN: se contesta con
 // el conocimiento aprobado (o la IA), no con la ficha de fechas del catálogo.
@@ -23,10 +33,16 @@ const looksLikeQuestion=raw=>/[?¿]/.test(raw)||normalize(raw).split(' ').filter
 // fechas): ante la duda, la pregunta debe caer en «unknown» y resolverse con el conocimiento aprobado o la IA, no con la ficha equivocada.
 const words=t=>t.split(' ').filter(Boolean).length;
 const PATTERNS=[
+  // «¿Eres un bot?» pregunta con quién habla; no pide un asesor (salvo que además lo pida: «quiero hablar con una persona real»).
+  ['identity',/\b(eres|es|hablo con|estoy hablando con|me atiende|me contesta|esto es) (un |una |el |la )?(bot|robot|maquina|persona|humano|humana|ia|inteligencia artificial|asistente virtual|alguien real|persona real)\b|\bquien (eres|me atiende|me contesta|habla|escribe)\b|\bcon quien (hablo|estoy hablando|tengo el gusto)\b|^(bot|robot)$/,.85,t=>!/\b(quiero|necesito|prefiero|mejor|asesor|asesora|agente|ponme|dame|pasame|pasa|pasas|pasen|comunicame|comunica|comunicas|comuniquen)\b/.test(t)],
   // «persona» y «alguien» sueltos no piden un asesor («¿aplica para alguien que apenas empieza?»): sólo cuando se pide que alguien atienda.
-  ['human',/\b(asesor|asesora|humano|atencion|hablar con|persona real|(con|a) (una|alguna) persona|una persona del equipo|con alguien|alguien (que )?(me )?(atienda|ayude|llame|explique|responda|conteste)|alguien me (puede|podria)|llamenme|llamame|llamada|(pueden|podrian|puedes|podria) (llamar|marcar)(me)?)\b/,.9],
-  ['refund',/\b(reembolso|devolucion|devolver|queja|molest|pesimo|fraude|engan)/,.9],
-  ['enroll',/\b(inscrib|registr|apuntar|apuntarme|apunto|anotarme|quiero el curso|quiero entrar|quiero tomarlo|me anoto|como me inscribo)/,.85],
+  ['human',/\b(asesor|asesora|humano|atencion|hablar con|persona real|(con|a) (una|alguna) persona|una persona del equipo|(atienda|atiende|responda|conteste|ayude|escriba|llame) (una|alguna) persona|con alguien|alguien (que )?(me )?(atienda|ayude|llame|explique|responda|conteste)|alguien me (puede|podria)|llamenme|llamame|llamada|(pueden|podrian|puedes|podria) (llamar|marcar)(me)?)\b/,.9],
+  ['refund',/\b(reembolso|devolucion|devolver|devuelv|queja|molest|pesimo|fraude|engan)|\b(regres\w*|quiero|y|de vuelta) mi dinero\b|\bmi dinero de (vuelta|regreso)\b/,.9],
+  // «No», «no gracias», «ya no me interesa», «no quiero inscribirme»: se despide sin insistir. Va antes de «enroll» y de «greeting» («me interesa»).
+  ['decline',/^(no+|nel|nop|nope|no gracias|no muchas gracias|gracias no|gracias pero no|no por ahora|por ahora no|ahorita no|ahora no|no de momento|de momento no|por el momento no|no por el momento|mejor no|no quiero|ya no|no ya no|ya no gracias)$|\b(ya no|no) me interesa\b|\bno estoy interesad[oa]\b|\bya no (lo )?quiero\b|\b(no|ya no|todavia no|aun no) (me )?(quiero|voy a|pienso) (inscribir|registrar|apuntar|anotar)/,.8,(t,raw)=>words(t)<=7&&!/[?¿]/.test(raw)],
+  ['enroll',/\b(inscrib|registr|apuntar|apuntarme|apunto|anotarme|quiero el curso|quiero entrar|quiero tomarlo|me anoto|como me inscribo)/,.85,t=>!/\b(no|ya no|todavia no|aun no) (me )?(quiero|voy a|pienso|deseo) (inscribir|registrar|apuntar|anotar|el curso|entrar|tomarlo)/.test(t)],
+  // «Está caro», «no me alcanza»: no es una pregunta de pago ni de precio; se contesta con el precio vigente y la opción de hablar con una persona.
+  ['objection',/\b(caro|cara|carisimo|carisima|costoso|costosa|no me alcanza|no tengo (dinero|presupuesto|para pagar(lo)?)|no puedo pagar(lo)?|fuera de mi presupuesto|es mucho dinero|mas barato|mas economico|rebaja)\b/,.75,t=>!/comprobante|pague|transferi|deposite|\btiempo\b/.test(t)],
   // «¿Cuánto hay que pagar?» pregunta el precio, no una forma de pago: va antes que «payment».
   ['price',/\bcuanto (se |hay que |tengo que |debo |es lo que hay que )?(pag(a|ar|o)|cobran)\b/,.85],
   ['payment',/\b(comprobante|pague|pago|pagos|pagar|transferencia|deposito|tarjeta|oxxo|spei|factura|meses sin intereses)\b/,.85],
@@ -34,14 +50,25 @@ const PATTERNS=[
   ['duration',/\b(duracion|cuanto dura|cuantas (horas|sesiones|clases|semanas)|cuanto tiempo (dura|es|son|tarda|lleva|toma))\b/,.8],
   ['price',/\b(precio|precios|cuesta|costo|costos|inversion|promo|promos|promocion|promociones|descuento|descuentos|oferta|cuanto (cuesta|vale|sale|es|seria|cobran|me queda|queda)|en cuanto|que vale)\b|^cuanto$/,.85],
   ['schedule',/\b(fecha|fechas|horario|horarios|calendario|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|a que hora|que hora|(que|cual|primer|ultimo|proximo) dias?|cuando (es|son|seria|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|abren|hay|toca)|para cuando|quien (da|dara|imparte|ensena)|docente|docentes|profesor|profesora|maestro|maestra|instructor|ponente)\b|^cuando$/,.8],
-  ['syllabus',/\b(temario|incluye|temas?|contenido|que voy a aprender|programa)\b/,.8],
+  ['syllabus',/\b(temario|incluye|temas?|contenido|que voy a aprender|programa|de que (se )?trata|que (se )?(ve|vera|veremos|ensenan)|que es (esto|eso|el curso))\b/,.8],
   ['certificate',/\b(certificad|constancia|diploma|aval|validez|reconocimiento)/,.85],
   ['requirements',/\b(requisito|conocimientos previos|necesito saber|que necesito)\b/,.8],
-  ['modality',/\b(modalidad|en linea|online|presencial|virtual|zoom|meet|plataforma|donde es|donde se imparte|donde me conecto|como me conecto|por donde (es|son|se da))\b/,.8],
+  ['modality',/\b(modalidad|en linea|online|presencial|virtual|zoom|meet|plataforma|donde es|donde se imparte|donde me conecto|como me conecto|por donde (es|son|se da)|en vivo|ubicad[oa]s?|ubicacion|sucursal|sucursales|direccion|donde (estan|se encuentran|quedan))\b/,.8],
   ['recording',/\b(grabaci|grabad|graban?\b|grabar\b|no puedo asistir|repeticion|ver despues)/,.8],
-  ['greeting',/\b(hola|buen[oa]s?|informacion|info|flyer|imagen|me interesa|saludos)\b/,.6],
+  // Cupo y otros cursos: datos del catálogo.
+  ['seats',/\b(cupos?|lugar|lugares|vacantes?|lleno)\b/,.8,t=>/\b(hay|queda|quedan|cuantos|todavia|aun|tienen|lleno|disponibles?|cupos?)\b/.test(t)],
+  ['courses',/\b(otros?|mas|cuales|que) (cursos|diplomados|talleres)\b|\b(cursos|diplomados|talleres) (tienen|hay|manejan|ofrecen|dan|imparten)\b|\botro (curso|diplomado|taller)\b/,.8],
+  // ---- Mensajes de trato. Casi todos exigen que el mensaje sea SÓLO eso, para no robarle una pregunta de verdad al conocimiento o a la IA.
+  ['menu',/^(ver )?(las )?(opciones|menu)$|^el menu$|\bque (puedes|sabes|pueden) (hacer|responder|decirme)\b|\ben que (me )?(puedes|pueden) ayudar\b/,.8],
+  ['affirm',/^(si+|sip|simon|claro|claro que si|por supuesto|desde luego|si claro|por favor|porfa|porfavor|si por favor|si porfa|quiero|si quiero|lo quiero|si lo quiero|adelante|dale|va|sale|sale va|orale|bueno|andale|juega|si gracias|hagamoslo)$/,.6],
+  ['later',/\b(espera|esperame|espereme|un momento|un momentito|un segundo|dame chance|dame un momento|permiteme|dejame (pensarlo|verlo|checarlo|revisarlo|consultarlo|platicarlo)|deja lo (pienso|checo|reviso|consulto|platico)|lo (voy a|tengo que|quiero) (pensar|consultar|checar|platicar|revisar)|lo (pienso|consulto|checo|platico)|voy a pensarlo|tengo que pensarlo|(luego|despues|manana|al rato|mas tarde|ahorita|en la tarde|en la noche|la proxima semana|en la quincena) (te|les|le) (aviso|digo|confirmo|escribo|marco)|te aviso|les aviso|cuando (cobre|me paguen))\b/,.6,(t,raw)=>words(t)<=12&&!/[?¿]/.test(raw)&&!SITUATION.test(t)],
+  ['bye',/^(bye|bay|adios|hasta luego|hasta pronto|hasta manana|nos vemos|chao|chau|cuidate|cuidense)\b|\bque (tengas?|tengan|pases?|pasen) (un )?(buen|bonito|lindo|excelente|buena|bonita|linda)\b/,.6,t=>words(t)<=6],
+  ['help',/^(disculpa|disculpe|disculpen|perdon|perdona|oye|oiga|oigan|hey|ey|eh|m+|h+m+|que|como|a ver|dime|digame|mande|ayuda|ayudame|una pregunta|una duda|una consulta|tengo una (duda|pregunta|consulta)|tengo dudas|me (puedes|pueden|podrias|podrian) ayudar|necesito ayuda|siguen ahi|sigues ahi|estan ahi|hay alguien|nadie contesta|nadie responde|que mas|y luego|y ahora|como le hago|que hago|otra vez|repite|repiteme|como dices|que dices|no (te |le |les )?(entiendo|entendi|comprendo))( una pregunta| una duda| una consulta| por favor| porfa)?$/,.6],
+  ['greeting',/\b(hola|buen[oa]s?|informacion|info|informes|detalles|flyer|imagen|me interesa|saludos|saber mas|cuentame|platicame|explicame)\b/,.6],
   // Un agradecimiento no es una pregunta: «¿el curso vale la pena?» debe resolverse con conocimiento o IA, no con «¡con gusto!».
   ['thanks',/\b(gracias|perfecto|ok|vale|listo|entendido)\b/,.5,(t,raw)=>!/vale la pena/.test(t)&&(words(t)<=4||!/[?¿]/.test(raw))],
+  // Acuses cortos: «okey», «entiendo», «de acuerdo», «eso es todo», «jaja».
+  ['thanks',/\b(okey|okay|oki|okis|va|sale|claro|excelente|genial|super|de acuerdo|esta bien|muy bien|que bien|ah ya|ya vi|ya entendi|entiendo|enterad[oa]|eso es todo|es todo|nada mas|y ya|ja(ja)+|je(je)+)\b/,.5,(t,raw)=>words(t)<=4&&!/[?¿]/.test(raw)],
 ];
 
 // Motor de respuestas v2. Reglas del proyecto que cumple: precios/fechas/cupos sólo del catálogo; nunca confirma pagos ni
@@ -57,17 +84,25 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
 
   function classify(raw){
     if(contacts.isOptOutText(raw))return {intent:'opt_out',confidence:.95};
-    const t=normalize(raw);
+    const t=clean(raw);
+    if(!t)return /[?¿]/.test(String(raw||''))?{intent:'help',confidence:.6}:/\p{Extended_Pictographic}/u.test(String(raw||''))?{intent:'thanks',confidence:.5}:{intent:'unknown',confidence:0};
     for(const [intent,re,confidence,when] of PATTERNS)if(re.test(t)&&(!when||when(t,String(raw||''))))return {intent,confidence};
     return {intent:'unknown',confidence:0};
   }
   // Todas las intenciones que aparecen en el mensaje, en el orden de las reglas (para contestar varias preguntas a la vez).
   function classifyAll(raw){
-    const t=normalize(raw),found=[];
+    const t=clean(raw),found=[];
     for(const [intent,re,,when] of PATTERNS)if(!found.includes(intent)&&re.test(t)&&(!when||when(t,String(raw||''))))found.push(intent);
     return found;
   }
-  const unknownStreak=conversationId=>{let n=0;for(const r of db.prepare("SELECT intent,action FROM reply_log WHERE conversation_id=? AND action IN ('replied','suggested') ORDER BY created_at DESC LIMIT 5").all(conversationId)){if(r.intent==='unknown')n++;else break;}return n;};
+  // Respuestas seguidas SIN contestar: intención desconocida y ninguna fuente de conocimiento (ni aprobado ni usado por la IA). Una pregunta que
+  // el conocimiento o la IA sí contestaron no cuenta, y los mensajes de trato («ok», «¿sigues ahí?») ni suman ni reinician la cuenta.
+  const unanswered=r=>{if(r.intent!=='unknown')return false;try{return !JSON.parse(r.sources).some(s=>s.type==='knowledge');}catch{return true;}};
+  const unknownStreak=conversationId=>{let n=0;for(const r of db.prepare("SELECT intent,sources,action FROM reply_log WHERE conversation_id=? AND action IN ('replied','suggested','escalated') ORDER BY created_at DESC,rowid DESC LIMIT 10").all(conversationId)){if(r.action==='escalated')break;if(r.intent!=='menu'&&SOFT_INTENTS.includes(r.intent))continue;if(unanswered(r))n++;else break;}return n;};   // pedir las opciones (o decir «no» a la persona) reinicia la cuenta
+  // Último mensaje que recibió la persona, si fue del asistente: su texto y si era la propuesta de pasar con una persona.
+  const lastBot=conversationId=>{const m=db.prepare("SELECT id,text,sender_kind FROM messages WHERE conversation_id=? AND sender_kind!='customer' ORDER BY seq DESC LIMIT 1").get(conversationId);if(!m||m.sender_kind!=='automation')return null;const r=db.prepare('SELECT intent,sources FROM reply_log WHERE conversation_id=? AND reply_message_id=?').get(conversationId,m.id);return {text:String(m.text||''),intent:r?.intent||null,offer:Boolean(r&&r.sources.includes('"kind":"offer_human"'))};};
+  // Otros cursos activos de la MISMA marca con una edición disponible (sólo títulos).
+  const otherCourses=c=>db.prepare('SELECT id,title FROM courses WHERE brand_id=? AND active=1 AND id!=? ORDER BY title LIMIT 20').all(c.brand_id,c.course_id).filter(k=>{try{return !catalogue.info(k.id).reason;}catch{return false;}}).slice(0,6).map(k=>k.title);
 
   // Plan síncrono: decide intención, texto, fuentes y si hace falta el proveedor. No escribe nada.
   function plan(c,trigger){
@@ -75,13 +110,32 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     // Flujo de bienvenida de la marca (server/flows.mjs): si la persona pulsó un botón del paso en el que va, ese botón manda. Un botón de acción
     // (precio, temario, fechas, inscribirse, asesor) equivale a pedirlo con esas palabras: se responde por el camino de siempre.
     const flow=flows?.active(c.brand_id)||null,pressed=flow?flows.pressed(flow,c.id,trigger.text):null,forced=pressed?.kind==='action'?pressed.target:null;
-    const ctx=catalogue.info(c.course_id,c.edition_id),course=ctx.course,cls=forced?{intent:forced,confidence:1}:classify(trigger.text),situational=!forced&&CATALOGUE_INTENTS.includes(cls.intent)&&SITUATION.test(normalize(trigger.text)),intent=situational?'unknown':cls.intent,confidence=situational?.3:cls.confidence;
+    const ctx=catalogue.info(c.course_id,c.edition_id),course=ctx.course,cls=forced?{intent:forced,confidence:1}:classify(trigger.text),situational=!forced&&CATALOGUE_INTENTS.includes(cls.intent)&&SITUATION.test(normalize(trigger.text));
+    let intent=situational?'unknown':cls.intent,confidence=situational?.3:cls.confidence;
     const count=db.prepare("SELECT count(*) n FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id).n;
+    // Respuestas cortas que sólo se entienden por lo que el asistente acaba de decir («sí», «va», «no»):
+    //  · tras proponer una persona («¿Quieres que te pase con…?»): «sí» pasa a un asesor y «no» muestra las opciones;
+    //  · tras invitar a inscribirse: «sí» sigue el camino de la inscripción, el mismo de «Quiero inscribirme» (nunca se confirma sola);
+    //  · tras ofrecer datos («¿Te cuento el precio o las fechas?»): «sí» los contesta.
+    let offered=null,followed='';
+    const prev=!forced&&!pressed&&FOLLOW_UP.includes(intent)?lastBot(c.id):null;
+    if(prev){
+      const said=clean(trigger.text),yes=YES.test(said),whole=normalize(prev.text),lastQ=normalize((prev.text.match(/¿[^?¿]*\?/g)||[]).pop()||'').trim();
+      if(prev.offer&&yes){intent='human';confidence=.9;followed='Aceptó la propuesta de hablar con una persona.';}
+      else if(prev.offer&&intent==='decline'){intent='menu';confidence=.8;followed='No quiso pasar con una persona: se le muestran las opciones.';}
+      // Sólo cuenta una pregunta DIRECTA de inscripción («¿Quieres apartar tu lugar?»). Una pregunta con varias opciones («¿Quieres conocer el temario,
+      // el precio o cómo inscribirte?», la bienvenida) no se contesta con un pedido: un «ok» ahí sólo recibe las opciones.
+      // Y exige un «sí» claro («sí», «sí quiero», «me interesa»): «ok», «va» o «vale» sólo acusan recibo y no arman un pedido.
+      else if(STRONG_YES.test(said)&&((/apartar tu lugar|inscrib/.test(lastQ)&&!/\bo\b/.test(lastQ))||(!lastQ&&/quiero inscribirme|apartar tu lugar/.test(whole)))){intent='enroll';confidence=.8;followed='Respondió que sí a la invitación a inscribirse del mensaje anterior.';}
+      else if(yes&&!/inscrib/.test(lastQ)){const info=[['price',/\b(precio|costo)\b/],['schedule',/\b(fechas?|horarios?)\b/],['syllabus',/\btemario\b/]].filter(([,re])=>re.test(lastQ)).map(([k])=>k);if(info.length){intent=info[0];confidence=.75;offered=info.length>1?info:null;followed='Respondió que sí a lo que ofrecía el mensaje anterior ('+info.join(', ')+').';}}
+    }
     // ¿El cliente pregunta algo concreto? (un tema del conocimiento, o una pregunta sin intención reconocida)
     const asks=TOPIC_INTENTS.includes(intent)||(intent==='unknown'&&looksLikeQuestion(trigger.text));
     const out={mode:s.mode,intent,confidence,reply:'',sources:[],stage:null,handoff:false,prepared:null,reason:'',needsProvider:false,knowledge:[],buttons:null,order:false};
     const flowValues=()=>({name:copy.firstName(user?.name),course:course.title,edition:ctx.edition.name,brand:ctx.brand.name});
-    const menu=step=>{out.buttons=step.buttons.length?step.buttons.map(b=>b.label):null;out.keepButtons=true;out.flow={step:step.id};};   // los botones del paso viajan con la respuesta
+    const menu=(step,o=out)=>{o.buttons=step.buttons.length?step.buttons.map(b=>b.label):null;o.keepButtons=true;o.flow={step:step.id};};   // los botones del paso viajan con la respuesta
+    // Texto con opciones para tocar. Con un flujo de bienvenida encendido se ofrecen los botones de su primer paso (los que el flujo entiende).
+    const options=(reply,buttons=OPTIONS)=>{out.reply=reply;out.buttons=buttons;out.keepButtons=true;if(flow){const st=flow.steps[0];if(st.buttons.length){menu(st);out.sources.push({type:'flow',step:st.id});}}};
     const catalogueSource={type:'catalogue',courseId:course.id,editionId:ctx.edition.id,promotionId:ctx.promotion?.id||null,priceCents:ctx.priceCents,currency:ctx.currency};
     const kb=approved(c.brand_id,c.course_id);
     // Bienvenida con la ficha vigente del curso (o la de anuncio): saludo, primer mensaje sin pregunta y respaldo del primer mensaje.
@@ -95,11 +149,13 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     // respuesta en el catálogo o en el conocimiento aprobado. Pedir un asesor, una queja, inscribirse o avisar de un pago siguen su camino de siempre.
     const INFO=['price','schedule','syllabus','certificate','requirements','modality','recording','duration','payment'];
     const paidClaim=/comprobante|pague|ya pague|transferi|deposite/.test(normalize(trigger.text));
-    const several=()=>{
-      if(situational||paidClaim||!INFO.includes(intent))return false;
-      // señal de que son dos preguntas y no una: un conector («y», «también»…), una coma o dos signos de cierre de pregunta
-      if(!/\b(y|e|tambien|ademas|aparte)\b|[,;]|\?.*\S.*\?/.test(normalize(trigger.text)+' '+trigger.text.toLowerCase()))return false;
-      const asked=classifyAll(trigger.text).filter(i=>INFO.includes(i)).slice(0,3);if(asked.length<2)return false;
+    const several=(only=null)=>{
+      if(!only){
+        if(situational||paidClaim||!INFO.includes(intent))return false;
+        // señal de que son dos preguntas y no una: un conector («y», «también»…), una coma o dos signos de cierre de pregunta
+        if(!/\b(y|e|tambien|ademas|aparte)\b|[,;]|\?.*\S.*\?/.test(normalize(trigger.text)+' '+trigger.text.toLowerCase()))return false;
+      }
+      const asked=only||classifyAll(trigger.text).filter(i=>INFO.includes(i)).slice(0,3);if(asked.length<2)return false;
       const parts=[],sources=[];let kind=null;
       for(const it of asked){
         if(it==='price'){parts.push(copy.priceBody(ctx));kind='price';}
@@ -118,7 +174,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     else if(intent==='opt_out'){out.reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';out.reason='El cliente pidió la baja; se registra y se confirma una sola vez.';}
     else if(intent==='human'||intent==='refund'){out.reply=intent==='refund'?copy.refund(user?.name):copy.human(user?.name);out.handoff=true;out.reason=intent==='refund'?'Queja o reembolso: siempre lo atiende una persona.':'El cliente pidió hablar con una persona.';}
     else if(ctx.reason){out.reply=copy.unavailable(ctx.reason);out.handoff=true;out.reason='La edición no está disponible según el catálogo.';out.sources.push(catalogueSource);}
-    else if(several()){/* varias preguntas: respondidas juntas */}
+    else if((offered&&several(offered))||several()){/* varias preguntas: respondidas juntas */}
     else if(intent==='enroll'){
       const open=payments?.openOrder(c.id);
       if(open){out.reply=copy.orderReminder(open.reference)+payments.linkMessage(open);out.stage='inscripcion';out.reason='Ya existía un pedido vigente: se recuerda el enlace de pago.';out.sources.push(catalogueSource);}
@@ -141,8 +197,18 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     else if(intent==='price'){out.prepared=catalogue.prepare(c,{kind:'price'});out.reply=copy.price(ctx);out.stage='interesado';out.sources.push(catalogueSource);out.reason='Precio y promoción vigentes consultados en el catálogo al responder.';}
     else if(intent==='syllabus'){out.prepared=catalogue.prepare(c,{kind:'syllabus'});out.reply=copy.syllabus(ctx);out.sources.push(catalogueSource);out.reason='Temario del curso en el catálogo.';}
     else if(intent==='schedule'){out.prepared=catalogue.prepare(c,{kind:'schedule'});out.reply=copy.schedule(ctx);out.sources.push(catalogueSource);out.reason='Fecha, horario y docente de la edición en el catálogo.';}
-    else if(intent==='greeting'||(count===1&&!asks))welcome();
-    else if(intent==='thanks'){out.reply=copy.thanks(user?.name);out.reason='Agradecimiento o cierre.';}
+    else if(intent==='greeting'||(count===1&&!asks&&!DIRECT_INTENTS.includes(intent)))welcome();
+    else if(intent==='thanks'){out.reply=prev?.intent==='thanks'?copy.thanksAgain:copy.thanks(user?.name);out.reason='Agradecimiento o cierre.';}
+    else if(intent==='affirm'){options(copy.affirm(ctx));out.reason='Dijo que sí sin una pregunta pendiente: se le ofrecen las opciones.';}
+    else if(intent==='decline'){out.reply=copy.decline(user?.name);out.reason='Dijo que no o que ya no le interesa: se despide sin insistir.';}
+    else if(intent==='later'){out.reply=copy.later(user?.name);out.reason='Pidió tiempo o avisará después: se le deja la puerta abierta.';}
+    else if(intent==='bye'){out.reply=copy.bye(user?.name);out.reason='Despedida.';}
+    else if(intent==='help'){options(copy.help(ctx),WITH_HUMAN);out.reason='Llamó la atención o dijo que no entendió: se le ofrecen las opciones; no cuenta como pregunta sin respuesta.';}
+    else if(intent==='menu'){options(flow?flows.render(flow.steps[0].text,flowValues()):copy.menu(ctx));out.reason='Pidió ver las opciones.';}
+    else if(intent==='identity'){options(copy.identity(ctx),WITH_HUMAN);out.reason='Preguntó con quién habla: se le dice que es el asistente automático y cómo pedir una persona.';}
+    else if(intent==='seats'){out.reply=copy.seats(ctx);out.sources.push(catalogueSource);out.reason='Cupo de la edición consultado en el catálogo al responder.';}
+    else if(intent==='courses'){out.reply=copy.courses(ctx,otherCourses(c));out.sources.push(catalogueSource);out.reason='Otros cursos activos de la marca, consultados en el catálogo.';}
+    else if(intent==='objection'){if(!fromKnowledge(.6)){out.reply=copy.objection(ctx);out.sources.push(catalogueSource);out.reason='Le parece caro: precio vigente del catálogo y opción de hablar con una persona; no se ofrecen descuentos.';}}
     else if(fromKnowledge(.5)){/* respondido con conocimiento */}
     else{
       // A la IA sólo se le manda lo relevante (BM25 + sinónimos del negocio), no todo el conocimiento (server/retrieval.mjs)
@@ -152,19 +218,30 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
       out.retrieval={considered:picked.considered,sent:picked.sent,mode:picked.mode,truncated:picked.truncated};
       out.needsProvider=Boolean(s.provider_enabled)&&picked.sent>0;
       if(out.needsProvider&&c.id!=='simulacion')out.memory=customerMemory(db,c,{now}).text;
-      out.reply=copy.fallback(ctx);
+      out.reply=copy.fallback(ctx);if(!flow){out.buttons=WITH_HUMAN;out.keepButtons=true;}
       out.reason='Sin intención reconocida ni conocimiento parecido.'+(s.provider_enabled&&kb.length?(picked.sent?' Contexto para la IA: '+picked.sent+' de '+picked.considered+' entradas.':' Ninguna entrada del conocimiento se parece a la pregunta: no se consultó a la IA.'):'');
       if(count===1){welcome();if(out.needsProvider){out.prepared=null;if(!flow)out.buttons=null;}out.reason='Primer mensaje sin respuesta en el conocimiento: bienvenida con la ficha vigente del curso.'+(out.needsProvider?' Si el proveedor de IA responde con fuentes aprobadas, se usa su respuesta.':'');}
-      if(unknownStreak(c.id)+1>=s.max_unknown){out.handoff=true;out.reply=copy.escalate;out.reason+=' Se alcanzó el máximo de respuestas sin reconocer ('+s.max_unknown+'): se escala.';}
-    }
-    if(flow){
-      if(out.handoff||forced==='enroll'||forced==='human'||intent==='opt_out'){out.flow={end:true};out.buttons=null;out.keepButtons=false;}   // pasa a una persona, se inscribe o pide la baja: el recorrido termina y ya no se ofrece el menú
-      else if(forced){menu(pressed.step);out.reason+=' Opción «'+pressed.label+'» del flujo de bienvenida: el menú sigue a la vista.';}
-      else if(!out.flow&&count===1&&!out.order)menu(flow.steps[0]);   // su primer mensaje fue una pregunta concreta: se contesta y se le ofrece el menú
-      else if(out.flow&&!pressed)out.reason+=' Flujo de bienvenida de la marca.';
-      else if(!out.flow&&!pressed&&flows.running(c.id))out.flow={miss:true};   // escribió otra cosa: contesta el motor; el menú vale una vez más
+      // Sin respuesta, en tres escalones en lugar de pasar a una persona de golpe:
+      //  1) opciones para tocar (precio, fechas, asesor);  2) al llegar al máximo de la marca, se PREGUNTA si quiere una persona;
+      //  3) si después de eso tampoco hay respuesta, entonces sí se pasa. Si la IA contesta bien, nada de esto se aplica (commit()).
+      const streak=unknownStreak(c.id)+1,level=streak>s.max_unknown?'escalate':streak===s.max_unknown?'offer':'options';
+      out.miss=level;out.ifAnswered={buttons:count===1?out.buttons:null,keepButtons:count===1?Boolean(out.keepButtons):false,flow:count===1?out.flow||null:null};
+      if(level==='offer'){out.reply=copy.offerHuman;out.prepared=null;out.buttons=OFFER_BUTTONS;out.keepButtons=true;out.flow=null;out.sources=[{type:'template',kind:'offer_human'}];out.reason+=' Van '+streak+' respuestas seguidas sin contestar (máximo de la marca: '+s.max_unknown+'): antes de pasar a una persona se le pregunta si la quiere.';}
+      else if(level==='escalate'){out.handoff=true;out.reply=copy.escalate;out.prepared=null;out.buttons=null;out.keepButtons=false;out.flow=null;out.reason+=' Se superó el máximo de respuestas sin contestar ('+s.max_unknown+') después de ofrecerle una persona: se escala.';}
     }
     if(out.mode==='templates'&&out.needsProvider){out.needsProvider=false;out.reason+=' (El proveedor de IA sólo se usa en modo autónomo.)';}
+    const flowStep=o=>{
+      if(!flow||o.miss==='offer')return;   // la propuesta de pasar con una persona lleva sus propios botones y no mueve el recorrido
+      if(o.handoff||forced==='enroll'||forced==='human'||intent==='opt_out'){o.flow={end:true};o.buttons=null;o.keepButtons=false;}   // pasa a una persona, se inscribe o pide la baja: el recorrido termina y ya no se ofrece el menú
+      else if(forced){menu(pressed.step,o);o.reason+=' Opción «'+pressed.label+'» del flujo de bienvenida: el menú sigue a la vista.';}
+      else if(!o.flow&&count===1&&!o.order)menu(flow.steps[0],o);   // su primer mensaje fue una pregunta concreta: se contesta y se le ofrece el menú
+      else if(o.flow&&!pressed)o.reason+=' Flujo de bienvenida de la marca.';
+      else if(!o.flow&&!pressed&&flows.running(c.id))o.flow={miss:true};   // escribió otra cosa: contesta el motor; el menú vale una vez más
+    };
+    // Lo que acompaña a la respuesta si la IA sí contesta: sin propuesta de asesor, sin pase a una persona y sin botones de «no la tengo».
+    if(out.miss){if(out.needsProvider){const a={...out.ifAnswered,handoff:false,order:false,reason:''};flowStep(a);out.ifAnswered={buttons:a.buttons||null,keepButtons:Boolean(a.keepButtons),flow:a.flow||null};}else out.ifAnswered=null;}
+    flowStep(out);
+    if(followed)out.reason=followed+' '+out.reason;
     return out;
   }
 
@@ -215,18 +292,18 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
   // Aplica el plan dentro de una transacción del llamador. Revalida que nadie respondió ya a este mensaje.
   function commit(c,trigger,p,draft=null){
     const ref='automation:'+trigger.id;if(db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref))return {action:'skipped',reason:'Ya existía una respuesta para este mensaje.'};
-    const t=now(),sources=[...p.sources];let reply=p.reply,model=null,reason=p.reason;
-    if(draft){model=draft.model;const v=validateDraft(draft,p.knowledge);if(v.ok){reply=v.text;if(provider.name==='claude')learnFromDraft(c,trigger,v.text);reason='Proveedor de IA: '+draft.reason+(p.retrieval?' Contexto: '+p.retrieval.sent+' de '+p.retrieval.considered+' entradas del conocimiento.':'')+(p.memory?' Memoria del cliente enviada: «'+p.memory+'»':'');for(const id of v.usedIds)sources.push({type:'knowledge',id});}else reason+=' Proveedor descartado: '+v.reason+(draft.text?'':' ('+draft.reason+')');}
+    const t=now();let sources=[...p.sources],reply=p.reply,model=null,reason=p.reason,handoff=p.handoff,buttons=p.buttons,keepButtons=p.keepButtons,move=p.flow;
+    if(draft){model=draft.model;const v=validateDraft(draft,p.knowledge);if(v.ok){reply=v.text;if(p.ifAnswered){handoff=false;buttons=p.ifAnswered.buttons;keepButtons=p.ifAnswered.keepButtons;move=p.ifAnswered.flow;sources=sources.filter(s=>s.kind!=='offer_human');}if(provider.name==='claude')learnFromDraft(c,trigger,v.text);reason='Proveedor de IA: '+draft.reason+(p.retrieval?' Contexto: '+p.retrieval.sent+' de '+p.retrieval.considered+' entradas del conocimiento.':'')+(p.memory?' Memoria del cliente enviada: «'+p.memory+'»':'');for(const id of v.usedIds)sources.push({type:'knowledge',id});}else reason+=' Proveedor descartado: '+v.reason+(draft.text?'':' ('+draft.reason+')');}
     const log=(action,replyMessageId=null)=>{const id=randomUUID();db.prepare('INSERT INTO reply_log(id,conversation_id,brand_id,trigger_message_id,reply_message_id,intent,confidence,mode,action,reply_text,sources,model,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,trigger.id,replyMessageId,p.intent,p.confidence,p.mode,action,reply,JSON.stringify(sources),model,reason,t);return id;};
     if(p.mode==='off'){log('skipped');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);return {action:'skipped',reason:'Respuestas automáticas apagadas para la marca: pasa a una persona.'};}
     if(p.mode==='suggest'){log('suggested');db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);return {action:'suggested',reply,reason};}
     if(p.order){const made=payments.createOrder(c,{user:null,source:'bot'});reply=reply.replace('{{pedido}}',payments.linkMessage(made.order));}
-    const messageId=insertMessage(c,null,reply,'automation',ref,null,p.prepared?.flyerSnapshot?c.course_id:null,p.prepared,{buttons:p.buttons,keepButtons:p.keepButtons,category:'service'});   // responde a un mensaje entrante: siempre dentro de la ventana de servicio
-    log(p.handoff?'escalated':'replied',messageId);
-    if(p.flow)flows?.apply(c.id,p.flow);
+    const messageId=insertMessage(c,null,reply,'automation',ref,null,p.prepared?.flyerSnapshot?c.course_id:null,p.prepared,{buttons,keepButtons,category:'service'});   // responde a un mensaje entrante: siempre dentro de la ventana de servicio
+    log(handoff?'escalated':'replied',messageId);
+    if(move)flows?.apply(c.id,move);
     if(p.stage)crm.setStage(c,p.stage);
-    if(p.handoff){db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);}
-    return {action:p.handoff?'escalated':'replied',messageId,reply,reason};
+    if(handoff){db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);operations.requestHuman(c,trigger.created_at);away(c,trigger);}
+    return {action:handoff?'escalated':'replied',messageId,reply,reason};
   }
 
   // Reanuda al asistente en una conversación que sólo quedó en espera por el NIVEL de la marca («Apagado» o «Sugerir») cuando la marca ya responde sola
@@ -268,8 +345,8 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const fake={id:'simulacion',customer_id:user.id,brand_id:brandId,course_id:course.id,edition_id:input.editionId||null,channel:['whatsapp','instagram','facebook'].includes(input.channel)?input.channel:'whatsapp',status:'open',bot_enabled:1,assigned_to:null},trigger={id:'simulacion',text:message,created_at:now()};
     const p=plan(fake,trigger);let draft=null;
     if(p.needsProvider||(input.forceProvider&&p.intent==='unknown'&&p.knowledge.length)){const ctx=catalogue.info(course.id,fake.edition_id);draft=await provider.draft({brand:ctx.brand,course:ctx.course,edition:{name:ctx.edition.name,dateLabel:ctx.dateLabel,priceLabel:(ctx.priceCents/100).toFixed(2)+' '+ctx.currency},question:message,knowledge:p.knowledge,history:[]});}
-    const v=draft?validateDraft(draft,p.knowledge):null,reply=(v?.ok?v.text:p.reply).replace('{{pedido}}','[aquí iría el pedido con su enlace de pago de prueba]');
-    return {context:{retrieval:p.retrieval||null,knowledge:(p.knowledge||[]).map(k=>({id:k.id,question:k.question,score:k.score})),memory:p.memory||null},intent:p.intent,confidence:p.confidence,mode:p.mode,reply,handoff:p.handoff,stage:p.stage,sources:[...p.sources,...(v?.ok?v.usedIds:[]).map(id=>({type:'knowledge',id}))],reason:draft?(v.ok?'Proveedor de IA: '+draft.reason:p.reason+' Proveedor descartado: '+v.reason+(draft.called||provider.name!=='claude'?'':' · NO se consultó a la IA: '+draft.reason)):p.reason,provider:{name:provider.name,model:draft?.model||null,used:Boolean(draft),called:Boolean(draft?.called),accepted:Boolean(v?.ok),error:draft&&!draft.called&&provider.name==='claude'?String(draft.reason||'').slice(0,200):null}};
+    const v=draft?validateDraft(draft,p.knowledge):null,answered=Boolean(v?.ok&&p.ifAnswered),reply=(v?.ok?v.text:p.reply).replace('{{pedido}}','[aquí iría el pedido con su enlace de pago de prueba]');
+    return {context:{retrieval:p.retrieval||null,knowledge:(p.knowledge||[]).map(k=>({id:k.id,question:k.question,score:k.score})),memory:p.memory||null},intent:p.intent,confidence:p.confidence,mode:p.mode,reply,handoff:answered?false:p.handoff,buttons:(answered?p.ifAnswered.buttons:p.buttons)||null,stage:p.stage,sources:[...p.sources.filter(s=>!answered||s.kind!=='offer_human'),...(v?.ok?v.usedIds:[]).map(id=>({type:'knowledge',id}))],reason:draft?(v.ok?'Proveedor de IA: '+draft.reason:p.reason+' Proveedor descartado: '+v.reason+(draft.called||provider.name!=='claude'?'':' · NO se consultó a la IA: '+draft.reason)):p.reason,provider:{name:provider.name,model:draft?.model||null,used:Boolean(draft),called:Boolean(draft?.called),accepted:Boolean(v?.ok),error:draft&&!draft.called&&provider.name==='claude'?String(draft.reason||'').slice(0,200):null}};
   }
 
   // ---- huecos de conocimiento: lo que los clientes preguntaron y el motor no supo responder con conocimiento aprobado

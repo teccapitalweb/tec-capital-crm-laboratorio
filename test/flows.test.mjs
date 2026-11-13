@@ -81,9 +81,11 @@ test('flujo de bienvenida de punta a punta: saludo con menú, botones que navega
   // 4) si lo primero que escribe es una pregunta concreta, se contesta y se le ofrece el menú
   const luis=await person('Luis'),first=await luis.say('¿Cuánto cuesta el curso?');assert.equal(first.log.intent,'price');assert.match(first.text,/379/);assert.deepEqual(first.buttons,['Precio','Temario','Más opciones']);assert.equal(run(luis.conv),'inicio');
   const human=await luis.say('Más opciones').then(()=>luis.say('Hablar con asesor'));assert.equal(human.log.intent,'human');assert.equal(human.log.action,'escalated');assert.equal(run(luis.conv),null);
-  // si lo primero que escribe no se entiende y la marca escala a la primera, pasa a una persona SIN menú
+  // si lo primero que escribe no se entiende y la marca propone una persona a la primera: la propuesta lleva sus dos botones (no el menú) y no
+  // mueve el recorrido; si tampoco se entiende lo siguiente, pasa a una persona SIN menú
   const rs=(await call('/api/replies/settings',admin.cookie)).settings.find(x=>x.brand_id==='globalvet');await call('/api/replies/brands/globalvet',admin.cookie,{maxUnknown:1,expectedRevision:rs.revision},'PATCH');
-  const lost=await person('Teo'),odd=await lost.say('Necesito que me expliquen lo del convenio con mi cooperativa');assert.equal(odd.log.action,'escalated');assert.equal(odd.buttons,null);assert.equal(run(lost.conv),null);
+  const lost=await person('Teo'),odd=await lost.say('Necesito que me expliquen lo del convenio con mi cooperativa');assert.equal(odd.log.action,'replied');assert.deepEqual(odd.buttons,['Sí, con un asesor','Ver opciones']);assert.match(odd.text,/persona del equipo/);assert.equal(run(lost.conv),null);
+  const odd2=await lost.say('Es que la cooperativa tiene un convenio distinto con ustedes');assert.equal(odd2.log.action,'escalated');assert.equal(odd2.buttons,null);assert.equal(run(lost.conv),null);
   await call('/api/replies/brands/globalvet',admin.cookie,{maxUnknown:2,expectedRevision:rs.revision+1},'PATCH');
   // un cuerpo vacío no rompe el servidor
   await call('/api/flows/globalvet',admin.cookie,null,'PUT',400);
