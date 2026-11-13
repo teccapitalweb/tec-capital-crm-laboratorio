@@ -55,6 +55,7 @@ test('registro de pantallas: lee cada carpeta, normaliza, ordena por el menú y 
     visibility: 'live',
     nav: { group: 'Gestión', icon: 'megaphone', label: 'Pantalla difusiones', order: 40 },
     roles: ['admin', 'agent'],
+    permission: null,
     entry: 'index.js',
     styles: ['screen.css'],
   });
@@ -83,6 +84,7 @@ test('una pantalla mal declarada dice qué está mal; el servidor la omite y las
   check(screen('nueva', { visibility: 'publica' }), /«visibility»/);
   check(screen('nueva', { roles: [] }), /«roles»/);
   check(screen('nueva', { roles: ['customer'] }), /«roles»/);
+  check(screen('nueva', { permission: 'Ver Todo' }), /«permission»/);
   check(screen('nueva', { entry: '../app.js' }), /«entry»/);
   check(screen('nueva', { entry: 'falta.js' }), /no existe el archivo falta\.js/);
   check(screen('nueva', { styles: ['../styles.css'] }), /«styles»/);
@@ -90,7 +92,12 @@ test('una pantalla mal declarada dice qué está mal; el servidor la omite y las
   check(screen('nueva', { nav: { icon: 'x', order: 1 } }), /«nav\.group»/);
   check(screen('nueva', { nav: { group: 'Gestión', icon: '<svg>', order: 1 } }), /«nav\.icon»/);
   check(screen('nueva', { nav: { group: 'Gestión', icon: 'x', order: 'primero' } }), /«nav\.order»/);
-  assert.equal(validateScreen(screen('nueva', { styles: ['screen.css'] }), 'nueva', dir).id, 'nueva');
+  const valid = validateScreen(
+    screen('nueva', { styles: ['screen.css'], permission: 'broadcasts.view' }),
+    'nueva',
+    dir,
+  );
+  assert.deepEqual([valid.id, valid.permission], ['nueva', 'broadcasts.view']);
 
   const root = await project(t, {
     'public/screens/buena/screen.json': screen('buena', { visibility: 'live' }),

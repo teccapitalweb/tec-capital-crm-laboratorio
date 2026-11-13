@@ -2,7 +2,9 @@
 //
 //   { "id": "difusiones", "title": "Difusiones", "visibility": "preview",
 //     "nav": { "group": "Gestión", "icon": "megaphone", "label": "Difusiones", "order": 40 },
-//     "roles": ["admin", "agent"], "entry": "index.js", "styles": ["screen.css"] }
+//     "roles": ["admin", "agent"], "permission": "broadcasts.view", "entry": "index.js", "styles": ["screen.css"] }
+//
+// `nav`, `permission`, `styles` y `visibility` son opcionales (sin `nav` la pantalla no sale en el menú).
 //
 // El servidor publica la lista en GET /screens/index.json y el navegador (public/kit/boot.js) la usa para armar el
 // menú y cargar cada pantalla la primera vez que se abre. Dar de alta una pantalla no toca index.html, app.js ni
@@ -36,6 +38,7 @@ const ID = /^[a-z][a-z0-9-]{2,30}$/;
 const SCRIPT = /^[a-z0-9][a-z0-9._-]*\.js$/;
 const STYLE = /^[a-z0-9][a-z0-9._-]*\.css$/;
 const ICON = /^[a-z][a-z0-9-]{0,40}$/;
+const PERMISSION = /^[a-z][a-z0-9._:-]{1,60}$/;
 const text = (value, max) => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
 
 // Devuelve la pantalla normalizada o lanza un error que dice qué está mal y dónde.
@@ -57,6 +60,9 @@ export function validateScreen(raw, folder, dir) {
     throw bad('«styles» debe ser una lista de archivos .css de la carpeta.');
   for (const file of [raw.entry, ...styles])
     if (!existsSync(join(dir, file))) throw bad(`no existe el archivo ${file}.`);
+  // Clave del catálogo de permisos (server/lib/access.mjs) que decide quién ve la pantalla, además del rol.
+  const permission = raw.permission ?? null;
+  if (permission !== null && !PERMISSION.test(permission)) throw bad('«permission» debe ser una clave de permiso.');
   let nav = null;
   if (raw.nav != null) {
     const { group, icon, label, order } = raw.nav;
@@ -72,6 +78,7 @@ export function validateScreen(raw, folder, dir) {
     visibility,
     nav,
     roles: ROLES.filter(role => raw.roles.includes(role)),
+    permission,
     entry: raw.entry,
     styles: [...styles],
   };

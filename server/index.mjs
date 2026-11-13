@@ -888,6 +888,7 @@ const server = http.createServer(async (req, res) => {
     if (await integrations.handlePublic(req, res, path, url, req.socket.remoteAddress || 'unknown')) return; // API v1 de lectura: llave propia, sin sesión ni Origin
     if (await allies.handlePublic(req, res, path, req.socket.remoteAddress || 'unknown')) return; // postulación pública de aliados (/aliados), apagada por omisión, con límite por IP
     if (await surveys.handlePublic(req, res, path, req.socket.remoteAddress || 'unknown')) return; // encuestas por token (/encuesta/<token>, /api/survey/<token>), sin sesión, con límite por IP
+    if (await modules.handlePublic(req, res, path, url, req.socket.remoteAddress || 'unknown')) return; // rutas sin sesión de los módulos nuevos (llave o firma propia)
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && !originAllowed(req))
       throw fail(403, 'Origen no permitido.');
     const ip = req.socket.remoteAddress || 'unknown';
