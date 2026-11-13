@@ -151,17 +151,19 @@ test('verificación en dos pasos: activación, acceso con desafío, recuperació
   assert.equal(step1.headers.get('set-cookie'), null);
   await call('/api/bootstrap', '', undefined, 'GET', 401);
   await call('/api/auth/mfa', '', { challenge: step1.challenge, code: '123456' }, 'POST', 401);
-  await call('/api/auth/mfa', '', { challenge: 'x'.repeat(64), code: code(setup.secret, 1) }, 'POST', 401);
+  // El código se calcula una sola vez: si el paso de 30 s cambiara entre dos llamadas, «el mismo código» sería otro.
+  const stepCode = code(setup.secret, 1);
+  await call('/api/auth/mfa', '', { challenge: 'x'.repeat(64), code: stepCode }, 'POST', 401);
   await call('/api/auth/mfa', '', {}, 'POST', 401);
-  const done = await call('/api/auth/mfa', '', { challenge: step1.challenge, code: code(setup.secret, 1) });
+  const done = await call('/api/auth/mfa', '', { challenge: step1.challenge, code: stepCode });
   assert.ok(done.cookie);
   assert.equal(done.user.username, 'asesor');
   assert.equal(done.usedRecovery, false);
   await call('/api/bootstrap', done.cookie);
-  await call('/api/auth/mfa', '', { challenge: step1.challenge, code: code(setup.secret, 1) }, 'POST', 401); // el desafío se consume
+  await call('/api/auth/mfa', '', { challenge: step1.challenge, code: stepCode }, 'POST', 401); // el desafío se consume
   // el mismo código (mismo paso) no se puede reutilizar
   const again = await call('/api/auth/login', '', { username: 'asesor', password });
-  await call('/api/auth/mfa', '', { challenge: again.challenge, code: code(setup.secret, 1) }, 'POST', 401);
+  await call('/api/auth/mfa', '', { challenge: again.challenge, code: stepCode }, 'POST', 401);
 
   // código de recuperación: un solo uso
   const rec = enabled.recoveryCodes[0],
