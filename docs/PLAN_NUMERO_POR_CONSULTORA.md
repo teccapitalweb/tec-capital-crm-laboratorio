@@ -1,6 +1,6 @@
 # Un número de WhatsApp para toda la consultora (13 nov 2026)
 
-Rama `feat/numero-por-consultora`. **Esquema 41. Sin publicar.** Apagado por omisión: cada número sigue recibiendo en su curso de siempre hasta que administración lo cambie.
+Publicado en `main` (13 nov 2026). **Esquema 41.** Apagado por omisión: cada número sigue recibiendo en su curso de siempre hasta que administración lo cambie.
 
 ## Para qué
 
