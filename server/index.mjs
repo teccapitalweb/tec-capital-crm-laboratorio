@@ -201,13 +201,13 @@ const contacts=createContacts({db,crm,body,json,audit,broadcast,events,persons})
 const catalogueImport=createCatalogueImport({db,catalogue,crm,body,json,audit});
 const operations=createOperations({db,crm,catalogue,body,json,audit,broadcast,online,insertMessage});
 // Venta con pago simulado (server/payments.mjs): pedidos, enlace de prueba, comprobantes en cola, inscripci√≥n; apagada por marca por omisi√≥n.
-// Cupones de descuento (server/coupons.mjs): administraciÛn los crea por marca; el equipo los aplica al cobrar desde el chat.
+// Cupones de descuento (server/coupons.mjs): administraci√≥n los crea por marca; el equipo los aplica al cobrar desde el chat.
 const coupons=createCoupons({db,crm,body,json,audit});
-// API p˙blica de lectura y webhooks salientes (server/integrations.mjs): llaves por marca, envÌos firmados con reintento, destinos privados rechazados.
+// API p√∫blica de lectura y webhooks salientes (server/integrations.mjs): llaves por marca, env√≠os firmados con reintento, destinos privados rechazados.
 const integrations=createIntegrations({db,crm,events,body,json,audit,rate,baseDelayMs:process.env.NODE_ENV==='test'?100:5000,capDelayMs:process.env.NODE_ENV==='test'?400:15*60000});
 const payments=createPayments({db,crm,catalogue,insertMessage,body,json,audit,broadcast,accessConversation,events,content,coupons,rate});
 // Coordinaci√≥n acad√©mica (server/coordination.mjs): aperturas sobre la edici√≥n, sesiones, asistencia y recursos; la venta confirmada entra por evento.
-// Lista ´Preparar marcaª (server/readiness.mjs): sÛlo lectura, administraciÛn.
+// Lista ¬´Preparar marca¬ª (server/readiness.mjs): s√≥lo lectura, administraci√≥n.
 const readiness=createReadiness({db,crm,json});
 const coordination=createCoordination({db,crm,events,insertMessage,body,json,audit,broadcast,content,payments,surveys});
 // Finanzas (server/finance.mjs): libro de ventas por eventos, comisiones con regla configurable, liquidaciones, funci√≥n contadora.
@@ -225,22 +225,22 @@ aiProvider.useBudget(createAiBudget({db}));   // tope mensual de llamadas y toke
 const flows=createFlows({db,crm,body,json,audit,broadcast});
 const privacy=createPrivacy();   // aviso de privacidad publico (/privacidad): pagina estatica, sin sesion
 const replies=createReplies({db,catalogue,crm,contacts,operations,insertMessage,provider:aiProvider,payments,content,flows});
-// Estado de la IA para administraciÛn (server/ai-status.mjs): proveedor, clave (sÌ/no), gasto del mes y quÈ falta por marca; sin secretos.
+// Estado de la IA para administraci√≥n (server/ai-status.mjs): proveedor, clave (s√≠/no), gasto del mes y qu√© falta por marca; sin secretos.
 const aiStatus=createAiStatus({db,crm,provider:aiProvider,json});
 // WhatsApp real (server/whatsapp.mjs): entrantes de Meta -> cliente, conversacion y mensaje; salientes de conversaciones reales. Apagado sin CHANNEL_CONNECTOR=meta.
 const mcp=createMcp({db,crm,catalogue,replies,integrations,body,json,audit,rate,version:'0.34.0'});
 const whatsapp=createWhatsApp({db,crm,catalogue,payments,replies,events,channel,connectors,broadcast,audit,body,json,rate,insertMessage,passwordHash,attachmentData,defaultEditionId,dataDir,root,takeOver,accessConversation});
 const knowledgeImport=createKnowledgeImport({db,replies,crm,body,json,audit});
-// Pauta (server/ads.mjs): el panel de tr·fico de IPCIL dentro del CRM; administraciÛn y la funciÛn de trafiquer.
+// Pauta (server/ads.mjs): el panel de tr√°fico de IPCIL dentro del CRM; administraci√≥n y la funci√≥n de trafiquer.
 const ads=createAds({db,crm,body,json,audit});
-// Aliados (server/allies.mjs): el panel RH de IPCIL dentro del CRM; la p·gina p˙blica de postulaciÛn est· apagada (ALLY_FORM_ENABLED=1).
+// Aliados (server/allies.mjs): el panel RH de IPCIL dentro del CRM; la p√°gina p√∫blica de postulaci√≥n est√° apagada (ALLY_FORM_ENABLED=1).
 const allies=createAllies({db,crm,body,json,audit,rate});
-// Resumen de conversaciÛn (server/summaries.mjs): por reglas siempre, con IA si hay proveedor; lo usa tambiÈn la IA que responde en chats largos.
+// Resumen de conversaci√≥n (server/summaries.mjs): por reglas siempre, con IA si hay proveedor; lo usa tambi√©n la IA que responde en chats largos.
 const summaries=createSummaries({db,crm,provider:aiProvider,accessConversation,body,json,audit,rate});
 // Mensajes programados (server/scheduled.mjs): salen solos a la hora elegida, con las mismas reglas que un envio manual.
 const scheduled=createScheduled({db,crm,catalogue,insertMessage,takeOver,accessConversation,broadcast,body,json,audit,rate});
 // Agenda de citas (server/appointments.mjs): se agendan desde el chat, con recordatorio opcional al cliente (un mensaje programado) y aviso a quien la lleva.
-const appointments=createAppointments({db,crm,accessConversation,scheduled,broadcast,body,json,audit,rate});   // conocimiento por lote (borradores), sÛlo administraciÛn
+const appointments=createAppointments({db,crm,accessConversation,scheduled,broadcast,body,json,audit,rate});   // conocimiento por lote (borradores), s√≥lo administraci√≥n
 // Banco de evaluaci√≥n (server/evaluation.mjs): casos esperados del motor, ejecutados con la simulaci√≥n sin efectos.
 const evaluation=createEvaluation({db,crm,replies,provider:aiProvider,body,json,audit});
 const automation=createAutomation({db,onChange:step=>{if(step.conversation_id)broadcast('conversation',step.conversation_id);broadcast('crm',null,{brandId:step.brand_id});}});
@@ -298,18 +298,18 @@ async function processJob(job){
     let draft=null;
     if(planned.plan.needsProvider){
       const ctx=catalogue.info(planned.plan.course?.courseId||planned.c.course_id,planned.plan.course?.editionId||planned.c.edition_id),history=db.prepare('SELECT sender_kind,text FROM messages WHERE conversation_id=? ORDER BY seq DESC LIMIT 6').all(planned.c.id).reverse().map(m=>({role:m.sender_kind==='customer'?'customer':'agent',text:m.text}));
-      const summary=await summaries.ensureFor(planned.c);   // chats largos: la IA ve un resumen de lo anterior adem·s de los ˙ltimos mensajes
+      const summary=await summaries.ensureFor(planned.c);   // chats largos: la IA ve un resumen de lo anterior adem√°s de los √∫ltimos mensajes
       draft=await aiProvider.draft({brand:ctx.brand,course:ctx.course,edition:{name:ctx.edition.name,dateLabel:ctx.dateLabel,priceLabel:(ctx.priceCents/100).toFixed(2)+' '+ctx.currency},question:planned.trigger.text,knowledge:planned.plan.knowledge,history,memory:planned.plan.memory||null,summary});
     }
     transaction(db,()=>{const state=db.prepare('SELECT state FROM jobs WHERE id=?').get(job.id)?.state;if(state!=='pending')return;const c=db.prepare('SELECT * FROM conversations WHERE id=?').get(job.conversation_id);if(!c.bot_enabled||c.assigned_to||c.status!=='open'){db.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").run(job.id);return;}replies.commit(c,planned.trigger,planned.plan,draft);db.prepare("UPDATE jobs SET state='done' WHERE id=?").run(job.id);});
     broadcast('conversation',job.conversation_id);
-    if(!db.prepare('SELECT bot_enabled FROM conversations WHERE id=?').get(job.conversation_id)?.bot_enabled)summaries.auto(job.conversation_id);   // pasÛ a una persona: se deja listo el resumen
+    if(!db.prepare('SELECT bot_enabled FROM conversations WHERE id=?').get(job.conversation_id)?.bot_enabled)summaries.auto(job.conversation_id);   // pas√≥ a una persona: se deja listo el resumen
   }catch(error){console.error('Automation job failed',error.name);jobFailed(job,error);}
   finally{jobsInFlight.delete(job.id);}
 }
 const JOB_MAX_ATTEMPTS=5,JOB_BASE_DELAY=2000,JOB_CAP_DELAY=5*60_000;
 function jobFailed(job,error){
-  const attempts=job.attempts+1,message=String(error?.message||error).replace(/[ -]+/g,' ').slice(0,200),t=Date.now();
+  const attempts=job.attempts+1,message=String(error?.message||error).replace(/[\x00-\x1f]+/g,' ').slice(0,200),t=Date.now();
   try{transaction(db,()=>{
     if(attempts>=JOB_MAX_ATTEMPTS){
       db.prepare("UPDATE jobs SET state='cancelled',attempts=?,last_error=? WHERE id=? AND state='pending'").run(attempts,message,job.id);
@@ -353,8 +353,8 @@ const server=http.createServer(async(req,res)=>{
     if(await payments.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // pago sin sesion de un pedido de WhatsApp real (/api/pay/<pedido>)
     if(await certificates.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // verificaci√≥n p√∫blica de certificados por folio, con l√≠mite por IP
     if(await mcp.handle(req,res,path,req.socket.remoteAddress||'unknown'))return;   // conector de Claude (MCP): llave propia, sin sesion
-    if(await integrations.handlePublic(req,res,path,url,req.socket.remoteAddress||'unknown'))return;   // API v1 de lectura: llave propia, sin sesiÛn ni Origin
-    if(await allies.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // postulaciÛn p˙blica de aliados (/aliados), apagada por omisiÛn, con lÌmite por IP
+    if(await integrations.handlePublic(req,res,path,url,req.socket.remoteAddress||'unknown'))return;   // API v1 de lectura: llave propia, sin sesi√≥n ni Origin
+    if(await allies.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // postulaci√≥n p√∫blica de aliados (/aliados), apagada por omisi√≥n, con l√≠mite por IP
     if(await surveys.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // encuestas por token (/encuesta/<token>, /api/survey/<token>), sin sesi√≥n, con l√≠mite por IP
     if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&!originAllowed(req))throw fail(403,'Origen no permitido.');
     const ip=req.socket.remoteAddress||'unknown';

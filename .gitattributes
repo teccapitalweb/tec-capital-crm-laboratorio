@@ -1,0 +1,24 @@
+# Texto: LF en el repositorio y en la copia de trabajo, en cualquier sistema.
+*            text=auto eol=lf
+*.mjs        text eol=lf
+*.js         text eol=lf
+*.css        text eol=lf
+*.html       text eol=lf
+*.json       text eol=lf
+*.md         text eol=lf
+*.sql        text eol=lf
+*.yml        text eol=lf
+*.svg        text eol=lf
+*.csv        text eol=lf
+*.webmanifest text eol=lf
+Dockerfile   text eol=lf
+# Binarios: nunca se convierten ni se comparan como texto.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.pdf  binary
+*.woff2 binary
+*.sqlite binary
