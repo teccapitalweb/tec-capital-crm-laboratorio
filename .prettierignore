@@ -1,0 +1,16 @@
+node_modules/
+.claude/
+data/
+data-demo/
+docs/
+nucleo/
+*.md
+*.csv
+*.sql
+*.svg
+*.webmanifest
+package-lock.json
+public/index.html
+public/flyers/
+public/vendor/
+test/fixtures/

@@ -48,7 +48,7 @@ test('push por API: permisos, claves VAPID firmadas, suscripción validada, env�
   // archivos de la app instalable
   for(const [path,type] of [['/sw.js','javascript'],['/push.js','javascript'],['/manifest.webmanifest','manifest+json'],['/icon-192.png','image/png'],['/icon-512.png','image/png']]){const r=await fetch(origin+path);assert.equal(r.status,200,path);assert.ok(r.headers.get('content-type').includes(type),path+' '+r.headers.get('content-type'));}
   const manifest=await (await fetch(origin+'/manifest.webmanifest')).json();assert.equal(manifest.display,'standalone');assert.equal(manifest.start_url,'/crm');assert.ok(manifest.icons.some(i=>i.sizes==='192x192')&&manifest.icons.some(i=>i.sizes==='512x512'));
-  assert.match(await (await fetch(origin+'/sw.js')).text(),/addEventListener\('push'/);
+  assert.match(await (await fetch(origin+'/sw.js')).text(),/addEventListener\(\s*['"]push['"]/);
 
   const admin=await call('/api/auth/register','',{username:'admin',name:'Administración',password,inviteCode:code});
   const agent=await call('/api/auth/register','',{username:'asesor',name:'Asesora',password});const inv=await call('/api/team/invites',admin.cookie,{username:'asesor',brandIds:['globalvet']},'POST',201);await call('/api/team/accept',agent.cookie,{token:inv.token});
