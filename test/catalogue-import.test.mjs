@@ -9,7 +9,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {parseCsv,zonedToUtc,TEMPLATE_CSV,COLUMNS} from '../server/catalogue-import.mjs';
 
 test('CSV: comillas, saltos de línea dentro de celdas, punto y coma, BOM y líneas reales',()=>{
-  const rows=parseCsv('﻿marca;curso;temario\r\nOdonTeck;"Curso ""A""";"uno\ndos"\r\n\r\nGlobalVet;B;x\r\n');
+  const rows=parseCsv('\uFEFFmarca;curso;temario\r\nOdonTeck;"Curso ""A""";"uno\ndos"\r\n\r\nGlobalVet;B;x\r\n');
   assert.deepEqual(rows.map(r=>r.cells),[['marca','curso','temario'],['OdonTeck','Curso "A"','uno\ndos'],['GlobalVet','B','x']]);
   assert.deepEqual(rows.map(r=>r.line),[1,2,5]);
   assert.deepEqual(parseCsv('a,b\n1,"2,5"\n')[1].cells,['1','2,5']);

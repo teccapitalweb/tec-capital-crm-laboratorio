@@ -38,7 +38,7 @@ window.createCatalogueImportUI=function({api,esc,icon,showModal,toast,reload}){
   async function action(name,el){
     if(name==='imp-open'){open();return true;}
     if(name==='imp-template'){
-      const t=await api('/api/catalogue/import/template'),blob=new Blob(['﻿'+t.csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
+      const t=await api('/api/catalogue/import/template'),blob=new Blob(['\uFEFF'+t.csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
       a.href=URL.createObjectURL(blob);a.download='plantilla-catalogo.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);return true;
     }
     if(name==='imp-preview'){

@@ -113,7 +113,7 @@ test('contactos: etiquetas, duplicados, fusión con vista previa y exportación'
     const bytes=Buffer.from(await res.arrayBuffer());assert.deepEqual([...bytes.subarray(0,3)],[0xEF,0xBB,0xBF]);const text=bytes.toString('utf8').slice(1);assert.ok(text.startsWith('marca,nombre,telefono,correo,origen,etiquetas,intereses_activos'));assert.ok(text.includes("\"'=HYPERLINK(\"\"http://x\"\")\""));assert.ok(text.includes("'+525512341234"));assert.ok(!text.includes('De otra marca'));
     const filtered=await (await raw('/api/crm/export/contacts.csv?tag='+tag.id,admin.cookie)).text();assert.equal(filtered.trim().split('\r\n').length,2);assert.ok(filtered.includes('Exportar'));
     await raw('/api/crm/export/contacts.csv?brand=nada',admin.cookie).then(r=>assert.equal(r.status,404));await raw('/api/crm/export/contacts.csv?tag='+randomUUID(),admin.cookie).then(r=>assert.equal(r.status,404));
-    const opp=await (await raw('/api/crm/export/opportunities.csv',admin.cookie)).text();assert.ok(opp.replace(/^﻿/,'').startsWith('marca,contacto,curso,edicion,etapa,responsable,precio'));assert.ok(opp.split('\r\n').length>2);
+    const opp=await (await raw('/api/crm/export/opportunities.csv',admin.cookie)).text();assert.ok(opp.replace(/^\uFEFF/,'').startsWith('marca,contacto,curso,edicion,etapa,responsable,precio'));assert.ok(opp.split('\r\n').length>2);
     const d=db();try{assert.ok(d.prepare("SELECT count(*) n FROM audit WHERE action LIKE 'export.%'").get().n>=3);}finally{d.close();}
   });
 });

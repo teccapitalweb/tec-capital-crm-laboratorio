@@ -38,7 +38,7 @@ window.createKnowledgeImportUI=function({api,esc,icon,showModal,toast,reload}){
   async function action(name){
     if(name==='kimp-open'){open();return true;}
     if(name==='kimp-template'){
-      const t=await api('/api/knowledge-import/template'),blob=new Blob(['﻿'+t.csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
+      const t=await api('/api/knowledge-import/template'),blob=new Blob(['\uFEFF'+t.csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
       a.href=URL.createObjectURL(blob);a.download='plantilla-conocimiento.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);return true;
     }
     if(name==='kimp-preview'){try{await readInput();preview=await api('/api/knowledge-import/preview',{method:'POST',body:{csv}});showPreview(preview);}catch(e){$('#kimp-result').textContent=e.message;toast(e.message);}return true;}

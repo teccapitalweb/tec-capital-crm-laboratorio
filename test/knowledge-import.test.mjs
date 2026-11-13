@@ -68,7 +68,7 @@ test('importar conocimiento por lote: vista previa sin escribir, borradores, sin
   ['GlobalVet','¿Aplica a un curso que no existe?','El curso indicado no existe en la marca y debe rechazarse.','general','Curso Inventado',''],
   ['GlobalVet','¿Qué dicen los alumnos del curso?','COMPLETAR: resume lo que opinan los alumnos.','general','',''],
  ];
- const csv='﻿'+rows.map(r=>r.map(c=>/[;"\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c).join(';')).join('\r\n')+'\r\n';
+ const csv='\uFEFF'+rows.map(r=>r.map(c=>/[;"\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c).join(';')).join('\r\n')+'\r\n';
  const preview=await call('/api/knowledge-import/preview',admin.cookie,{csv},'POST');
  assert.deepEqual(preview.summary,{rows:9,valid:2,withErrors:7,toCreate:2,existing:0});
  const byLine=Object.fromEntries(preview.rows.map(r=>[r.line,r]));

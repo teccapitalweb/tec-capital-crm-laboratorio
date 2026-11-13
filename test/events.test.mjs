@@ -96,7 +96,7 @@ test('eventos de dominio: publicación idempotente dentro de la transacción, su
   assert.equal(events.list([brand,other],{before:3}).length,2);assert.equal(events.list([brand,other],{limit:1}).length,1);
   const rows=events.list([brand,other]);assert.equal(rows[0].seq,3);assert.equal(rows[0].failed,1);assert.equal(rows[2].pending,0);
   const st=events.stats([brand,other]);assert.equal(st.total,3);assert.equal(st.failed,2);assert.equal(st.byType[0].n,1);
-  const csv=events.csv(rows);assert.match(csv,/^﻿seq,fecha,tipo/);assert.equal(csv.split('\n').length,4);assert.match(csv,/"{""reference"":""TC-222222""}"/);
+  const csv=events.csv(rows);assert.match(csv,/^\uFEFFseq,fecha,tipo/);assert.equal(csv.split('\n').length,4);assert.match(csv,/"{""reference"":""TC-222222""}"/);
   assert.match(events.csv([{...rows[0],actor_name:'=HYPERLINK("x")',payload:{}}]),/,"'=HYPERLINK\(""x""\)"/,'una celda que empieza con = se neutraliza');
   assert.equal(events.get(1).payload.reference,'TC-111111');assert.equal(events.get(42),null);
   assert.throws(()=>events.publish({type:'pedido.creado',brandId:brand,entityId:'o-3',payload:{big:'x'.repeat(5000)},source:'test'}),/demasiado grande/);

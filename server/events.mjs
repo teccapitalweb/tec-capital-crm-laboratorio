@@ -151,7 +151,7 @@ export function createEvents({db,crm=null,body,json,audit=()=>{},now=Date.now,lo
       byType:db.prepare(`SELECT type,count(*) n FROM domain_events WHERE brand_id IN (${ph}) GROUP BY type ORDER BY n DESC`).all(...brandIds)};
   }
   // Misma neutralización de fórmulas que la exportación de contactos (celdas que empiezan con = + - @).
-  const csv=rows=>['﻿seq,fecha,tipo,marca,entidad,id_entidad,origen,actor,carga',...rows.map(e=>[e.seq,new Date(e.created_at).toISOString(),e.type,e.brand_name,e.entity_kind,e.entity_id,e.source,e.actor_name||'',JSON.stringify(e.payload)].map(csvCell).join(','))].join('\n');
+  const csv=rows=>['\uFEFFseq,fecha,tipo,marca,entidad,id_entidad,origen,actor,carga',...rows.map(e=>[e.seq,new Date(e.created_at).toISOString(),e.type,e.brand_name,e.entity_kind,e.entity_id,e.source,e.actor_name||'',JSON.stringify(e.payload)].map(csvCell).join(','))].join('\n');
 
   const requireAdmin=user=>{const u=db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);if(!u||u.disabled||u.role!=='admin')throw fail(403,'La bitácora de eventos es para administración.');};
   async function handle(req,res,path,user){

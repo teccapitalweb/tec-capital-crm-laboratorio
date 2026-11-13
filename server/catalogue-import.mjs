@@ -9,7 +9,7 @@ const MODALITY={online:'online',presencial:'in_person',in_person:'in_person',hib
 const STATUS={borrador:'draft',draft:'draft',publicada:'published',published:'published'};
 
 export function parseCsv(text){
-  const src=String(text).replace(/^﻿/,''),first=src.split(/\r?\n/,1)[0],delimiter=(first.match(/;/g)||[]).length>(first.match(/,/g)||[]).length?';':',';
+  const src=String(text).replace(/^\uFEFF/,''),first=src.split(/\r?\n/,1)[0],delimiter=(first.match(/;/g)||[]).length>(first.match(/,/g)||[]).length?';':',';
   const rows=[];let row=[],cell='',quoted=false,line=1,start=1;
   const endRow=()=>{row.push(cell);cell='';if(row.some(c=>c.trim()!==''))rows.push({line:start,cells:row});row=[];start=line+1;};
   for(let i=0;i<src.length;i++){

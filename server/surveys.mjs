@@ -136,7 +136,7 @@ export function createSurveys({db,crm,events,insertMessage,content=null,body,jso
     if(!path.startsWith('/api/surveys'))return false;let x;
     if((x=path.match(/^\/api\/surveys\/([a-f0-9-]{36})(\.csv|\/close)$/))){
       const s=get(x[1]);if(!s)throw fail(404,'Encuesta no encontrada.');requireStaff(user);crm.requireBrand(user,s.brand_id);
-      if(x[2]==='.csv'&&req.method==='GET'){res.writeHead(200,{'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="encuesta-'+s.id.slice(0,8)+'.csv"'});res.end('﻿'+csv(s));return true;}
+      if(x[2]==='.csv'&&req.method==='GET'){res.writeHead(200,{'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="encuesta-'+s.id.slice(0,8)+'.csv"'});res.end('\uFEFF'+csv(s));return true;}
       if(x[2]==='/close'&&req.method==='POST'){json(res,200,{survey:close(s,user)});return true;}
       throw fail(405,'Método no permitido.');
     }

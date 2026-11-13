@@ -162,7 +162,7 @@ export function createContacts({db,crm,body,json,audit,broadcast,events=null,per
       const rows=db.prepare(`SELECT o.*,b.name brand_name,c.name contact_name,k.title course_title,e.name edition_name,e.price_cents,e.currency,u.name owner_name FROM opportunities o JOIN contacts c ON c.id=o.contact_id JOIN brands b ON b.id=o.brand_id JOIN courses k ON k.id=o.course_id LEFT JOIN editions e ON e.id=o.edition_id LEFT JOIN users u ON u.id=o.owner_id WHERE o.brand_id IN (${q}) ORDER BY b.name,o.updated_at DESC LIMIT ${MAX_EXPORT}`).all(...ids);
       count=rows.length;lines=[csvLine(['marca','contacto','curso','edicion','etapa','responsable','precio','moneda','motivo_perdida','creada','actualizada']),...rows.map(r=>csvLine([r.brand_name,r.contact_name,r.course_title,r.edition_name,r.stage,r.owner_name,r.price_cents===null||r.price_cents===undefined?'':(r.price_cents/100).toFixed(2),r.currency,r.lost_reason,new Date(r.created_at).toISOString(),new Date(r.updated_at).toISOString()]))];
     }
-    return {filename:`${kind==='contacts'?'contactos':'oportunidades'}-${stamp}.csv`,csv:'﻿'+lines.join('\r\n')+'\r\n',count};
+    return {filename:`${kind==='contacts'?'contactos':'oportunidades'}-${stamp}.csv`,csv:'\uFEFF'+lines.join('\r\n')+'\r\n',count};
   }
 
   async function handle(req,res,path,user){
