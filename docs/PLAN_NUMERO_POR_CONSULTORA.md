@@ -29,7 +29,7 @@ Una marca con un solo curso disponible nunca pregunta.
 
 Los mensajes anteriores conservan su ficha y su precio tal como salieron.
 
-## Ajustes con el catálogo real de GlobalVet (13 nov 2026, rama `feat/catalogo-real-ajustes`, sin publicar)
+## Ajustes con el catálogo real de GlobalVet (13 nov 2026, publicados en `main`)
 
 Con los 18 cursos de noviembre cargados en un servidor local salieron cuatro cosas:
 
