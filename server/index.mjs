@@ -343,8 +343,10 @@ function flyer(course,brand){
 }
 
 const server=http.createServer(async(req,res)=>{
-  security(res);const url=new URL(req.url,'http://localhost'),path=url.pathname;
+  security(res);
   try{
+    let url;try{url=new URL(req.url,'http://localhost');}catch{throw fail(400,'Solicitud no v\u00e1lida.');}   // un destino ilegible responde 400 en lugar de detener el proceso
+    const path=url.pathname;
     if(req.method==='GET'&&path==='/api/health'){db.prepare('SELECT 1').get();return json(res,200,{ok:true,version:'0.34.0',transport:'websocket',mode:'laboratorio'});}
     if(await connectors.handlePublic(req,res,path,url,req.socket.remoteAddress||'unknown'))return;   // webhooks de proveedores: firma propia, sin sesión ni Origin
     if(await privacy.handlePublic(req,res,path))return;

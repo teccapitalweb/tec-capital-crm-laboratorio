@@ -1,6 +1,6 @@
 # Estado actual del CRM
 
-Página de referencia corta y vigente. Si algo de aquí contradice al código, **el código manda**: comprueba `git status`, `package.json`, `git log` y `/api/health` antes de actuar. Al publicar un cambio, actualiza esta página (versión, esquema, pruebas y fecha). Última actualización: **7 nov 2026**.
+Página de referencia corta y vigente. Si algo de aquí contradice al código, **el código manda**: comprueba `git status`, `package.json`, `git log` y `/api/health` antes de actuar. Al publicar un cambio, actualiza esta página (versión, esquema, pruebas y fecha). Última actualización: **13 nov 2026**.
 
 ## Identificación
 
@@ -8,9 +8,9 @@ Página de referencia corta y vigente. Si algo de aquí contradice al código, *
 | --- | --- |
 | Producto | CRM de TEC Capital para 15 marcas de cursos (hoy 3 marcas y 6 cursos de demostración cargados) |
 | Versión publicada | **0.34.0** en `main` (etiquetas en la bandeja). `/api/health` de producción devuelve `0.34.0` |
-| Pendiente de publicar | **Corrección de la evaluación con IA** (rama `fix/evaluacion-ia`: el puntaje se leía como fracción y daba «Lista para responder» con 5,9 %; en «Sugerir» el banco nunca podía pasar), sin esquema nuevo. También: **Auditoría de celular, ronda 3** (áreas táctiles de 40 px en casillas, horas, resúmenes desplegables, tachar tareas y botones de ícono; tablas que se salían de su panel; sólo CSS), rama `feat/mejora-diseno-3`. Ya publicados desde la v0.34.0 (todos sobre `main`, `/api/health` sigue diciendo 0.34.0): menú por grupos y Operación por áreas, mensajes programados (esquema 32) con avisos, panel en Mi día y **materiales del catálogo** (esquema 37), agenda de citas (33) y vista semanal, cupones (34) y cupón escrito por el cliente (36), API pública y webhooks (35, con su corrección de seguridad), estado de la IA y guía de activación, resumen de conversación (31), Aliados (30), Pauta (29) y lo anterior. El usuario ya confirmó en producción el menú agrupado, Agenda y «Mis citas» con una cita real |
+| Pendiente de publicar | **Corrección del arranque** (rama `fix/destino-mal-formado`: una petición con un destino mal formado, como `GET //`, detenía el proceso sin necesidad de sesión; ahora responde 400 y el servidor sigue atendiendo), sin esquema nuevo. También: **Corrección de la evaluación con IA** (rama `fix/evaluacion-ia`: el puntaje se leía como fracción y daba «Lista para responder» con 5,9 %; en «Sugerir» el banco nunca podía pasar), sin esquema nuevo. También: **Auditoría de celular, ronda 3** (áreas táctiles de 40 px en casillas, horas, resúmenes desplegables, tachar tareas y botones de ícono; tablas que se salían de su panel; sólo CSS), rama `feat/mejora-diseno-3`. Ya publicados desde la v0.34.0 (todos sobre `main`, `/api/health` sigue diciendo 0.34.0): menú por grupos y Operación por áreas, mensajes programados (esquema 32) con avisos, panel en Mi día y **materiales del catálogo** (esquema 37), agenda de citas (33) y vista semanal, cupones (34) y cupón escrito por el cliente (36), API pública y webhooks (35, con su corrección de seguridad), estado de la IA y guía de activación, resumen de conversación (31), Aliados (30), Pauta (29) y lo anterior. El usuario ya confirmó en producción el menú agrupado, Agenda y «Mis citas» con una cita real |
 | Esquema SQLite | **41** (publicado: un número de WhatsApp para toda la consultora). Respaldo previo al migrar: `backups/before-crm-v41-*` |
-| Pruebas | 217 aprobadas (`npm test`); `npm run check` limpio |
+| Pruebas | 218 aprobadas (`npm test`); `npm run check` limpio |
 | CRM del equipo | <https://crm-laboratorio-production.up.railway.app/crm> |
 | Experiencia del cliente | <https://crm-laboratorio-production.up.railway.app/> |
 | Repositorio | <https://github.com/teccapitalweb/tec-capital-crm-laboratorio>, rama `main` (público: nada de secretos) |
