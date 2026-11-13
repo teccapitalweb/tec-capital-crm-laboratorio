@@ -1,0 +1,6 @@
+# Commits de solo formato (Prettier): git blame los salta.
+# Uso local: git config blame.ignoreRevsFile .git-blame-ignore-revs
+ab6fabd2dd8152b54df865201d7cff4651df4522
+53b99d317e5f7abe0dee122175ddd1a1447b6c44
+764eb0798299ffad379d7eac349a38910962199a
+03e7300e243c01a7c78970c444f486735e2552bb

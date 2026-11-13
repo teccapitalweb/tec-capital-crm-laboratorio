@@ -30,7 +30,12 @@ const report = (name, ok, started, detail = '') => {
   if (!ok) process.exit(1);
 };
 // `npx` necesita un intérprete de órdenes en Windows; el propio Node no (y su ruta puede llevar espacios).
-const run = (command, args, shell = false) => spawnSync(command, args, { stdio: 'inherit', shell }).status === 0;
+// Con intérprete se pasa la orden entera como texto: los argumentos son fijos, escritos aquí.
+const run = (command, args, shell = false) =>
+  (shell
+    ? spawnSync([command, ...args].join(' '), { stdio: 'inherit', shell: true })
+    : spawnSync(command, args, { stdio: 'inherit' })
+  ).status === 0;
 
 async function syntax(files) {
   const failed = [];
