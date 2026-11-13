@@ -14,3 +14,20 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm test
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # Las pruebas de interfaz usan el Chrome del sistema; la imagen ya lo trae y sólo se instala si faltara.
+      - run: which google-chrome || npx playwright install chrome
+      - run: npm run test:ui
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/

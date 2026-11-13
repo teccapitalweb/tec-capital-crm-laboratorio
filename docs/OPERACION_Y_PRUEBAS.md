@@ -123,7 +123,9 @@ Para iterar en un módulo puede ejecutarse, por ejemplo, `node --test test/opera
 
 Cuando una prueba abre su propia conexión `DatabaseSync` sobre la base del servidor temporal para sembrar o inspeccionar filas, debe abrirla con `{timeout:5000}`: el servidor escribe cada segundo desde el tick de eventos y una conexión sin espera falla con `database is locked` (ocurrió una vez en CI, 3 nov 2026). Las conexiones de sólo lectura (`readOnly:true`) no lo necesitan.
 
-Las pruebas automatizadas del repositorio no ejecutan navegador ni demuestran que Railway tenga ese código. La revisión local y la publicada son evidencias diferentes.
+**Pruebas de humo en navegador** (`npm run test:ui`, Playwright con el Chrome instalado; no descarga navegadores): arrancan su propio servidor sobre una carpeta temporal, con los proveedores apagados, y recorren en computadora (1366×800) y celular (375×812) el acceso del equipo, un mensaje de cliente que llega en vivo a la bandeja con su respuesta, y la auditoría de Niebla de Mi día, Conversaciones, Contactos y Catálogo contra una línea base (`test/ui/niebla-baseline.json`) que sólo puede bajar. En las tres: ningún error de consola, ningún error de página y ninguna respuesta 5xx. CI las ejecuta en un trabajo aparte (`ui`).
+
+Las pruebas automatizadas no demuestran que Railway tenga ese código. La revisión local y la publicada son evidencias diferentes.
 
 ## Recorrido de aceptación en navegador
 

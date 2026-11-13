@@ -16,8 +16,11 @@ const walk = dir =>
 
 // Lista de archivos de código que se revisan; exportada para poder comprobarla desde fuera.
 export function discover() {
-  return DIRS.filter(dir => existsSync(dir))
-    .flatMap(walk)
+  // Las carpetas de código, completas, y los guiones sueltos de la raíz (por ejemplo playwright.config.mjs).
+  const rootFiles = readdirSync('.', { withFileTypes: true })
+    .filter(entry => entry.isFile())
+    .map(entry => entry.name);
+  return [...DIRS.filter(dir => existsSync(dir)).flatMap(walk), ...rootFiles]
     .filter(file => ['.mjs', '.js'].includes(extname(file)))
     .map(file => file.replace(/\\/g, '/'))
     .sort();

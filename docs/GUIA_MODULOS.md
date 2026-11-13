@@ -142,8 +142,9 @@ Los archivos estáticos se sirven por carpeta: cualquier archivo de `public/` co
 ```sh
 npm run check     # codificación, sintaxis y formato (Prettier)
 npm test
+npm run test:ui   # pruebas de humo en un navegador real, en computadora y en celular
 ```
 
 - Archivos en UTF-8, finales de línea LF, formato de Prettier (`npx prettier --write <archivos>`).
-- Cada módulo, pantalla y migración llega con sus pruebas. Una pantalla se revisa además en computadora y en celular.
+- Cada módulo, pantalla y migración llega con sus pruebas. Una pantalla trae su `test/ui/<pantalla>.spec.mjs`, que la monta en los dos tamaños (proyectos `escritorio` y `celular`), comprueba que no deja errores con `watch(page)` y llama a `expectNiebla(page, nombre, testInfo)` (letra de 11 px o más, contraste, áreas táctiles de 40 px y sin desborde; una pantalla nueva no tiene línea base: su límite es cero). Ayudantes en `test/ui/helpers.mjs`.
 - No se suben secretos, datos de clientes, copias de la base ni adjuntos. El repositorio es público.
