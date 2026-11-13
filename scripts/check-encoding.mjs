@@ -33,14 +33,23 @@ export function problems(path, bytes) {
   if (text.includes(FFFD)) found.push('contiene U+FFFD (texto dañado por una conversión)');
   const body = BOM_ALLOWED.test(path) && text.startsWith(FEFF) ? text.slice(1) : text;
   if (body.includes(FEFF)) found.push('contiene U+FEFF literal (escríbelo como \\uFEFF)');
-  if (CODE.test(path) && INVISIBLE.test(text)) found.push('contiene un espacio o separador invisible (U+00A0, U+200B a U+200F, U+2028 o U+2029)');
+  if (CODE.test(path) && INVISIBLE.test(text))
+    found.push('contiene un espacio o separador invisible (U+00A0, U+200B a U+200F, U+2028 o U+2029)');
   if (!text.endsWith('\n')) found.push('no termina en salto de línea');
   return found;
 }
 
 export function listFiles(root) {
-  const out = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
-  return out.split('\0').filter(Boolean).filter(path => !BINARY.test(path)).sort();
+  const out = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  return out
+    .split('\0')
+    .filter(Boolean)
+    .filter(path => !BINARY.test(path))
+    .sort();
 }
 
 export function run(root) {
@@ -62,7 +71,14 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const root = fileURLToPath(new URL('../', import.meta.url));
   const { files, failures } = run(root);
   if (failures.length) {
-    console.error('Codificación: ' + failures.length + ' problema(s) en ' + files + ' archivos de texto:\n  ' + failures.join('\n  '));
+    console.error(
+      'Codificación: ' +
+        failures.length +
+        ' problema(s) en ' +
+        files +
+        ' archivos de texto:\n  ' +
+        failures.join('\n  '),
+    );
     process.exit(1);
   }
   console.log('Codificación: ' + files + ' archivos de texto en UTF-8 y LF.');
