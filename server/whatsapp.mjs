@@ -4,6 +4,7 @@ import {resolve} from 'node:path';
 import {transaction} from './database.mjs';
 import {artworkAsset} from './demo-catalog.mjs';
 import * as copy from './reply-copy.mjs';
+import {brandCourses,matchCourse} from './course-match.mjs';
 
 // WhatsApp real (Meta · Cloud API). docs/PLAN_WHATSAPP_REAL.md
 // Convierte un mensaje que llega a un número real en cliente, conversación y mensaje del CRM —el mismo camino que sigue un
@@ -31,6 +32,18 @@ export function createWhatsApp({db,env=process.env,crm,catalogue,payments,replie
     const courses=db.prepare('SELECT id FROM courses WHERE brand_id=? AND active=1 ORDER BY title').all(number.brand_id),k=courses.find(x=>x.id===number.course_id)||courses[0];if(!k)return null;
     const any=db.prepare('SELECT id FROM editions WHERE id=?').get(defaultEditionId(k.id))||db.prepare('SELECT id FROM editions WHERE course_id=? ORDER BY created_at LIMIT 1').get(k.id);
     return any?{courseId:k.id,editionId:any.id}:null;
+  }
+  // ---- Anuncios (número que atiende toda la marca): cada anuncio por el que llega alguien queda anotado por marca; el curso lo asigna administración
+  // en Conectores. Mientras no lo asigne, se intenta reconocer el curso en el título y el texto del anuncio. Dentro de la transacción del llamador.
+  const adOf=d=>{const r=d?.referral;if(!r||typeof r!=='object')return null;const id=text(String(r.adId||''),80).replace(/[^\w.:-]/g,'');return id?{id,headline:text(String(r.ad||''),120),body:text(String(r.headline||''),200)}:null;};
+  function adCourse(number,ad,t){
+    if(!ad)return null;
+    const row=db.prepare('SELECT * FROM wa_ads WHERE brand_id=? AND ad_id=?').get(number.brand_id,ad.id);
+    if(row)db.prepare("UPDATE wa_ads SET hits=hits+1,last_seen=?,headline=CASE WHEN ?!='' THEN ? ELSE headline END,body=CASE WHEN ?!='' THEN ? ELSE body END WHERE brand_id=? AND ad_id=?").run(t,ad.headline,ad.headline,ad.body,ad.body,number.brand_id,ad.id);
+    else if(db.prepare('SELECT count(*) n FROM wa_ads WHERE brand_id=?').get(number.brand_id).n<500)db.prepare('INSERT INTO wa_ads(brand_id,ad_id,headline,body,hits,first_seen,last_seen) VALUES(?,?,?,?,1,?,?)').run(number.brand_id,ad.id,ad.headline,ad.body,t,t);   // tope por marca: un anuncio de más se reconoce por su texto, sin anotarse
+    if(!number.multi)return null;
+    const list=brandCourses(db,catalogue,number.brand_id);
+    return (row?.course_id&&list.find(k=>k.id===row.course_id))||matchCourse(list,ad.headline+' '+ad.body)||null;
   }
   const displayName=(name,waId)=>{const n=text(name,60).replace(/[<>]/g,'');return n.length>=2?n:'WhatsApp ··'+waId.slice(-4);};
 
@@ -71,13 +84,18 @@ export function createWhatsApp({db,env=process.env,crm,catalogue,payments,replie
       db.prepare('UPDATE users SET last_seen=? WHERE id=?').run(t,userId);
       // 3) conversación abierta con ese número; si no hay, una nueva en el curso que toca
       let c=db.prepare("SELECT * FROM conversations WHERE customer_id=? AND wa_number=? AND brand_id=? AND status!='resolved' ORDER BY updated_at DESC LIMIT 1").get(userId,number.phone_number_id,number.brand_id),created=false;
+      const ad=adOf(d),fromAd=adCourse(number,ad,t),refJson=d.referral&&typeof d.referral==='object'&&text(String(d.referral.ad||''),120)?JSON.stringify({source:'ad',ad:text(String(d.referral.ad),120),adId:ad?.id||null,campaign:text(String(d.referral.campaign||''),120)||null,flyerId:null,headline:text(String(d.referral.headline||''),200)||null,at:t}):null;
+      // Ya tenía una conversación abierta y ahora llega por el anuncio de OTRO curso: la conversación pasa a ese curso (salvo que tenga un pedido vigente).
+      if(c&&fromAd&&(fromAd.id!==c.course_id||c.course_pending)&&!payments.openOrder(c.id)&&crm.moveConversation(c,fromAd.id,fromAd.editionId,{placeholder:Boolean(c.course_pending)})){db.prepare('UPDATE conversations SET referral=? WHERE id=?').run(refJson,c.id);c.referral=refJson;audit(null,'conversation.course.ad',c.id);}
       if(!c){
-        const p=pick(number);if(!p)return {skip:'ignorado: la marca no tiene un curso activo con edición para recibir conversaciones'};
+        // Número que atiende toda la marca: el curso es el del anuncio; sin anuncio (o sin curso reconocible) queda «por elegir» y el asistente lo pregunta.
+        const several=number.multi?brandCourses(db,catalogue,number.brand_id):[],p=fromAd?{courseId:fromAd.id,editionId:fromAd.editionId}:pick(number);if(!p)return {skip:'ignorado: la marca no tiene un curso activo con edición para recibir conversaciones'};
+        const pending=!fromAd&&several.length>1?1:0;
         let id=db.prepare("SELECT id FROM conversations WHERE customer_id=? AND course_id=? AND channel='whatsapp' AND status!='resolved'").get(userId,p.courseId)?.id||null;
         if(id)db.prepare('UPDATE conversations SET wa_number=?,wa_peer=? WHERE id=?').run(number.phone_number_id,waId,id);   // ya tenía una abierta de ese curso (escribió a otro número): continúa ahí
         else{
-          id=randomUUID();const r=d.referral&&typeof d.referral==='object'&&text(String(d.referral.ad||''),120)?JSON.stringify({source:'ad',ad:text(String(d.referral.ad),120),campaign:text(String(d.referral.campaign||''),120)||null,flyerId:null,headline:text(String(d.referral.headline||''),200)||null,at:t}):null;
-          db.prepare('INSERT INTO conversations(id,customer_id,brand_id,course_id,channel,created_at,updated_at,edition_id,referral,wa_number,wa_peer) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(id,userId,number.brand_id,p.courseId,'whatsapp',t,t,p.editionId,r,number.phone_number_id,waId);created=true;
+          id=randomUUID();
+          db.prepare('INSERT INTO conversations(id,customer_id,brand_id,course_id,channel,created_at,updated_at,edition_id,referral,wa_number,wa_peer,course_pending) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(id,userId,number.brand_id,p.courseId,'whatsapp',t,t,p.editionId,refJson,number.phone_number_id,waId,pending);created=true;
         }
         c=db.prepare('SELECT * FROM conversations WHERE id=?').get(id);
         crm.syncConversation(c);
@@ -233,25 +251,35 @@ export function createWhatsApp({db,env=process.env,crm,catalogue,payments,replie
   }
 
   // ---- Administración: números ↔ marcas, estado y prueba de conexión. Nunca devuelve el token ni el secreto.
-  const numberView=n=>({phoneNumberId:n.phone_number_id,brandId:n.brand_id,brandName:db.prepare('SELECT name FROM brands WHERE id=?').get(n.brand_id)?.name||n.brand_id,courseId:n.course_id,courseTitle:n.course_id?db.prepare('SELECT title FROM courses WHERE id=?').get(n.course_id)?.title||null:null,label:n.label,enabled:Boolean(n.enabled),revision:n.revision,updatedAt:n.updated_at,
+  const numberView=n=>({phoneNumberId:n.phone_number_id,brandId:n.brand_id,brandName:db.prepare('SELECT name FROM brands WHERE id=?').get(n.brand_id)?.name||n.brand_id,courseId:n.course_id,courseTitle:n.course_id?db.prepare('SELECT title FROM courses WHERE id=?').get(n.course_id)?.title||null:null,label:n.label,enabled:Boolean(n.enabled),multi:Boolean(n.multi),revision:n.revision,updatedAt:n.updated_at,
     conversations:db.prepare('SELECT count(*) n FROM conversations WHERE wa_number=?').get(n.phone_number_id).n,people:db.prepare('SELECT count(DISTINCT customer_id) n FROM conversations WHERE wa_number=?').get(n.phone_number_id).n});
   function status(){
     const meta=connectors.adapters.channel.meta,envNumber=/^\d{5,25}$/.test(String(env.META_PHONE_NUMBER_ID||'').trim())?String(env.META_PHONE_NUMBER_ID).trim():null,numbers=db.prepare('SELECT * FROM wa_numbers ORDER BY created_at').all();
     return {live:connectors.metaLive(),selected:connectors.selected.channel.provider==='meta',configured:meta.configured,missing:meta.missing,envNumber,envNumberAssigned:envNumber?numbers.some(n=>n.phone_number_id===envNumber):false,
       wabaSet:wabaSet(),webhookPath:'/api/webhooks/channel/meta',webhookReady:Boolean(env.META_APP_SECRET&&env.META_VERIFY_TOKEN),numbers:numbers.map(numberView),
       brands:db.prepare('SELECT id,name FROM brands ORDER BY name').all(),courses:db.prepare('SELECT id,brand_id,title FROM courses WHERE active=1 ORDER BY title').all(),
-      people:db.prepare('SELECT count(*) n FROM wa_identities').get().n};
+      people:db.prepare('SELECT count(*) n FROM wa_identities').get().n,
+      ads:db.prepare('SELECT a.*,b.name brand_name,k.title course_title FROM wa_ads a JOIN brands b ON b.id=a.brand_id LEFT JOIN courses k ON k.id=a.course_id ORDER BY a.last_seen DESC LIMIT 100').all().map(a=>({brandId:a.brand_id,brandName:a.brand_name,adId:a.ad_id,headline:a.headline,body:a.body,courseId:a.course_id,courseTitle:a.course_title||null,hits:a.hits,lastSeen:a.last_seen,revision:a.revision}))};
+  }
+  // El curso de un anuncio. Sólo cursos activos de la marca del anuncio; «sin curso» lo deja a lo que se reconozca en su texto.
+  function saveAd(input,user){
+    const brandId=String(input.brandId||''),adId=String(input.adId||''),courseId=input.courseId?String(input.courseId):null,row=db.prepare('SELECT * FROM wa_ads WHERE brand_id=? AND ad_id=?').get(brandId,adId);
+    if(!row)throw fail(404,'Anuncio no encontrado.');
+    if(courseId&&!db.prepare('SELECT 1 FROM courses WHERE id=? AND brand_id=? AND active=1').get(courseId,brandId))throw fail(400,'Elige un curso activo de la marca del anuncio.');
+    if(!Number.isInteger(input.expectedRevision)||input.expectedRevision!==row.revision)throw fail(409,'El anuncio cambió. Recarga la pantalla.');
+    db.prepare('UPDATE wa_ads SET course_id=?,revision=revision+1,updated_by=? WHERE brand_id=? AND ad_id=? AND revision=?').run(courseId,user.id,brandId,adId,row.revision);
+    audit(user,'whatsapp.ad',adId);return {ok:true};
   }
   function saveNumber(id,input,user){
     if(!/^\d{5,25}$/.test(id))throw fail(400,'El identificador del número son sólo dígitos: es el «Identificador del número de teléfono» que muestra Meta, no el teléfono.');
     const brandId=String(input.brandId||''),courseId=input.courseId?String(input.courseId):null;
     if(!db.prepare('SELECT 1 FROM brands WHERE id=?').get(brandId))throw fail(400,'Elige la marca que atiende este número.');
     if(courseId&&!db.prepare('SELECT 1 FROM courses WHERE id=? AND brand_id=? AND active=1').get(courseId,brandId))throw fail(400,'El curso por omisión debe ser un curso activo de esa marca.');
-    const current=numberRow(id),t=now(),label=text(input.label,60),enabled=input.enabled===undefined?(current?current.enabled:1):input.enabled?1:0;
+    const current=numberRow(id),t=now(),label=text(input.label,60),enabled=input.enabled===undefined?(current?current.enabled:1):input.enabled?1:0,multi=input.multi===undefined?(current?current.multi:0):input.multi?1:0;
     if(current&&current.brand_id!==brandId&&db.prepare("SELECT 1 FROM conversations WHERE wa_number=? AND status!='resolved' LIMIT 1").get(id))throw fail(409,'Este número tiene conversaciones abiertas en '+(db.prepare('SELECT name FROM brands WHERE id=?').get(current.brand_id)?.name||current.brand_id)+': ciérralas antes de pasarlo a otra marca.');
     if(!Number.isInteger(input.expectedRevision)||input.expectedRevision!==(current?current.revision:0))throw fail(409,'El número cambió. Recarga la pantalla.');
-    if(current)db.prepare('UPDATE wa_numbers SET brand_id=?,course_id=?,label=?,enabled=?,revision=revision+1,updated_by=?,updated_at=? WHERE phone_number_id=? AND revision=?').run(brandId,courseId,label,enabled,user.id,t,id,current.revision);
-    else db.prepare('INSERT INTO wa_numbers(phone_number_id,brand_id,course_id,label,enabled,updated_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').run(id,brandId,courseId,label,enabled,user.id,t,t);
+    if(current)db.prepare('UPDATE wa_numbers SET brand_id=?,course_id=?,label=?,enabled=?,multi=?,revision=revision+1,updated_by=?,updated_at=? WHERE phone_number_id=? AND revision=?').run(brandId,courseId,label,enabled,multi,user.id,t,id,current.revision);
+    else db.prepare('INSERT INTO wa_numbers(phone_number_id,brand_id,course_id,label,enabled,multi,updated_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').run(id,brandId,courseId,label,enabled,multi,user.id,t,t);
     audit(user,'whatsapp.number',id);return numberView(numberRow(id));
   }
   function removeNumber(id,user){
@@ -296,6 +324,7 @@ export function createWhatsApp({db,env=process.env,crm,catalogue,payments,replie
       if(!x[2]&&req.method==='DELETE'){json(res,200,removeTemplate(x[1],user));return true;}
     }
     if(path==='/api/whatsapp'&&req.method==='GET'){json(res,200,status());return true;}
+    if(path==='/api/whatsapp/ads'&&req.method==='PUT'){json(res,200,saveAd(await body(req),user));return true;}
     if(path==='/api/whatsapp/subscribe'&&req.method==='POST'){rate('wa-sub:'+user.id,6);json(res,200,await subscribe(user));return true;}
     if(path==='/api/whatsapp/ping'&&req.method==='POST'){rate('wa-ping:'+user.id,12);json(res,200,await ping(await body(req),user));return true;}
     if((x=path.match(/^\/api\/whatsapp\/numbers\/(\d{1,30})$/))){

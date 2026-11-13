@@ -29,3 +29,15 @@ export function migrateWhatsAppTemplates(db){
       +"CREATE INDEX wa_templates_brand ON wa_templates(brand_id,status);ALTER TABLE messages ADD COLUMN wa_template TEXT;ALTER TABLE messages ADD COLUMN wa_hold INTEGER;CREATE INDEX messages_wa_hold ON messages(wa_hold) WHERE wa_hold IS NOT NULL;PRAGMA user_version=39;");
   });
 }
+
+// Esquema v41: un número de WhatsApp para toda la consultora (docs/PLAN_NUMERO_POR_CONSULTORA.md).
+//   wa_numbers.multi              el número atiende TODOS los cursos de su marca (apagado por omisión: sigue recibiendo en su curso de siempre).
+//   conversations.course_pending  la persona todavía no dice qué curso le interesa: el asistente se lo pregunta antes de hablar de precios o fechas.
+//   wa_ads                        anuncios de Meta por los que han llegado personas, por marca, y el curso al que pertenece cada uno (lo asigna administración).
+export function migrateWhatsAppMulti(db){
+  if(db.prepare('PRAGMA user_version').get().user_version>=41)return;
+  transaction(db,()=>{
+    db.exec("ALTER TABLE wa_numbers ADD COLUMN multi INTEGER NOT NULL DEFAULT 0;ALTER TABLE conversations ADD COLUMN course_pending INTEGER NOT NULL DEFAULT 0;"
+      +"CREATE TABLE wa_ads(brand_id TEXT NOT NULL REFERENCES brands(id),ad_id TEXT NOT NULL,headline TEXT NOT NULL DEFAULT '',body TEXT NOT NULL DEFAULT '',course_id TEXT REFERENCES courses(id),hits INTEGER NOT NULL DEFAULT 0,revision INTEGER NOT NULL DEFAULT 1,updated_by TEXT REFERENCES users(id),first_seen INTEGER NOT NULL,last_seen INTEGER NOT NULL,PRIMARY KEY(brand_id,ad_id));PRAGMA user_version=41;");
+  });
+}

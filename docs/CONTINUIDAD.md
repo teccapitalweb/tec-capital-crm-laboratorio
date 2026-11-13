@@ -34,6 +34,13 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Un número de WhatsApp para toda la consultora (rama `feat/numero-por-consultora`, 13 nov 2026, sin publicar)
+
+- **Por qué:** el usuario pidió que el número real sea la consultora completa: que el curso dependa del anuncio de Instagram o Facebook por el que llegó la persona y que el asistente conteste de todos los cursos.
+- **Qué se hizo (esquema 41):** opción por número «Todos los cursos de la marca»; registro de anuncios de Meta por marca con su curso (`wa_ads`); conversación con el curso «por elegir» y lista numerada; reconocer el curso por palabras propias de su título; cambiar de curso en el mismo chat (`crm.moveConversation`). Detalle y límites: [PLAN_NUMERO_POR_CONSULTORA.md](PLAN_NUMERO_POR_CONSULTORA.md).
+- **Decisiones:** apagado por omisión; a media conversación hace falta una señal además de la palabra; con un pedido vigente no se cambia solo; el interés anterior se conserva salvo el «de relleno» (nacido con esa conversación, en «nuevo» y sin otra conversación ligada); no se habla de precios ni fechas hasta saber el curso.
+- **Evidencia:** 215 pruebas (2 nuevas en `test/whatsapp-multi.test.mjs`, con Meta y Anthropic de mentira); revisión independiente con cuatro hallazgos corregidos; Conectores y el chat revisados en el demo local en computadora y a 375 px. **Falta:** probar con un anuncio real de Meta (el número de prueba no puede correr anuncios).
+
 ## Asistente sin callejones (publicado en `main`, 13 nov 2026)
 
 - **Por qué:** el usuario vio en WhatsApp real que el asistente pasaba a un asesor («No quiero hacerte perder tiempo…») por mensajes cortos. Medido con 94 frases de trato: 79 caían en «no reconocida»; además, en Autónomo las respuestas buenas de la IA contaban como «sin reconocer» y la segunda seguida ya escalaba.

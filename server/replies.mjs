@@ -6,13 +6,14 @@ import {isOpen,openingLabel} from './service-hours.mjs';
 import {rankKnowledge} from './retrieval.mjs';
 import {customerMemory} from './memory.mjs';
 import * as copy from './reply-copy.mjs';
+import {brandCourses,matchCourse,byNumber} from './course-match.mjs';
 
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
 export const MODES=['off','suggest','templates','autonomous'];
-export const INTENTS=['opt_out','human','refund','enroll','payment','price','schedule','syllabus','certificate','requirements','modality','recording','duration','greeting','thanks','identity','decline','objection','seats','courses','affirm','later','bye','help','menu','unknown'];
+export const INTENTS=['opt_out','human','refund','enroll','payment','price','schedule','syllabus','certificate','requirements','modality','recording','duration','greeting','thanks','identity','decline','objection','seats','courses','affirm','later','bye','help','menu','choose_course','unknown'];
 // Mensajes de trato (saludo, gracias, «sí», «no», «espera», «¿sigues ahí?»…): se contestan con un texto fijo y NO cuentan como pregunta sin respuesta.
-export const SOFT_INTENTS=['greeting','thanks','affirm','decline','later','bye','help','menu','identity'];
+export const SOFT_INTENTS=['greeting','thanks','affirm','decline','later','bye','help','menu','identity','choose_course'];
 // Con el primer mensaje de una conversación estas intenciones se contestan tal cual; las demás de trato reciben la bienvenida.
 const DIRECT_INTENTS=['seats','courses','identity','objection'];
 // Respuestas cortas que se leen contra el último mensaje del asistente («sí» después de «¿Quieres apartar tu lugar?»).
@@ -101,11 +102,33 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
   const unknownStreak=conversationId=>{let n=0;for(const r of db.prepare("SELECT intent,sources,action FROM reply_log WHERE conversation_id=? AND action IN ('replied','suggested','escalated') ORDER BY created_at DESC,rowid DESC LIMIT 10").all(conversationId)){if(r.action==='escalated')break;if(r.intent!=='menu'&&SOFT_INTENTS.includes(r.intent))continue;if(unanswered(r))n++;else break;}return n;};   // pedir las opciones (o decir «no» a la persona) reinicia la cuenta
   // Último mensaje que recibió la persona, si fue del asistente: su texto y si era la propuesta de pasar con una persona.
   const lastBot=conversationId=>{const m=db.prepare("SELECT id,text,sender_kind FROM messages WHERE conversation_id=? AND sender_kind!='customer' ORDER BY seq DESC LIMIT 1").get(conversationId);if(!m||m.sender_kind!=='automation')return null;const r=db.prepare('SELECT intent,sources FROM reply_log WHERE conversation_id=? AND reply_message_id=?').get(conversationId,m.id);return {text:String(m.text||''),intent:r?.intent||null,offer:Boolean(r&&r.sources.includes('"kind":"offer_human"'))};};
+  // ---- Número de WhatsApp que atiende toda la marca (docs/PLAN_NUMERO_POR_CONSULTORA.md). Decide, sin escribir nada, si este mensaje elige o cambia el
+  // curso de la conversación: por el número de la lista que se le acaba de ofrecer o porque nombra un curso de la marca. Con el curso todavía por elegir
+  // basta una palabra propia del curso; a media conversación hace falta además una señal («el de aves», «también…»), y un pedido vigente lo impide.
+  // Devuelve null si no aplica (laboratorio, o número de un solo curso); si no, {list, pending, course? | ask? | blocked?}.
+  function route(c,trigger){
+    if(!c.wa_number)return null;
+    const number=db.prepare('SELECT multi FROM wa_numbers WHERE phone_number_id=?').get(c.wa_number),pending=Boolean(c.course_pending);
+    if(!number?.multi&&!pending)return null;
+    const list=brandCourses(db,catalogue,c.brand_id),base={multi:true,list,pending};
+    if(pending&&list.length===1)return {...base,course:list[0]};
+    const shown=lastBot(c.id),listed=Boolean(shown&&/(^|\n)1\. /.test(shown.text)),hit=(listed&&byNumber(list,trigger.text))||matchCourse(list,trigger.text,{strict:!pending});
+    if(hit&&(pending||hit.id!==c.course_id)){
+      if(db.prepare("SELECT 1 FROM conversations WHERE customer_id=? AND course_id=? AND edition_id=? AND channel=? AND status!='resolved' AND id!=?").get(c.customer_id,hit.id,hit.editionId,c.channel,c.id))return {...base,ask:pending&&list.length>1};
+      if(!pending&&payments?.openOrder(c.id))return {...base,blocked:hit};
+      return {...base,course:hit};
+    }
+    return {...base,ask:pending&&list.length>1};
+  }
+  const askedStreak=conversationId=>{let n=0;for(const r of db.prepare("SELECT intent FROM reply_log WHERE conversation_id=? AND action IN ('replied','suggested') ORDER BY created_at DESC,rowid DESC LIMIT 4").all(conversationId)){if(r.intent==='choose_course')n++;else break;}return n;};
   // Otros cursos activos de la MISMA marca con una edición disponible (sólo títulos).
   const otherCourses=c=>db.prepare('SELECT id,title FROM courses WHERE brand_id=? AND active=1 AND id!=? ORDER BY title LIMIT 20').all(c.brand_id,c.course_id).filter(k=>{try{return !catalogue.info(k.id).reason;}catch{return false;}}).slice(0,6).map(k=>k.title);
 
   // Plan síncrono: decide intención, texto, fuentes y si hace falta el proveedor. No escribe nada.
   function plan(c,trigger){
+    // El curso de ESTE mensaje: si lo elige o lo cambia, todo lo demás (catálogo, conocimiento, ficha) se planea ya con el curso nuevo; commit() lo guarda.
+    const routed=route(c,trigger);
+    if(routed?.course)c={...c,course_id:routed.course.id,edition_id:routed.course.editionId,course_pending:0};
     const s=settings(c.brand_id),user=db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id),first=(user?.name||'').split(' ')[0];
     // Flujo de bienvenida de la marca (server/flows.mjs): si la persona pulsó un botón del paso en el que va, ese botón manda. Un botón de acción
     // (precio, temario, fechas, inscribirse, asesor) equivale a pedirlo con esas palabras: se responde por el camino de siempre.
@@ -113,6 +136,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const ctx=catalogue.info(c.course_id,c.edition_id),course=ctx.course,cls=forced?{intent:forced,confidence:1}:classify(trigger.text),situational=!forced&&CATALOGUE_INTENTS.includes(cls.intent)&&SITUATION.test(normalize(trigger.text));
     let intent=situational?'unknown':cls.intent,confidence=situational?.3:cls.confidence;
     const count=db.prepare("SELECT count(*) n FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id).n;
+    const fresh=count===1||Boolean(routed?.course);   // primer mensaje, o acaba de elegir curso: lo que no sea una pregunta concreta recibe la ficha de ese curso
     // Respuestas cortas que sólo se entienden por lo que el asistente acaba de decir («sí», «va», «no»):
     //  · tras proponer una persona («¿Quieres que te pase con…?»): «sí» pasa a un asesor y «no» muestra las opciones;
     //  · tras invitar a inscribirse: «sí» sigue el camino de la inscripción, el mismo de «Quiero inscribirme» (nunca se confirma sola);
@@ -170,7 +194,14 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
       out.reason='Varias preguntas en un mensaje ('+asked.join(', ')+'): se contestan juntas con el catálogo vigente y el conocimiento aprobado.';
       return true;
     };
-    if(pressed?.kind==='step'&&!ctx.reason){out.intent='flow';out.confidence=1;out.reply=flows.render(pressed.step.text,flowValues());menu(pressed.step);out.sources.push({type:'flow',step:pressed.step.id});out.reason='Flujo de bienvenida: la persona eligió «'+pressed.label+'».';}
+    const OWN_PATH=['opt_out','human','refund'].includes(intent)||(intent==='payment'&&paidClaim);   // la baja, pedir una persona, una queja y avisar de un pago siguen su camino aunque falte el curso
+    if(routed?.ask&&!OWN_PATH){
+      const asked=askedStreak(c.id);out.intent='choose_course';out.confidence=1;out.noFlow=true;
+      if(asked>=2){out.handoff=true;out.reply=copy.escalate;out.reason='Se le preguntó dos veces qué curso le interesa y no se reconoció ninguno: pasa a una persona.';}
+      else{out.reply=copy.chooseCourse(ctx.brand.name,routed.list.map(k=>k.title),{again:asked>0});out.reason='El número atiende toda la marca y todavía no se sabe el curso: se le pregunta antes de hablar de precios o fechas.';}
+    }
+    else if(routed?.blocked&&!OWN_PATH){out.intent='choose_course';out.confidence=1;out.noFlow=true;out.reply=copy.switchBlocked(ctx,routed.blocked.title);out.reason='Pidió otro curso teniendo un pedido vigente: no se cambia solo.';}
+    else if(pressed?.kind==='step'&&!ctx.reason){out.intent='flow';out.confidence=1;out.reply=flows.render(pressed.step.text,flowValues());menu(pressed.step);out.sources.push({type:'flow',step:pressed.step.id});out.reason='Flujo de bienvenida: la persona eligió «'+pressed.label+'».';}
     else if(intent==='opt_out'){out.reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';out.reason='El cliente pidió la baja; se registra y se confirma una sola vez.';}
     else if(intent==='human'||intent==='refund'){out.reply=intent==='refund'?copy.refund(user?.name):copy.human(user?.name);out.handoff=true;out.reason=intent==='refund'?'Queja o reembolso: siempre lo atiende una persona.':'El cliente pidió hablar con una persona.';}
     else if(ctx.reason){out.reply=copy.unavailable(ctx.reason);out.handoff=true;out.reason='La edición no está disponible según el catálogo.';out.sources.push(catalogueSource);}
@@ -197,7 +228,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     else if(intent==='price'){out.prepared=catalogue.prepare(c,{kind:'price'});out.reply=copy.price(ctx);out.stage='interesado';out.sources.push(catalogueSource);out.reason='Precio y promoción vigentes consultados en el catálogo al responder.';}
     else if(intent==='syllabus'){out.prepared=catalogue.prepare(c,{kind:'syllabus'});out.reply=copy.syllabus(ctx);out.sources.push(catalogueSource);out.reason='Temario del curso en el catálogo.';}
     else if(intent==='schedule'){out.prepared=catalogue.prepare(c,{kind:'schedule'});out.reply=copy.schedule(ctx);out.sources.push(catalogueSource);out.reason='Fecha, horario y docente de la edición en el catálogo.';}
-    else if(intent==='greeting'||(count===1&&!asks&&!DIRECT_INTENTS.includes(intent)))welcome();
+    else if(intent==='greeting'||(fresh&&!asks&&!DIRECT_INTENTS.includes(intent)))welcome();
     else if(intent==='thanks'){out.reply=prev?.intent==='thanks'?copy.thanksAgain:copy.thanks(user?.name);out.reason='Agradecimiento o cierre.';}
     else if(intent==='affirm'){options(copy.affirm(ctx));out.reason='Dijo que sí sin una pregunta pendiente: se le ofrecen las opciones.';}
     else if(intent==='decline'){out.reply=copy.decline(user?.name);out.reason='Dijo que no o que ya no le interesa: se despide sin insistir.';}
@@ -207,7 +238,7 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     else if(intent==='menu'){options(flow?flows.render(flow.steps[0].text,flowValues()):copy.menu(ctx));out.reason='Pidió ver las opciones.';}
     else if(intent==='identity'){options(copy.identity(ctx),WITH_HUMAN);out.reason='Preguntó con quién habla: se le dice que es el asistente automático y cómo pedir una persona.';}
     else if(intent==='seats'){out.reply=copy.seats(ctx);out.sources.push(catalogueSource);out.reason='Cupo de la edición consultado en el catálogo al responder.';}
-    else if(intent==='courses'){out.reply=copy.courses(ctx,otherCourses(c));out.sources.push(catalogueSource);out.reason='Otros cursos activos de la marca, consultados en el catálogo.';}
+    else if(intent==='courses'){out.reply=routed?.multi&&routed.list.length>1?copy.courseMenu(ctx,routed.list.map(k=>k.title)):copy.courses(ctx,otherCourses(c));out.sources.push(catalogueSource);out.reason='Otros cursos activos de la marca, consultados en el catálogo.';}
     else if(intent==='objection'){if(!fromKnowledge(.6)){out.reply=copy.objection(ctx);out.sources.push(catalogueSource);out.reason='Le parece caro: precio vigente del catálogo y opción de hablar con una persona; no se ofrecen descuentos.';}}
     else if(fromKnowledge(.5)){/* respondido con conocimiento */}
     else{
@@ -217,24 +248,24 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
       out.knowledge=picked.selected.map(x=>({id:x.entry.id,question:x.entry.question,answer:x.entry.answer,score:x.score}));
       out.retrieval={considered:picked.considered,sent:picked.sent,mode:picked.mode,truncated:picked.truncated};
       out.needsProvider=Boolean(s.provider_enabled)&&picked.sent>0;
-      if(out.needsProvider&&c.id!=='simulacion')out.memory=customerMemory(db,c,{now}).text;
+      if(out.needsProvider&&c.id!=='simulacion'&&!routed?.pending)out.memory=customerMemory(db,c,{now}).text;   // con el curso recién elegido, el interés de relleno todavía figura en su historia: no se le manda a la IA
       out.reply=copy.fallback(ctx);if(!flow){out.buttons=WITH_HUMAN;out.keepButtons=true;}
       out.reason='Sin intención reconocida ni conocimiento parecido.'+(s.provider_enabled&&kb.length?(picked.sent?' Contexto para la IA: '+picked.sent+' de '+picked.considered+' entradas.':' Ninguna entrada del conocimiento se parece a la pregunta: no se consultó a la IA.'):'');
-      if(count===1){welcome();if(out.needsProvider){out.prepared=null;if(!flow)out.buttons=null;}out.reason='Primer mensaje sin respuesta en el conocimiento: bienvenida con la ficha vigente del curso.'+(out.needsProvider?' Si el proveedor de IA responde con fuentes aprobadas, se usa su respuesta.':'');}
+      if(fresh){welcome();if(out.needsProvider){out.prepared=null;if(!flow)out.buttons=null;}out.reason='Primer mensaje sin respuesta en el conocimiento: bienvenida con la ficha vigente del curso.'+(out.needsProvider?' Si el proveedor de IA responde con fuentes aprobadas, se usa su respuesta.':'');}
       // Sin respuesta, en tres escalones en lugar de pasar a una persona de golpe:
       //  1) opciones para tocar (precio, fechas, asesor);  2) al llegar al máximo de la marca, se PREGUNTA si quiere una persona;
       //  3) si después de eso tampoco hay respuesta, entonces sí se pasa. Si la IA contesta bien, nada de esto se aplica (commit()).
       const streak=unknownStreak(c.id)+1,level=streak>s.max_unknown?'escalate':streak===s.max_unknown?'offer':'options';
-      out.miss=level;out.ifAnswered={buttons:count===1?out.buttons:null,keepButtons:count===1?Boolean(out.keepButtons):false,flow:count===1?out.flow||null:null};
+      out.miss=level;out.ifAnswered={buttons:fresh?out.buttons:null,keepButtons:fresh?Boolean(out.keepButtons):false,flow:fresh?out.flow||null:null};
       if(level==='offer'){out.reply=copy.offerHuman;out.prepared=null;out.buttons=OFFER_BUTTONS;out.keepButtons=true;out.flow=null;out.sources=[{type:'template',kind:'offer_human'}];out.reason+=' Van '+streak+' respuestas seguidas sin contestar (máximo de la marca: '+s.max_unknown+'): antes de pasar a una persona se le pregunta si la quiere.';}
       else if(level==='escalate'){out.handoff=true;out.reply=copy.escalate;out.prepared=null;out.buttons=null;out.keepButtons=false;out.flow=null;out.reason+=' Se superó el máximo de respuestas sin contestar ('+s.max_unknown+') después de ofrecerle una persona: se escala.';}
     }
     if(out.mode==='templates'&&out.needsProvider){out.needsProvider=false;out.reason+=' (El proveedor de IA sólo se usa en modo autónomo.)';}
     const flowStep=o=>{
-      if(!flow||o.miss==='offer')return;   // la propuesta de pasar con una persona lleva sus propios botones y no mueve el recorrido
+      if(!flow||o.miss==='offer'||o.noFlow)return;   // la propuesta de pasar con una persona lleva sus propios botones y no mueve el recorrido
       if(o.handoff||forced==='enroll'||forced==='human'||intent==='opt_out'){o.flow={end:true};o.buttons=null;o.keepButtons=false;}   // pasa a una persona, se inscribe o pide la baja: el recorrido termina y ya no se ofrece el menú
       else if(forced){menu(pressed.step,o);o.reason+=' Opción «'+pressed.label+'» del flujo de bienvenida: el menú sigue a la vista.';}
-      else if(!o.flow&&count===1&&!o.order)menu(flow.steps[0],o);   // su primer mensaje fue una pregunta concreta: se contesta y se le ofrece el menú
+      else if(!o.flow&&fresh&&!o.order)menu(flow.steps[0],o);   // su primer mensaje fue una pregunta concreta: se contesta y se le ofrece el menú
       else if(o.flow&&!pressed)o.reason+=' Flujo de bienvenida de la marca.';
       else if(!o.flow&&!pressed&&flows.running(c.id))o.flow={miss:true};   // escribió otra cosa: contesta el motor; el menú vale una vez más
     };
@@ -242,6 +273,8 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     if(out.miss){if(out.needsProvider){const a={...out.ifAnswered,handoff:false,order:false,reason:''};flowStep(a);out.ifAnswered={buttons:a.buttons||null,keepButtons:Boolean(a.keepButtons),flow:a.flow||null};}else out.ifAnswered=null;}
     flowStep(out);
     if(followed)out.reason=followed+' '+out.reason;
+    out.course={courseId:c.course_id,editionId:c.edition_id};   // el curso con el que se planeó: quien consulte a la IA debe darle ESTE curso
+    if(routed?.course){out.move={courseId:routed.course.id,editionId:routed.course.editionId,placeholder:routed.pending};out.reason=(routed.pending?'Eligió el curso «':'Cambió al curso «')+routed.course.title+'»: la conversación pasa a ese curso. '+out.reason;}
     return out;
   }
 
@@ -292,6 +325,9 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
   // Aplica el plan dentro de una transacción del llamador. Revalida que nadie respondió ya a este mensaje.
   function commit(c,trigger,p,draft=null){
     const ref='automation:'+trigger.id;if(db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref))return {action:'skipped',reason:'Ya existía una respuesta para este mensaje.'};
+    // El curso elegido o cambiado se guarda antes de responder: el mensaje, la etapa y un pedido ya pertenecen al curso nuevo.
+    // Si ya no se puede (otra conversación abierta de ese curso, o el curso dejó de estar disponible), la persona no se queda sin respuesta: pasa a un asesor.
+    if(p.move&&!crm.moveConversation(c,p.move.courseId,p.move.editionId,{placeholder:p.move.placeholder})){p={...p,move:null,handoff:true,reply:copy.escalate,prepared:null,buttons:null,keepButtons:false,flow:null,stage:null,order:false,ifAnswered:null,sources:[],reason:p.reason+' No se pudo pasar la conversación a ese curso: pasa a una persona.'};draft=null;}
     const t=now();let sources=[...p.sources],reply=p.reply,model=null,reason=p.reason,handoff=p.handoff,buttons=p.buttons,keepButtons=p.keepButtons,move=p.flow;
     if(draft){model=draft.model;const v=validateDraft(draft,p.knowledge);if(v.ok){reply=v.text;if(p.ifAnswered){handoff=false;buttons=p.ifAnswered.buttons;keepButtons=p.ifAnswered.keepButtons;move=p.ifAnswered.flow;sources=sources.filter(s=>s.kind!=='offer_human');}if(provider.name==='claude')learnFromDraft(c,trigger,v.text);reason='Proveedor de IA: '+draft.reason+(p.retrieval?' Contexto: '+p.retrieval.sent+' de '+p.retrieval.considered+' entradas del conocimiento.':'')+(p.memory?' Memoria del cliente enviada: «'+p.memory+'»':'');for(const id of v.usedIds)sources.push({type:'knowledge',id});}else reason+=' Proveedor descartado: '+v.reason+(draft.text?'':' ('+draft.reason+')');}
     const log=(action,replyMessageId=null)=>{const id=randomUUID();db.prepare('INSERT INTO reply_log(id,conversation_id,brand_id,trigger_message_id,reply_message_id,intent,confidence,mode,action,reply_text,sources,model,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,c.id,c.brand_id,trigger.id,replyMessageId,p.intent,p.confidence,p.mode,action,reply,JSON.stringify(sources),model,reason,t);return id;};

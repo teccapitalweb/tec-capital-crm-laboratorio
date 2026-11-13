@@ -96,6 +96,11 @@ export function seats(ctx){
 export const courses=(ctx,titles)=>titles.length
   ?'En '+ctx.brand.name+' también tenemos:\n'+titles.map(t=>'• '+t).join('\n')+'\n\nEste chat es sobre '+ctx.course.title+'. Si te interesa otro, escribe «asesor» y una persona te da los detalles.'
   :'Por ahora '+ctx.course.title+' es el curso que tenemos abierto en '+ctx.brand.name+'. ¿Te cuento el precio o las fechas?';
+// ---- Un número de WhatsApp para toda la marca (docs/PLAN_NUMERO_POR_CONSULTORA.md): se pregunta el curso antes de hablar de precios o fechas.
+const numbered=titles=>titles.map((t,i)=>(i+1)+'. '+t).join('\n');
+export const chooseCourse=(brand,titles,{again=false}={})=>(again?'Para darte la información correcta necesito saber qué curso te interesa:':'¡Hola! Soy el asistente de '+brand+'. ¿Sobre qué curso te gustaría información?')+'\n\n'+numbered(titles)+'\n\nResponde con el número o el nombre del curso.'+(again?' Si prefieres que te atienda una persona, escribe «asesor».':'');
+export const courseMenu=(ctx,titles)=>'Estos son los cursos de '+ctx.brand.name+':\n\n'+numbered(titles)+'\n\nAhora estamos viendo '+ctx.course.title+'. Para cambiar, responde con el número o el nombre del curso.';
+export const switchBlocked=(ctx,other)=>'Tienes un pedido pendiente de '+ctx.course.title+'. Para cambiarte a '+other+', escribe «asesor» y una persona te ayuda.';
 export const objection=ctx=>'Te entiendo. El precio vigente de '+title(ctx)+' es de '+priceText(ctx)+'. Por este chat no puedo ofrecerte otro precio, pero una persona del equipo puede revisar las opciones contigo: escribe «asesor» y le aviso.\n'+PRICE_NOTE;
 
 // ---- Cuando no hay respuesta: primero opciones, después se PREGUNTA si quiere una persona, y sólo al final se pasa.

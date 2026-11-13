@@ -208,7 +208,7 @@ export function metaChannel({env,fetchImpl=(...a)=>fetch(...a)}){
           const text=m.text?.body||m.button?.text||m.interactive?.button_reply?.title||m.interactive?.list_reply?.title||media?.caption||(loc?'Ubicación compartida: '+([loc.name,loc.address].filter(Boolean).join(', ')||loc.latitude+', '+loc.longitude):'')||(Array.isArray(m.contacts)?'Contacto compartido: '+m.contacts.map(c=>c?.name?.formatted_name).filter(Boolean).join(', '):'')||'';
           out.push({id:m.id,type:'message.inbound',data:{channel:change.field==='messages'?'whatsapp':(change.field||'whatsapp'),from:m.from,to:v.metadata?.phone_number_id||null,name:String((v.contacts||[]).find(c=>c?.wa_id===m.from)?.profile?.name||v.contacts?.[0]?.profile?.name||''),kind,text:String(text),
             media:media?.id?{id:String(media.id),mime:String(media.mime_type||'').split(';')[0].trim(),filename:media.filename?String(media.filename):null}:null,providerRef:m.id,at:m.timestamp?Number(m.timestamp)*1000:null,
-            referral:m.referral?{source:'ad',ad:m.referral.headline||m.referral.source_id||'anuncio',campaign:m.referral.source_type||null,headline:m.referral.body||null}:null}});
+            referral:m.referral?{source:'ad',ad:m.referral.headline||m.referral.source_id||'anuncio',adId:m.referral.source_id?String(m.referral.source_id):null,campaign:m.referral.source_type||null,headline:m.referral.body||null}:null}});
         }
       }
       return out;

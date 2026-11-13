@@ -86,6 +86,15 @@ Detalle: [PLAN_PLANTILLAS_WHATSAPP.md](PLAN_PLANTILLAS_WHATSAPP.md). Hace falta 
 3. **Enviar a aprobación.** Meta suele responder en minutos; vuelve a **Sincronizar con Meta** para ver si quedó «Aprobada» o el motivo del rechazo.
 4. Para probarla hay que tener una conversación con más de 24 horas sin mensaje de la persona: en el chat aparece **Enviar plantilla**.
 
+## Paso 7 · Un número para toda la consultora (opcional)
+
+Detalle: [PLAN_NUMERO_POR_CONSULTORA.md](PLAN_NUMERO_POR_CONSULTORA.md).
+
+1. En **Conectores → WhatsApp real · Meta**, pulsa **Editar** en el número y elige **Qué cursos atiende: Todos los cursos de la marca**. Guarda.
+2. Desde un teléfono de la lista «Para», escribe «Hola»: el asistente pregunta sobre qué curso y manda la lista. Responde con el número o el nombre.
+3. Prueba «¿y el de (otro curso) cuánto cuesta?»: contesta de ese curso y la conversación pasa a él.
+4. Cuando haya anuncios reales, cada anuncio por el que llegue alguien aparece en **Anuncios por los que han llegado personas**: asígnale su curso una vez.
+
 ## Si algo falla
 
 | Lo que ves | Qué significa | Qué hacer |

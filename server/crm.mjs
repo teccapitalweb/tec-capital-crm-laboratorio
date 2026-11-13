@@ -185,5 +185,26 @@ export function createCRM({db,body,json,audit,passwordHash,checkPassword,rate,di
     let id;
     transaction(db,()=>{const row=db.prepare('SELECT r.*,u.disabled FROM recovery_tokens r JOIN users u ON u.id=r.user_id WHERE r.token_hash=? AND r.used_at IS NULL AND r.expires_at>? AND u.username=?').get(tokenHash(token),Date.now(),username);if(!row||row.disabled)throw fail(400,'El código no es válido, venció o ya fue utilizado.');id=row.user_id;db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(value,id);db.prepare('UPDATE recovery_tokens SET used_at=? WHERE id=?').run(Date.now(),row.id);db.prepare('DELETE FROM sessions WHERE user_id=?').run(id);audit(null,'recovery.completed',id);});disconnect(id);
   }
-  return {handle,canBrand,requireBrand,brandsFor,syncConversation,assignConversation,setStage,inviteFor,acceptInvite,recover,setAssignmentGuard:guard=>{assignmentGuard=guard;},setStageHook:fn=>{stageHook=fn;},setContactHook:fn=>{contactHook=fn;},contactChanged:id=>{const c=db.prepare('SELECT * FROM contacts WHERE id=?').get(id);if(c)contactHook(c);}};
+  // Cambia el curso de una conversación (un número de WhatsApp que atiende toda la marca). Dentro de la transacción del llamador; actualiza también «c».
+  // El interés anterior NO se borra: la persona sí preguntó por ese curso. Excepción: si el curso anterior era sólo el de relleno (todavía no había
+  // elegido) y su interés sigue en «nuevo», ese mismo interés pasa a ser el del curso elegido, para no dejar un seguimiento de un curso que nunca pidió.
+  // Devuelve false si no se puede (la persona ya tiene otra conversación abierta de ese curso en el mismo canal).
+  function moveConversation(c,courseId,editionId,{placeholder=false}={}){
+    if(c.course_id===courseId&&c.edition_id===editionId){if(c.course_pending){db.prepare('UPDATE conversations SET course_pending=0 WHERE id=?').run(c.id);c.course_pending=0;}return true;}
+    if(!db.prepare('SELECT 1 FROM courses WHERE id=? AND brand_id=? AND active=1').get(courseId,c.brand_id)||!db.prepare('SELECT 1 FROM editions WHERE id=? AND course_id=?').get(editionId,courseId))return false;   // nunca a un curso de otra marca
+    if(db.prepare("SELECT 1 FROM conversations WHERE customer_id=? AND course_id=? AND edition_id=? AND channel=? AND status!='resolved' AND id!=?").get(c.customer_id,courseId,editionId,c.channel,c.id))return false;
+    const link=db.prepare('SELECT opportunity_id FROM conversation_opportunities WHERE conversation_id=?').get(c.id),old=link?db.prepare('SELECT * FROM opportunities WHERE id=?').get(link.opportunity_id):null,t=Date.now();
+    db.prepare('UPDATE conversations SET course_id=?,edition_id=?,course_pending=0,updated_at=? WHERE id=?').run(courseId,editionId,t,c.id);
+    c.course_id=courseId;c.edition_id=editionId;c.course_pending=0;
+    if(old){
+      const target=db.prepare("SELECT id FROM opportunities WHERE contact_id=? AND course_id=? AND edition_id=? AND stage NOT IN ('ganada','perdida')").get(old.contact_id,courseId,editionId);
+      // «De relleno» sólo si ese interés nació con ESTA conversación y ninguna otra lo usa: un interés anterior de la persona en ese curso es real y no se toca.
+      const filler=placeholder&&old.stage==='nuevo'&&old.created_at>=c.created_at&&db.prepare('SELECT count(*) n FROM conversation_opportunities WHERE opportunity_id=?').get(old.id).n===1;
+      if(filler&&!target){db.prepare('UPDATE opportunities SET course_id=?,edition_id=?,updated_at=? WHERE id=?').run(courseId,editionId,t,old.id);return true;}
+      db.prepare('DELETE FROM conversation_opportunities WHERE conversation_id=?').run(c.id);
+      if(filler)followup.changeStage(old.id,'perdida',null,'Curso de relleno: la persona eligió otro curso.');   // ya tenía un interés vivo en el curso elegido: el de relleno se cierra con su motivo
+    }
+    syncConversation(c);return true;
+  }
+  return {handle,canBrand,requireBrand,brandsFor,syncConversation,moveConversation,assignConversation,setStage,inviteFor,acceptInvite,recover,setAssignmentGuard:guard=>{assignmentGuard=guard;},setStageHook:fn=>{stageHook=fn;},setContactHook:fn=>{contactHook=fn;},contactChanged:id=>{const c=db.prepare('SELECT * FROM contacts WHERE id=?').get(id);if(c)contactHook(c);}};
 }

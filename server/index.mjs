@@ -46,6 +46,7 @@ import {createWhatsApp} from './whatsapp.mjs';
 import {createFlows} from './flows.mjs';
 import {createPrivacy} from './privacy.mjs';
 import {migrateFlows} from './flows-schema.mjs';
+import {migrateWhatsAppMulti} from './whatsapp-schema.mjs';
 import {migrateWhatsApp,migrateWhatsAppTemplates} from './whatsapp-schema.mjs';
 import {migrateCoordination} from './coordination-schema.mjs';
 import {createEvents} from './events.mjs';
@@ -90,7 +91,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const dataDir=resolve(process.env.DATA_DIR || resolve(root,'data'));
 mkdirSync(resolve(dataDir,'uploads'),{recursive:true});
 const db=openDatabase(dataDir);
-if(db.prepare('PRAGMA user_version').get().user_version<40&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v40-'+Date.now()+'.sqlite'));}
+if(db.prepare('PRAGMA user_version').get().user_version<41&&db.prepare('SELECT count(*) n FROM users').get().n){mkdirSync(resolve(dataDir,'backups'),{recursive:true});db.prepare('VACUUM INTO ?').run(resolve(dataDir,'backups','before-crm-v41-'+Date.now()+'.sqlite'));}
 migrateCRM(db);
 migrateFollowup(db);
 migrateCatalogue(db);
@@ -129,6 +130,7 @@ migrateScheduledMaterial(db);
 migrateWhatsApp(db);
 migrateWhatsAppTemplates(db);
 migrateFlows(db);
+migrateWhatsAppMulti(db);
 const hash = value=>createHash('sha256').update(value).digest('hex');
 const derive=promisify(scrypt);
 const production=process.env.NODE_ENV==='production';
@@ -293,7 +295,7 @@ async function processJob(job){
     if(!planned)return;
     let draft=null;
     if(planned.plan.needsProvider){
-      const ctx=catalogue.info(planned.c.course_id,planned.c.edition_id),history=db.prepare('SELECT sender_kind,text FROM messages WHERE conversation_id=? ORDER BY seq DESC LIMIT 6').all(planned.c.id).reverse().map(m=>({role:m.sender_kind==='customer'?'customer':'agent',text:m.text}));
+      const ctx=catalogue.info(planned.plan.course?.courseId||planned.c.course_id,planned.plan.course?.editionId||planned.c.edition_id),history=db.prepare('SELECT sender_kind,text FROM messages WHERE conversation_id=? ORDER BY seq DESC LIMIT 6').all(planned.c.id).reverse().map(m=>({role:m.sender_kind==='customer'?'customer':'agent',text:m.text}));
       const summary=await summaries.ensureFor(planned.c);   // chats largos: la IA ve un resumen de lo anterior además de los últimos mensajes
       draft=await aiProvider.draft({brand:ctx.brand,course:ctx.course,edition:{name:ctx.edition.name,dateLabel:ctx.dateLabel,priceLabel:(ctx.priceCents/100).toFixed(2)+' '+ctx.currency},question:planned.trigger.text,knowledge:planned.plan.knowledge,history,memory:planned.plan.memory||null,summary});
     }

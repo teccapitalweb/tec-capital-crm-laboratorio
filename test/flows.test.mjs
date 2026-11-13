@@ -40,7 +40,7 @@ test('flujo de bienvenida de punta a punta: saludo con menú, botones que navega
   async function call(path,cookie='',body,method=body===undefined?'GET':'POST',expected=200){const r=await fetch(origin+path,{method,headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const result=await r.json();assert.equal(r.status,expected,path+': '+JSON.stringify(result));return {...result,cookie:r.headers.get('set-cookie')?.split(';')[0]};}
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   const admin=await call('/api/auth/register','',{username:'admin',name:'Administración',password,inviteCode:code});
-  db=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});assert.equal(db.prepare('PRAGMA user_version').get().user_version,40);
+  db=new DatabaseSync(join(dir,'laboratorio.sqlite'),{timeout:5000});assert.equal(db.prepare('PRAGMA user_version').get().user_version,41);
   // cada persona: perfil nuevo, conversación del curso de aves; say() manda un mensaje y devuelve la respuesta del asistente a ESE mensaje
   let n=0;const person=async name=>{const u=await call('/api/auth/register','',{username:'persona'+(++n),name,password}),conv=(await call('/api/conversations',u.cookie,{courseId:'aves',channel:'whatsapp'})).conversation.id;
     const say=async text=>{const sent=await call('/api/conversations/'+conv+'/messages',u.cookie,{text,clientRef:randomUUID()},'POST',201);
