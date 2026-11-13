@@ -18,8 +18,9 @@ window.createIntegrationsUI=function({state,api,esc,icon,showModal,toast}){
     return `<article class="ops-row int-row"><div class="ops-row-person"><span class="avatar">${icon('key-round')}</span><div><strong>${esc(k.name)}</strong><small><code>${esc(k.prefix)}…</code> · ${esc(k.brandName)} · ${k.scopes.map(s=>esc(data.scopes[s]||s)).join(', ')}</small><small>Creada ${esc(stamp(k.createdAt))} · ${k.lastUsedAt?'último uso '+esc(stamp(k.lastUsedAt)):'sin usos todavía'}${k.revokedAt?' · revocada '+esc(stamp(k.revokedAt)):''}</small></div></div><div class="actions">${chip(k.status==='active'?'Activa':'Revocada',k.status==='active'?'ok':'')}${k.status==='active'?btn('key-revoke','Revocar',k.id):''}</div></article>`;
   }
   function keysHtml(){
-    return `<section class="crm-panel"><div class="ops-card-top"><h2>Llaves de la API de lectura</h2>${chip('Sólo administración')}${btn('key-new',icon('plus')+' Nueva llave')}</div>
-      ${note('Una llave da <strong>lectura</strong> de los datos de <strong>una marca</strong> (eventos, pedidos, contactos y aperturas, según los permisos que elijas). Se manda como <code>Authorization: Bearer tcw_…</code> a <code>'+esc(base())+'</code>. Sólo guardamos su huella: el valor completo se muestra <strong>una sola vez</strong> al crearla.')}
+    return `<section class="crm-panel"><div class="ops-card-top"><h2>Llaves de la API</h2>${chip('Sólo administración')}${btn('key-new',icon('plus')+' Nueva llave')}</div>
+      ${note('Una llave da acceso a los datos de <strong>una marca</strong>, sólo con los permisos que elijas. Se manda como <code>Authorization: Bearer tcw_…</code> a <code>'+esc(base())+'</code> (otros sistemas, sólo lectura) o al conector de Claude, <code>'+esc(location.origin+'/mcp')+'</code>. Sólo guardamos su huella: el valor completo se muestra <strong>una sola vez</strong> al crearla.')}
+      ${note('Los permisos que empiezan con «Claude:» son para conectar el CRM con Claude. El de <strong>MODIFICAR</strong> deja cambiar cursos y aperturas a nombre de quien crea la llave: dalo sólo cuando haga falta y revoca la llave al terminar.')}
       <div class="ops-queue">${data.keys.map(keyRow).join('')||`<div class="crm-empty">${icon('key-round')}<h3>Sin llaves</h3><p>Crea una para que otro sistema consulte tus datos.</p></div>`}</div></section>`;
   }
   function hookRow(w){
@@ -45,7 +46,7 @@ window.createIntegrationsUI=function({state,api,esc,icon,showModal,toast}){
   function keyForm(){
     showModal('Nueva llave de la API',`<form id="int-key-form" class="form-grid">${brandSelect()}
       <label class="field">Nombre (para quién o para qué es)<input name="name" maxlength="60" required placeholder="Panel de finanzas"></label>
-      <fieldset class="survey-form"><legend>Permisos de lectura</legend><div class="int-scopes">${Object.entries(data.scopes).map(([k,l])=>`<label><input type="checkbox" name="scope-${esc(k)}" ${k==='events'?'checked':''}> ${esc(l)}</label>`).join('')}</div></fieldset>
+      <fieldset class="survey-form"><legend>Permisos</legend><div class="int-scopes">${Object.entries(data.scopes).map(([k,l])=>`<label><input type="checkbox" name="scope-${esc(k)}" ${k==='events'?'checked':''}> ${esc(l)}</label>`).join('')}</div></fieldset>
       <button class="btn primary" type="submit">Crear llave</button></form>`);
   }
   function secretBox(label,value,extra=''){

@@ -16,7 +16,9 @@ const sha=v=>createHash('sha256').update(String(v)).digest('hex');
 const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
 export const API_VERSION='1';
 export const SUBSCRIBER='webhooks.out';
-export const SCOPES={events:'Eventos del negocio',orders:'Pedidos (importes y estados)',contacts:'Contactos (con teléfono y correo)',editions:'Aperturas, precios y cupos'};
+export const SCOPES={events:'Eventos del negocio',orders:'Pedidos (importes y estados)',contacts:'Contactos (con teléfono y correo)',editions:'Aperturas, precios y cupos',
+  // Sólo los usa el conector de Claude (POST /mcp, docs/PLAN_MCP_CLAUDE.md); la API v1 no tiene rutas para ellos.
+  conversations:'Claude: ver conversaciones y mensajes (datos personales)',knowledge:'Claude: leer el conocimiento del asistente y proponer borradores',catalog_write:'Claude: MODIFICAR cursos y aperturas (fecha, docente, precio, cupo, temario)'};
 // Qué permiso (además de `events`) hace falta para ver el CONTENIDO de cada tipo de evento por la API de lectura. Sin él se entrega el sobre (tipo, marca, entidad,
 // fecha) con `data` vacío y `redacted: true`. Un tipo sin clasificar se trata como restringido. Los webhooks no se filtran así: los registra administración y es ella
 // quien decide qué eventos manda a qué destino.
@@ -183,15 +185,20 @@ export function createIntegrations({db,crm,events,body,json,audit,rate,now=Date.
   const cursor=v=>{const m=String(v||'').match(/^(\d+)(?::([a-f0-9-]{8,40}))?$/);return m?{ts:Number(m[1]),id:m[2]||''}:{ts:0,id:''};};
   const limitOf=v=>Math.min(LIMITS.page,Math.max(1,Number(v)||100));
   const need=(key,scope)=>{if(!parse(key.scopes,[]).includes(scope))throw fail(403,'Esta llave no tiene el permiso «'+scope+'».');};
-  async function handlePublic(req,res,path,url,ip){
-    if(!path.startsWith('/api/v1/'))return false;
-    if(req.method!=='GET')throw fail(405,'La API v1 es de sólo lectura por ahora.');
+  // Llave de la cabecera Authorization: la usan la API v1 y el conector de Claude. Los intentos con llaves falsas se frenan por IP.
+  function authenticate(req,ip){
     const m=String(req.headers.authorization||'').match(/^Bearer\s+(tcw_[A-Za-z0-9_-]{20,64})$/);
     if(!m){rate('apibad:'+ip,30);throw fail(401,'Falta la llave de la API (Authorization: Bearer tcw_…).');}
     const key=db.prepare("SELECT * FROM api_keys WHERE key_hash=? AND status='active'").get(sha(m[1]));
     if(!key){rate('apibad:'+ip,30);throw fail(401,'Llave no válida o revocada.');}
     rate('api:'+key.id,LIMITS.perKeyPerMinute);
     if(!key.last_used_at||now()-key.last_used_at>60000)db.prepare('UPDATE api_keys SET last_used_at=? WHERE id=?').run(now(),key.id);
+    return key;
+  }
+  async function handlePublic(req,res,path,url,ip){
+    if(!path.startsWith('/api/v1/'))return false;
+    if(req.method!=='GET')throw fail(405,'La API v1 es de sólo lectura por ahora.');
+    const key=authenticate(req,ip);
     const q=url.searchParams,limit=limitOf(q.get('limit')),brand=key.brand_id;
     if(path==='/api/v1/me'){json(res,200,{apiVersion:API_VERSION,brand:{id:brand,name:brandName(brand)},key:{name:key.name,prefix:key.prefix},scopes:parse(key.scopes,[]),eventTypes:Object.keys(EVENT_TYPES),eventScopes:EVENT_NEEDS});return true;}
     if(path==='/api/v1/events'){
@@ -242,5 +249,5 @@ export function createIntegrations({db,crm,events,body,json,audit,rate,now=Date.
     if((x=path.match(/^\/api\/integrations\/deliveries\/([a-f0-9-]+)\/retry$/))&&req.method==='POST'){retryDelivery(user,x[1]);audit(user,'webhook.retry',x[1]);json(res,200,{ok:true});return true;}
     throw fail(404,'Ruta de integraciones no encontrada.');
   }
-  return {handle,handlePublic,tick,enqueue,createKey,test};
+  return {handle,handlePublic,tick,enqueue,createKey,test,authenticate,scopesOf:key=>parse(key.scopes,[]),scopeName:s=>SCOPES[s]||s};
 }

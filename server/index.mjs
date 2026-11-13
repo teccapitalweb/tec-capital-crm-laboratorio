@@ -47,6 +47,7 @@ import {createFlows} from './flows.mjs';
 import {createPrivacy} from './privacy.mjs';
 import {migrateFlows} from './flows-schema.mjs';
 import {migrateWhatsAppMulti} from './whatsapp-schema.mjs';
+import {createMcp} from './mcp.mjs';
 import {migrateWhatsApp,migrateWhatsAppTemplates} from './whatsapp-schema.mjs';
 import {migrateCoordination} from './coordination-schema.mjs';
 import {createEvents} from './events.mjs';
@@ -227,6 +228,7 @@ const replies=createReplies({db,catalogue,crm,contacts,operations,insertMessage,
 // Estado de la IA para administración (server/ai-status.mjs): proveedor, clave (sí/no), gasto del mes y qué falta por marca; sin secretos.
 const aiStatus=createAiStatus({db,crm,provider:aiProvider,json});
 // WhatsApp real (server/whatsapp.mjs): entrantes de Meta -> cliente, conversacion y mensaje; salientes de conversaciones reales. Apagado sin CHANNEL_CONNECTOR=meta.
+const mcp=createMcp({db,crm,catalogue,replies,integrations,body,json,audit,rate,version:'0.34.0'});
 const whatsapp=createWhatsApp({db,crm,catalogue,payments,replies,events,channel,connectors,broadcast,audit,body,json,rate,insertMessage,passwordHash,attachmentData,defaultEditionId,dataDir,root,takeOver,accessConversation});
 const knowledgeImport=createKnowledgeImport({db,replies,crm,body,json,audit});
 // Pauta (server/ads.mjs): el panel de tráfico de IPCIL dentro del CRM; administración y la función de trafiquer.
@@ -348,6 +350,7 @@ const server=http.createServer(async(req,res)=>{
     if(await privacy.handlePublic(req,res,path))return;
     if(await payments.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // pago sin sesion de un pedido de WhatsApp real (/api/pay/<pedido>)
     if(await certificates.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // verificaciÃ³n pÃºblica de certificados por folio, con lÃ­mite por IP
+    if(await mcp.handle(req,res,path,req.socket.remoteAddress||'unknown'))return;   // conector de Claude (MCP): llave propia, sin sesion
     if(await integrations.handlePublic(req,res,path,url,req.socket.remoteAddress||'unknown'))return;   // API v1 de lectura: llave propia, sin sesión ni Origin
     if(await allies.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // postulación pública de aliados (/aliados), apagada por omisión, con límite por IP
     if(await surveys.handlePublic(req,res,path,req.socket.remoteAddress||'unknown'))return;   // encuestas por token (/encuesta/<token>, /api/survey/<token>), sin sesiÃ³n, con lÃ­mite por IP

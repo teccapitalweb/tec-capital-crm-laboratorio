@@ -2,6 +2,8 @@
 
 Estado: **publicado en `main`** (7 nov 2026), **esquema 35** (tres tablas nuevas), sin cambio de versión. Dos correcciones posteriores a la revisión de seguridad automática (rama `fix/api-seguridad`, sin publicar) están en «Seguridad».
 
+> **13 nov 2026:** las mismas llaves sirven para el conector de Claude ([PLAN_MCP_CLAUDE.md](PLAN_MCP_CLAUDE.md)), con tres permisos propios que la API v1 no usa.
+
 ## Para qué
 
 Hasta ahora el CRM sólo hablaba con sus propias pantallas. Para que otro sistema (facturación, un tablero, una automatización, el sitio de la consultora) use sus datos sin entrar al CRM, hacen falta dos cosas: **preguntarle** (API) y que **él avise** cuando algo pasa (webhooks). Esta entrega da las dos, por marca y con permisos mínimos.
