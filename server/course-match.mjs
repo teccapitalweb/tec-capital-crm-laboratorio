@@ -6,7 +6,9 @@ import {normalize,stem} from './ai-provider.mjs';
 
 // Palabras que aparecen en casi cualquier título y no distinguen un curso de otro.
 const GENERIC=new Set(['curso','cursos','diplomado','diplomados','taller','talleres','seminario','certificacion','programa','basico','basica','avanzado','avanzada','intensivo','practico','practica','online','linea','introduccion','para','sobre','desde','como','plan','manejo','nivel','modulo']);
-const words=v=>[...new Set(normalize(v).split(/\s+/).filter(w=>w.length>=4&&!GENERIC.has(w)).map(stem))];
+// «bovino», «bovinos» y «bovinas» son la misma palabra: además del plural se quita la vocal final de género.
+const root=w=>{const s=stem(w);return s.length>=5?s.replace(/[oa]$/,''):s;};
+const words=v=>[...new Set(normalize(v).split(/\s+/).filter(w=>w.length>=4&&!GENERIC.has(w)).map(root))];
 // Señal de que la persona habla de un curso («el de aves», «también me interesa…»), y no sólo usa una palabra que coincide con un título.
 const CUE=/\b(curso|cursos|diplomado|taller|el de|la de|los de|las de|el otro|otro|tambien|cambiar|cambio|cambiame|mejor|informacion|info|informes|interesa)\b/;
 
@@ -34,5 +36,15 @@ export function matchCourse(list,text,{strict=false}={}){
   return best&&!tie?best.course:null;
 }
 
-// «2» después de una lista numerada: el segundo curso de la lista.
-export const byNumber=(list,text)=>{const m=/^\s*(\d{1,2})\s*[.)]?\s*$/.exec(String(text||''));if(!m)return null;return list[Number(m[1])-1]||null;};
+// Cuando el texto nombra algo que comparten varios cursos («el de reptiles», «el de perros y gatos») y ninguno gana: esos cursos, para preguntar
+// «¿cuál de estos?» en lugar de repetir la lista completa. Vacío si no nombra nada, y también si son demasiados para ser una lista corta.
+export function candidates(list,text,{strict=false,max=6}={}){
+  const plain=normalize(text).replace(/\s+/g,' ').trim(),said=new Set(words(text));if(!said.size||list.length<2)return [];
+  if(strict&&!CUE.test(plain))return [];
+  const scored=list.map(k=>({k,n:words(k.title).filter(w=>said.has(w)).length})).filter(x=>x.n>0),top=Math.max(0,...scored.map(x=>x.n)),some=scored.filter(x=>x.n===top).map(x=>x.k);
+  return some.length>=2&&some.length<=max?some:[];
+}
+
+// «2» después de una lista numerada: el curso que ESA lista mostraba en el renglón 2 (se lee del propio mensaje, así vale para la lista completa
+// y para una corta, y no depende de que el catálogo siga en el mismo orden).
+export const byNumber=(list,text,shown='')=>{const m=/^\s*(\d{1,2})\s*[.)]?\s*$/.exec(String(text||''));if(!m)return null;const line=new RegExp('^'+Number(m[1])+'\\. (.+)$','m').exec(String(shown||''));return line?list.find(k=>k.title===line[1].trim())||null:null;};

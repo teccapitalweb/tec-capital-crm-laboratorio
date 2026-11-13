@@ -6,7 +6,7 @@ import {isOpen,openingLabel} from './service-hours.mjs';
 import {rankKnowledge} from './retrieval.mjs';
 import {customerMemory} from './memory.mjs';
 import * as copy from './reply-copy.mjs';
-import {brandCourses,matchCourse,byNumber} from './course-match.mjs';
+import {brandCourses,matchCourse,byNumber,candidates} from './course-match.mjs';
 
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const text=(v,max)=>typeof v==='string'?v.trim().slice(0,max):'';
@@ -50,7 +50,7 @@ const PATTERNS=[
   // Duración va antes que precio: «¿cuánto dura?» no es una pregunta de precio. «¿Cuánto tiempo tengo para…?» tampoco es de duración.
   ['duration',/\b(duracion|cuanto dura|cuantas (horas|sesiones|clases|semanas)|cuanto tiempo (dura|es|son|tarda|lleva|toma))\b/,.8],
   ['price',/\b(precio|precios|cuesta|costo|costos|inversion|promo|promos|promocion|promociones|descuento|descuentos|oferta|cuanto (cuesta|vale|sale|es|seria|cobran|me queda|queda)|en cuanto|que vale)\b|^cuanto$/,.85],
-  ['schedule',/\b(fecha|fechas|horario|horarios|calendario|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|a que hora|que hora|(que|cual|primer|ultimo|proximo) dias?|cuando (es|son|seria|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|abren|hay|toca)|para cuando|quien (da|dara|imparte|ensena)|docente|docentes|profesor|profesora|maestro|maestra|instructor|ponente)\b|^cuando$/,.8],
+  ['schedule',/\b(fecha|fechas|horario|horarios|calendario|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|a que hora|que hora|(que|cual|primer|ultimo|proximo) dias?|cuando (es|son|seria|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|abren|hay|toca)|para cuando|quien (lo |la |los |las |nos )?(da|dara|imparte|impartira|ensena|va a dar|va a impartir)|docente|docentes|profesor|profesora|maestro|maestra|instructor|ponente)\b|^cuando$/,.8],
   ['syllabus',/\b(temario|incluye|temas?|contenido|que voy a aprender|programa|de que (se )?trata|que (se )?(ve|vera|veremos|ensenan)|que es (esto|eso|el curso))\b/,.8],
   ['certificate',/\b(certificad|constancia|diploma|aval|validez|reconocimiento)/,.85],
   ['requirements',/\b(requisito|conocimientos previos|necesito saber|que necesito)\b/,.8],
@@ -112,13 +112,15 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     if(!number?.multi&&!pending)return null;
     const list=brandCourses(db,catalogue,c.brand_id),base={multi:true,list,pending};
     if(pending&&list.length===1)return {...base,course:list[0]};
-    const shown=lastBot(c.id),listed=Boolean(shown&&/(^|\n)1\. /.test(shown.text)),hit=(listed&&byNumber(list,trigger.text))||matchCourse(list,trigger.text,{strict:!pending});
+    const shown=lastBot(c.id),hit=(shown&&byNumber(list,trigger.text,shown.text))||matchCourse(list,trigger.text,{strict:!pending});
     if(hit&&(pending||hit.id!==c.course_id)){
       if(db.prepare("SELECT 1 FROM conversations WHERE customer_id=? AND course_id=? AND edition_id=? AND channel=? AND status!='resolved' AND id!=?").get(c.customer_id,hit.id,hit.editionId,c.channel,c.id))return {...base,ask:pending&&list.length>1};
       if(!pending&&payments?.openOrder(c.id))return {...base,blocked:hit};
       return {...base,course:hit};
     }
-    return {...base,ask:pending&&list.length>1};
+    // Nombró algo que comparten varios cursos y ninguno gana: se le preguntará sólo por ésos (sin cambiar nada todavía).
+    const narrow=hit?[]:candidates(list,trigger.text,{strict:!pending});
+    return {...base,ask:pending&&list.length>1,narrow:narrow.length?narrow:null};
   }
   const askedStreak=conversationId=>{let n=0;for(const r of db.prepare("SELECT intent FROM reply_log WHERE conversation_id=? AND action IN ('replied','suggested') ORDER BY created_at DESC,rowid DESC LIMIT 4").all(conversationId)){if(r.intent==='choose_course')n++;else break;}return n;};
   // Otros cursos activos de la MISMA marca con una edición disponible (sólo títulos).
@@ -135,6 +137,9 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     const flow=flows?.active(c.brand_id)||null,pressed=flow?flows.pressed(flow,c.id,trigger.text):null,forced=pressed?.kind==='action'?pressed.target:null;
     const ctx=catalogue.info(c.course_id,c.edition_id),course=ctx.course,cls=forced?{intent:forced,confidence:1}:classify(trigger.text),situational=!forced&&CATALOGUE_INTENTS.includes(cls.intent)&&SITUATION.test(normalize(trigger.text));
     let intent=situational?'unknown':cls.intent,confidence=situational?.3:cls.confidence;
+    // «Hola, quiero el curso de aves» como primer mensaje a un número que atiende toda la marca ELIGE el curso; no es todavía una inscripción:
+    // recibe la ficha. Con «inscribirme», «registrarme» o «apuntarme» sí sigue el camino de la inscripción.
+    if(routed?.course&&routed.pending&&intent==='enroll'&&!forced&&!/inscrib|registr|apunt|anot/.test(normalize(trigger.text))){intent='greeting';confidence=.6;}
     const count=db.prepare("SELECT count(*) n FROM messages WHERE conversation_id=? AND sender_kind='customer'").get(c.id).n;
     const fresh=count===1||Boolean(routed?.course);   // primer mensaje, o acaba de elegir curso: lo que no sea una pregunta concreta recibe la ficha de ese curso
     // Respuestas cortas que sólo se entienden por lo que el asistente acaba de decir («sí», «va», «no»):
@@ -198,8 +203,10 @@ export function createReplies({db,catalogue,crm,contacts,operations,insertMessag
     if(routed?.ask&&!OWN_PATH){
       const asked=askedStreak(c.id);out.intent='choose_course';out.confidence=1;out.noFlow=true;
       if(asked>=2){out.handoff=true;out.reply=copy.escalate;out.reason='Se le preguntó dos veces qué curso le interesa y no se reconoció ninguno: pasa a una persona.';}
+      else if(routed.narrow){out.reply=copy.whichCourse(routed.narrow.map(k=>k.title));out.reason='Nombró algo que comparten '+routed.narrow.length+' cursos de la marca: se le pregunta cuál de ésos.';}
       else{out.reply=copy.chooseCourse(ctx.brand.name,routed.list.map(k=>k.title),{again:asked>0});out.reason='El número atiende toda la marca y todavía no se sabe el curso: se le pregunta antes de hablar de precios o fechas.';}
     }
+    else if(routed?.narrow&&!OWN_PATH&&!payments?.openOrder(c.id)){out.intent='choose_course';out.confidence=1;out.noFlow=true;out.reply=copy.whichCourse(routed.narrow.map(k=>k.title));out.reason='Pidió otro curso con una palabra que comparten '+routed.narrow.length+' cursos: se le pregunta cuál, sin cambiar nada todavía.';}
     else if(routed?.blocked&&!OWN_PATH){out.intent='choose_course';out.confidence=1;out.noFlow=true;out.reply=copy.switchBlocked(ctx,routed.blocked.title);out.reason='Pidió otro curso teniendo un pedido vigente: no se cambia solo.';}
     else if(pressed?.kind==='step'&&!ctx.reason){out.intent='flow';out.confidence=1;out.reply=flows.render(pressed.step.text,flowValues());menu(pressed.step);out.sources.push({type:'flow',step:pressed.step.id});out.reason='Flujo de bienvenida: la persona eligió «'+pressed.label+'».';}
     else if(intent==='opt_out'){out.reply='Listo: no volveremos a enviarte mensajes de seguimiento. Si más adelante necesitas ayuda, escríbenos cuando quieras.';out.reason='El cliente pidió la baja; se registra y se confirma una sola vez.';}

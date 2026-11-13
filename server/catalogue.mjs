@@ -1,4 +1,5 @@
 import {randomUUID,createHash} from 'node:crypto';
+import {noHour} from './reply-copy.mjs';
 import {readFile,writeFile,unlink,mkdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {transaction} from './database.mjs';
@@ -21,7 +22,8 @@ const nullableInt=v=>v===''||v==null?null:Number(v);
 const date=v=>{const n=nullableInt(v);if(n!==null&&(!Number.isSafeInteger(n)||n<0||n>8640000000000000))throw fail(400,'Fecha no válida.');return n;};
 const price=v=>{const n=Number(v);if(v===''||v==null||!Number.isFinite(n)||n<0||n>1000000||Math.abs(n*100-Math.round(n*100))>0.00001)throw fail(400,'El precio debe tener como máximo dos decimales.');return Math.round(n*100);};
 const revision=(row,input)=>{if(!row)return;if(Number(input.expectedRevision)!==row.revision)throw fail(409,'El registro cambió. Recarga los datos antes de guardar.');};
-const timeText=(value,zone)=>value===null?'Por confirmar':new Intl.DateTimeFormat('es-MX',{dateStyle:'medium',timeStyle:'short',timeZone:zone}).format(value)+' · '+zone;
+// Medianoche exacta en la zona de la edición = sólo se conoce el día: se muestra la fecha, sin «12:00 a.m.».
+const timeText=(value,zone)=>value===null?'Por confirmar':noHour(value,zone)?new Intl.DateTimeFormat('es-MX',{dateStyle:'medium',timeZone:zone}).format(value):new Intl.DateTimeFormat('es-MX',{dateStyle:'medium',timeStyle:'short',timeZone:zone}).format(value)+' · '+zone;
 
 // Valores de las variables de una plantilla para un curso/edición (los usa también Contenido para las plantillas por evento).
 export function templateValues(ctx,name){

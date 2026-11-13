@@ -29,6 +29,16 @@ Una marca con un solo curso disponible nunca pregunta.
 
 Los mensajes anteriores conservan su ficha y su precio tal como salieron.
 
+## Ajustes con el catálogo real de GlobalVet (13 nov 2026, rama `feat/catalogo-real-ajustes`, sin publicar)
+
+Con los 18 cursos de noviembre cargados en un servidor local salieron cuatro cosas:
+
+- **Cursos con nombres parecidos.** «El de reptiles» (dos cursos), «el de bovinos» (tres), «el de perros y gatos»: en lugar de repetir la lista completa, el asistente ofrece **sólo esos** («Tenemos 2 cursos de ese tema. ¿Cuál te interesa?»). `candidates()`; «bovino», «bovinos» y «bovinas» cuentan como la misma palabra.
+- **El número elige de la lista que se mostró.** Se lee del propio mensaje del asistente (lista completa o corta), así no depende del orden del catálogo.
+- **Fecha sin hora.** Una edición con día pero sin hora (medianoche en su zona) se muestra «martes, 17 de noviembre de 2026», sin «12:00 a.m.».
+- **«¿Quién lo imparte?»** ya se entiende como pregunta de fechas y docente.
+- **«Hola, quiero el curso de aves»** como primer mensaje elige el curso y recibe la ficha; ya no arma un pedido de inmediato (con «inscribirme» sí).
+
 ## Lo que ve el equipo
 
 - En el chat, mientras no elige: **«Curso por elegir · el asistente se lo está preguntando»** en lugar del curso.

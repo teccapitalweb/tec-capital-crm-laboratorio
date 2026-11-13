@@ -8,7 +8,8 @@ import {randomUUID} from 'node:crypto';
 import {createServer} from 'node:http';
 import {DatabaseSync} from 'node:sqlite';
 import {hmacHex} from '../server/connectors.mjs';
-import {matchCourse,byNumber} from '../server/course-match.mjs';
+import {matchCourse,byNumber,candidates} from '../server/course-match.mjs';
+import {startText} from '../server/reply-copy.mjs';
 
 // Un número de WhatsApp para toda la consultora (docs/PLAN_NUMERO_POR_CONSULTORA.md): el curso lo decide el anuncio, lo que la persona escribe o la
 // lista que el asistente le ofrece; y se puede cambiar de curso en el mismo chat.
@@ -23,7 +24,20 @@ test('reconocer el curso: sólo deciden las palabras propias de un curso; a medi
   // a media conversación
   assert.equal(matchCourse(list,'tengo 200 aves ponedoras, ¿me sirve?',{strict:true}),null);assert.equal(matchCourse(list,'¿y el de aves cuánto cuesta?',{strict:true})?.id,'a');
   assert.equal(matchCourse(list,'también me interesa aves',{strict:true})?.id,'a');assert.equal(matchCourse(list,'plan sanitario aves',{strict:true})?.id,'a','dos palabras propias bastan');
-  assert.equal(byNumber(list,'2')?.id,'n');assert.equal(byNumber(list,' 3. ')?.id,'a');assert.equal(byNumber(list,'9'),null);assert.equal(byNumber(list,'2 personas'),null);assert.equal(byNumber(list,'0'),null);
+  // un número elige el curso del renglón que mostraba el ÚLTIMO mensaje del asistente (lista completa o corta); sin lista, nada
+  const full='¿Sobre qué curso?\n\n1. Nutrición clínica canina y felina\n2. Nutrición en perros y gatos\n3. Plan sanitario para aves\n\nResponde con el número.',short='Tenemos 2 cursos de ese tema.\n\n1. Nutrición en perros y gatos\n2. Nutrición clínica canina y felina';
+  assert.equal(byNumber(list,'2',full)?.id,'n');assert.equal(byNumber(list,' 3. ',full)?.id,'a');assert.equal(byNumber(list,'2',short)?.id,'c','en la lista corta el 2 es otro curso');
+  assert.equal(byNumber(list,'9',full),null);assert.equal(byNumber(list,'2 personas',full),null);assert.equal(byNumber(list,'0',full),null);assert.equal(byNumber(list,'2','El precio es de $550.'),null);assert.equal(byNumber(list,'2'),null);
+  // palabra que comparten varios cursos: candidatos para preguntar «¿cuál de estos?»
+  assert.deepEqual(candidates(list,'el de nutrición').map(k=>k.id),['c','n']);assert.deepEqual(candidates(list,'el de aves'),[],'una sola coincidencia no es duda');assert.deepEqual(candidates(list,'hola'),[]);
+  assert.deepEqual(candidates(list,'me encanta la nutrición',{strict:true}),[],'a media conversación, sin señal de «quiero ese curso» no se pregunta nada');assert.equal(candidates(list,'¿y el de nutrición?',{strict:true}).length,2);
+  // masculino, femenino y plural son la misma palabra
+  const gv=[{id:'g',title:'Manejo clínico en ganado bovino'},{id:'r',title:'Enfermedades reproductivas en bovinos'},{id:'z',title:'Zoonosis bovinas'},{id:'p',title:'Parvovirus canino'}];
+  assert.deepEqual(candidates(gv,'el de bovinos').map(k=>k.id),['g','r','z']);assert.equal(matchCourse(gv,'zoonosis')?.id,'z');assert.equal(matchCourse(gv,'el de ganado')?.id,'g');assert.equal(matchCourse(gv,'parvovirus canina')?.id,'p');
+  assert.deepEqual(candidates(gv,'el de bovinos',{max:2}),[],'demasiados para una lista corta');
+  // una edición con día pero sin hora no dice «12:00 a.m.»
+  const midnight=new Date('2026-11-17T06:00:00Z').getTime();   // 00:00 en el centro de México
+  assert.equal(startText({starts_at:midnight,timezone:'America/Mexico_City'}),'martes, 17 de noviembre de 2026');assert.match(startText({starts_at:midnight+19*3600e3,timezone:'America/Mexico_City'}),/7:00 p\.m\. \(hora del centro de México\)$/);
 });
 
 test('un número para toda la marca: pregunta el curso, lo reconoce por anuncio o por texto, y cambia de curso en el mismo chat',async t=>{
@@ -124,6 +138,21 @@ test('un número para toda la marca: pregunta el curso, lo reconoce por anuncio 
   const h=await say('5215511110009','Vivo en Colombia, ¿puedo tomar el curso de '+word+' desde allá?');assert.equal(h.conv.course_id,otro.id);assert.match(h.log.reason,/Proveedor de IA:/);assert.match(h.text,/^Sí: el curso es en línea/);
   const asked=prompts.filter(x=>x.includes('Colombia'));assert.equal(asked.length,1,'una sola consulta por esa pregunta (los resúmenes de chats largos van aparte)');assert.ok(asked[0].includes(otro.title),'la IA recibe el curso elegido');assert.ok(!asked[0].includes(aves.title),'y no el curso de relleno: …'+asked[0].slice(Math.max(0,asked[0].indexOf(aves.title)-260),asked[0].indexOf(aves.title)+60));
   await call('/api/replies/brands/globalvet',admin.cookie,{mode:'templates',providerEnabled:false,expectedRevision:rs.revision+1},'PATCH');
+  // cursos con nombres parecidos: se agrega «Urgencias en perros» (comparte «perros» con el otro curso). «El de perros» ofrece sólo esos dos, y el
+  // número se lee de ESA lista corta
+  const soon=new Date(Date.now()+30*86400e3).toISOString().slice(0,10)+' 18:00',csv='marca,curso,temario,edicion,inicio,precio,estado\nGlobalVet,Urgencias en perros,Triage y estabilización,Edición diciembre,'+soon+',450,publicada\n',pre=await call('/api/catalogue/import/preview',admin.cookie,{csv}),done=await call('/api/catalogue/import/apply',admin.cookie,{csv,fileHash:pre.fileHash});assert.equal(done.applied,1,JSON.stringify(done).slice(0,400));
+  const urg=db.prepare("SELECT id,title FROM courses WHERE brand_id='globalvet' AND title='Urgencias en perros'").get();
+  if(/perros/i.test(otro.title)){
+    const j=await say('5215511110010','Hola, quiero el curso de perros');assert.equal(j.log.intent,'choose_course',JSON.stringify([j.log.reason,j.conv,j.text.slice(0,120)]));assert.equal(j.conv.course_pending,1);assert.match(j.text,/^Tenemos 2 cursos de ese tema\. ¿Cuál te interesa\?/);assert.ok(j.text.includes('1. '+otro.title)&&j.text.includes('2. Urgencias en perros'));assert.ok(!j.text.includes(aves.title),'no repite la lista completa');
+    const j2=await say('5215511110010','2');assert.equal(j2.conv.course_id,urg.id,'el 2 de la lista corta');assert.equal(j2.conv.course_pending,0);assert.ok(j2.text.includes('Urgencias en perros'));
+    // a media conversación: «¿y el de perros?» desde aves pregunta cuál, sin cambiar todavía; una palabra suelta sin señal no pregunta nada
+    const k1=await say('5215511110002','¿y el de perros cuánto cuesta?');assert.equal(k1.log.intent,'choose_course');assert.equal(k1.conv.course_id,'aves');assert.match(k1.text,/^Tenemos 2 cursos/);
+    const k2=await say('5215511110002','1');assert.equal(k2.conv.course_id,otro.id);
+    const k3=await say('5215511110002','tengo dos perros en casa');assert.notEqual(k3.log.intent,'choose_course');assert.equal(k3.conv.course_id,otro.id);
+  }
+  // «quiero el curso de aves» como primer mensaje elige el curso y recibe la ficha: no arma un pedido (la venta está activa); «quiero inscribirme al de aves» sí
+  const w1=await say('5215511110011','Hola, quiero el curso de aves');assert.equal(w1.conv.course_id,'aves');assert.equal(w1.log.intent,'greeting');assert.match(w1.text,/• Inicio: /);assert.doesNotMatch(w1.text,/Pedido TC-/);
+  const w2=await say('5215511110012','Hola, quiero inscribirme al curso de aves');assert.equal(w2.conv.course_id,'aves');assert.equal(w2.log.intent,'enroll');assert.match(w2.text,/Pedido TC-/);
   // 6) una marca con un número de un solo curso y los perfiles del laboratorio no cambian
   await call('/api/whatsapp/numbers/'+OTHER,admin.cookie,{brandId:'odonteck',expectedRevision:0},'PUT');
   const o=await say('5215511110008','Hola',{to:OTHER});assert.equal(o.log.intent,'greeting');assert.equal(o.conv.course_pending,0);
