@@ -1,10 +1,10 @@
-import {transaction} from './database.mjs';
+import { transaction } from './database.mjs';
 
 // Esquema v17: contrato de conectores. Referencia del proveedor por mensaje, URL de pago del proveedor por pedido y
 // bitácora idempotente de eventos recibidos por webhook (un evento por proveedor e id).
-export function migrateConnectors(db){
-  if(db.prepare('PRAGMA user_version').get().user_version>=17)return;
-  transaction(db,()=>{
+export function migrateConnectors(db) {
+  if (db.prepare('PRAGMA user_version').get().user_version >= 17) return;
+  transaction(db, () => {
     db.exec(`
     ALTER TABLE messages ADD COLUMN provider_ref TEXT;
     CREATE INDEX messages_provider_ref ON messages(provider_ref);

@@ -1,12 +1,13 @@
-import {transaction} from './database.mjs';
+import { transaction } from './database.mjs';
 
 // Esquema v34: cupones de descuento (docs/PLAN_CUPONES.md). Un cupón es un código por marca (porcentaje o monto fijo) que el equipo aplica al cobrar
 // desde el chat. No hay tabla de canjes: los usos se cuentan sobre los pedidos (`orders.coupon_id`) que siguen vivos (pendientes, en revisión o pagados),
 // así un pedido cancelado o vencido libera el cupo solo. El pedido guarda una copia del código y del descuento: cambiar o archivar el cupón después
 // no altera lo ya cobrado. Aditivo: una tabla nueva y tres columnas con valor por omisión en `orders`.
-export function migrateCoupons(db){
-  if(db.prepare('PRAGMA user_version').get().user_version>=34)return;
-  transaction(db,()=>db.exec(`
+export function migrateCoupons(db) {
+  if (db.prepare('PRAGMA user_version').get().user_version >= 34) return;
+  transaction(db, () =>
+    db.exec(`
     CREATE TABLE coupons(id TEXT PRIMARY KEY,brand_id TEXT NOT NULL REFERENCES brands(id),code TEXT NOT NULL,name TEXT NOT NULL,
       kind TEXT NOT NULL CHECK(kind IN ('percent','amount')),value INTEGER NOT NULL CHECK(value>0),
       course_id TEXT REFERENCES courses(id),edition_id TEXT REFERENCES editions(id),starts_at INTEGER,ends_at INTEGER,
@@ -18,16 +19,19 @@ export function migrateCoupons(db){
     ALTER TABLE orders ADD COLUMN discount_cents INTEGER NOT NULL DEFAULT 0;
     CREATE INDEX orders_coupon ON orders(coupon_id,status);
     PRAGMA user_version=34;
-  `));
+  `),
+  );
 }
 
 // Esquema v36: el cliente puede escribir su cupón en la pantalla de pago (docs/PLAN_CUPONES.md). `coupons.customer_entry` (0 por omisión: un cupón sólo lo aplica el
 // equipo hasta que administración lo permita) y `orders.coupon_source` ('agent' o 'customer', para saber quién lo aplicó y si el cliente puede quitarlo). Aditivo.
-export function migrateCouponEntry(db){
-  if(db.prepare('PRAGMA user_version').get().user_version>=36)return;
-  transaction(db,()=>db.exec(`
+export function migrateCouponEntry(db) {
+  if (db.prepare('PRAGMA user_version').get().user_version >= 36) return;
+  transaction(db, () =>
+    db.exec(`
     ALTER TABLE coupons ADD COLUMN customer_entry INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE orders ADD COLUMN coupon_source TEXT;
     PRAGMA user_version=36;
-  `));
+  `),
+  );
 }

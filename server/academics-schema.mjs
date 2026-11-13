@@ -1,4 +1,4 @@
-import {transaction} from './database.mjs';
+import { transaction } from './database.mjs';
 
 // Esquema v24 (Fase 2 · resto del bloque 2.3: pagos por sesión y encuestas).
 // - Pagos por sesión: la edición puede fijar un precio por sesión; una inscripción nace con plan «completo» o «por sesión».
@@ -8,9 +8,10 @@ import {transaction} from './database.mjs';
 // - Encuestas: una por sesión realizada o por apertura; cada inscrito recibe una invitación con token propio por su chat
 //   y responde sin sesión en /encuesta/<token> (o desde la app). Las respuestas son anónimas hacia la bitácora común y
 //   nominales sólo para el equipo con acceso a la marca.
-export function migrateAcademics(db){
-  if(db.prepare('PRAGMA user_version').get().user_version>=24)return;
-  transaction(db,()=>db.exec(`
+export function migrateAcademics(db) {
+  if (db.prepare('PRAGMA user_version').get().user_version >= 24) return;
+  transaction(db, () =>
+    db.exec(`
     ALTER TABLE editions ADD COLUMN session_price_cents INTEGER CHECK(session_price_cents IS NULL OR session_price_cents>=0);
     ALTER TABLE orders ADD COLUMN kind TEXT NOT NULL DEFAULT 'course' CHECK(kind IN ('course','session'));
     ALTER TABLE orders ADD COLUMN plan TEXT NOT NULL DEFAULT 'full' CHECK(plan IN ('full','per_session'));
@@ -30,5 +31,6 @@ export function migrateAcademics(db){
     CREATE TABLE survey_answers(token TEXT PRIMARY KEY REFERENCES survey_invites(token),survey_id TEXT NOT NULL REFERENCES surveys(id),content_score INTEGER NOT NULL CHECK(content_score BETWEEN 1 AND 5),instructor_score INTEGER NOT NULL CHECK(instructor_score BETWEEN 1 AND 5),organization_score INTEGER NOT NULL CHECK(organization_score BETWEEN 1 AND 5),nps INTEGER NOT NULL CHECK(nps BETWEEN 0 AND 10),comment TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL);
     CREATE INDEX survey_answers_survey ON survey_answers(survey_id,created_at);
     PRAGMA user_version=24;
-  `));
+  `),
+  );
 }

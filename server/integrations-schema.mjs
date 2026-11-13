@@ -1,13 +1,14 @@
-import {transaction} from './database.mjs';
+import { transaction } from './database.mjs';
 
 // Esquema v35: API pública y webhooks salientes (docs/PLAN_API_PUBLICA.md). Tres tablas nuevas, todas por marca:
 //  · api_keys: llaves de la API de lectura. Sólo se guarda el hash (SHA-256) y un prefijo para reconocerlas; el valor completo se muestra una sola vez.
 //  · webhook_endpoints: direcciones HTTPS a las que el CRM avisa de los eventos de dominio. El secreto de firma se guarda (hace falta para firmar cada envío).
 //  · webhook_deliveries: una fila por evento y destino, con intentos, siguiente intento y el último código recibido. UNIQUE(endpoint, evento) evita duplicados.
 // Aditivo: sin cambios en tablas existentes.
-export function migrateIntegrations(db){
-  if(db.prepare('PRAGMA user_version').get().user_version>=35)return;
-  transaction(db,()=>db.exec(`
+export function migrateIntegrations(db) {
+  if (db.prepare('PRAGMA user_version').get().user_version >= 35) return;
+  transaction(db, () =>
+    db.exec(`
     CREATE TABLE api_keys(id TEXT PRIMARY KEY,brand_id TEXT NOT NULL REFERENCES brands(id),name TEXT NOT NULL,prefix TEXT NOT NULL,key_hash TEXT NOT NULL UNIQUE,
       scopes TEXT NOT NULL DEFAULT '[]',status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','revoked')),created_by TEXT REFERENCES users(id),
       created_at INTEGER NOT NULL,last_used_at INTEGER,revoked_at INTEGER);
@@ -24,5 +25,6 @@ export function migrateIntegrations(db){
     CREATE INDEX webhook_deliveries_due ON webhook_deliveries(state,next_attempt_at);
     CREATE INDEX webhook_deliveries_endpoint ON webhook_deliveries(endpoint_id,created_at);
     PRAGMA user_version=35;
-  `));
+  `),
+  );
 }

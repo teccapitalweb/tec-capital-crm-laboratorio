@@ -61,26 +61,71 @@ export function openDatabase(directory) {
     const now = Date.now();
     db.exec('BEGIN IMMEDIATE');
     try {
-      for (const [id,name,description] of [['globalvet','GlobalVet','Capacitación veterinaria'],['odonteck','OdonTeck','Formación odontológica'],['dermalysse','Dermalysse','Formación en cuidado de la piel']]) {
-        db.prepare('INSERT INTO brands VALUES(?,?,?,?)').run(id,name,description,now);
-      }
-      for (const [id,brand,title,price,syllabus] of [
-        ['aves','globalvet','Plan sanitario para aves',37900,'Prevención de enfermedades\nBioseguridad en la granja\nIntroducción a la vacunación\nPreguntas y casos de estudio'],
-        ['odontologia','odonteck','Actualización en odontología',49900,'Fundamentos y actualización\nProtocolos de atención\nAnálisis de casos\nPreguntas con el docente'],
-        ['piel','dermalysse','Fundamentos de la piel',39900,'Anatomía y funciones de la piel\nConceptos de cuidado\nRevisión de casos\nPreguntas frecuentes']
+      for (const [id, name, description] of [
+        ['globalvet', 'GlobalVet', 'Capacitación veterinaria'],
+        ['odonteck', 'OdonTeck', 'Formación odontológica'],
+        ['dermalysse', 'Dermalysse', 'Formación en cuidado de la piel'],
       ]) {
-        db.prepare('INSERT INTO courses(id,brand_id,title,price_cents,date_label,syllabus,welcome,updated_at) VALUES(?,?,?,?,?,?,?,?)')
-          .run(id,brand,title,price,'Fecha de práctica por confirmar',syllabus,'Hola, {{nombre}}. Te comparto la información de {{curso}}. ¿Quieres conocer el temario, el precio o cómo inscribirte?',now);
+        db.prepare('INSERT INTO brands VALUES(?,?,?,?)').run(id, name, description, now);
+      }
+      for (const [id, brand, title, price, syllabus] of [
+        [
+          'aves',
+          'globalvet',
+          'Plan sanitario para aves',
+          37900,
+          'Prevención de enfermedades\nBioseguridad en la granja\nIntroducción a la vacunación\nPreguntas y casos de estudio',
+        ],
+        [
+          'odontologia',
+          'odonteck',
+          'Actualización en odontología',
+          49900,
+          'Fundamentos y actualización\nProtocolos de atención\nAnálisis de casos\nPreguntas con el docente',
+        ],
+        [
+          'piel',
+          'dermalysse',
+          'Fundamentos de la piel',
+          39900,
+          'Anatomía y funciones de la piel\nConceptos de cuidado\nRevisión de casos\nPreguntas frecuentes',
+        ],
+      ]) {
+        db.prepare(
+          'INSERT INTO courses(id,brand_id,title,price_cents,date_label,syllabus,welcome,updated_at) VALUES(?,?,?,?,?,?,?,?)',
+        ).run(
+          id,
+          brand,
+          title,
+          price,
+          'Fecha de práctica por confirmar',
+          syllabus,
+          'Hola, {{nombre}}. Te comparto la información de {{curso}}. ¿Quieres conocer el temario, el precio o cómo inscribirte?',
+          now,
+        );
       }
       db.exec('COMMIT');
-    } catch (error) { db.exec('ROLLBACK'); throw error; }
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
   }
-  if(version<2){
-    transaction(db,()=>{
-      for(const item of demoFlyers.filter(item=>item.syllabus)){
+  if (version < 2) {
+    transaction(db, () => {
+      for (const item of demoFlyers.filter(item => item.syllabus)) {
         // Add the three new sample courses once; preserve existing records and chats.
-        db.prepare('INSERT OR IGNORE INTO courses(id,brand_id,title,price_cents,date_label,syllabus,welcome,updated_at) VALUES(?,?,?,?,?,?,?,?)')
-          .run(item.courseId,item.brandId,item.title,item.price*100,'Fecha de práctica por confirmar',item.syllabus,'Hola, {{nombre}}. Te comparto la información de {{curso}}. ¿Quieres conocer el temario, el precio o cómo inscribirte?',Date.now());
+        db.prepare(
+          'INSERT OR IGNORE INTO courses(id,brand_id,title,price_cents,date_label,syllabus,welcome,updated_at) VALUES(?,?,?,?,?,?,?,?)',
+        ).run(
+          item.courseId,
+          item.brandId,
+          item.title,
+          item.price * 100,
+          'Fecha de práctica por confirmar',
+          item.syllabus,
+          'Hola, {{nombre}}. Te comparto la información de {{curso}}. ¿Quieres conocer el temario, el precio o cómo inscribirte?',
+          Date.now(),
+        );
       }
       db.exec('PRAGMA user_version=2');
     });
@@ -90,6 +135,12 @@ export function openDatabase(directory) {
 
 export function transaction(db, fn) {
   db.exec('BEGIN IMMEDIATE');
-  try { const result=fn(); db.exec('COMMIT'); return result; }
-  catch(error) { db.exec('ROLLBACK'); throw error; }
+  try {
+    const result = fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }

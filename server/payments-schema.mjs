@@ -1,10 +1,10 @@
-import {transaction} from './database.mjs';
+import { transaction } from './database.mjs';
 
 // Esquema v16: venta con pago simulado. Pedidos con referencia y enlace de pago de prueba, comprobantes en cola de
 // validación, inscripciones y bitácora de eventos de pago. Apagado por marca por omisión (`payment_settings.enabled`).
-export function migratePayments(db){
-  if(db.prepare('PRAGMA user_version').get().user_version>=16)return;
-  transaction(db,()=>{
+export function migratePayments(db) {
+  if (db.prepare('PRAGMA user_version').get().user_version >= 16) return;
+  transaction(db, () => {
     db.exec(`
     CREATE TABLE payment_settings(brand_id TEXT PRIMARY KEY REFERENCES brands(id),enabled INTEGER NOT NULL DEFAULT 0,link_hours INTEGER NOT NULL DEFAULT 48,revision INTEGER NOT NULL DEFAULT 1,updated_by TEXT REFERENCES users(id),updated_at INTEGER NOT NULL);
     CREATE TABLE orders(id TEXT PRIMARY KEY,reference TEXT NOT NULL UNIQUE,brand_id TEXT NOT NULL REFERENCES brands(id),contact_id TEXT NOT NULL REFERENCES contacts(id),opportunity_id TEXT NOT NULL REFERENCES opportunities(id),conversation_id TEXT NOT NULL REFERENCES conversations(id),course_id TEXT NOT NULL REFERENCES courses(id),edition_id TEXT NOT NULL REFERENCES editions(id),promotion_id TEXT REFERENCES promotions(id),amount_cents INTEGER NOT NULL CHECK(amount_cents>=0),currency TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('pending','review','paid','cancelled','expired')),method TEXT CHECK(method IS NULL OR method IN ('card','oxxo','transfer')),provider_ref TEXT,source TEXT NOT NULL CHECK(source IN ('agent','bot')),created_by TEXT REFERENCES users(id),expires_at INTEGER NOT NULL,paid_at INTEGER,confirmed_by TEXT REFERENCES users(id),note TEXT NOT NULL DEFAULT '',revision INTEGER NOT NULL DEFAULT 1,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);

@@ -1,11 +1,11 @@
-import {transaction} from './database.mjs';
+import { transaction } from './database.mjs';
 
 // Esquema v15: canal simulado realista. Estados de entrega por mensaje saliente, categoría (servicio / utilidad /
 // marketing), botones de respuesta rápida, llegada por anuncio (referral) y ajustes por marca, apagados por omisión.
 // Los mensajes ya leídos quedan como «read» para que el historial sea coherente; el resto conserva «sent».
-export function migrateChannel(db){
-  if(db.prepare('PRAGMA user_version').get().user_version>=15)return;
-  transaction(db,()=>{
+export function migrateChannel(db) {
+  if (db.prepare('PRAGMA user_version').get().user_version >= 15) return;
+  transaction(db, () => {
     db.exec(`
     ALTER TABLE messages ADD COLUMN delivery_state TEXT NOT NULL DEFAULT 'sent' CHECK(delivery_state IN ('sent','delivered','read','failed'));
     ALTER TABLE messages ADD COLUMN delivered_at INTEGER;

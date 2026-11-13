@@ -3,13 +3,24 @@
 // tiene derecho a saber qué se guarda y cómo pedir que se borre. Es una página estática, sin sesión, sin datos de nadie y sin
 // secretos. El nombre de la empresa y el correo de contacto vienen del entorno: el repositorio es público y no lleva correos.
 // ES UN TEXTO BASE: la empresa debe revisarlo y ajustarlo; no sustituye la asesoría legal.
-export const PRIVACY_UPDATED='12 de noviembre de 2026';
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const clean=(v,max)=>String(v||'').replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,max);
+export const PRIVACY_UPDATED = '12 de noviembre de 2026';
+const esc = v =>
+  String(v ?? '').replace(
+    /[&<>"']/g,
+    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
+const clean = (v, max) =>
+  String(v || '')
+    .replace(/[\u0000-\u001f<>]/g, '')
+    .trim()
+    .slice(0, max);
 
-export function privacyPage({company='TEC Capital',email=''}={}){
-  const name=esc(clean(company,80)||'TEC Capital'),mail=/^[^\s@<>"']+@[^\s@<>"']+\.[a-z]{2,}$/i.test(String(email).trim())?esc(String(email).trim()):'';
-  const contact=mail?`escribiendo a <a href="mailto:${mail}">${mail}</a> o por el mismo chat en el que hablas con nosotros`:'por el mismo chat en el que hablas con nosotros';
+export function privacyPage({ company = 'TEC Capital', email = '' } = {}) {
+  const name = esc(clean(company, 80) || 'TEC Capital'),
+    mail = /^[^\s@<>"']+@[^\s@<>"']+\.[a-z]{2,}$/i.test(String(email).trim()) ? esc(String(email).trim()) : '';
+  const contact = mail
+    ? `escribiendo a <a href="mailto:${mail}">${mail}</a> o por el mismo chat en el que hablas con nosotros`
+    : 'por el mismo chat en el que hablas con nosotros';
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aviso de privacidad · ${name}</title>
 <style>body{margin:0;background:#f1f4f6;color:#242428;font:15px/1.65 Manrope,Inter,'Segoe UI',Helvetica,Arial,sans-serif}main{max-width:720px;margin:0 auto;padding:40px 16px 56px}.card{background:#fff;border:1px solid #e1e6ea;border-radius:18px;padding:32px;box-shadow:0 1px 2px #1d2e380a,0 10px 28px -18px #1d2e3829}.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2f6f8f;font-weight:600}h1{font-size:28px;line-height:1.2;margin:6px 0 6px;font-weight:650;letter-spacing:-.6px}h2{font-size:16px;margin:28px 0 8px;font-weight:650}p,li{color:#4b515c}p{margin:0 0 12px}ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:6px}.sub{color:#636977;font-size:13px;margin-bottom:20px}.box{border:1px solid #cddbe3;background:#f1f6f9;border-radius:12px;padding:14px 16px;margin:16px 0}.box p{margin:0;color:#255a75}a{color:#255a75}strong{color:#242428}footer{margin-top:20px;font-size:12px;color:#636977;text-align:center}@media(max-width:600px){main{padding:20px 12px 40px}.card{padding:22px 18px}h1{font-size:24px}}</style></head>
 <body><main><article class="card">
@@ -68,12 +79,18 @@ export function privacyPage({company='TEC Capital',email=''}={}){
 </article><footer>${name} · Aviso de privacidad</footer></main></body></html>`;
 }
 
-export function createPrivacy({env=process.env}={}){
-  async function handlePublic(req,res,path){
-    if(path!=='/privacidad'&&path!=='/privacidad/')return false;
-    if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405,{'Content-Type':'text/plain; charset=utf-8',Allow:'GET, HEAD'});res.end('Método no permitido.');return true;}
-    const html=privacyPage({company:env.PRIVACY_COMPANY,email:env.PRIVACY_CONTACT_EMAIL});
-    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'public, max-age=300'});res.end(req.method==='HEAD'?'':html);return true;
+export function createPrivacy({ env = process.env } = {}) {
+  async function handlePublic(req, res, path) {
+    if (path !== '/privacidad' && path !== '/privacidad/') return false;
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8', Allow: 'GET, HEAD' });
+      res.end('Método no permitido.');
+      return true;
+    }
+    const html = privacyPage({ company: env.PRIVACY_COMPANY, email: env.PRIVACY_CONTACT_EMAIL });
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' });
+    res.end(req.method === 'HEAD' ? '' : html);
+    return true;
   }
-  return {handlePublic};
+  return { handlePublic };
 }

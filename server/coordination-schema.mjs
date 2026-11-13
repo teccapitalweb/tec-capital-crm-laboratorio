@@ -1,4 +1,4 @@
-import {transaction} from './database.mjs';
+import { transaction } from './database.mjs';
 
 // Esquema v19 (Fase 2 · bloques 2.1 y 2.3).
 // - domain_events: índice común de hechos del negocio (un registro por hecho, idempotente por dedupe_key). Las tablas de
@@ -7,9 +7,10 @@ import {transaction} from './database.mjs';
 // - Coordinación académica sobre la edición existente: campos de apertura (mínimo, estado operativo, responsable, grupo),
 //   sesiones con enlace de videollamada, asistencia por inscripción y recursos (materiales, grabaciones, enlaces).
 //   La tabla de sesiones se llama edition_sessions porque `sessions` ya es la tabla de accesos.
-export function migrateCoordination(db){
-  if(db.prepare('PRAGMA user_version').get().user_version>=19)return;
-  transaction(db,()=>db.exec(`
+export function migrateCoordination(db) {
+  if (db.prepare('PRAGMA user_version').get().user_version >= 19) return;
+  transaction(db, () =>
+    db.exec(`
     CREATE TABLE domain_events(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,type TEXT NOT NULL,brand_id TEXT NOT NULL REFERENCES brands(id),entity_kind TEXT NOT NULL,entity_id TEXT NOT NULL,payload TEXT NOT NULL DEFAULT '{}',actor_id TEXT REFERENCES users(id),source TEXT NOT NULL,dedupe_key TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL);
     CREATE INDEX domain_events_brand ON domain_events(brand_id,seq);
     CREATE INDEX domain_events_type ON domain_events(type,seq);
@@ -33,5 +34,6 @@ export function migrateCoordination(db){
     CREATE TABLE edition_resources(id TEXT PRIMARY KEY,edition_id TEXT NOT NULL REFERENCES editions(id),brand_id TEXT NOT NULL REFERENCES brands(id),session_id TEXT REFERENCES edition_sessions(id),kind TEXT NOT NULL CHECK(kind IN ('material','recording','link')),title TEXT NOT NULL,url TEXT NOT NULL DEFAULT '',file_id TEXT REFERENCES library_files(id),created_by TEXT REFERENCES users(id),created_at INTEGER NOT NULL);
     CREATE INDEX edition_resources_edition ON edition_resources(edition_id,created_at);
     PRAGMA user_version=19;
-  `));
+  `),
+  );
 }

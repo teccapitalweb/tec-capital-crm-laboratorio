@@ -1,4 +1,4 @@
-import {transaction} from './database.mjs';
+import { transaction } from './database.mjs';
 
 // Esquema v29: Pauta (docs/PLAN_PAUTA.md). Trae al CRM lo que hacía el panel de tráfico («trafiquer») de IPCIL: captura diaria de la
 // pauta y los mensajes acumulados de cada lanzamiento (una edición por vender), diagnóstico de si va a abrir, cola de acciones
@@ -8,9 +8,10 @@ import {transaction} from './database.mjs';
 //  - ad_captures: acumulado de pauta y mensajes de Meta al cierre de un día (una fila por edición y día; capturar de nuevo corrige).
 //  - ad_actions: «atendida» por día, con nota, compartida por quienes llevan la pauta.
 //  - ad_decisions: instrucciones del gerente (subir, bajar o pausar pauta; apertura pospuesta o cerrada) y su aplicación.
-export function migrateAds(db){
-  if(db.prepare('PRAGMA user_version').get().user_version>=29)return;
-  transaction(db,()=>db.exec(`
+export function migrateAds(db) {
+  if (db.prepare('PRAGMA user_version').get().user_version >= 29) return;
+  transaction(db, () =>
+    db.exec(`
     CREATE TABLE ad_access(user_id TEXT PRIMARY KEY REFERENCES users(id),granted_by TEXT REFERENCES users(id),created_at INTEGER NOT NULL);
     CREATE TABLE ad_launches(edition_id TEXT PRIMARY KEY REFERENCES editions(id),launched_on TEXT NOT NULL,updated_by TEXT REFERENCES users(id),updated_at INTEGER NOT NULL);
     CREATE TABLE ad_captures(edition_id TEXT NOT NULL REFERENCES editions(id),day TEXT NOT NULL,spend_cents INTEGER NOT NULL CHECK(spend_cents>=0),messages INTEGER NOT NULL CHECK(messages>=0),updated_by TEXT REFERENCES users(id),updated_at INTEGER NOT NULL,PRIMARY KEY(edition_id,day));
@@ -21,5 +22,6 @@ export function migrateAds(db){
       created_by TEXT REFERENCES users(id),created_at INTEGER NOT NULL,applied_by TEXT REFERENCES users(id),applied_at INTEGER,applied_note TEXT NOT NULL DEFAULT '');
     CREATE INDEX ad_decisions_status ON ad_decisions(status,created_at);
     PRAGMA user_version=29;
-  `));
+  `),
+  );
 }
