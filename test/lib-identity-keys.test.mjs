@@ -120,6 +120,24 @@ test('números de otros países: con «+», con 00 y sin «+» como los entrega 
   }
 });
 
+test('códigos de país: se reconocen los que existen y se rechazan los que nadie tiene asignados', () => {
+  const real =
+    '1 7 20 27 33 34 39 44 49 51 52 54 55 56 57 58 61 81 86 91 98 212 254 351 353 380 420 502 503 506 507 591 593 595 ' +
+    '598 852 880 886 966 971 972 977 998';
+  for (const code of real.split(' ')) {
+    const national = code === '1' || code === '52' ? '2125550199' : '212555019';
+    assert.equal(canonicalPhone(`+${code}${national}`).country, code, code);
+  }
+  const unassigned = '0 210 214 259 28 292 384 422 671 684 693 80 83 851 87 89 969 978 990 997 999';
+  for (const code of unassigned.split(' '))
+    assert.equal(canonicalPhone(`+${code}212555019`).reason, 'unknown_country', code);
+  // El largo total va de 8 a 15 dígitos (E.164).
+  assert.equal(canonicalPhone('+290 5123').reason, 'too_short');
+  assert.equal(phoneKey('+290 51234'), '29051234');
+  assert.equal(phoneKey('+49 1512 3456 7890 1'), '491512345678901');
+  assert.equal(canonicalPhone('+49 1512 3456 7890 12').reason, 'too_long');
+});
+
 test('international: los dígitos son el número completo aunque no lleven «+»', () => {
   // Sin la pista, diez dígitos son un número nacional; con ella, el país va delante (Noruega, 47 + 8).
   assert.equal(phoneKey('4712345678'), '524712345678');
@@ -199,11 +217,17 @@ test('un teléfono que no sirve devuelve clave nula con su motivo y un mensaje e
     ['52551234567', 'too_short'],
     ['+1 415 555 267', 'too_short'],
     ['+34 61', 'too_short'],
+    ['+290 5123', 'too_short'],
+    ['+0 123', 'too_short'],
+    ['+999 12', 'too_short'],
     ['+52 55 1234 56789', 'too_long'],
     ['+5255123456781', 'too_long'],
     ['52155123456789', 'too_long'],
     ['+1 415 555 26711', 'too_long'],
+    ['+1 1 415 555 2671', 'too_long'],
     ['55123456789012345678', 'too_long'],
+    ['09999999999999999', 'too_long'],
+    ['+34 612 345 678 901 23', 'too_long'],
     ['+34 612 345 678 901 234', 'too_long'],
     ['+999 123456789', 'unknown_country'],
     ['+0 123456789', 'unknown_country'],
@@ -304,6 +328,9 @@ test('displayPhone: teléfono completo y legible para quien puede verlo', () => 
   assert.equal(displayPhone('522221234567'), '+52 222 123 4567');
   assert.equal(displayPhone('529981234567'), '+52 998 123 4567');
   assert.equal(displayPhone('14155552671'), '+1 415 555 2671');
+  // Las claves de dos dígitos son de México: en Estados Unidos y Canadá siempre son tres.
+  assert.equal(displayPhone('15512345678'), '+1 551 234 5678');
+  assert.equal(displayPhone('18135550199'), '+1 813 555 0199');
   assert.equal(displayPhone('34612345678'), '+34 612345678');
   assert.equal(displayPhone('50255551234'), '+502 55551234');
   assert.equal(displayPhone('+52 55 1234 5678'), '+52 55 1234 5678');
