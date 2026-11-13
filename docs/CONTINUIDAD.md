@@ -34,12 +34,13 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Corrección: un destino de petición mal formado detenía el servidor (rama `fix/destino-mal-formado`, 13 nov 2026)
+## Corrección: un destino de petición mal formado detenía el servidor (publicado en `main`, 13 nov 2026)
 
 - **Qué pasaba:** en `server/index.mjs` la dirección de cada petición se leía con `new URL(req.url, …)` **antes** del `try` del manejador. Un destino que no se puede leer (por ejemplo `GET //`) lanzaba un error fuera de toda captura y el proceso terminaba. No hacía falta sesión. Apareció en una revisión del arranque del servidor.
 - **Qué se hizo (sin esquema nuevo):** la lectura pasa dentro del `try`; un destino ilegible responde `400` con `{"error":"Solicitud no válida."}` y el servidor sigue atendiendo. Ninguna otra ruta cambia. El manejador del WebSocket compara la dirección como texto y no tenía el problema.
 - **Evidencia:** `test/malformed-url.test.mjs` escribe la petición por socket (porque `fetch` normaliza la dirección): sin la corrección el proceso se cae; con ella responde 400 y `/api/health` sigue en 200. Suite: 218 pruebas.
-- **Falta:** publicarlo. No se probó contra producción antes de corregir, para no arriesgar una caída, así que no se sabe si el proxy de Railway dejaba pasar ese destino. El proceso sigue sin manejadores globales de errores (`uncaughtException`, `unhandledRejection`): es trabajo aparte.
+- **Publicado y comprobado en producción (13 nov 2026):** con el despliegue nuevo arriba, `GET //` responde 400 y `/api/health` sigue en 200. Esa respuesta confirma además que el proxy de Railway sí dejaba pasar ese destino: producción estuvo expuesta hasta este despliegue. No se probó antes de corregir, para no arriesgar una caída.
+- **Falta:** el proceso sigue sin manejadores globales de errores (`uncaughtException`, `unhandledRejection`); es trabajo aparte.
 
 ## Conector del CRM para Claude · MCP (publicado en `main`, 13 nov 2026)
 
