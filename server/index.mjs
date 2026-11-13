@@ -8,6 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { openDatabase, transaction } from './database.mjs';
 import { migrate } from './migrations/index.mjs';
+import { createStatic } from './app/static.mjs';
+import { loadScreens } from './app/screens.mjs';
+import { loadModules } from './app/modules.mjs';
 import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
 import { createCRM } from './crm.mjs';
 import { conversationPage } from './conversations.mjs';
@@ -440,6 +443,88 @@ const simulator = createSimulator({
   selfOrigin: () => 'http://127.0.0.1:' + server.address().port,
   enabled: process.env.SIMULATOR_DISABLED !== '1',
 });
+// Pantallas nuevas (public/screens/<id>/screen.json) y archivos estáticos por carpeta (server/app/).
+const screens = loadScreens({ root, preview: process.env.SCREENS_PREVIEW === '1' });
+for (const message of screens.errors) console.error('Pantalla omitida:', message);
+const statics = createStatic({
+  root,
+  fail,
+  generated: { '/screens/index.json': { bytes: screens.bytes, type: 'application/json; charset=utf-8' } },
+});
+// Módulos nuevos (server/modules/<nombre>/module.mjs): se descubren y se montan solos después de los actuales.
+const modules = await loadModules({
+  dir: resolve(root, 'server', 'modules'),
+  test: process.env.NODE_ENV === 'test',
+  host: {
+    db,
+    transaction,
+    root,
+    dataDir,
+    version,
+    production,
+    fail,
+    clean,
+    json,
+    body,
+    audit,
+    rate,
+    broadcast,
+    online,
+    staff,
+    requireStaff,
+    requireAdmin,
+    accessConversation,
+    canSee,
+    insertMessage,
+    takeOver,
+    selfOrigin: () => 'http://127.0.0.1:' + server.address().port,
+    services: {
+      crm,
+      events,
+      persons,
+      catalogue,
+      content,
+      surveys,
+      core,
+      channel,
+      mfa,
+      analytics,
+      contacts,
+      catalogueImport,
+      operations,
+      coupons,
+      integrations,
+      payments,
+      readiness,
+      coordination,
+      finance,
+      certificates,
+      legacy,
+      presentation,
+      connectors,
+      aiProvider,
+      flows,
+      replies,
+      aiStatus,
+      whatsapp,
+      knowledgeImport,
+      ads,
+      allies,
+      summaries,
+      scheduled,
+      appointments,
+      evaluation,
+      automation,
+      backups,
+      recipes,
+      campaigns,
+      portal,
+      push,
+      quickReplies,
+      simulator,
+    },
+  },
+});
 async function body(req) {
   let size = 0;
   const chunks = [];
@@ -786,7 +871,14 @@ const server = http.createServer(async (req, res) => {
     const path = url.pathname;
     if (req.method === 'GET' && path === '/api/health') {
       db.prepare('SELECT 1').get();
-      return json(res, 200, { ok: true, version, transport: 'websocket', mode: 'laboratorio', schema: schema.id });
+      return json(res, 200, {
+        ok: true,
+        version,
+        transport: 'websocket',
+        mode: 'laboratorio',
+        schema: schema.id,
+        ...(modules.failed.length ? { modulesFailed: modules.failed.map(m => m.name) } : {}),
+      });
     }
     if (await connectors.handlePublic(req, res, path, url, req.socket.remoteAddress || 'unknown')) return; // webhooks de proveedores: firma propia, sin sesión ni Origin
     if (await privacy.handlePublic(req, res, path)) return;
@@ -907,6 +999,7 @@ const server = http.createServer(async (req, res) => {
       if (await evaluation.handle(req, res, path, user)) return;
       if (await contacts.handle(req, res, path, user)) return;
       if (await crm.handle(req, res, path, user)) return;
+      if (await modules.handle(req, res, path, user, url)) return; // módulos nuevos: /api/<nombre>/…
       if (req.method === 'POST' && path === '/api/auth/logout') {
         db.prepare('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash);
         for (const [ws, u] of sessions) if (u.token_hash === user.token_hash) ws.close(1000, 'Sesión cerrada');
@@ -1365,83 +1458,7 @@ const server = http.createServer(async (req, res) => {
       throw fail(404, 'Ruta no disponible.');
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') throw fail(405, 'Método no permitido.');
-    const files = {
-      '/': ['public/index.html', 'text/html; charset=utf-8'],
-      '/app.js': ['public/app.js', 'text/javascript; charset=utf-8'],
-      '/styles.css': ['public/styles.css', 'text/css; charset=utf-8'],
-      '/crm.js': ['public/crm.js', 'text/javascript; charset=utf-8'],
-      '/crm.css': ['public/crm.css', 'text/css; charset=utf-8'],
-      '/catalogue.js': ['public/catalogue.js', 'text/javascript; charset=utf-8'],
-      '/catalogue.css': ['public/catalogue.css', 'text/css; charset=utf-8'],
-      '/operations.js': ['public/operations.js', 'text/javascript; charset=utf-8'],
-      '/knowledge.js': ['public/knowledge.js', 'text/javascript; charset=utf-8'],
-      '/simulator.js': ['public/simulator.js', 'text/javascript; charset=utf-8'],
-      '/payments.js': ['public/payments.js', 'text/javascript; charset=utf-8'],
-      '/presentation.js': ['public/presentation.js', 'text/javascript; charset=utf-8'],
-      '/connectors.js': ['public/connectors.js', 'text/javascript; charset=utf-8'],
-      '/evaluation.js': ['public/evaluation.js', 'text/javascript; charset=utf-8'],
-      '/coordination.js': ['public/coordination.js', 'text/javascript; charset=utf-8'],
-      '/finance.js': ['public/finance.js', 'text/javascript; charset=utf-8'],
-      '/persons.js': ['public/persons.js', 'text/javascript; charset=utf-8'],
-      '/certificates.js': ['public/certificates.js', 'text/javascript; charset=utf-8'],
-      '/content.js': ['public/content.js', 'text/javascript; charset=utf-8'],
-      '/legacy.js': ['public/legacy.js', 'text/javascript; charset=utf-8'],
-      '/campaigns.js': ['public/campaigns.js', 'text/javascript; charset=utf-8'],
-      '/portal.js': ['public/portal.js', 'text/javascript; charset=utf-8'],
-      '/push.js': ['public/push.js', 'text/javascript; charset=utf-8'],
-      '/quickreplies.js': ['public/quickreplies.js', 'text/javascript; charset=utf-8'],
-      '/inboxtags.js': ['public/inboxtags.js', 'text/javascript; charset=utf-8'],
-      '/coursewizard.js': ['public/coursewizard.js', 'text/javascript; charset=utf-8'],
-      '/knowledge-import.js': ['public/knowledge-import.js', 'text/javascript; charset=utf-8'],
-      '/ads.js': ['public/ads.js', 'text/javascript; charset=utf-8'],
-      '/allies.js': ['public/allies.js', 'text/javascript; charset=utf-8'],
-      '/summary.js': ['public/summary.js', 'text/javascript; charset=utf-8'],
-      '/scheduled.js': ['public/scheduled.js', 'text/javascript; charset=utf-8'],
-      '/appointments.js': ['public/appointments.js', 'text/javascript; charset=utf-8'],
-      '/agenda.js': ['public/agenda.js', 'text/javascript; charset=utf-8'],
-      '/integrations.js': ['public/integrations.js', 'text/javascript; charset=utf-8'],
-      '/ai-status.js': ['public/ai-status.js', 'text/javascript; charset=utf-8'],
-      '/readiness.js': ['public/readiness.js', 'text/javascript; charset=utf-8'],
-      '/checkout.js': ['public/checkout.js', 'text/javascript; charset=utf-8'],
-      '/checkout.css': ['public/checkout.css', 'text/css; charset=utf-8'],
-      '/sw.js': ['public/sw.js', 'text/javascript; charset=utf-8'],
-      '/manifest.webmanifest': ['public/manifest.webmanifest', 'application/manifest+json; charset=utf-8'],
-      '/manifest-cliente.webmanifest': [
-        'public/manifest-cliente.webmanifest',
-        'application/manifest+json; charset=utf-8',
-      ],
-      '/icon-192.png': ['public/icon-192.png', 'image/png'],
-      '/icon-512.png': ['public/icon-512.png', 'image/png'],
-      '/catalogue-import.js': ['public/catalogue-import.js', 'text/javascript; charset=utf-8'],
-      '/polish.css': ['public/polish.css', 'text/css; charset=utf-8'],
-      '/security.js': ['public/security.js', 'text/javascript; charset=utf-8'],
-      '/analytics.js': ['public/analytics.js', 'text/javascript; charset=utf-8'],
-      '/analytics.css': ['public/analytics.css', 'text/css; charset=utf-8'],
-      '/contacts.js': ['public/contacts.js', 'text/javascript; charset=utf-8'],
-      '/recipes.js': ['public/recipes.js', 'text/javascript; charset=utf-8'],
-      '/flows.js': ['public/flows.js', 'text/javascript; charset=utf-8'],
-      '/recipes.css': ['public/recipes.css', 'text/css; charset=utf-8'],
-      '/operations.css': ['public/operations.css', 'text/css; charset=utf-8'],
-      '/favicon.svg': ['public/favicon.svg', 'image/svg+xml'],
-      '/vendor/lucide.js': ['node_modules/lucide/dist/umd/lucide.min.js', 'text/javascript; charset=utf-8'],
-    };
-    const entry = files[path] || (!path.includes('.') ? files['/'] : null);
-    if (!entry) throw fail(404, 'No encontrado.');
-    let bytes = await readFile(resolve(root, entry[0]));
-    // Fuera de /crm la portada es la experiencia del cliente: al instalarla, la app abre el chat de prueba y no el CRM del equipo.
-    if (entry === files['/'] && !path.startsWith('/crm'))
-      bytes = Buffer.from(
-        bytes
-          .toString('utf8')
-          .replace('href="/manifest.webmanifest"', 'href="/manifest-cliente.webmanifest"')
-          .replace(
-            'name="apple-mobile-web-app-title" content="TEC Capital"',
-            'name="apple-mobile-web-app-title" content="Chat de prueba"',
-          ),
-        'utf8',
-      );
-    res.writeHead(200, { 'Content-Type': entry[1] });
-    res.end(req.method === 'HEAD' ? undefined : bytes);
+    await statics.serve(req, res, path);
   } catch (error) {
     if (res.headersSent) return res.end();
     if (!error.status) console.error('Request failed:', error.name, error.message);
@@ -1576,8 +1593,10 @@ const heartbeat = setInterval(() => {
   for (const [key, value] of limits) if (value.end < now) limits.delete(key);
   db.prepare('DELETE FROM sessions WHERE expires_at<?').run(now);
 }, 30000);
+modules.startTimers();
 server.listen(port, host, () => console.log(`TEC Capital Laboratorio: http://${host}:${server.address().port}`));
 function stop() {
+  modules.stopTimers();
   clearInterval(webhooksTimer);
   clearInterval(scheduledTimer);
   clearInterval(jobsTimer);
