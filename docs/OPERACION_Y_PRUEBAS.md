@@ -72,7 +72,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta las etiquetas de la bandeja son **159** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` descubre los archivos de `server/`, `public/`, `test/` y `scripts/` y comprueba, en orden, codificación (UTF-8, finales LF, sin caracteres invisibles), sintaxis y formato (Prettier; `npx prettier --write <archivo>` lo corrige); no es un linter ni una compilación. Un paso suelto: `npm run check -- syntax`. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta las etiquetas de la bandeja son **159** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -113,6 +113,10 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/backup.test.mjs` | Respaldo con manifiesto, rotación, programación, detección de adjuntos perdidos/base dañada, ensayo de restauración y rutas |
 | `test/catalogue-import.test.mjs` | CSV (comillas, saltos, BOM), fechas por zona IANA, vista previa sin escritura, aplicación idempotente y errores por fila |
 | `test/recipes.test.mjs`, `test/recipes-http.test.mjs` | Recetas 4B: validación, simulación sin efectos, no retroactividad, cancelaciones, versiones, ejecución real por API |
+| `test/migrations.test.mjs` | Migraciones con nombre: ejecutor (orden, una sola vez, fallo sin restos), registro, identidad del esquema, reconstrucción de tablas, respaldo previo, la escalera publicada peldaño a peldaño, candado de «escalera cerrada» y actualización de una base en la 41 con el servidor real |
+| `test/static.test.mjs`, `test/screens.test.mjs`, `test/modules.test.mjs` | Estáticos por carpeta (lista de tipos, exclusiones, enlaces simbólicos, `ETag` y 304), registro de pantallas (validación, vista previa) y cargador de módulos (prefijos, rutas sin sesión, relojes, módulos rotos, rutas reservadas al día) |
+| `test/lib-identity-keys.test.mjs`, `test/lib-csv.test.mjs` | Bibliotecas comunes: clave canónica de teléfono y CSV con límites y protección contra fórmulas |
+| `test/malformed-url.test.mjs` | Un destino de petición ilegible responde 400 y el servidor sigue en pie |
 | `test/operations.test.mjs` | Minutos hábiles/DST, reparto, presencia, carga, transferencia conjunta, menciones, SLA, macros atómicas, paginación, revocación y reinicio |
 
 Para iterar en un módulo puede ejecutarse, por ejemplo, `node --test test/operations.test.mjs`. Antes de una entrega funcional, ejecutar la suite pertinente y la regresión completa; no ampliar repetidamente las pruebas sin cambios o dudas nuevas.
@@ -204,7 +208,7 @@ Publicar sólo dentro del alcance autorizado por el usuario. Para el traspaso do
 El health esperado de referencia:
 
 ```json
-{"ok":true,"version":"0.34.0","transport":"websocket","mode":"laboratorio"}
+{"ok":true,"version":"0.34.0","transport":"websocket","mode":"laboratorio","schema":"41"}
 ```
 
 ## Respaldos y recuperación
@@ -232,6 +236,10 @@ Procedimiento a diseñar y ensayar en entorno aislado:
 5. Restaurar primero en otro directorio/entorno, ejecutar `PRAGMA integrity_check` y comprobar `user_version`, claves foráneas y conteos de referencia.
 6. Arrancar con el código compatible y origen/puerto de prueba. Verificar login, historial, descarga de adjuntos/flyers y ausencia de ejecución accidental de campañas/trabajos futuros.
 7. Documentar resultado y tiempos. Sólo después preparar la recuperación real y su manejo de datos posteriores.
+
+`schema` es la identidad del esquema: `41` mientras no haya migraciones con nombre y `41+N.<huella>` con N (la que debe tener una base al día con el código la imprime `npm run schema:id`). Si un módulo nuevo no cargó, health añade `modulesFailed` con su nombre.
+
+**Migraciones con nombre (desde los cimientos de noviembre de 2026).** La escalera `PRAGMA user_version` está cerrada en la 41: el arranque sube primero cualquier base antigua por la escalera y después aplica las migraciones con nombre pendientes (`server/migrations/named/<área>/`), cada una en su transacción y anotada en la tabla `schema_migrations`. Antes de aplicar algo pendiente a una base con usuarios guarda **una** copia `backups/before-<nombre>-<ms>.sqlite` (`before-crm-v41-…` si la base venía de una versión anterior a la 41). Esas copias no se rotan todavía: vigila el espacio del volumen. Una base con migraciones que el código no conoce (por ejemplo tras revertir un despliegue) arranca y lo avisa en el registro; como todo cambio es aditivo, el código anterior sigue funcionando. Cómo se escribe una: [GUIA_MODULOS.md](GUIA_MODULOS.md).
 
 Con v7 el arranque guarda `backups/before-crm-v7-<timestamp>.sqlite` antes de migrar una base con usuarios y esquema < 8 (el v7 no llegó a publicarse por separado). Revertir código no revierte esquema. No ejecutar una versión antigua contra v6 o posteriores sin comprobar compatibilidad. No borrar WAL/SHM manualmente para intentar arreglar una base.
 

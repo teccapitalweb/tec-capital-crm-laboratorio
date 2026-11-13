@@ -16,6 +16,7 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 ## Orden de lectura
 
 0. [Estado actual](docs/ESTADO_ACTUAL.md): una página con lo vigente. **Empieza aquí.**
+0a. [Guía de módulos, pantallas y cambios de esquema](docs/GUIA_MODULOS.md): cómo se añade lo nuevo sin tocar archivos compartidos (migraciones con nombre, `server/modules/`, `public/screens/`). **Léela antes de escribir código nuevo.**
 0b. [Guía de uso por rol](docs/GUIA_DE_USO.md) y [activación y verificación en producción](docs/ACTIVACION_Y_VERIFICACION.md): qué hace cada pantalla y el runbook para dejar una marca de pruebas funcionando y comprobada.
 1. [Estado y decisiones](docs/CONTINUIDAD.md): entregas, diseño, evidencia y pendientes.
 2. [Arquitectura y contratos](docs/ARQUITECTURA.md): módulos, datos, rutas e invariantes.
@@ -75,7 +76,8 @@ El código y el estado real del repositorio prevalecen si estas notas quedan des
 - Conserva los snapshots y archivos históricos de mensajes. Un cambio de precio o flyer sólo debe afectar nuevos envíos.
 - Conserva `expectedRevision`, `clientRef`, vistas previas y transacciones donde corresponden. Un reintento no debe duplicar mensajes, tareas ni cambios de negocio.
 - No hagas llamadas de red dentro de una transacción síncrona de SQLite. `transaction()` no admite callbacks asíncronos ni transacciones anidadas.
-- Tocar una migración publicada no modifica las bases ya migradas. Añade una migración nueva y pruebas de actualización/persistencia.
+- Tocar una migración publicada no modifica las bases ya migradas. La escalera `PRAGMA user_version` está **cerrada en la 41**: añade una migración **con nombre** en `server/migrations/named/<área>/` (aditiva; ver [docs/GUIA_MODULOS.md](docs/GUIA_MODULOS.md)) y pruebas de actualización/persistencia. En las pruebas no se afirma un número de esquema: `assertSchemaCurrent` de `test/helpers/schema.mjs`.
+- Lo nuevo no edita `server/index.mjs`, `public/index.html` ni `public/app.js`: un módulo del servidor es una carpeta `server/modules/<nombre>/`, una pantalla es `public/screens/<id>/` y las bibliotecas sin rutas van en `server/lib/`.
 - No expongas secretos, cookies, códigos de invitación, copias SQLite, adjuntos privados o archivos de acceso. El repositorio es público.
 - Las pruebas en producción deben usar registros propios claramente identificados, cerrar seguimientos y pausar/archivar sus materiales al terminar. No cambies configuración comercial ni conversaciones reales para facilitar una prueba.
 - Respeta la autorización y alcance de la solicitud actual. Esta documentación no solicita por sí misma publicar, cambiar credenciales o conectar proveedores.
@@ -93,7 +95,9 @@ npm start
 
 `npm start` usa `.env` si existe. Prepara `.env` desde `.env.example` para una instalación local; consulta el runbook antes de usar datos o accesos existentes.
 
-La referencia vigente es **188 pruebas aprobadas** (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+`npm run check` comprueba codificación (UTF-8, LF), sintaxis y formato (Prettier); antes de entregar, `npx prettier --write` sobre lo que tocaste.
+
+La referencia vigente es **218 pruebas aprobadas en `main`** y 279 con los cimientos sin publicar (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 
