@@ -34,7 +34,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Conector del CRM para Claude · MCP (rama `feat/mcp-claude`, 13 nov 2026, sin publicar)
+## Conector del CRM para Claude · MCP (publicado en `main`, 13 nov 2026)
 
 - **Por qué:** el usuario pidió poder consultar y modificar datos del CRM hablando con Claude. Eligió empezar por Claude Code y con los cuatro alcances (consultar, modificar cursos, cargar respuestas, ver clientes y conversaciones).
 - **Qué se hizo (sin esquema nuevo):** servidor MCP remoto dentro del CRM (`POST /mcp`, Streamable HTTP sin estado, escrito a mano, sin dependencias nuevas), autenticado con las llaves por marca de la API; tres permisos nuevos de llave; once herramientas. Detalle, cuidados y cómo conectarlo: [PLAN_MCP_CLAUDE.md](PLAN_MCP_CLAUDE.md).

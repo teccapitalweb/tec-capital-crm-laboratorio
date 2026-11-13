@@ -1,6 +1,6 @@
 # Conector del CRM para Claude (MCP) · 13 nov 2026
 
-Rama `feat/mcp-claude`. **Sin esquema nuevo. Sin publicar.**
+Publicado en `main` (13 nov 2026). **Sin esquema nuevo.** Falta usarlo con una llave real en producción.
 
 ## Para qué
 
@@ -47,7 +47,7 @@ Escribir: `proponer_conocimiento`, `actualizar_apertura`, `actualizar_curso`.
 - **Límites:** 120 peticiones por minuto por llave y 60 llamadas a herramientas por minuto; los intentos con llaves falsas se frenan por IP.
 - **Datos personales.** Con los permisos de contactos o conversaciones, nombres, teléfonos y mensajes de clientes pasan por Claude. Crea llaves con esos permisos sólo cuando haga falta y revócalas al terminar.
 
-## Cómo conectarlo (cuando esté publicado)
+## Cómo conectarlo
 
 1. En el CRM: **Operación → Sistema → API y webhooks → Llaves de la API**. Elige la marca, ponle nombre (por ejemplo «Claude») y marca los permisos. Copia la llave: sólo se muestra una vez.
 2. En una terminal, **fuera de la carpeta del repositorio** (el repositorio es público y la llave no debe quedar en él):
