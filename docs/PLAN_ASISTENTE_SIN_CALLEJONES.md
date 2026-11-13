@@ -1,6 +1,6 @@
 # Asistente sin callejones (13 nov 2026)
 
-Rama `feat/asistente-sin-callejones`. **Sin esquema nuevo. Sin publicar.**
+Publicado en `main` (13 nov 2026). **Sin esquema nuevo.** Falta probarlo en producción y con WhatsApp real.
 
 ## Para qué
 
