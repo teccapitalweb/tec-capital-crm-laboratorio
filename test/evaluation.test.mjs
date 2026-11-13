@@ -9,6 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { grade, actionOf } from '../server/evaluation.mjs';
 import { DEMO_CASES } from '../server/evaluation-schema.mjs';
 import { createAiProvider } from '../server/ai-provider.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('el proveedor distingue una llamada real a Claude de un borrador vacío por error, sin clave o por tope', async () => {
   const input = {
@@ -313,7 +314,7 @@ test('banco de evaluación por API: siembra, casos, ejecución con el nivel vige
   }
   const d = new DatabaseSync(join(dir, 'laboratorio.sqlite'), { timeout: 5000 });
   try {
-    assert.equal(d.prepare('PRAGMA user_version').get().user_version, 41);
+    assertSchemaCurrent(d);
     assert.equal(d.prepare('SELECT count(*) n FROM eval_runs').get().n, 5);
   } finally {
     d.close();

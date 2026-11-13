@@ -15,6 +15,7 @@ import {
   REQUIREMENTS,
   CONTRACT_VERSION,
 } from '../server/connectors.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('adaptadores: Meta (firma, verificación y traducción) y Stripe (firma con tolerancia y traducción) sin red', () => {
   const meta = metaChannel({ env: { META_APP_SECRET: 'app-secret', META_VERIFY_TOKEN: 'verifyme' } });
@@ -392,7 +393,7 @@ test('contrato de conectores por API: estado, webhooks firmados e idempotentes, 
   assert.equal(after.recentEvents[0].kind, 'payment');
   const d = new DatabaseSync(join(S.dir, 'laboratorio.sqlite'), { timeout: 5000 });
   try {
-    assert.equal(d.prepare('PRAGMA user_version').get().user_version, 41);
+    assertSchemaCurrent(d);
     assert.equal(d.prepare("SELECT count(*) n FROM connector_events WHERE event_id='evt-1'").get().n, 1);
     assert.ok(d.prepare('SELECT provider_ref FROM orders WHERE id=?').get(o2.id).provider_ref);
   } finally {

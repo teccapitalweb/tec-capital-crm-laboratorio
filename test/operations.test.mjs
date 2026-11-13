@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { WebSocket } from 'ws';
 import { isOpen, serviceDeadline, validateHours } from '../server/service-hours.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('horarios: minutos hábiles, fin de semana, límites exactos y cambios de horario', () => {
   const p = {
@@ -454,7 +455,7 @@ test('operación v0.5: reparto, coordinación privada, objetivos y macros atómi
     );
     assert.equal((await call('/api/operations/macros/' + macroId + '/history', admin.cookie)).versions.length, 2);
     const db = new DatabaseSync(join(dir, 'laboratorio.sqlite'), { timeout: 5000 });
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 41);
+    assertSchemaCurrent(db);
     assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
     db.close();
     assert.equal((await readdir(dir)).includes('laboratorio.sqlite'), true);

@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { hmacHex, metaChannel } from '../server/connectors.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 const TOKEN = 'EAAprueba0000000000000000000000token',
   SECRET = 'app-secret-prueba',
@@ -372,7 +373,7 @@ test('plantillas de WhatsApp de punta a punta: crear, aprobar, enviar desde el c
     inviteCode: code,
   });
   db = new DatabaseSync(join(dir, 'laboratorio.sqlite'), { timeout: 5000 });
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 41);
+  assertSchemaCurrent(db);
   await call(
     '/api/whatsapp/numbers/' + NUMBER,
     admin.cookie,

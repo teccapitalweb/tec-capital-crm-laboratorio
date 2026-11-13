@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { openDatabase } from '../server/database.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('CRM: invitaciones, alcance por marca, oportunidades y recuperación', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'crm-team-')),
@@ -326,7 +327,7 @@ test('migración del laboratorio conserva usuarios y toma copia previa de SQLite
     });
   });
   const check = openDatabase(dir);
-  assert.equal(check.prepare('PRAGMA user_version').get().user_version, 41);
+  assertSchemaCurrent(check);
   assert.equal(check.prepare('SELECT COUNT(*) n FROM brand_members').get().n, 3);
   assert.equal(check.prepare('SELECT COUNT(*) n FROM opportunities').get().n, 1);
   assert.equal(check.prepare('SELECT COUNT(*) n FROM tasks').get().n, 1);

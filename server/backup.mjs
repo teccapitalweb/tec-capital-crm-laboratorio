@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, readdirSync, existsSync, renameSync, rmSync, statSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
+import { appliedNames, schemaId } from './migrations/named.mjs';
 
 const MEDIA = ['uploads', 'library'];
 const stamp = t =>
@@ -29,7 +30,8 @@ const count = (db, table) => {
   }
 };
 
-// Comprueba un respaldo: integridad de SQLite, versión de esquema, claves foráneas y, si se indica un directorio de datos,
+// Comprueba un respaldo: integridad de SQLite, esquema (versión de la escalera e identidad con las migraciones con nombre,
+// si el manifiesto la trae), claves foráneas y, si se indica un directorio de datos,
 // que cada adjunto de la lista exista con el mismo tamaño. No modifica nada.
 export function verifyBackup(backupDir, dataDir = null) {
   const problems = [],
@@ -50,6 +52,9 @@ export function verifyBackup(backupDir, dataDir = null) {
     if (fk.length) problems.push(fk.length + ' violaciones de claves foráneas');
     const schema = db.prepare('PRAGMA user_version').get().user_version;
     if (manifest && manifest.schema !== schema) problems.push('Esquema distinto al del manifiesto');
+    // Los manifiestos anteriores a las migraciones con nombre no traen schemaId y siguen valiendo.
+    if (manifest?.schemaId && manifest.schemaId !== schemaId(db))
+      problems.push('Migraciones distintas a las del manifiesto');
     const counts = {
       users: count(db, 'users'),
       conversations: count(db, 'conversations'),
@@ -95,6 +100,7 @@ export function createBackups({ db, dataDir, version, intervalMs, keep = 7, now 
           name,
           createdAt: manifest?.createdAt || null,
           schema: manifest?.schema ?? null,
+          schemaId: manifest?.schemaId ?? null,
           counts: manifest?.counts || null,
           bytes: existsSync(join(root, name, 'laboratorio.sqlite'))
             ? statSync(join(root, name, 'laboratorio.sqlite')).size
@@ -122,6 +128,8 @@ export function createBackups({ db, dataDir, version, intervalMs, keep = 7, now 
           createdAt: t,
           version,
           schema: snap.prepare('PRAGMA user_version').get().user_version,
+          schemaId: schemaId(snap),
+          migrations: appliedNames(snap),
           counts: {
             users: count(snap, 'users'),
             conversations: count(snap, 'conversations'),

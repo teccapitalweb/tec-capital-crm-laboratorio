@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { encodeQR, qrSvg } from '../server/qr.mjs';
 import { FOLIO } from '../server/certificates.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('QR: versión según el largo, tamaño de la matriz, patrones fijos, SVG y límite', () => {
   const short = encodeQR('Hola');
@@ -477,7 +478,7 @@ test('certificación por API: emisión al cerrar con asistencia mínima, folio s
   assert.ok(limited > 0, 'la verificación pública tiene límite de peticiones');
   const d = new DatabaseSync(join(dir, 'laboratorio.sqlite'), { timeout: 5000 });
   try {
-    assert.equal(d.prepare('PRAGMA user_version').get().user_version, 41);
+    assertSchemaCurrent(d);
     assert.equal(d.prepare('SELECT count(*) n FROM certificates').get().n, 4);
     assert.equal(d.prepare('SELECT count(DISTINCT folio) n FROM certificates').get().n, 4);
     assert.equal(

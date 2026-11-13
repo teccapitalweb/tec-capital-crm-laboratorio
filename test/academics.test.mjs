@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { npsOf, SURVEY_MODES, QUESTIONS } from '../server/surveys.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('NPS y catálogo de encuesta', () => {
   assert.deepEqual(npsOf([]), { promoters: 0, passives: 0, detractors: 0, score: null });
@@ -594,7 +595,7 @@ test('pagos por sesión y encuestas por API: precio por sesión en catálogo, in
   assert.equal(all.stats.failed, 0);
   const x = db();
   try {
-    assert.equal(x.prepare('PRAGMA user_version').get().user_version, 41);
+    assertSchemaCurrent(x);
     assert.equal(x.prepare('SELECT count(*) n FROM session_payments').get().n, 5);
     assert.equal(x.prepare('SELECT count(*) n FROM survey_answers').get().n, 2);
     assert.equal(x.prepare("SELECT count(*) n FROM orders WHERE kind='session'").get().n, 3);

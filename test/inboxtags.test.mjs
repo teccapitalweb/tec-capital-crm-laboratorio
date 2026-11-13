@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('etiquetas en la bandeja por API: etiquetas por hilo, filtro por etiqueta con alcance por marca, parámetro inválido ignorado y nada de esto llega al cliente', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'crm-inboxtags-')),
@@ -181,5 +182,12 @@ test('etiquetas en la bandeja por API: etiquetas por hilo, filtro por etiqueta c
   assert.equal('tags' in own[0], false);
   assert.equal('contact_id' in own[0], false);
   assert.equal('tags' in (await call('/api/conversations/' + convAna.id, ana.cookie)).conversation, false);
-  assert.equal(one('PRAGMA user_version').user_version, 41, 'sin migración nueva de este bloque');
+  {
+    const d = db();
+    try {
+      assertSchemaCurrent(d);
+    } finally {
+      d.close();
+    }
+  }
 });

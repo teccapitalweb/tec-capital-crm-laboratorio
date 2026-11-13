@@ -10,6 +10,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { hmacHex } from '../server/connectors.mjs';
 import { matchCourse, byNumber, candidates } from '../server/course-match.mjs';
 import { startText } from '../server/reply-copy.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 // Un número de WhatsApp para toda la consultora (docs/PLAN_NUMERO_POR_CONSULTORA.md): el curso lo decide el anuncio, lo que la persona escribe o la
 // lista que el asistente le ofrece; y se puede cambiar de curso en el mismo chat.
@@ -223,7 +224,7 @@ test('un número para toda la marca: pregunta el curso, lo reconoce por anuncio 
     inviteCode: code,
   });
   db = new DatabaseSync(join(dir, 'laboratorio.sqlite'), { timeout: 5000 });
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 41);
+  assertSchemaCurrent(db);
   const courses = db
     .prepare("SELECT id,title FROM courses WHERE brand_id='globalvet' AND active=1 ORDER BY title")
     .all();

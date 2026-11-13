@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { RUN_STATUS, TRANSITIONS, simulatedCalendar } from '../server/coordination.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('transiciones de apertura y calendario simulado', async () => {
   assert.deepEqual(Object.keys(RUN_STATUS), ['planned', 'open', 'running', 'closed', 'cancelled']);
@@ -639,7 +640,7 @@ test('coordinación académica por API: la venta confirmada entra sola a la aper
 
   const d = db();
   try {
-    assert.equal(d.prepare('PRAGMA user_version').get().user_version, 41);
+    assertSchemaCurrent(d);
     assert.equal(d.prepare("SELECT count(*) n FROM domain_deliveries WHERE state!='done'").get().n, 0);
     assert.equal(d.prepare("SELECT count(*) n FROM edition_sessions WHERE edition_id='edition-aves'").get().n, 2);
   } finally {

@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { cleanSteps, render, norm, DEFAULT_STEPS, ACTIONS } from '../server/flows.mjs';
 import { metaChannel } from '../server/connectors.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('flujo de bienvenida: validación de los pasos, datos por su nombre y comparación de botones', () => {
   assert.deepEqual(cleanSteps(DEFAULT_STEPS), DEFAULT_STEPS, 'el flujo sugerido es válido tal cual');
@@ -172,7 +173,7 @@ test('flujo de bienvenida de punta a punta: saludo con menú, botones que navega
     inviteCode: code,
   });
   db = new DatabaseSync(join(dir, 'laboratorio.sqlite'), { timeout: 5000 });
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 41);
+  assertSchemaCurrent(db);
   // cada persona: perfil nuevo, conversación del curso de aves; say() manda un mensaje y devuelve la respuesta del asistente a ESE mensaje
   let n = 0;
   const person = async name => {

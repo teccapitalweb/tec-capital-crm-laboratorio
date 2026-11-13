@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('canal simulado: apagado por omisión, ventana de 24/72 h, estados de entrega, reintento, botones, anuncio y permisos', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'crm-channel-')),
@@ -219,7 +220,7 @@ test('canal simulado: apagado por omisión, ventana de 24/72 h, estados de entre
   assert.equal(bot2.delivery_state, 'sent');
   const d = db();
   try {
-    assert.equal(d.prepare('PRAGMA user_version').get().user_version, 41);
+    assertSchemaCurrent(d);
     assert.equal(d.prepare('SELECT count(*) n FROM channel_events WHERE message_id=?').get(f1.id).n, 3);
   } finally {
     d.close();

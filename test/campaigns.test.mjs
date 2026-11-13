@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('campañas por API: permisos, apagado por marca, vista previa con motivos, confirmación del público, envío idempotente, respuestas, bajas, separación mínima, toma humana y cancelación', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'crm-campaigns-')),
@@ -449,7 +450,14 @@ test('campañas por API: permisos, apagado por marca, vista previa con motivos, 
   const list = (await call('/api/campaigns', admin.cookie)).campaigns;
   assert.ok(list.length >= 6);
   assert.ok(list.every(c => typeof c.stats.recipients === 'number'));
-  assert.equal(one('PRAGMA user_version').user_version, 41);
+  {
+    const d = db();
+    try {
+      assertSchemaCurrent(d);
+    } finally {
+      d.close();
+    }
+  }
   assert.ok(
     one(
       "SELECT count(*) n FROM audit WHERE action IN ('campaign.create','campaign.schedule','campaign.cancel','campaign.settings')",

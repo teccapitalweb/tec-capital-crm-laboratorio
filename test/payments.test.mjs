@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 const PNG = Buffer.from([
   137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137,
@@ -325,7 +326,7 @@ test('venta con pago simulado: apagada por omisión, cobro desde el chat, pago s
   await call('/api/payments/orders/' + randomUUID(), admin.cookie, undefined, 'GET', 404);
   const d = db();
   try {
-    assert.equal(d.prepare('PRAGMA user_version').get().user_version, 41);
+    assertSchemaCurrent(d);
     assert.equal(d.prepare("SELECT count(*) n FROM payment_events WHERE kind='expired'").get().n, 1);
   } finally {
     d.close();

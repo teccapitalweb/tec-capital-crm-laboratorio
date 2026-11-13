@@ -23,6 +23,7 @@ import { migrateEvaluation } from '../server/evaluation-schema.mjs';
 import { migrateCoordination } from '../server/coordination-schema.mjs';
 import { migrateFinance, periodDay } from '../server/finance-schema.mjs';
 import { commissionAmount, periodKey, dayStart } from '../server/finance.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 const upTo19 = db => {
   migrateCRM(db);
@@ -500,7 +501,7 @@ test('finanzas por API: libro por eventos, reglas, comisiones, recálculo, liqui
   await call('/api/finance', conta.cookie, undefined, 'GET', 403);
   const d = new DatabaseSync(join(dir, 'laboratorio.sqlite'), { timeout: 5000 });
   try {
-    assert.equal(d.prepare('PRAGMA user_version').get().user_version, 41);
+    assertSchemaCurrent(d);
     assert.equal(d.prepare('SELECT count(*) n FROM ledger_entries').get().n, 3);
     assert.equal(d.prepare("SELECT count(*) n FROM commission_entries WHERE status='paid'").get().n, 2);
   } finally {

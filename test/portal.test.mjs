@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('portal por roles por API: cada persona ve lo suyo, administración ve a otras, alcance por marca, cifras contra el libro, cartera, aperturas y avisos', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'crm-portal-')),
@@ -308,5 +309,12 @@ test('portal por roles por API: cada persona ve lo suyo, administración ve a ot
   await call('/api/portal/team', admin.cookie, {}, 'POST', 405);
   // sólo lectura y sin esquema nuevo
   await call('/api/portal/me', vende.cookie, {}, 'POST', 405);
-  assert.equal(one('PRAGMA user_version').user_version, 41);
+  {
+    const d = db();
+    try {
+      assertSchemaCurrent(d);
+    } finally {
+      d.close();
+    }
+  }
 });

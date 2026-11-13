@@ -23,6 +23,7 @@ import { migrateEvaluation } from '../server/evaluation-schema.mjs';
 import { migrateCoordination } from '../server/coordination-schema.mjs';
 import { migrateFinance } from '../server/finance-schema.mjs';
 import { migratePersons, normalizePhone, normalizeEmail, normalizeName } from '../server/persons-schema.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 const upTo20 = db => {
   migrateCRM(db);
@@ -553,7 +554,7 @@ test('personas por API: dos conversaciones de la misma persona en marcas distint
   assert.ok(csv.split('\r\n').some(l => l.startsWith('GlobalVet,Ana Pérez') && l.endsWith(',' + p.id)));
   const d = new DatabaseSync(join(dir, 'laboratorio.sqlite'), { timeout: 5000 });
   try {
-    assert.equal(d.prepare('PRAGMA user_version').get().user_version, 41);
+    assertSchemaCurrent(d);
     assert.equal(
       d.prepare('SELECT count(*) n FROM contacts WHERE persona_id IS NULL').get().n,
       0,

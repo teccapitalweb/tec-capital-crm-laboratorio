@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { createECDH, createPublicKey, randomBytes, randomUUID, verify } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { encryptPayload, decryptPayload, endpointAllowed, groupOf, GROUPS } from '../server/push.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 const b64u = b => Buffer.from(b).toString('base64url');
 const receiverKeys = () => {
@@ -427,6 +428,13 @@ test('push por API: permisos, claves VAPID firmadas, suscripciÃ³n validada, envÃ
     0,
     'una cuenta deshabilitada pierde sus dispositivos',
   );
-  assert.equal(one('PRAGMA user_version').user_version, 41);
+  {
+    const d = db();
+    try {
+      assertSchemaCurrent(d);
+    } finally {
+      d.close();
+    }
+  }
   assert.ok(one("SELECT count(*) n FROM audit WHERE action IN ('push.subscribe','push.unsubscribe')").n >= 3);
 });

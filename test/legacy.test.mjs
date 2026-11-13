@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { when, cents, parseDocument, normalize, KINDS, EXAMPLE } from '../server/legacy.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('históricos: fechas del panel, importes y normalización de registros', () => {
   assert.equal(when('2025-02-20'), Date.UTC(2025, 1, 20, 12));
@@ -327,7 +328,7 @@ test('históricos por API: vista previa con errores, importación idempotente li
   );
   const x = db();
   try {
-    assert.equal(x.prepare('PRAGMA user_version').get().user_version, 41);
+    assertSchemaCurrent(x);
   } finally {
     x.close();
   }

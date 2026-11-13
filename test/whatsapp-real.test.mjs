@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { hmacHex, metaChannel, explainMeta } from '../server/connectors.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 const PNG = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(64, 7)]);
 const TOKEN = 'EAAprueba0000000000000000000000token',
@@ -360,7 +361,7 @@ test('WhatsApp real de punta a punta con un Meta de mentira: entra un mensaje, s
     inviteCode: code,
   });
   db = new DatabaseSync(join(dir, 'laboratorio.sqlite'), { timeout: 5000 });
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 41);
+  assertSchemaCurrent(db);
 
   // 1) estado: Meta activo y completo, el número del entorno todavía sin marca; sólo administración
   let st = await call('/api/whatsapp', admin.cookie);

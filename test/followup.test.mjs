@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { openDatabase, transaction } from '../server/database.mjs';
 import { migrateCRM } from '../server/crm.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('seguimiento v0.3: etapas, tareas, histórico y búsqueda con permisos', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'crm-followup-')),
@@ -430,7 +431,7 @@ test('migrar v3 conserva ediciones, importa historial y crea un respaldo restaur
     });
   });
   db = openDatabase(dir);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 41);
+  assertSchemaCurrent(db);
   assert.equal(db.prepare('SELECT lost_reason FROM opportunities').get().lost_reason, 'Motivo preservado');
   assert.equal(db.prepare('SELECT count(*) n FROM crm_events').get().n, 1);
   db.close();

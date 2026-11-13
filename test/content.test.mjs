@@ -9,6 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { validateVariant, EVENTS } from '../server/content.mjs';
 import { createAiProvider } from '../server/ai-provider.mjs';
 import { fillTemplate, variables, scenarios } from '../server/catalogue.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('contenido: relleno de variables, validación de variantes y variantes del proveedor simulado', async () => {
   assert.equal(
@@ -508,7 +509,7 @@ test('contenido por API: funciones de diseño y aprobación, plantillas por even
   await call('/api/catalogue/templates', designer.cookie, tpl, 'POST', 403);
   const d = new DatabaseSync(join(dir, 'laboratorio.sqlite'), { timeout: 5000 });
   try {
-    assert.equal(d.prepare('PRAGMA user_version').get().user_version, 41);
+    assertSchemaCurrent(d);
     assert.equal(d.prepare("SELECT count(*) n FROM template_variants WHERE status='accepted'").get().n, 1);
     assert.equal(d.prepare('SELECT count(*) n FROM content_sheets').get().n, 1);
   } finally {

@@ -2,26 +2,22 @@ import http from 'node:http';
 import { randomBytes, randomUUID, createHash, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { openDatabase, transaction } from './database.mjs';
+import { migrate } from './migrations/index.mjs';
 import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
-import { migrateCRM, createCRM } from './crm.mjs';
-import { migrateFollowup } from './followup.mjs';
+import { createCRM } from './crm.mjs';
 import { conversationPage } from './conversations.mjs';
-import { migrateCatalogue, defaultEditionId, seedBrandTemplates } from './catalogue-schema.mjs';
+import { defaultEditionId, seedBrandTemplates } from './catalogue-schema.mjs';
 import { createCatalogue } from './catalogue.mjs';
-import { migrateOperations, migrateHolidays } from './operations-schema.mjs';
 import { createOperations } from './operations.mjs';
-import { migrateAutomation, migrateRecipes } from './automation-schema.mjs';
-import { migrateContacts, migrateConsent } from './contacts-schema.mjs';
 import { createContacts } from './contacts.mjs';
 import { createAnalytics } from './analytics.mjs';
-import { migrateMfa } from './mfa-schema.mjs';
 import { createMfa } from './mfa.mjs';
-import { migrateReplies, seedBrandKnowledge } from './replies-schema.mjs';
+import { seedBrandKnowledge } from './replies-schema.mjs';
 import { createReplies } from './replies.mjs';
 import { createAiProvider } from './ai-provider.mjs';
 import { createRecipes } from './recipes.mjs';
@@ -30,60 +26,36 @@ import { createCatalogueImport } from './catalogue-import.mjs';
 import { createKnowledgeImport } from './knowledge-import.mjs';
 import { createAiBudget } from './ai-budget.mjs';
 import { createAutomation, cancelConversationSteps } from './automation.mjs';
-import { migrateSimulator } from './simulator-schema.mjs';
 import { createSimulator } from './simulator.mjs';
-import { migrateChannel } from './channel-schema.mjs';
 import { createChannel } from './channel.mjs';
-import { migratePayments } from './payments-schema.mjs';
 import { createPayments } from './payments.mjs';
 import { createReadiness } from './readiness.mjs';
 import { createPresentation } from './presentation.mjs';
-import { migrateEvaluation, seedBrandEvaluation } from './evaluation-schema.mjs';
+import { seedBrandEvaluation } from './evaluation-schema.mjs';
 import { createEvaluation } from './evaluation.mjs';
-import { migrateConnectors } from './connectors-schema.mjs';
 import { createConnectors } from './connectors.mjs';
 import { createWhatsApp } from './whatsapp.mjs';
 import { createFlows } from './flows.mjs';
 import { createPrivacy } from './privacy.mjs';
-import { migrateFlows } from './flows-schema.mjs';
-import { migrateWhatsAppMulti } from './whatsapp-schema.mjs';
 import { createMcp } from './mcp.mjs';
-import { migrateWhatsApp, migrateWhatsAppTemplates } from './whatsapp-schema.mjs';
-import { migrateCoordination } from './coordination-schema.mjs';
 import { createEvents } from './events.mjs';
 import { createCoordination } from './coordination.mjs';
-import { migrateFinance } from './finance-schema.mjs';
 import { createFinance } from './finance.mjs';
-import { migratePersons } from './persons-schema.mjs';
 import { createPersons } from './persons.mjs';
-import { migrateCertificates } from './certificates-schema.mjs';
 import { createCertificates } from './certificates.mjs';
-import { migrateContent } from './content-schema.mjs';
 import { createContent } from './content.mjs';
-import { migrateAcademics } from './academics-schema.mjs';
 import { createSurveys } from './surveys.mjs';
 import { createCore } from './core.mjs';
-import { migrateLegacy } from './legacy-schema.mjs';
 import { createLegacy } from './legacy.mjs';
-import { migrateCampaigns } from './campaigns-schema.mjs';
 import { createCampaigns } from './campaigns.mjs';
 import { createPortal } from './portal.mjs';
-import { migratePush } from './push-schema.mjs';
 import { createPush } from './push.mjs';
-import { migrateQuickReplies } from './quickreplies-schema.mjs';
-import { migrateAds } from './ads-schema.mjs';
 import { createAds } from './ads.mjs';
-import { migrateAllies } from './allies-schema.mjs';
 import { createAllies } from './allies.mjs';
-import { migrateSummaries } from './summaries-schema.mjs';
 import { createSummaries } from './summaries.mjs';
-import { migrateScheduled, migrateScheduledMaterial } from './scheduled-schema.mjs';
 import { createScheduled } from './scheduled.mjs';
-import { migrateAppointments } from './appointments-schema.mjs';
 import { createAppointments } from './appointments.mjs';
-import { migrateCoupons, migrateCouponEntry } from './coupons-schema.mjs';
 import { createCoupons } from './coupons.mjs';
-import { migrateIntegrations } from './integrations-schema.mjs';
 import { createIntegrations } from './integrations.mjs';
 import { createAiStatus } from './ai-status.mjs';
 import { createQuickReplies } from './quickreplies.mjs';
@@ -92,49 +64,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = resolve(process.env.DATA_DIR || resolve(root, 'data'));
 mkdirSync(resolve(dataDir, 'uploads'), { recursive: true });
 const db = openDatabase(dataDir);
-if (db.prepare('PRAGMA user_version').get().user_version < 41 && db.prepare('SELECT count(*) n FROM users').get().n) {
-  mkdirSync(resolve(dataDir, 'backups'), { recursive: true });
-  db.prepare('VACUUM INTO ?').run(resolve(dataDir, 'backups', 'before-crm-v41-' + Date.now() + '.sqlite'));
-}
-migrateCRM(db);
-migrateFollowup(db);
-migrateCatalogue(db);
-migrateOperations(db);
-migrateAutomation(db);
-migrateRecipes(db);
-migrateContacts(db);
-migrateConsent(db);
-migrateHolidays(db);
-migrateMfa(db);
-migrateReplies(db);
-migrateSimulator(db);
-migrateChannel(db);
-migratePayments(db);
-migrateConnectors(db);
-migrateEvaluation(db);
-migrateCoordination(db);
-migrateFinance(db);
-migratePersons(db);
-migrateCertificates(db);
-migrateContent(db);
-migrateAcademics(db);
-migrateLegacy(db);
-migrateCampaigns(db);
-migratePush(db);
-migrateQuickReplies(db);
-migrateAds(db);
-migrateAllies(db);
-migrateSummaries(db);
-migrateScheduled(db);
-migrateAppointments(db);
-migrateCoupons(db);
-migrateIntegrations(db);
-migrateCouponEntry(db);
-migrateScheduledMaterial(db);
-migrateWhatsApp(db);
-migrateWhatsAppTemplates(db);
-migrateFlows(db);
-migrateWhatsAppMulti(db);
+// Esquema: respaldo previo si hay algo pendiente, escalera cerrada en la 41 y migraciones con nombre (server/migrations/).
+const { version } = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+const schema = migrate(db, { dataDir, log: name => console.log('Migración aplicada: ' + name) });
+if (schema.unknown.length)
+  console.warn('La base tiene migraciones que este código no conoce: ' + schema.unknown.join(', '));
 const hash = value => createHash('sha256').update(value).digest('hex');
 const derive = promisify(scrypt);
 const production = process.env.NODE_ENV === 'production';
@@ -416,7 +350,7 @@ const replies = createReplies({
 // Estado de la IA para administración (server/ai-status.mjs): proveedor, clave (sí/no), gasto del mes y qué falta por marca; sin secretos.
 const aiStatus = createAiStatus({ db, crm, provider: aiProvider, json });
 // WhatsApp real (server/whatsapp.mjs): entrantes de Meta -> cliente, conversacion y mensaje; salientes de conversaciones reales. Apagado sin CHANNEL_CONNECTOR=meta.
-const mcp = createMcp({ db, crm, catalogue, replies, integrations, body, json, audit, rate, version: '0.34.0' });
+const mcp = createMcp({ db, crm, catalogue, replies, integrations, body, json, audit, rate, version });
 const whatsapp = createWhatsApp({
   db,
   crm,
@@ -481,7 +415,7 @@ const backupHours =
 const backups = createBackups({
   db,
   dataDir,
-  version: '0.34.0',
+  version,
   intervalMs: Number.isFinite(backupHours) && backupHours > 0 ? backupHours * 3600000 : 0,
   keep: Math.max(1, Number(process.env.BACKUP_KEEP) || 7),
 });
@@ -852,7 +786,7 @@ const server = http.createServer(async (req, res) => {
     const path = url.pathname;
     if (req.method === 'GET' && path === '/api/health') {
       db.prepare('SELECT 1').get();
-      return json(res, 200, { ok: true, version: '0.34.0', transport: 'websocket', mode: 'laboratorio' });
+      return json(res, 200, { ok: true, version, transport: 'websocket', mode: 'laboratorio', schema: schema.id });
     }
     if (await connectors.handlePublic(req, res, path, url, req.socket.remoteAddress || 'unknown')) return; // webhooks de proveedores: firma propia, sin sesión ni Origin
     if (await privacy.handlePublic(req, res, path)) return;

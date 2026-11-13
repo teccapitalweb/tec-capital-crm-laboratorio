@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { validateBody, fill, VARIABLES, STARTER } from '../server/quickreplies.mjs';
+import { assertSchemaCurrent } from './helpers/schema.mjs';
 
 test('respuestas rápidas: variables permitidas y sustitución', () => {
   assert.deepEqual(Object.keys(VARIABLES), ['nombre', 'nombre_completo', 'curso', 'edicion', 'marca', 'asesor']);
@@ -318,7 +319,14 @@ test('respuestas rápidas por API: permisos, validación, personales y de marca,
     'gracias',
     'el atajo archivado queda libre',
   );
-  assert.equal(one('PRAGMA user_version').user_version, 41);
+  {
+    const d = db();
+    try {
+      assertSchemaCurrent(d);
+    } finally {
+      d.close();
+    }
+  }
   assert.ok(one("SELECT count(*) n FROM audit WHERE action LIKE 'quickreply.%'").n >= 6);
 });
 
