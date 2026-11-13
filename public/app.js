@@ -1,361 +1,1691 @@
 (() => {
   'use strict';
-  const $=(s,root=document)=>root.querySelector(s);
-  const app=$('#app'),modal=$('#modal');
-  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const icon=name=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
-  const initials=name=>name.split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase();
-  const channels={all:{name:'Todos',icon:'inbox'},whatsapp:{name:'WhatsApp',icon:'message-circle'},instagram:{name:'Instagram',icon:'camera'},facebook:{name:'Facebook',icon:'message-circle'}};
-  const stages={nuevo:'Nuevo interés',interesado:'Interesado',inscripcion:'Inscripción solicitada',ganada:'Ganada · prueba',perdida:'No continuó'};
-  const state={user:null,brands:[],courses:[],editions:[],conversations:[],messages:[],view:'inbox',mode:'customer',brand:'all',channel:'all',filter:'all',tag:'',query:'',selected:null,hasMore:false,connection:'connecting',mobileChat:false,drafts:{},attachment:null,sending:false,retry:null,authMode:'register',typing:{},newChannel:'whatsapp',referral:null};
-  let inboxItems=[],inboxCursor=null,inboxPages=1,inboxVersion=0,inboxLoading=false,searchTimer,messageSearch='';
-  let socket,reconnectTimer,reconnectDelay=700,refreshTimer,refreshing=false,refreshAgain=false,selectionVersion=0,toastTimer,typingTime=0,alive=true;
-  const crmUI=window.createCRMUI({state,api,esc,icon,showModal,toast,icons,refresh,shell,setView,selectConversation,load,entry,afterDay:()=>{scheduledUI.mountDay();appointmentsUI.mountDay();}});
-  const catalogueUI=window.createCatalogueUI({state,api,esc,icon,icons,showModal,toast,refresh,setView,newChat});
-  const replyAssist=window.createReplyAssistUI({state,api,esc,icon,toast});
-  const quickUI=window.createQuickRepliesUI({state,api,esc,icon,showModal,toast});
-  const summaryUI=window.createSummaryUI({state,api,esc,icon,toast});
-  const scheduledUI=window.createScheduledUI({state,api,esc,icon,toast});
-  const appointmentsUI=window.createAppointmentsUI({state,api,esc,icon,toast});
-  const tagsUI=window.createInboxTagsUI({state,api,esc,icon,showModal,toast,reload:()=>{renderChat();loadThreads(false,true);}});
-  const analyticsUI=window.createAnalyticsUI({state,api,esc,icon,icons,toast});
-  const portalUI=window.createPortalUI({state,api,esc,icon,icons,toast});
-  const agendaUI=window.createAgendaUI({state,api,esc,icon,icons,toast});
-  const operationsUI=window.createOperationsUI({state,api,esc,icon,icons,showModal,toast,refresh,setView,selectConversation});
-  const presentationUI=window.createPresentationUI({state,api,esc,icon,icons,toast,setView,openOps:tab=>operationsUI.openTab(tab)});
-  if(location.pathname==='/crm')state.authMode='login';
+  const $ = (s, root = document) => root.querySelector(s);
+  const app = $('#app'),
+    modal = $('#modal');
+  const esc = v =>
+    String(v ?? '').replace(
+      /[&<>"']/g,
+      c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+    );
+  const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
+  const initials = name =>
+    name
+      .split(/\s+/)
+      .slice(0, 2)
+      .map(x => x[0] || '')
+      .join('')
+      .toUpperCase();
+  const channels = {
+    all: { name: 'Todos', icon: 'inbox' },
+    whatsapp: { name: 'WhatsApp', icon: 'message-circle' },
+    instagram: { name: 'Instagram', icon: 'camera' },
+    facebook: { name: 'Facebook', icon: 'message-circle' },
+  };
+  const stages = {
+    nuevo: 'Nuevo interés',
+    interesado: 'Interesado',
+    inscripcion: 'Inscripción solicitada',
+    ganada: 'Ganada · prueba',
+    perdida: 'No continuó',
+  };
+  const state = {
+    user: null,
+    brands: [],
+    courses: [],
+    editions: [],
+    conversations: [],
+    messages: [],
+    view: 'inbox',
+    mode: 'customer',
+    brand: 'all',
+    channel: 'all',
+    filter: 'all',
+    tag: '',
+    query: '',
+    selected: null,
+    hasMore: false,
+    connection: 'connecting',
+    mobileChat: false,
+    drafts: {},
+    attachment: null,
+    sending: false,
+    retry: null,
+    authMode: 'register',
+    typing: {},
+    newChannel: 'whatsapp',
+    referral: null,
+  };
+  let inboxItems = [],
+    inboxCursor = null,
+    inboxPages = 1,
+    inboxVersion = 0,
+    inboxLoading = false,
+    searchTimer,
+    messageSearch = '';
+  let socket,
+    reconnectTimer,
+    reconnectDelay = 700,
+    refreshTimer,
+    refreshing = false,
+    refreshAgain = false,
+    selectionVersion = 0,
+    toastTimer,
+    typingTime = 0,
+    alive = true;
+  const crmUI = window.createCRMUI({
+    state,
+    api,
+    esc,
+    icon,
+    showModal,
+    toast,
+    icons,
+    refresh,
+    shell,
+    setView,
+    selectConversation,
+    load,
+    entry,
+    afterDay: () => {
+      scheduledUI.mountDay();
+      appointmentsUI.mountDay();
+    },
+  });
+  const catalogueUI = window.createCatalogueUI({
+    state,
+    api,
+    esc,
+    icon,
+    icons,
+    showModal,
+    toast,
+    refresh,
+    setView,
+    newChat,
+  });
+  const replyAssist = window.createReplyAssistUI({ state, api, esc, icon, toast });
+  const quickUI = window.createQuickRepliesUI({ state, api, esc, icon, showModal, toast });
+  const summaryUI = window.createSummaryUI({ state, api, esc, icon, toast });
+  const scheduledUI = window.createScheduledUI({ state, api, esc, icon, toast });
+  const appointmentsUI = window.createAppointmentsUI({ state, api, esc, icon, toast });
+  const tagsUI = window.createInboxTagsUI({
+    state,
+    api,
+    esc,
+    icon,
+    showModal,
+    toast,
+    reload: () => {
+      renderChat();
+      loadThreads(false, true);
+    },
+  });
+  const analyticsUI = window.createAnalyticsUI({ state, api, esc, icon, icons, toast });
+  const portalUI = window.createPortalUI({ state, api, esc, icon, icons, toast });
+  const agendaUI = window.createAgendaUI({ state, api, esc, icon, icons, toast });
+  const operationsUI = window.createOperationsUI({
+    state,
+    api,
+    esc,
+    icon,
+    icons,
+    showModal,
+    toast,
+    refresh,
+    setView,
+    selectConversation,
+  });
+  const presentationUI = window.createPresentationUI({
+    state,
+    api,
+    esc,
+    icon,
+    icons,
+    toast,
+    setView,
+    openOps: tab => operationsUI.openTab(tab),
+  });
+  if (location.pathname === '/crm') state.authMode = 'login';
   // Enlace de anuncio (/?ad=<flyer>): se recuerda hasta que el cliente entra y abre la conversación del curso del anuncio.
-  const startParams=new URLSearchParams(location.search),adParam=startParams.get('ad'),payParam=startParams.get('pay');
-  if(adParam&&/^[a-f0-9-]{8,80}$/.test(adParam))sessionStorage.setItem('tc-ad',adParam);
-  if(payParam&&/^[a-f0-9-]{36}$/.test(payParam))sessionStorage.setItem('tc-pay',payParam);   // enlace de pago de prueba (/?pay=<pedido>)
-  const inviteCourse=startParams.get('curso'),inviteChannel=startParams.get('canal');
-  if(inviteCourse&&/^[a-zA-Z0-9-]{1,60}$/.test(inviteCourse))sessionStorage.setItem('tc-invite',JSON.stringify({course:inviteCourse,channel:['whatsapp','instagram','facebook'].includes(inviteChannel)?inviteChannel:'whatsapp'}));   // enlace de invitación a probar
-  if(adParam||payParam||inviteCourse)history.replaceState(null,'',location.pathname);
-  const isStaff=()=>state.user&&state.user.role!=='customer';
-  const agentMode=()=>isStaff()&&state.mode==='agent';
-  const current=()=>state.conversations.find(c=>c.id===state.selected);
-  const allowedConversations=()=>state.conversations.filter(c=>agentMode()||c.customer_id===state.user.id);
-  const courseById=id=>state.courses.find(c=>c.id===id);
-  const brandById=id=>state.brands.find(b=>b.id===id);
-  const unread=c=>agentMode()?c.unread:c.customer_unread;
-  const currency=n=>new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',maximumFractionDigits:0}).format(n);
-  const time=n=>new Intl.DateTimeFormat('es-MX',{hour:'2-digit',minute:'2-digit'}).format(new Date(n));
-  function icons(){if(window.lucide)window.lucide.createIcons({attrs:{'stroke-width':1.7}});tintAvatars();}
-// Cada persona conserva un tono suave propio (seis tonos de Niebla), calculado de sus iniciales: ayuda a reconocerla de un vistazo.
-function tintAvatars(){for(const el of document.querySelectorAll('.avatar:not([data-h])')){let h=0;for(const ch of el.textContent.trim())h=(h*31+ch.charCodeAt(0))>>>0;el.dataset.h=String(h%6);}}
-  function provider(channel){const c=channels[channel];return `<span class="provider ${channel}">${channel==='facebook'?'<b class="f" aria-hidden="true">f</b>':icon(c.icon)}</span>`;}
-  function avatar(name,channel){return `<span class="identity"><span class="avatar">${esc(initials(name))}</span>${provider(channel)}</span>`;}
+  const startParams = new URLSearchParams(location.search),
+    adParam = startParams.get('ad'),
+    payParam = startParams.get('pay');
+  if (adParam && /^[a-f0-9-]{8,80}$/.test(adParam)) sessionStorage.setItem('tc-ad', adParam);
+  if (payParam && /^[a-f0-9-]{36}$/.test(payParam)) sessionStorage.setItem('tc-pay', payParam); // enlace de pago de prueba (/?pay=<pedido>)
+  const inviteCourse = startParams.get('curso'),
+    inviteChannel = startParams.get('canal');
+  if (inviteCourse && /^[a-zA-Z0-9-]{1,60}$/.test(inviteCourse))
+    sessionStorage.setItem(
+      'tc-invite',
+      JSON.stringify({
+        course: inviteCourse,
+        channel: ['whatsapp', 'instagram', 'facebook'].includes(inviteChannel) ? inviteChannel : 'whatsapp',
+      }),
+    ); // enlace de invitación a probar
+  if (adParam || payParam || inviteCourse) history.replaceState(null, '', location.pathname);
+  const isStaff = () => state.user && state.user.role !== 'customer';
+  const agentMode = () => isStaff() && state.mode === 'agent';
+  const current = () => state.conversations.find(c => c.id === state.selected);
+  const allowedConversations = () => state.conversations.filter(c => agentMode() || c.customer_id === state.user.id);
+  const courseById = id => state.courses.find(c => c.id === id);
+  const brandById = id => state.brands.find(b => b.id === id);
+  const unread = c => (agentMode() ? c.unread : c.customer_unread);
+  const currency = n =>
+    new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(n);
+  const time = n => new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' }).format(new Date(n));
+  function icons() {
+    if (window.lucide) window.lucide.createIcons({ attrs: { 'stroke-width': 1.7 } });
+    tintAvatars();
+  }
+  // Cada persona conserva un tono suave propio (seis tonos de Niebla), calculado de sus iniciales: ayuda a reconocerla de un vistazo.
+  function tintAvatars() {
+    for (const el of document.querySelectorAll('.avatar:not([data-h])')) {
+      let h = 0;
+      for (const ch of el.textContent.trim()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      el.dataset.h = String(h % 6);
+    }
+  }
+  function provider(channel) {
+    const c = channels[channel];
+    return `<span class="provider ${channel}">${channel === 'facebook' ? '<b class="f" aria-hidden="true">f</b>' : icon(c.icon)}</span>`;
+  }
+  function avatar(name, channel) {
+    return `<span class="identity"><span class="avatar">${esc(initials(name))}</span>${provider(channel)}</span>`;
+  }
   // Aviso breve. Va en la capa superior del navegador (popover manual) para verse ENCIMA de una ventana abierta; volver a mostrarlo lo sube al
   // frente aunque la ventana se haya abierto después. Sin soporte de popover se comporta como antes.
-  let toastHide=null;
-  function toast(text){
-    clearTimeout(toastTimer);clearTimeout(toastHide);const el=$('#toast');el.textContent=text;
-    try{if(el.matches(':popover-open'))el.hidePopover();el.showPopover();}catch{}
-    el.classList.remove('visible');void el.offsetWidth;el.classList.add('visible');
-    toastTimer=setTimeout(()=>{el.classList.remove('visible');toastHide=setTimeout(()=>{try{if(el.matches(':popover-open'))el.hidePopover();}catch{}},260);},4300);
+  let toastHide = null;
+  function toast(text) {
+    clearTimeout(toastTimer);
+    clearTimeout(toastHide);
+    const el = $('#toast');
+    el.textContent = text;
+    try {
+      if (el.matches(':popover-open')) el.hidePopover();
+      el.showPopover();
+    } catch {}
+    el.classList.remove('visible');
+    void el.offsetWidth;
+    el.classList.add('visible');
+    toastTimer = setTimeout(() => {
+      el.classList.remove('visible');
+      toastHide = setTimeout(() => {
+        try {
+          if (el.matches(':popover-open')) el.hidePopover();
+        } catch {}
+      }, 260);
+    }, 4300);
   }
-  async function api(path,options={}){
-    const response=await fetch(path,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...options.headers},body:options.body===undefined?undefined:JSON.stringify(options.body)});
-    const data=await response.json();if(!response.ok){const error=new Error(data.error||'Ocurrió un error.');error.status=response.status;error.code=data.code;error.activeOpportunityId=data.activeOpportunityId;throw error;}return data;
+  async function api(path, options = {}) {
+    const response = await fetch(path, {
+      credentials: 'same-origin',
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...options.headers },
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const error = new Error(data.error || 'Ocurrió un error.');
+      error.status = response.status;
+      error.code = data.code;
+      error.activeOpportunityId = data.activeOpportunityId;
+      throw error;
+    }
+    return data;
   }
-  function showModal(title,content){$('#modal-content').innerHTML=`<div class="modal-inner"><div class="modal-head"><h2>${esc(title)}</h2><button class="icon-btn" data-action="close-modal" aria-label="Cerrar">${icon('x')}</button></div>${content}</div>`;if(!modal.open)modal.showModal();icons();}
-  modal.addEventListener('click',e=>{if(e.target===modal)modal.close();});
-  modal.addEventListener('close',()=>{if(state.user&&state.view==='courses')renderCourses();});
-  function entry(){
-    const registering=state.authMode==='register';
-    app.innerHTML=`<div class="entry"><section class="entry-story"><div class="brand"><span class="brand-mark">tc</span><div class="brand-copy"><strong>TEC CAPITAL</strong><small>Laboratorio de conversaciones</small></div></div><span class="eyebrow" style="margin-bottom:16px">Una prueba. Muchas posibilidades.</span><h1>Las conversaciones<br>ya tienen su lugar.</h1><p>Entra como cliente, escribe al equipo y descubre cómo se siente una atención conectada. Mensajes reales en un espacio de prueba.</p><div class="entry-mini"><div class="mini-head"><span class="avatar">VM</span><div><strong>Tu perfil de prueba</strong><br><small class="muted">Conectado con el equipo</small></div>${provider('whatsapp')}</div><div class="mini-bubble">Hola, me interesa el curso.<br>¿Me compartes el temario?</div><div class="mini-bubble right">Claro. Te envío la información y el flyer de esta edición.</div><div class="mini-note">Conversación de ejemplo ${icon('check-check')}</div></div><div class="entry-foot">${icon('flask-conical')} Un laboratorio independiente de WhatsApp y Meta.</div></section><section class="entry-form-wrap"><div class="entry-form"><div class="segmented"><button data-action="auth-mode" data-value="register" class="${registering?'active':''}">Crear perfil</button><button data-action="auth-mode" data-value="login" class="${!registering?'active':''}">Ya tengo cuenta</button></div><h2>${location.pathname==='/crm'?'Entra al CRM del equipo.':registering?'Tu primera conversación.':'Qué gusto tenerte de vuelta.'}</h2><p>${location.pathname==='/crm'?'Usa tu cuenta actual. Si todavía eres cliente de prueba, podrás aceptar tu invitación después de entrar.':registering?'Crea tu perfil. Tendrás un número de prueba y tus conversaciones guardadas.':'Entra para continuar tus conversaciones y seguir las pruebas con el equipo.'}</p><form id="auth-form" class="form-grid">${registering?'<label class="field">Tu nombre<input name="name" autocomplete="name" placeholder="Cómo quieres que te llamemos" required minlength="2" maxlength="60"></label>':''}<label class="field">Usuario<input name="username" autocomplete="username" placeholder="por.ejemplo.miguel" required minlength="3" maxlength="40" pattern="[a-zA-Z0-9_.\\-]{3,40}" autocapitalize="none" spellcheck="false"></label><label class="field">Contraseña<input name="password" type="password" autocomplete="${registering?'new-password':'current-password'}" placeholder="Mínimo 8 caracteres" required minlength="8" maxlength="128"></label>${registering?'<details><summary>Soy parte del equipo de atención</summary><label class="field">Invitación individual<input name="inviteCode" type="password" autocomplete="off" placeholder="Código personal del equipo"><small>Sin código entrarás como cliente de prueba.</small></label></details>':''}<div class="form-error" id="auth-error" hidden></div><button type="submit" class="btn primary wide">${registering?'Crear mi perfil':'Entrar a mi espacio'} ${icon('arrow-right')}</button></form><div class="entry-access-links"><a href="${location.pathname==='/crm'?'/':'/crm'}">${location.pathname==='/crm'?'Soy cliente de prueba':'Entrar al CRM del equipo'}</a><button data-action="crm-recover-entry">Recuperar mi cuenta</button></div><div class="entry-note"><strong>Pruebas, sin cobros reales.</strong><br>Usa información ficticia. No necesitas tu número de teléfono ni una cuenta de WhatsApp. Guarda tu usuario y contraseña para volver.</div></div></section></div>`;icons();
+  function showModal(title, content) {
+    $('#modal-content').innerHTML =
+      `<div class="modal-inner"><div class="modal-head"><h2>${esc(title)}</h2><button class="icon-btn" data-action="close-modal" aria-label="Cerrar">${icon('x')}</button></div>${content}</div>`;
+    if (!modal.open) modal.showModal();
+    icons();
   }
-  async function load(){
-    try{const data=await api('/api/bootstrap');Object.assign(state,data);if(!localStorage.getItem('tc-mode-'+state.user.id))state.mode=isStaff()?'agent':'customer';else state.mode=isStaff()?localStorage.getItem('tc-mode-'+state.user.id):'customer';if(location.pathname==='/crm'&&isStaff())state.mode='agent';if(agentMode()&&state.view==='inbox'&&!state.selected)state.view='day';shell();connect();openAdIfAny();openInviteIfAny();openPaymentIfAny();}
-    catch(error){if(error.status===401){state.user=null;if(!await publicPayStart())entry();}else app.innerHTML=`<div class="boot"><span class="brand-mark">tc</span><p>No pudimos conectar con el laboratorio.</p><button class="btn" data-action="reload">Volver a intentar</button></div>`;}
+  modal.addEventListener('click', e => {
+    if (e.target === modal) modal.close();
+  });
+  modal.addEventListener('close', () => {
+    if (state.user && state.view === 'courses') renderCourses();
+  });
+  function entry() {
+    const registering = state.authMode === 'register';
+    app.innerHTML = `<div class="entry"><section class="entry-story"><div class="brand"><span class="brand-mark">tc</span><div class="brand-copy"><strong>TEC CAPITAL</strong><small>Laboratorio de conversaciones</small></div></div><span class="eyebrow" style="margin-bottom:16px">Una prueba. Muchas posibilidades.</span><h1>Las conversaciones<br>ya tienen su lugar.</h1><p>Entra como cliente, escribe al equipo y descubre cómo se siente una atención conectada. Mensajes reales en un espacio de prueba.</p><div class="entry-mini"><div class="mini-head"><span class="avatar">VM</span><div><strong>Tu perfil de prueba</strong><br><small class="muted">Conectado con el equipo</small></div>${provider('whatsapp')}</div><div class="mini-bubble">Hola, me interesa el curso.<br>¿Me compartes el temario?</div><div class="mini-bubble right">Claro. Te envío la información y el flyer de esta edición.</div><div class="mini-note">Conversación de ejemplo ${icon('check-check')}</div></div><div class="entry-foot">${icon('flask-conical')} Un laboratorio independiente de WhatsApp y Meta.</div></section><section class="entry-form-wrap"><div class="entry-form"><div class="segmented"><button data-action="auth-mode" data-value="register" class="${registering ? 'active' : ''}">Crear perfil</button><button data-action="auth-mode" data-value="login" class="${!registering ? 'active' : ''}">Ya tengo cuenta</button></div><h2>${location.pathname === '/crm' ? 'Entra al CRM del equipo.' : registering ? 'Tu primera conversación.' : 'Qué gusto tenerte de vuelta.'}</h2><p>${location.pathname === '/crm' ? 'Usa tu cuenta actual. Si todavía eres cliente de prueba, podrás aceptar tu invitación después de entrar.' : registering ? 'Crea tu perfil. Tendrás un número de prueba y tus conversaciones guardadas.' : 'Entra para continuar tus conversaciones y seguir las pruebas con el equipo.'}</p><form id="auth-form" class="form-grid">${registering ? '<label class="field">Tu nombre<input name="name" autocomplete="name" placeholder="Cómo quieres que te llamemos" required minlength="2" maxlength="60"></label>' : ''}<label class="field">Usuario<input name="username" autocomplete="username" placeholder="por.ejemplo.miguel" required minlength="3" maxlength="40" pattern="[a-zA-Z0-9_.\\-]{3,40}" autocapitalize="none" spellcheck="false"></label><label class="field">Contraseña<input name="password" type="password" autocomplete="${registering ? 'new-password' : 'current-password'}" placeholder="Mínimo 8 caracteres" required minlength="8" maxlength="128"></label>${registering ? '<details><summary>Soy parte del equipo de atención</summary><label class="field">Invitación individual<input name="inviteCode" type="password" autocomplete="off" placeholder="Código personal del equipo"><small>Sin código entrarás como cliente de prueba.</small></label></details>' : ''}<div class="form-error" id="auth-error" hidden></div><button type="submit" class="btn primary wide">${registering ? 'Crear mi perfil' : 'Entrar a mi espacio'} ${icon('arrow-right')}</button></form><div class="entry-access-links"><a href="${location.pathname === '/crm' ? '/' : '/crm'}">${location.pathname === '/crm' ? 'Soy cliente de prueba' : 'Entrar al CRM del equipo'}</a><button data-action="crm-recover-entry">Recuperar mi cuenta</button></div><div class="entry-note"><strong>Pruebas, sin cobros reales.</strong><br>Usa información ficticia. No necesitas tu número de teléfono ni una cuenta de WhatsApp. Guarda tu usuario y contraseña para volver.</div></div></section></div>`;
+    icons();
+  }
+  async function load() {
+    try {
+      const data = await api('/api/bootstrap');
+      Object.assign(state, data);
+      if (!localStorage.getItem('tc-mode-' + state.user.id)) state.mode = isStaff() ? 'agent' : 'customer';
+      else state.mode = isStaff() ? localStorage.getItem('tc-mode-' + state.user.id) : 'customer';
+      if (location.pathname === '/crm' && isStaff()) state.mode = 'agent';
+      if (agentMode() && state.view === 'inbox' && !state.selected) state.view = 'day';
+      shell();
+      connect();
+      openAdIfAny();
+      openInviteIfAny();
+      openPaymentIfAny();
+    } catch (error) {
+      if (error.status === 401) {
+        state.user = null;
+        if (!(await publicPayStart())) entry();
+      } else
+        app.innerHTML = `<div class="boot"><span class="brand-mark">tc</span><p>No pudimos conectar con el laboratorio.</p><button class="btn" data-action="reload">Volver a intentar</button></div>`;
+    }
   }
   // Barra lateral del equipo agrupada por tarea (Atención · Gestión · Resultados · Cuenta). Cada módulo sigue aportando sus botones; aquí sólo se ordenan.
-  function sideNav(team){
-    const btn=(view,symbol,label,short)=>`<button data-view="${view}" class="${state.view===view?'active':''}" aria-label="${label}" title="${label}">${icon(symbol)}<span class="nav-label-text">${short||label}</span></button>`;
-    if(!team)return btn('inbox','inbox','Conversaciones')+btn('courses','book-open','Explorar cursos');
-    const by={inbox:btn('inbox','inbox','Conversaciones'),courses:btn('courses','book-open','Catálogo y biblioteca','Catálogo'),activity:btn('activity','chart-no-axes-column','Actividad')};
-    [crmUI.nav(),operationsUI.nav(),portalUI.nav(),analyticsUI.nav(),presentationUI.nav(),agendaUI.nav()].forEach(html=>html.split(/(?<=<\/button>)/).forEach(piece=>{const m=piece.match(/data-view="([^"]+)"/);if(m)by[m[1]]=piece;}));
-    const groups=[['Atención',['day','inbox','contacts','opportunities','tasks','agenda']],['Gestión',['courses','operations','team']],['Resultados',['results','analytics','activity','presentation']],['Cuenta',['settings']]];
-    return groups.map(([title,ids])=>{const items=ids.map(id=>by[id]||'').join('');return items?`<div class="nav-group" role="group" aria-label="${title}"><div class="nav-group-title">${title}</div>${items}</div>`:'';}).join('');
+  function sideNav(team) {
+    const btn = (view, symbol, label, short) =>
+      `<button data-view="${view}" class="${state.view === view ? 'active' : ''}" aria-label="${label}" title="${label}">${icon(symbol)}<span class="nav-label-text">${short || label}</span></button>`;
+    if (!team) return btn('inbox', 'inbox', 'Conversaciones') + btn('courses', 'book-open', 'Explorar cursos');
+    const by = {
+      inbox: btn('inbox', 'inbox', 'Conversaciones'),
+      courses: btn('courses', 'book-open', 'Catálogo y biblioteca', 'Catálogo'),
+      activity: btn('activity', 'chart-no-axes-column', 'Actividad'),
+    };
+    [crmUI.nav(), operationsUI.nav(), portalUI.nav(), analyticsUI.nav(), presentationUI.nav(), agendaUI.nav()].forEach(
+      html =>
+        html.split(/(?<=<\/button>)/).forEach(piece => {
+          const m = piece.match(/data-view="([^"]+)"/);
+          if (m) by[m[1]] = piece;
+        }),
+    );
+    const groups = [
+      ['Atención', ['day', 'inbox', 'contacts', 'opportunities', 'tasks', 'agenda']],
+      ['Gestión', ['courses', 'operations', 'team']],
+      ['Resultados', ['results', 'analytics', 'activity', 'presentation']],
+      ['Cuenta', ['settings']],
+    ];
+    return groups
+      .map(([title, ids]) => {
+        const items = ids.map(id => by[id] || '').join('');
+        return items
+          ? `<div class="nav-group" role="group" aria-label="${title}"><div class="nav-group-title">${title}</div>${items}</div>`
+          : '';
+      })
+      .join('');
   }
-  function shell(){
-    const team=agentMode();const brandOptions='<option value="all">Todas las marcas</option>'+state.brands.map(b=>`<option value="${esc(b.id)}" ${state.brand===b.id?'selected':''}>${esc(b.name)}</option>`).join('');
-    app.innerHTML=`<div class="workspace ${state.mobileChat?'mobile-chat':''} ${team?'':'customer-skin'}"><aside class="sidebar"><div class="brand"><span class="brand-mark">tc</span><div class="brand-copy"><strong>TEC CAPITAL</strong><small>Laboratorio CRM</small></div></div><div class="workspace-picker">${icon('building-2')}<select aria-label="Filtrar por marca" id="brand-picker">${brandOptions}</select></div><div>${team?'':'<div class="nav-label">Tu espacio</div>'}<nav class="nav ${team?'nav-grouped':''}" aria-label="Navegación principal">${sideNav(team)}</nav></div><div class="sidebar-bottom">${!isStaff()?'<a class="customer-team-link" href="/crm">Entrar al CRM</a>':''}${isStaff()?`<div class="mode-picker" aria-label="Cambiar experiencia"><button data-mode="customer" class="${!team?'active':''}">Cliente</button><button data-mode="agent" class="${team?'active':''}">Equipo</button></div>`:''}<div class="lab-note"><strong>${team?'Un equipo. Un espacio.':'Tu número de prueba: '+state.user.testNumber}</strong>${team?'Mensajes, cursos y atención en tiempo real.':'Este perfil identifica tus mensajes. No es un número de WhatsApp.'}</div><div class="user-card"><button data-action="profile" aria-label="Mi perfil"><span class="avatar">${esc(initials(state.user.name))}</span><span class="user-copy"><strong title="${esc(state.user.name)}">${esc(state.user.name)}</strong><small>${state.user.role==='admin'?'Administrador':state.user.role==='agent'?'Asesor':'Cliente de prueba'}</small></span></button><button class="icon-btn" data-action="logout" aria-label="Cerrar sesión">${icon('log-out')}</button></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb"><span>Laboratorio</span>${icon('chevron-right')}<strong id="breadcrumb-title">${pageTitle()}</strong></div><div class="top-status"><span id="connection" class="connection">Conectando</span><span class="lab-label">DATOS Y PAGOS DE PRUEBA</span>${!team?`<button class="btn" data-action="new-chat">${icon('plus')}<span>Nueva conversación</span></button>`:''}<button class="icon-btn mobile-profile" data-action="profile" aria-label="Mi perfil">${icon('user-round')}</button></div></header><div class="notice" id="notice"></div><div class="page-slot" id="page"></div></main></div>`;
-    renderPage();updateConnection();icons();
+  function shell() {
+    const team = agentMode();
+    const brandOptions =
+      '<option value="all">Todas las marcas</option>' +
+      state.brands
+        .map(b => `<option value="${esc(b.id)}" ${state.brand === b.id ? 'selected' : ''}>${esc(b.name)}</option>`)
+        .join('');
+    app.innerHTML = `<div class="workspace ${state.mobileChat ? 'mobile-chat' : ''} ${team ? '' : 'customer-skin'}"><aside class="sidebar"><div class="brand"><span class="brand-mark">tc</span><div class="brand-copy"><strong>TEC CAPITAL</strong><small>Laboratorio CRM</small></div></div><div class="workspace-picker">${icon('building-2')}<select aria-label="Filtrar por marca" id="brand-picker">${brandOptions}</select></div><div>${team ? '' : '<div class="nav-label">Tu espacio</div>'}<nav class="nav ${team ? 'nav-grouped' : ''}" aria-label="Navegación principal">${sideNav(team)}</nav></div><div class="sidebar-bottom">${!isStaff() ? '<a class="customer-team-link" href="/crm">Entrar al CRM</a>' : ''}${isStaff() ? `<div class="mode-picker" aria-label="Cambiar experiencia"><button data-mode="customer" class="${!team ? 'active' : ''}">Cliente</button><button data-mode="agent" class="${team ? 'active' : ''}">Equipo</button></div>` : ''}<div class="lab-note"><strong>${team ? 'Un equipo. Un espacio.' : 'Tu número de prueba: ' + state.user.testNumber}</strong>${team ? 'Mensajes, cursos y atención en tiempo real.' : 'Este perfil identifica tus mensajes. No es un número de WhatsApp.'}</div><div class="user-card"><button data-action="profile" aria-label="Mi perfil"><span class="avatar">${esc(initials(state.user.name))}</span><span class="user-copy"><strong title="${esc(state.user.name)}">${esc(state.user.name)}</strong><small>${state.user.role === 'admin' ? 'Administrador' : state.user.role === 'agent' ? 'Asesor' : 'Cliente de prueba'}</small></span></button><button class="icon-btn" data-action="logout" aria-label="Cerrar sesión">${icon('log-out')}</button></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb"><span>Laboratorio</span>${icon('chevron-right')}<strong id="breadcrumb-title">${pageTitle()}</strong></div><div class="top-status"><span id="connection" class="connection">Conectando</span><span class="lab-label">DATOS Y PAGOS DE PRUEBA</span>${!team ? `<button class="btn" data-action="new-chat">${icon('plus')}<span>Nueva conversación</span></button>` : ''}<button class="icon-btn mobile-profile" data-action="profile" aria-label="Mi perfil">${icon('user-round')}</button></div></header><div class="notice" id="notice"></div><div class="page-slot" id="page"></div></main></div>`;
+    renderPage();
+    updateConnection();
+    icons();
   }
-  function pageTitle(){if(state.view==='operations')return 'Operación del equipo';if(state.view==='analytics')return 'Analítica comercial';if(state.view==='results')return 'Mis resultados';if(state.view==='agenda')return 'Agenda de citas';if(state.view==='presentation')return 'Modo presentación';if(crmUI.labels[state.view])return crmUI.labels[state.view];return state.view==='courses'?(agentMode()?'Catálogo y biblioteca':'Explorar cursos'):state.view==='activity'?'Actividad':'Conversaciones';}
-  function setView(view){state.view=view;state.mobileChat=false;shell();const page=document.querySelector('#page');if(page){page.classList.remove('enter');void page.offsetWidth;page.classList.add('enter');}}
-  function sources(){const all=allowedConversations().filter(c=>state.brand==='all'||c.brand_id===state.brand);return `<div class="sources" role="group" aria-label="Filtrar por canal">${Object.entries(channels).map(([id,c])=>`<button class="source-tab ${id} ${state.channel===id?'active':''}" data-source="${id}" aria-pressed="${state.channel===id}">${provider(id)}<span>${c.name}</span><span class="source-count">${all.filter(x=>id==='all'||x.channel===id).length}</span></button>`).join('')}</div>`;}
-  function renderPage(){
-    if(location.pathname==='/crm'&&!isStaff())return crmUI.gate();
-    if(agentMode()&&state.view==='operations')return operationsUI.render();
-    if(agentMode()&&state.view==='analytics')return analyticsUI.render();
-    if(agentMode()&&state.view==='results')return portalUI.render();
-    if(agentMode()&&state.view==='agenda')return agendaUI.render();
-    if(agentMode()&&state.view==='presentation')return presentationUI.render();
-    if(agentMode()&&crmUI.labels[state.view])return crmUI.render();
-    if(state.view==='courses')return renderCourses();if(state.view==='activity')return renderActivity();
-    $('#page').innerHTML=`${sources()}<div class="inbox"><section class="thread-panel" aria-label="Conversaciones"><div class="list-head"><div class="list-title"><h1>${agentMode()?'Conversaciones':'Mis chats'}</h1><span class="count" id="list-count">0</span></div><label class="search">${icon('search')}<input id="thread-search" aria-label="Buscar conversación" placeholder="Nombre, número, curso o mensaje" maxlength="100" value="${esc(state.query)}"></label><div class="filters">${(agentMode()?[['all','Todas'],['waiting','Pendientes'],['mine','Mías'],['resolved','Cerradas']]:[['all','Todas'],['open','Abiertas'],['resolved','Cerradas']]).map(([id,label])=>`<button data-filter="${id}" class="${state.filter===id?'active':''}">${label}</button>`).join('')}</div>${agentMode()?tagsUI.filterHtml():''}</div><div class="thread-list" id="thread-list"></div></section><section class="chat" id="chat" aria-label="Chat"></section></div>`;
-    loadThreads();renderChat();icons();if(state.selected)loadMessages();
+  function pageTitle() {
+    if (state.view === 'operations') return 'Operación del equipo';
+    if (state.view === 'analytics') return 'Analítica comercial';
+    if (state.view === 'results') return 'Mis resultados';
+    if (state.view === 'agenda') return 'Agenda de citas';
+    if (state.view === 'presentation') return 'Modo presentación';
+    if (crmUI.labels[state.view]) return crmUI.labels[state.view];
+    return state.view === 'courses'
+      ? agentMode()
+        ? 'Catálogo y biblioteca'
+        : 'Explorar cursos'
+      : state.view === 'activity'
+        ? 'Actividad'
+        : 'Conversaciones';
   }
-  function filteredConversations(){return inboxItems;}
-  async function loadThreads(more=false,preserve=false){
-    if(state.view!=='inbox')return;if(more&&(!inboxCursor||inboxLoading))return;
-    const version=++inboxVersion,key=[state.query,state.brand,state.channel,state.filter,state.tag,state.mode].join('|');
-    inboxLoading=true;renderThreads();
-    const pages=more?1:preserve?inboxPages:1;let cursor=more?inboxCursor:null,items=more?[...inboxItems]:[];
-    try{
-      for(let n=0;n<pages;n++){
-        const params=new URLSearchParams({q:state.query,brand:state.brand,channel:state.channel,filter:state.filter,tag:state.tag,mode:state.mode});if(cursor)params.set('cursor',cursor);
-        const result=await api('/api/conversations?'+params);
-        if(version!==inboxVersion||state.view!=='inbox'||key!==[state.query,state.brand,state.channel,state.filter,state.tag,state.mode].join('|'))return;
-        const merged=new Map(items.map(c=>[c.id,c]));result.conversations.forEach(c=>merged.set(c.id,c));items=[...merged.values()];cursor=result.nextCursor;if(!cursor)break;
+  function setView(view) {
+    state.view = view;
+    state.mobileChat = false;
+    shell();
+    const page = document.querySelector('#page');
+    if (page) {
+      page.classList.remove('enter');
+      void page.offsetWidth;
+      page.classList.add('enter');
+    }
+  }
+  function sources() {
+    const all = allowedConversations().filter(c => state.brand === 'all' || c.brand_id === state.brand);
+    return `<div class="sources" role="group" aria-label="Filtrar por canal">${Object.entries(channels)
+      .map(
+        ([id, c]) =>
+          `<button class="source-tab ${id} ${state.channel === id ? 'active' : ''}" data-source="${id}" aria-pressed="${state.channel === id}">${provider(id)}<span>${c.name}</span><span class="source-count">${all.filter(x => id === 'all' || x.channel === id).length}</span></button>`,
+      )
+      .join('')}</div>`;
+  }
+  function renderPage() {
+    if (location.pathname === '/crm' && !isStaff()) return crmUI.gate();
+    if (agentMode() && state.view === 'operations') return operationsUI.render();
+    if (agentMode() && state.view === 'analytics') return analyticsUI.render();
+    if (agentMode() && state.view === 'results') return portalUI.render();
+    if (agentMode() && state.view === 'agenda') return agendaUI.render();
+    if (agentMode() && state.view === 'presentation') return presentationUI.render();
+    if (agentMode() && crmUI.labels[state.view]) return crmUI.render();
+    if (state.view === 'courses') return renderCourses();
+    if (state.view === 'activity') return renderActivity();
+    $('#page').innerHTML =
+      `${sources()}<div class="inbox"><section class="thread-panel" aria-label="Conversaciones"><div class="list-head"><div class="list-title"><h1>${agentMode() ? 'Conversaciones' : 'Mis chats'}</h1><span class="count" id="list-count">0</span></div><label class="search">${icon('search')}<input id="thread-search" aria-label="Buscar conversación" placeholder="Nombre, número, curso o mensaje" maxlength="100" value="${esc(state.query)}"></label><div class="filters">${(agentMode()
+        ? [
+            ['all', 'Todas'],
+            ['waiting', 'Pendientes'],
+            ['mine', 'Mías'],
+            ['resolved', 'Cerradas'],
+          ]
+        : [
+            ['all', 'Todas'],
+            ['open', 'Abiertas'],
+            ['resolved', 'Cerradas'],
+          ]
+      )
+        .map(
+          ([id, label]) =>
+            `<button data-filter="${id}" class="${state.filter === id ? 'active' : ''}">${label}</button>`,
+        )
+        .join(
+          '',
+        )}</div>${agentMode() ? tagsUI.filterHtml() : ''}</div><div class="thread-list" id="thread-list"></div></section><section class="chat" id="chat" aria-label="Chat"></section></div>`;
+    loadThreads();
+    renderChat();
+    icons();
+    if (state.selected) loadMessages();
+  }
+  function filteredConversations() {
+    return inboxItems;
+  }
+  async function loadThreads(more = false, preserve = false) {
+    if (state.view !== 'inbox') return;
+    if (more && (!inboxCursor || inboxLoading)) return;
+    const version = ++inboxVersion,
+      key = [state.query, state.brand, state.channel, state.filter, state.tag, state.mode].join('|');
+    inboxLoading = true;
+    renderThreads();
+    const pages = more ? 1 : preserve ? inboxPages : 1;
+    let cursor = more ? inboxCursor : null,
+      items = more ? [...inboxItems] : [];
+    try {
+      for (let n = 0; n < pages; n++) {
+        const params = new URLSearchParams({
+          q: state.query,
+          brand: state.brand,
+          channel: state.channel,
+          filter: state.filter,
+          tag: state.tag,
+          mode: state.mode,
+        });
+        if (cursor) params.set('cursor', cursor);
+        const result = await api('/api/conversations?' + params);
+        if (
+          version !== inboxVersion ||
+          state.view !== 'inbox' ||
+          key !== [state.query, state.brand, state.channel, state.filter, state.tag, state.mode].join('|')
+        )
+          return;
+        const merged = new Map(items.map(c => [c.id, c]));
+        result.conversations.forEach(c => merged.set(c.id, c));
+        items = [...merged.values()];
+        cursor = result.nextCursor;
+        if (!cursor) break;
       }
-      inboxItems=items;inboxCursor=cursor;inboxPages=more?inboxPages+1:preserve?inboxPages:1;
-      const cache=new Map(state.conversations.map(c=>[c.id,c]));items.forEach(c=>cache.set(c.id,c));state.conversations=[...cache.values()];
-    }catch(e){if(e.status===401)return expired();toast(e.message);}
-    finally{if(version===inboxVersion){inboxLoading=false;renderThreads();}}
+      inboxItems = items;
+      inboxCursor = cursor;
+      inboxPages = more ? inboxPages + 1 : preserve ? inboxPages : 1;
+      const cache = new Map(state.conversations.map(c => [c.id, c]));
+      items.forEach(c => cache.set(c.id, c));
+      state.conversations = [...cache.values()];
+    } catch (e) {
+      if (e.status === 401) return expired();
+      toast(e.message);
+    } finally {
+      if (version === inboxVersion) {
+        inboxLoading = false;
+        renderThreads();
+      }
+    }
   }
-  function renderThreads(){const target=$('#thread-list');if(!target)return;const list=filteredConversations();$('#list-count').textContent=inboxLoading?'…':list.length+(inboxCursor?'+':'');
-    target.innerHTML=list.length?list.map(c=>`<button class="thread ${c.id===state.selected?'active':''}" data-conversation="${c.id}" data-channel="${c.channel}" aria-pressed="${c.id===state.selected}">${avatar(agentMode()?c.customer_name:c.brand_name,c.channel)}<div class="thread-copy"><div class="thread-name"><strong>${esc(agentMode()?c.customer_name:c.brand_name)}</strong><time>${time(c.updated_at)}</time></div><div class="thread-brand">${esc(agentMode()?c.brand_name+' · '+(c.wa_peer?'+'+c.wa_peer:'#'+c.test_number):c.course_title)}</div>${agentMode()?tagsUI.chips(c):''}<p class="thread-preview">${esc(c.match_text||c.last_text||'Conversación lista para empezar')}</p><div class="thread-meta"><span>${c.match_text?'Coincide en mensaje · ':''}${channels[c.channel].name}${c.customer_online&&agentMode()?' · En línea':''}</span>${unread(c)?`<span class="unread">${unread(c)}</span>`:`<span>${c.status==='resolved'?'Cerrada':c.status==='waiting'?'Espera asesor':c.bot_enabled?'Automática':c.agent_name?'Con asesor':'Abierta'}</span>`}</div></div></button>`).join(''):`<div class="empty-list">${state.query?'No encontramos conversaciones con esa búsqueda.':agentMode()?'Las conversaciones aparecerán aquí cuando los participantes escriban.':'Explora un curso para empezar tu primera conversación.'}</div>`;if(inboxLoading)target.insertAdjacentHTML('beforeend','<p class="search-progress" role="status">Buscando conversaciones…</p>');else if(inboxCursor)target.insertAdjacentHTML('beforeend','<button class="load-more" data-action="more-threads">Cargar más conversaciones</button>');icons();
+  function renderThreads() {
+    const target = $('#thread-list');
+    if (!target) return;
+    const list = filteredConversations();
+    $('#list-count').textContent = inboxLoading ? '…' : list.length + (inboxCursor ? '+' : '');
+    target.innerHTML = list.length
+      ? list
+          .map(
+            c =>
+              `<button class="thread ${c.id === state.selected ? 'active' : ''}" data-conversation="${c.id}" data-channel="${c.channel}" aria-pressed="${c.id === state.selected}">${avatar(agentMode() ? c.customer_name : c.brand_name, c.channel)}<div class="thread-copy"><div class="thread-name"><strong>${esc(agentMode() ? c.customer_name : c.brand_name)}</strong><time>${time(c.updated_at)}</time></div><div class="thread-brand">${esc(agentMode() ? c.brand_name + ' · ' + (c.wa_peer ? '+' + c.wa_peer : '#' + c.test_number) : c.course_title)}</div>${agentMode() ? tagsUI.chips(c) : ''}<p class="thread-preview">${esc(c.match_text || c.last_text || 'Conversación lista para empezar')}</p><div class="thread-meta"><span>${c.match_text ? 'Coincide en mensaje · ' : ''}${channels[c.channel].name}${c.customer_online && agentMode() ? ' · En línea' : ''}</span>${unread(c) ? `<span class="unread">${unread(c)}</span>` : `<span>${c.status === 'resolved' ? 'Cerrada' : c.status === 'waiting' ? 'Espera asesor' : c.bot_enabled ? 'Automática' : c.agent_name ? 'Con asesor' : 'Abierta'}</span>`}</div></div></button>`,
+          )
+          .join('')
+      : `<div class="empty-list">${state.query ? 'No encontramos conversaciones con esa búsqueda.' : agentMode() ? 'Las conversaciones aparecerán aquí cuando los participantes escriban.' : 'Explora un curso para empezar tu primera conversación.'}</div>`;
+    if (inboxLoading)
+      target.insertAdjacentHTML('beforeend', '<p class="search-progress" role="status">Buscando conversaciones…</p>');
+    else if (inboxCursor)
+      target.insertAdjacentHTML(
+        'beforeend',
+        '<button class="load-more" data-action="more-threads">Cargar más conversaciones</button>',
+      );
+    icons();
   }
-  async function selectConversation(id){const detail=await api('/api/conversations/'+id);state.conversations=state.conversations.filter(c=>c.id!==id);state.conversations.push(detail.conversation);state.selected=id;state.messages=[];state.hasMore=false;state.attachment=null;state.retry=null;state.mobileChat=true;$('.workspace').classList.add('mobile-chat');renderThreads();renderChat();await loadMessages();if(agentMode())replyAssist.mountSuggestion(id,{force:true});}
-  function renderChat(){
-    const el=$('#chat');if(!el)return;const c=current();const focused=document.activeElement?.id==='message-input';const selection=focused?document.activeElement.selectionStart:null;const oldHistory=$('#history'),oldTop=oldHistory?.scrollTop||0;const atBottom=!oldHistory||oldHistory.scrollHeight-oldHistory.scrollTop-oldHistory.clientHeight<100;
-    if(!c){el.innerHTML=`<div class="empty-chat"><div class="empty-art" aria-hidden="true"></div><h2>Todo comienza con un mensaje.</h2><p>${agentMode()?'Comparte el laboratorio con tu equipo. Los participantes crean un perfil y escriben desde la experiencia de cliente.':'Elige un curso y prueba una conversación. Puedes pedir información, recibir un flyer o hablar con el equipo.'}</p><button class="btn primary" data-action="${agentMode()?'copy-link':'new-chat'}">${icon(agentMode()?'link':'plus')}${agentMode()?'Copiar enlace del laboratorio':'Empezar una conversación'}</button></div>`;return;}
-    const team=agentMode();const title=team?c.customer_name:c.brand_name;
-    el.innerHTML=`<div class="chat-head" data-channel="${c.channel}"><div class="chat-person"><button class="icon-btn back-button" data-action="back" aria-label="Volver a conversaciones">${icon('arrow-left')}</button>${avatar(title,c.channel)}<div><strong>${esc(title)}</strong><small><span class="channel-name">${channels[c.channel].name}</span> · ${esc(team?(c.wa_peer?'+'+c.wa_peer+' · número real':'#'+c.test_number)+' · '+c.brand_name:'Canal de prueba')}</small></div></div><button class="icon-btn" data-action="search-messages" aria-label="Buscar en este chat">${icon('search')}</button><button class="icon-btn" data-action="contact-details" aria-label="Ver ficha de la conversación">${icon('panel-right')}</button></div><div class="chat-context"><span>${c.course_pending?'<strong>Curso por elegir</strong> · el asistente se lo está preguntando':'Interés en <strong>'+esc(c.course_title)+'</strong>'+(c.edition_name?' · '+esc(c.edition_name):'')}${team?tagsUI.inline(c):''}</span>${team?`<select id="stage-picker" aria-label="Etapa del interesado">${Object.entries(stages).map(([id,name])=>`<option value="${id}" ${id===c.stage?'selected':''}>${name}</option>`).join('')}</select>`:`<span class="pill">${stages[c.stage]}</span>`}</div>${team?'<div id="conv-summary" class="conv-summary"></div>':''}${chatWindow(c,team)}<div class="history" id="history" role="log" aria-label="Mensajes de la conversación" aria-live="polite"></div><div class="chat-bottom"><div class="typing" id="typing"></div><div class="assist-row"><span class="assist-label">${icon(c.bot_enabled?'workflow':c.status==='waiting'?'clock-3':'user-round')}<span>${esc(c.status==='resolved'?'Conversación cerrada':c.bot_enabled?'Automatización por reglas':c.agent_name?'Atiende '+c.agent_name:'Esperando a un asesor')}</span></span>${team&&c.status!=='resolved'?`<div class="assist-actions"><button class="btn" data-chat-action="${c.bot_enabled||!c.assigned_to?'take':'automate'}">${c.bot_enabled||!c.assigned_to?'Tomar chat':'Reactivar reglas'}</button>${c.status!=='resolved'?'<button class="icon-btn" data-chat-action="resolve" aria-label="Cerrar conversación">'+icon('check-check')+'</button>':''}</div>`:''}</div>${c.status==='resolved'?`<div class="closed-notice"><span>Esta conversación terminó.</span>${!team?'<button class="btn" data-action="new-chat">Nueva prueba</button>':''}</div>`:`<div class="quick-replies">${team?`<button data-action="ops-detail">${icon('users-round')} Equipo</button><button data-action="tg-open">${icon('tag')} Etiquetas</button><button data-action="qr-open">${icon('zap')} Respuestas</button><button data-action="qr-remind">${icon('alarm-clock')} Recordarme</button><button data-action="cat-materials">${icon('library')} Biblioteca</button><button data-template="flyer">${icon('image')} Flyer</button><button data-action="crm-insert-signature">Mi firma</button><button data-template="syllabus">Temario</button><button data-template="price">Precio</button><button data-action="pay-new">${icon('credit-card')} Cobrar</button>`:['Información','Precio','Temario','Hablar con asesor'].map(x=>`<button data-quick="${x}">${x}</button>`).join('')}</div>${team?'<div id="conv-appointments" class="conv-scheduled"></div><div id="conv-scheduled" class="conv-scheduled"></div>':''}<form class="compose" id="message-form">${state.attachment?`<div class="attachment-preview">${icon('paperclip')}<span>${esc(state.attachment.name)}</span><button type="button" class="icon-btn" data-action="remove-attachment" aria-label="Quitar archivo">${icon('x')}</button></div>`:''}<textarea id="message-input" aria-label="Escribir mensaje" placeholder="${team?'Responder por '+channels[c.channel].name+'…':'Escribe un mensaje'}" rows="${team?2:1}" maxlength="5000">${esc(state.drafts[c.id]||'')}</textarea><div class="compose-footer"><div class="compose-left"><button type="button" class="icon-btn" data-action="attach" aria-label="Adjuntar imagen o PDF">${icon('paperclip')}</button><button type="button" class="icon-btn compose-expand" data-action="compose-expand" aria-label="Ampliar el cuadro para escribir" aria-pressed="false" title="Ampliar o reducir el cuadro">${icon('maximize-2')}</button>${team?`<button type="button" class="btn sch-open" data-action="sch-open" aria-label="Programar el envío de un mensaje">${icon('clock')}<span>Programar</span></button><button type="button" class="btn sch-open" data-action="apt-open" aria-label="Agendar una cita con esta persona">${icon('calendar-plus')}<span>Agendar cita</span></button>`:''}<small>${channels[c.channel].name} · ${c.wa_peer?'número real':'Laboratorio'}</small></div><button class="btn primary" id="send-button" type="submit" ${state.sending?'disabled':''}><span>${state.sending?'Enviando':'Enviar'}</span>${icon(state.sending?'loader-circle':'arrow-up')}</button></div><input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"></form>`}</div>`;
-    renderMessages(atBottom,oldTop);updateTyping();icons();fitComposer();if(focused&&$('#message-input')){$('#message-input').focus({preventScroll:true});$('#message-input').setSelectionRange(selection,selection);}
-  if(agentMode()&&state.selected){replyAssist.mountSuggestion(state.selected);summaryUI.mount({id:state.selected});scheduledUI.mount({id:state.selected});appointmentsUI.mount({id:state.selected});}}
+  async function selectConversation(id) {
+    const detail = await api('/api/conversations/' + id);
+    state.conversations = state.conversations.filter(c => c.id !== id);
+    state.conversations.push(detail.conversation);
+    state.selected = id;
+    state.messages = [];
+    state.hasMore = false;
+    state.attachment = null;
+    state.retry = null;
+    state.mobileChat = true;
+    $('.workspace').classList.add('mobile-chat');
+    renderThreads();
+    renderChat();
+    await loadMessages();
+    if (agentMode()) replyAssist.mountSuggestion(id, { force: true });
+  }
+  function renderChat() {
+    const el = $('#chat');
+    if (!el) return;
+    const c = current();
+    const focused = document.activeElement?.id === 'message-input';
+    const selection = focused ? document.activeElement.selectionStart : null;
+    const oldHistory = $('#history'),
+      oldTop = oldHistory?.scrollTop || 0;
+    const atBottom = !oldHistory || oldHistory.scrollHeight - oldHistory.scrollTop - oldHistory.clientHeight < 100;
+    if (!c) {
+      el.innerHTML = `<div class="empty-chat"><div class="empty-art" aria-hidden="true"></div><h2>Todo comienza con un mensaje.</h2><p>${agentMode() ? 'Comparte el laboratorio con tu equipo. Los participantes crean un perfil y escriben desde la experiencia de cliente.' : 'Elige un curso y prueba una conversación. Puedes pedir información, recibir un flyer o hablar con el equipo.'}</p><button class="btn primary" data-action="${agentMode() ? 'copy-link' : 'new-chat'}">${icon(agentMode() ? 'link' : 'plus')}${agentMode() ? 'Copiar enlace del laboratorio' : 'Empezar una conversación'}</button></div>`;
+      return;
+    }
+    const team = agentMode();
+    const title = team ? c.customer_name : c.brand_name;
+    el.innerHTML = `<div class="chat-head" data-channel="${c.channel}"><div class="chat-person"><button class="icon-btn back-button" data-action="back" aria-label="Volver a conversaciones">${icon('arrow-left')}</button>${avatar(title, c.channel)}<div><strong>${esc(title)}</strong><small><span class="channel-name">${channels[c.channel].name}</span> · ${esc(team ? (c.wa_peer ? '+' + c.wa_peer + ' · número real' : '#' + c.test_number) + ' · ' + c.brand_name : 'Canal de prueba')}</small></div></div><button class="icon-btn" data-action="search-messages" aria-label="Buscar en este chat">${icon('search')}</button><button class="icon-btn" data-action="contact-details" aria-label="Ver ficha de la conversación">${icon('panel-right')}</button></div><div class="chat-context"><span>${c.course_pending ? '<strong>Curso por elegir</strong> · el asistente se lo está preguntando' : 'Interés en <strong>' + esc(c.course_title) + '</strong>' + (c.edition_name ? ' · ' + esc(c.edition_name) : '')}${team ? tagsUI.inline(c) : ''}</span>${
+      team
+        ? `<select id="stage-picker" aria-label="Etapa del interesado">${Object.entries(stages)
+            .map(([id, name]) => `<option value="${id}" ${id === c.stage ? 'selected' : ''}>${name}</option>`)
+            .join('')}</select>`
+        : `<span class="pill">${stages[c.stage]}</span>`
+    }</div>${team ? '<div id="conv-summary" class="conv-summary"></div>' : ''}${chatWindow(c, team)}<div class="history" id="history" role="log" aria-label="Mensajes de la conversación" aria-live="polite"></div><div class="chat-bottom"><div class="typing" id="typing"></div><div class="assist-row"><span class="assist-label">${icon(c.bot_enabled ? 'workflow' : c.status === 'waiting' ? 'clock-3' : 'user-round')}<span>${esc(c.status === 'resolved' ? 'Conversación cerrada' : c.bot_enabled ? 'Automatización por reglas' : c.agent_name ? 'Atiende ' + c.agent_name : 'Esperando a un asesor')}</span></span>${team && c.status !== 'resolved' ? `<div class="assist-actions"><button class="btn" data-chat-action="${c.bot_enabled || !c.assigned_to ? 'take' : 'automate'}">${c.bot_enabled || !c.assigned_to ? 'Tomar chat' : 'Reactivar reglas'}</button>${c.status !== 'resolved' ? '<button class="icon-btn" data-chat-action="resolve" aria-label="Cerrar conversación">' + icon('check-check') + '</button>' : ''}</div>` : ''}</div>${c.status === 'resolved' ? `<div class="closed-notice"><span>Esta conversación terminó.</span>${!team ? '<button class="btn" data-action="new-chat">Nueva prueba</button>' : ''}</div>` : `<div class="quick-replies">${team ? `<button data-action="ops-detail">${icon('users-round')} Equipo</button><button data-action="tg-open">${icon('tag')} Etiquetas</button><button data-action="qr-open">${icon('zap')} Respuestas</button><button data-action="qr-remind">${icon('alarm-clock')} Recordarme</button><button data-action="cat-materials">${icon('library')} Biblioteca</button><button data-template="flyer">${icon('image')} Flyer</button><button data-action="crm-insert-signature">Mi firma</button><button data-template="syllabus">Temario</button><button data-template="price">Precio</button><button data-action="pay-new">${icon('credit-card')} Cobrar</button>` : ['Información', 'Precio', 'Temario', 'Hablar con asesor'].map(x => `<button data-quick="${x}">${x}</button>`).join('')}</div>${team ? '<div id="conv-appointments" class="conv-scheduled"></div><div id="conv-scheduled" class="conv-scheduled"></div>' : ''}<form class="compose" id="message-form">${state.attachment ? `<div class="attachment-preview">${icon('paperclip')}<span>${esc(state.attachment.name)}</span><button type="button" class="icon-btn" data-action="remove-attachment" aria-label="Quitar archivo">${icon('x')}</button></div>` : ''}<textarea id="message-input" aria-label="Escribir mensaje" placeholder="${team ? 'Responder por ' + channels[c.channel].name + '…' : 'Escribe un mensaje'}" rows="${team ? 2 : 1}" maxlength="5000">${esc(state.drafts[c.id] || '')}</textarea><div class="compose-footer"><div class="compose-left"><button type="button" class="icon-btn" data-action="attach" aria-label="Adjuntar imagen o PDF">${icon('paperclip')}</button><button type="button" class="icon-btn compose-expand" data-action="compose-expand" aria-label="Ampliar el cuadro para escribir" aria-pressed="false" title="Ampliar o reducir el cuadro">${icon('maximize-2')}</button>${team ? `<button type="button" class="btn sch-open" data-action="sch-open" aria-label="Programar el envío de un mensaje">${icon('clock')}<span>Programar</span></button><button type="button" class="btn sch-open" data-action="apt-open" aria-label="Agendar una cita con esta persona">${icon('calendar-plus')}<span>Agendar cita</span></button>` : ''}<small>${channels[c.channel].name} · ${c.wa_peer ? 'número real' : 'Laboratorio'}</small></div><button class="btn primary" id="send-button" type="submit" ${state.sending ? 'disabled' : ''}><span>${state.sending ? 'Enviando' : 'Enviar'}</span>${icon(state.sending ? 'loader-circle' : 'arrow-up')}</button></div><input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"></form>`}</div>`;
+    renderMessages(atBottom, oldTop);
+    updateTyping();
+    icons();
+    fitComposer();
+    if (focused && $('#message-input')) {
+      $('#message-input').focus({ preventScroll: true });
+      $('#message-input').setSelectionRange(selection, selection);
+    }
+    if (agentMode() && state.selected) {
+      replyAssist.mountSuggestion(state.selected);
+      summaryUI.mount({ id: state.selected });
+      scheduledUI.mount({ id: state.selected });
+      appointmentsUI.mount({ id: state.selected });
+    }
+  }
   // Canal simulado: ventana de servicio y origen por anuncio en la cabecera; estados de entrega y botones en cada mensaje.
-  function chatWindow(c,team){
-    const w=c.window,ref=c.referral?`<span class="pill">${icon('megaphone')} Anuncio: ${esc(c.referral.ad)}</span>`:'';
-    if(!w?.enabled)return ref?`<div class="chat-window">${ref}</div>`:'';
-    const until=w.until?new Intl.DateTimeFormat('es-MX',{dateStyle:'short',timeStyle:'short'}).format(w.until):null;
-    if(w.real)return `<div class="chat-window ${w.open?'open':'closed'}">${ref}<span>${icon(w.open?'smartphone':'lock')} ${w.open?'WhatsApp real · puedes escribirle hasta '+until:'WhatsApp real · pasaron 24 h desde su último mensaje: sólo puedes enviarle una plantilla aprobada hasta que vuelva a escribir'}</span>${!w.open&&team?`<button type="button" class="meta-action wa-template-open" data-action="wa-template" data-id="${c.id}">${icon('file-text')} Enviar plantilla</button>`:''}</div>`;
-    return `<div class="chat-window ${w.open?'open':'closed'}">${ref}<span>${icon(w.open?'clock-3':'lock')} ${w.open?'Ventana de servicio abierta hasta '+until+(w.source==='referral'?' (72 h por anuncio)':''):team?'Ventana de 24 h cerrada · sólo plantillas aprobadas (temario, precio, fechas o flyer)':'Canal simulado · el equipo sólo puede enviarte plantillas hasta que vuelvas a escribir'}</span></div>`;
+  function chatWindow(c, team) {
+    const w = c.window,
+      ref = c.referral ? `<span class="pill">${icon('megaphone')} Anuncio: ${esc(c.referral.ad)}</span>` : '';
+    if (!w?.enabled) return ref ? `<div class="chat-window">${ref}</div>` : '';
+    const until = w.until
+      ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'short', timeStyle: 'short' }).format(w.until)
+      : null;
+    if (w.real)
+      return `<div class="chat-window ${w.open ? 'open' : 'closed'}">${ref}<span>${icon(w.open ? 'smartphone' : 'lock')} ${w.open ? 'WhatsApp real · puedes escribirle hasta ' + until : 'WhatsApp real · pasaron 24 h desde su último mensaje: sólo puedes enviarle una plantilla aprobada hasta que vuelva a escribir'}</span>${!w.open && team ? `<button type="button" class="meta-action wa-template-open" data-action="wa-template" data-id="${c.id}">${icon('file-text')} Enviar plantilla</button>` : ''}</div>`;
+    return `<div class="chat-window ${w.open ? 'open' : 'closed'}">${ref}<span>${icon(w.open ? 'clock-3' : 'lock')} ${w.open ? 'Ventana de servicio abierta hasta ' + until + (w.source === 'referral' ? ' (72 h por anuncio)' : '') : team ? 'Ventana de 24 h cerrada · sólo plantillas aprobadas (temario, precio, fechas o flyer)' : 'Canal simulado · el equipo sólo puede enviarte plantillas hasta que vuelvas a escribir'}</span></div>`;
   }
-  function deliveryMark(m,c){
-    if(!c.window?.enabled)return `<span class="${m.read_at?'read':''}" aria-label="${m.read_at?'Leído':'Enviado'}">${icon(m.read_at?'check-check':'check')}</span>`;
-    const s=m.delivery_state||'sent',labels={sent:'Enviado',delivered:'Entregado',read:'Leído',failed:'No entregado'},cat={service:'servicio',utility:'plantilla de utilidad',marketing:'plantilla de marketing'};
-    if(m.wa_hold&&s==='sent'&&!m.provider_ref)return `<span class="held" title="Se le envió un aviso. Este mensaje sale cuando la persona responda; si no responde en unos días, caduca.">${icon('hourglass')} En espera de su respuesta</span>`;
-    if(s==='failed')return `<span class="failed" title="${esc(m.failed_reason||'')}">${icon('triangle-alert')} ${labels.failed}</span>${agentMode()?`<button type="button" class="meta-action" data-action="msg-retry" data-id="${m.id}">Reintentar</button>`:''}${agentMode()&&m.failed_reason?`<span class="failed-why">${esc(m.failed_reason)}</span>`:''}`;
-    return `${m.wa_template?'<span class="wa-tpl-mark">Plantilla</span>':''}<span class="${s==='read'?'read':''}" aria-label="${labels[s]}" title="${labels[s]}${m.category?' · '+cat[m.category]:''}">${icon(s==='sent'?'check':'check-check')}</span>`;
+  function deliveryMark(m, c) {
+    if (!c.window?.enabled)
+      return `<span class="${m.read_at ? 'read' : ''}" aria-label="${m.read_at ? 'Leído' : 'Enviado'}">${icon(m.read_at ? 'check-check' : 'check')}</span>`;
+    const s = m.delivery_state || 'sent',
+      labels = { sent: 'Enviado', delivered: 'Entregado', read: 'Leído', failed: 'No entregado' },
+      cat = { service: 'servicio', utility: 'plantilla de utilidad', marketing: 'plantilla de marketing' };
+    if (m.wa_hold && s === 'sent' && !m.provider_ref)
+      return `<span class="held" title="Se le envió un aviso. Este mensaje sale cuando la persona responda; si no responde en unos días, caduca.">${icon('hourglass')} En espera de su respuesta</span>`;
+    if (s === 'failed')
+      return `<span class="failed" title="${esc(m.failed_reason || '')}">${icon('triangle-alert')} ${labels.failed}</span>${agentMode() ? `<button type="button" class="meta-action" data-action="msg-retry" data-id="${m.id}">Reintentar</button>` : ''}${agentMode() && m.failed_reason ? `<span class="failed-why">${esc(m.failed_reason)}</span>` : ''}`;
+    return `${m.wa_template ? '<span class="wa-tpl-mark">Plantilla</span>' : ''}<span class="${s === 'read' ? 'read' : ''}" aria-label="${labels[s]}" title="${labels[s]}${m.category ? ' · ' + cat[m.category] : ''}">${icon(s === 'sent' ? 'check' : 'check-check')}</span>`;
   }
   // Plantillas aprobadas por Meta: lo único que WhatsApp deja enviar cuando la persona lleva más de 24 h sin escribir.
-  let waTplRef=null;
-  async function waTemplateModal(id){
-    let r;try{r=await api('/api/conversations/'+id+'/wa-templates');}catch(e){toast(e.message);return;}
-    waTplRef=crypto.randomUUID();
-    showModal('Enviar una plantilla',r.templates.length?`<p class="crm-hint">Son mensajes que Meta ya aprobó. Se envían tal cual, con los datos de esta persona. Cuando responda, podrás escribirle libremente otra vez.</p><div class="wa-tpl-list">${r.templates.map(t=>`<article class="wa-tpl"><div class="wa-tpl-top"><strong>${esc(t.name)}</strong><span class="pill">${t.category==='marketing'?'Marketing':'Utilidad'}</span>${t.purpose==='notice'?'<span class="pill">Aviso automático</span>':''}</div><p>${esc(t.text)}</p><div class="actions"><button type="button" class="btn primary" data-action="wa-template-send" data-id="${id}" data-template="${t.id}">${icon('send')} Enviar esta</button></div></article>`).join('')}</div>`:`<div class="info-box">Esta marca todavía no tiene plantillas aprobadas por Meta. Administración las crea y las manda a aprobación en Operación → Sistema → Conectores → Plantillas de WhatsApp.</div>`);
+  let waTplRef = null;
+  async function waTemplateModal(id) {
+    let r;
+    try {
+      r = await api('/api/conversations/' + id + '/wa-templates');
+    } catch (e) {
+      toast(e.message);
+      return;
+    }
+    waTplRef = crypto.randomUUID();
+    showModal(
+      'Enviar una plantilla',
+      r.templates.length
+        ? `<p class="crm-hint">Son mensajes que Meta ya aprobó. Se envían tal cual, con los datos de esta persona. Cuando responda, podrás escribirle libremente otra vez.</p><div class="wa-tpl-list">${r.templates.map(t => `<article class="wa-tpl"><div class="wa-tpl-top"><strong>${esc(t.name)}</strong><span class="pill">${t.category === 'marketing' ? 'Marketing' : 'Utilidad'}</span>${t.purpose === 'notice' ? '<span class="pill">Aviso automático</span>' : ''}</div><p>${esc(t.text)}</p><div class="actions"><button type="button" class="btn primary" data-action="wa-template-send" data-id="${id}" data-template="${t.id}">${icon('send')} Enviar esta</button></div></article>`).join('')}</div>`
+        : `<div class="info-box">Esta marca todavía no tiene plantillas aprobadas por Meta. Administración las crea y las manda a aprobación en Operación → Sistema → Conectores → Plantillas de WhatsApp.</div>`,
+    );
   }
-  function payLink(m,outgoing){const x=String(m.text||'').match(/\?pay=([a-f0-9-]{36})/);if(!x)return '';return agentMode()||outgoing?`<div class="msg-buttons"><span class="msg-button">${icon('credit-card')} Enlace de pago</span></div>`:`<div class="msg-buttons"><button type="button" class="msg-button" data-action="pay-open" data-id="${x[1]}">${icon('credit-card')} Abrir pago de prueba</button></div>`;}
-  function surveyLink(m,outgoing){const x=String(m.text||'').match(/\/encuesta\/([a-f0-9]{32})/);if(!x)return '';return agentMode()||outgoing?`<div class="msg-buttons"><span class="msg-button">${icon('clipboard-list')} Encuesta</span></div>`:`<div class="msg-buttons"><button type="button" class="msg-button" data-action="survey-open" data-id="${x[1]}">${icon('clipboard-list')} Responder encuesta</button></div>`;}
-  function renderButtons(m,outgoing){if(!m.buttons?.length)return '';return `<div class="msg-buttons">${m.buttons.map(b=>outgoing||agentMode()?`<span class="msg-button">${esc(b)}</span>`:`<button type="button" class="msg-button" data-quick="${esc(b)}">${esc(b)}</button>`).join('')}</div>`;}
-  function renderMessages(atBottom=true,oldTop=0){const h=$('#history'),c=current();if(!h||!c)return;
-    h.innerHTML=`${state.hasMore?'<button class="load-more" data-action="older">Ver mensajes anteriores</button>':''}<div class="day">${new Intl.DateTimeFormat('es-MX',{day:'numeric',month:'long'}).format(new Date(c.created_at))} · Conversación de prueba</div>${state.messages.map(m=>{
-      const outgoing=agentMode()?m.sender_kind!=='customer':m.sender_kind==='customer';const name=m.sender_kind==='automation'?(m.ai_drafted?'Automatización · IA':'Automatización · Reglas'):m.sender_name||'Equipo';
-      let attachment='';if(m.attachmentUrl){if(m.mime!=='application/pdf'&&(m.flyer_course_id||m.mime?.startsWith('image/')))attachment=`<img src="${esc(m.attachmentUrl)}" alt="${esc(m.flyer_course_id?'Flyer del curso, versión enviada':m.filename)}" class="attachment-image" data-image="${esc(m.attachmentUrl)}" loading="lazy">`;else attachment=`<a class="file-link" href="${esc(m.attachmentUrl)}" target="_blank" rel="noopener">${icon('file-text')}<span>${esc(m.filename)}</span>${icon('download')}</a>`;}
-      return `<article class="message ${outgoing?'outgoing':''}"><div class="bubble">${attachment}${esc(m.text)}${renderButtons(m,outgoing)}${payLink(m,outgoing)}${surveyLink(m,outgoing)}</div><div class="message-meta">${m.sender_kind==='automation'?icon(m.ai_drafted?'sparkles':'workflow'):''}<span>${esc(name)} · ${time(m.created_at)}</span>${outgoing?deliveryMark(m,c):''}${m.receipt_status?`<span class="msg-tag">${{pending:'Comprobante en revisión',accepted:'Comprobante aceptado',rejected:'Comprobante rechazado'}[m.receipt_status]}</span>`:''}</div></article>`;
-    }).join('')}${!state.messages.length?`<div class="empty-list">${agentMode()?'El participante aún no ha enviado un mensaje.':'Envía “Hola” o elige una de las respuestas rápidas para comenzar.'}</div>`:''}`;
-    if(atBottom)h.scrollTop=h.scrollHeight;else h.scrollTop=oldTop;icons();
-    if(atBottom&&document.visibilityState==='visible'&&state.messages.length){const last=state.messages.at(-1);const unread=state.messages.some(m=>!m.read_at&&(agentMode()?m.sender_kind==='customer':['agent','automation'].includes(m.sender_kind)));if(unread)api(`/api/conversations/${c.id}/read`,{method:'POST',body:{upTo:last.seq,asAgent:agentMode()}}).catch(()=>{});}
-    h.querySelectorAll('img').forEach(img=>img.addEventListener('load',()=>{if(atBottom)h.scrollTop=h.scrollHeight;},{once:true}));
+  function payLink(m, outgoing) {
+    const x = String(m.text || '').match(/\?pay=([a-f0-9-]{36})/);
+    if (!x) return '';
+    return agentMode() || outgoing
+      ? `<div class="msg-buttons"><span class="msg-button">${icon('credit-card')} Enlace de pago</span></div>`
+      : `<div class="msg-buttons"><button type="button" class="msg-button" data-action="pay-open" data-id="${x[1]}">${icon('credit-card')} Abrir pago de prueba</button></div>`;
   }
-  async function loadMessages(older=false){const id=state.selected;if(!id)return;const version=++selectionVersion;try{const before=older&&state.messages.length?'?before='+state.messages[0].seq:'';const data=await api(`/api/conversations/${id}/messages${before}`);if(id!==state.selected||version!==selectionVersion)return;if(older){state.messages=[...data.messages,...state.messages];state.hasMore=data.messages.length===150;}else{const merged=new Map(state.messages.map(m=>[m.id,m]));data.messages.forEach(m=>merged.set(m.id,m));state.messages=[...merged.values()].sort((a,b)=>a.seq-b.seq);if(state.messages.length===data.messages.length)state.hasMore=data.messages.length===150;}renderChat();}catch(error){if(error.status===401)return expired();toast(error.message);}}
-  async function searchMessages(before=''){
-    const target=$('#message-search-results'),id=state.selected,q=messageSearch;if(!target)return;
-    const params=new URLSearchParams({q});if(before)params.set('before',before);
-    const result=await api('/api/conversations/'+id+'/messages?'+params);
-    if(target!==$('#message-search-results')||id!==state.selected||q!==messageSearch)return;
-    if(!before)target.innerHTML='';target.querySelector('.load-more')?.remove();
-    target.insertAdjacentHTML('beforeend',result.messages.map(m=>`<article class="message-match"><strong>${esc(m.sender_name||(m.sender_kind==='automation'?'Reglas automáticas':'Sistema'))}</strong><time>${new Date(m.created_at).toLocaleString('es-MX')}</time><p>${esc(m.text)}</p></article>`).join('')||(!before?'<p class="crm-hint">No hay mensajes con esa búsqueda.</p>':''));
-    if(result.nextBefore)target.insertAdjacentHTML('beforeend',`<button class="load-more" data-action="more-matches" data-before="${result.nextBefore}">Ver coincidencias anteriores</button>`);
+  function surveyLink(m, outgoing) {
+    const x = String(m.text || '').match(/\/encuesta\/([a-f0-9]{32})/);
+    if (!x) return '';
+    return agentMode() || outgoing
+      ? `<div class="msg-buttons"><span class="msg-button">${icon('clipboard-list')} Encuesta</span></div>`
+      : `<div class="msg-buttons"><button type="button" class="msg-button" data-action="survey-open" data-id="${x[1]}">${icon('clipboard-list')} Responder encuesta</button></div>`;
   }
-  async function refresh(){
-    if(!state.user)return;if(refreshing){refreshAgain=true;return;}refreshing=true;
-    try{const data=await api('/api/bootstrap');Object.assign(state,{user:data.user,brands:data.brands,courses:data.courses,editions:data.editions,conversations:data.conversations});if(!state.brands.some(b=>b.id===state.brand))state.brand='all';if(state.view==='inbox'){const src=$('.sources');if(src){const wrapper=document.createElement('div');wrapper.innerHTML=sources();src.replaceWith(wrapper.firstElementChild);}await loadThreads(false,true);if(state.selected){try{const detail=await api('/api/conversations/'+state.selected);state.conversations=state.conversations.filter(c=>c.id!==state.selected);state.conversations.push(detail.conversation);await loadMessages();}catch(e){if(e.status===404){state.selected=null;state.messages=[];renderChat();}else throw e;}}}else if(state.view==='activity')renderActivity();else if(state.view==='courses'&&!modal.open)renderCourses();else if(agentMode()&&state.view==='operations'&&!modal.open)operationsUI.autoRefresh();else if(agentMode()&&state.view==='presentation'&&!modal.open)presentationUI.render();else if(agentMode()&&crmUI.labels[state.view]&&!modal.open)crmUI.render();operationsUI.badge();icons();}
-    catch(error){if(error.status===401)expired();}
-    finally{refreshing=false;if(refreshAgain){refreshAgain=false;refresh();}}
+  function renderButtons(m, outgoing) {
+    if (!m.buttons?.length) return '';
+    return `<div class="msg-buttons">${m.buttons.map(b => (outgoing || agentMode() ? `<span class="msg-button">${esc(b)}</span>` : `<button type="button" class="msg-button" data-quick="${esc(b)}">${esc(b)}</button>`)).join('')}</div>`;
   }
-  function scheduleRefresh(){clearTimeout(refreshTimer);refreshTimer=setTimeout(refresh,70);}
-  function expired(){state.user=null;alive=false;clearTimeout(reconnectTimer);socket?.close();entry();toast('Tu sesión terminó. Inicia sesión otra vez.');}
-  function connect(){
-    if(!state.user)return;alive=true;clearTimeout(reconnectTimer);socket?.close();const thisSocket=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/realtime');socket=thisSocket;state.connection='connecting';updateConnection();
-    thisSocket.onopen=()=>{if(socket!==thisSocket)return;state.connection='live';reconnectDelay=700;updateConnection();refresh();};
-    thisSocket.onmessage=e=>{if(socket!==thisSocket)return;try{const event=JSON.parse(e.data);if(event.type==='typing'){if(event.userId!==state.user.id){state.typing[event.conversationId]={name:event.name,until:event.expiresAt};updateTyping();}}else if(event.type!=='connected')scheduleRefresh();}catch{}};
-    thisSocket.onclose=()=>{if(socket!==thisSocket||!alive||!state.user)return;state.connection='offline';updateConnection();reconnectTimer=setTimeout(connect,reconnectDelay);reconnectDelay=Math.min(reconnectDelay*1.7,10000);};thisSocket.onerror=()=>{};
+  function renderMessages(atBottom = true, oldTop = 0) {
+    const h = $('#history'),
+      c = current();
+    if (!h || !c) return;
+    h.innerHTML = `${state.hasMore ? '<button class="load-more" data-action="older">Ver mensajes anteriores</button>' : ''}<div class="day">${new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long' }).format(new Date(c.created_at))} · Conversación de prueba</div>${state.messages
+      .map(m => {
+        const outgoing = agentMode() ? m.sender_kind !== 'customer' : m.sender_kind === 'customer';
+        const name =
+          m.sender_kind === 'automation'
+            ? m.ai_drafted
+              ? 'Automatización · IA'
+              : 'Automatización · Reglas'
+            : m.sender_name || 'Equipo';
+        let attachment = '';
+        if (m.attachmentUrl) {
+          if (m.mime !== 'application/pdf' && (m.flyer_course_id || m.mime?.startsWith('image/')))
+            attachment = `<img src="${esc(m.attachmentUrl)}" alt="${esc(m.flyer_course_id ? 'Flyer del curso, versión enviada' : m.filename)}" class="attachment-image" data-image="${esc(m.attachmentUrl)}" loading="lazy">`;
+          else
+            attachment = `<a class="file-link" href="${esc(m.attachmentUrl)}" target="_blank" rel="noopener">${icon('file-text')}<span>${esc(m.filename)}</span>${icon('download')}</a>`;
+        }
+        return `<article class="message ${outgoing ? 'outgoing' : ''}"><div class="bubble">${attachment}${esc(m.text)}${renderButtons(m, outgoing)}${payLink(m, outgoing)}${surveyLink(m, outgoing)}</div><div class="message-meta">${m.sender_kind === 'automation' ? icon(m.ai_drafted ? 'sparkles' : 'workflow') : ''}<span>${esc(name)} · ${time(m.created_at)}</span>${outgoing ? deliveryMark(m, c) : ''}${m.receipt_status ? `<span class="msg-tag">${{ pending: 'Comprobante en revisión', accepted: 'Comprobante aceptado', rejected: 'Comprobante rechazado' }[m.receipt_status]}</span>` : ''}</div></article>`;
+      })
+      .join(
+        '',
+      )}${!state.messages.length ? `<div class="empty-list">${agentMode() ? 'El participante aún no ha enviado un mensaje.' : 'Envía “Hola” o elige una de las respuestas rápidas para comenzar.'}</div>` : ''}`;
+    if (atBottom) h.scrollTop = h.scrollHeight;
+    else h.scrollTop = oldTop;
+    icons();
+    if (atBottom && document.visibilityState === 'visible' && state.messages.length) {
+      const last = state.messages.at(-1);
+      const unread = state.messages.some(
+        m =>
+          !m.read_at && (agentMode() ? m.sender_kind === 'customer' : ['agent', 'automation'].includes(m.sender_kind)),
+      );
+      if (unread)
+        api(`/api/conversations/${c.id}/read`, {
+          method: 'POST',
+          body: { upTo: last.seq, asAgent: agentMode() },
+        }).catch(() => {});
+    }
+    h.querySelectorAll('img').forEach(img =>
+      img.addEventListener(
+        'load',
+        () => {
+          if (atBottom) h.scrollTop = h.scrollHeight;
+        },
+        { once: true },
+      ),
+    );
   }
-  function updateConnection(){const el=$('#connection');if(el){el.className='connection '+(state.connection==='live'?'live':'');el.textContent=state.connection==='live'?'En tiempo real':state.connection==='connecting'?'Conectando':'Reconectando';}const notice=$('#notice');if(notice)notice.textContent=state.connection==='offline'?'La conexión se interrumpió. Estamos intentando reconectar. Tu borrador sigue aquí.':'';}
-  function updateTyping(){const el=$('#typing');if(!el)return;const item=state.typing[state.selected];el.textContent=item&&item.until>Date.now()?item.name+' está escribiendo…':'';}
-  setInterval(updateTyping,800);
-  document.addEventListener('visibilitychange',()=>{if(state.user&&document.visibilityState==='visible')refresh();});
-  async function sendMessage(textOverride){
-    const c=current();if(!c||state.sending)return;const text=typeof textOverride==='string'?textOverride:state.drafts[c.id]||'';if(!text.trim()&&!state.attachment)return;
-    state.sending=true;const attachment=state.attachment;const signature=c.id+'|'+text+'|'+(attachment?.key||'');if(state.retry?.signature!==signature)state.retry={signature,clientRef:crypto.randomUUID()};
-    const payload={text,clientRef:state.retry.clientRef,asAgent:agentMode(),...(attachment?{attachment:{name:attachment.name,type:attachment.type,base64:attachment.base64}}:{})};const button=$('#send-button');if(button)button.disabled=true;
-    try{await api(`/api/conversations/${c.id}/messages`,{method:'POST',body:payload});if(typeof textOverride!=='string'&&state.drafts[c.id]===text){state.drafts[c.id]='';localStorage.removeItem('tc-draft-'+state.user.id+'-'+c.id);}if(state.selected===c.id)state.attachment=null;state.retry=null;await refresh();}
-    catch(error){toast(error.message||'No se confirmó el envío. Puedes volver a intentarlo.');}
-    finally{state.sending=false;if(current())renderChat();}
+  async function loadMessages(older = false) {
+    const id = state.selected;
+    if (!id) return;
+    const version = ++selectionVersion;
+    try {
+      const before = older && state.messages.length ? '?before=' + state.messages[0].seq : '';
+      const data = await api(`/api/conversations/${id}/messages${before}`);
+      if (id !== state.selected || version !== selectionVersion) return;
+      if (older) {
+        state.messages = [...data.messages, ...state.messages];
+        state.hasMore = data.messages.length === 150;
+      } else {
+        const merged = new Map(state.messages.map(m => [m.id, m]));
+        data.messages.forEach(m => merged.set(m.id, m));
+        state.messages = [...merged.values()].sort((a, b) => a.seq - b.seq);
+        if (state.messages.length === data.messages.length) state.hasMore = data.messages.length === 150;
+      }
+      renderChat();
+    } catch (error) {
+      if (error.status === 401) return expired();
+      toast(error.message);
+    }
   }
-  async function openAdIfAny(){const ad=sessionStorage.getItem('tc-ad');if(!ad||isStaff())return;sessionStorage.removeItem('tc-ad');try{const r=await api('/api/ads/'+ad);state.referral={ad:r.ad,flyerId:r.flyerId,campaign:'anuncio',headline:r.headline};newChat(r.courseId,r.editionId);}catch(e){toast(e.message);}}
-  async function openSurvey(token){try{const {survey:s}=await api('/api/survey/'+token);const scale=(name,lo,hi)=>`<div class="co-radios">${Array.from({length:hi-lo+1},(_,k)=>lo+k).map(n=>`<label><input type="radio" name="${name}" value="${n}" required> ${n}</label>`).join('')}</div>`;
-    showModal('Encuesta · '+esc(s.title),s.answered?`<div class="info-box">Ya respondiste esta encuesta. ¡Gracias!</div>`:!s.open?`<div class="info-box">Esta encuesta ya cerró. Gracias de todos modos.</div>`:`<p class="crm-hint">${esc(s.course)} · ${esc(s.edition)} · ${esc(s.brand)}. Tus respuestas las ve sólo el equipo de la marca.</p><form id="survey-form" class="form-grid survey-form"><input type="hidden" name="token" value="${esc(token)}">${s.questions.map(q=>`<fieldset><legend>${esc(q.label)} · 1 = muy mal, 5 = excelente</legend>${scale(q.id,1,5)}</fieldset>`).join('')}<fieldset><legend>¿Recomendarías este curso? · 0 = nada, 10 = totalmente</legend>${scale('nps',0,10)}</fieldset><label class="field">Comentario (opcional)<textarea name="comment" rows="3" maxlength="1000" placeholder="Qué te gustó, qué mejorarías…"></textarea></label><button class="btn primary" type="submit">Enviar respuestas</button></form>`);}catch(e){toast(e.message);}}
-  async function openPaymentIfAny(){const id=sessionStorage.getItem('tc-pay');if(!id||isStaff())return;sessionStorage.removeItem('tc-pay');await openPayment(id);}
+  async function searchMessages(before = '') {
+    const target = $('#message-search-results'),
+      id = state.selected,
+      q = messageSearch;
+    if (!target) return;
+    const params = new URLSearchParams({ q });
+    if (before) params.set('before', before);
+    const result = await api('/api/conversations/' + id + '/messages?' + params);
+    if (target !== $('#message-search-results') || id !== state.selected || q !== messageSearch) return;
+    if (!before) target.innerHTML = '';
+    target.querySelector('.load-more')?.remove();
+    target.insertAdjacentHTML(
+      'beforeend',
+      result.messages
+        .map(
+          m =>
+            `<article class="message-match"><strong>${esc(m.sender_name || (m.sender_kind === 'automation' ? 'Reglas automáticas' : 'Sistema'))}</strong><time>${new Date(m.created_at).toLocaleString('es-MX')}</time><p>${esc(m.text)}</p></article>`,
+        )
+        .join('') || (!before ? '<p class="crm-hint">No hay mensajes con esa búsqueda.</p>' : ''),
+    );
+    if (result.nextBefore)
+      target.insertAdjacentHTML(
+        'beforeend',
+        `<button class="load-more" data-action="more-matches" data-before="${result.nextBefore}">Ver coincidencias anteriores</button>`,
+      );
+  }
+  async function refresh() {
+    if (!state.user) return;
+    if (refreshing) {
+      refreshAgain = true;
+      return;
+    }
+    refreshing = true;
+    try {
+      const data = await api('/api/bootstrap');
+      Object.assign(state, {
+        user: data.user,
+        brands: data.brands,
+        courses: data.courses,
+        editions: data.editions,
+        conversations: data.conversations,
+      });
+      if (!state.brands.some(b => b.id === state.brand)) state.brand = 'all';
+      if (state.view === 'inbox') {
+        const src = $('.sources');
+        if (src) {
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = sources();
+          src.replaceWith(wrapper.firstElementChild);
+        }
+        await loadThreads(false, true);
+        if (state.selected) {
+          try {
+            const detail = await api('/api/conversations/' + state.selected);
+            state.conversations = state.conversations.filter(c => c.id !== state.selected);
+            state.conversations.push(detail.conversation);
+            await loadMessages();
+          } catch (e) {
+            if (e.status === 404) {
+              state.selected = null;
+              state.messages = [];
+              renderChat();
+            } else throw e;
+          }
+        }
+      } else if (state.view === 'activity') renderActivity();
+      else if (state.view === 'courses' && !modal.open) renderCourses();
+      else if (agentMode() && state.view === 'operations' && !modal.open) operationsUI.autoRefresh();
+      else if (agentMode() && state.view === 'presentation' && !modal.open) presentationUI.render();
+      else if (agentMode() && crmUI.labels[state.view] && !modal.open) crmUI.render();
+      operationsUI.badge();
+      icons();
+    } catch (error) {
+      if (error.status === 401) expired();
+    } finally {
+      refreshing = false;
+      if (refreshAgain) {
+        refreshAgain = false;
+        refresh();
+      }
+    }
+  }
+  function scheduleRefresh() {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(refresh, 70);
+  }
+  function expired() {
+    state.user = null;
+    alive = false;
+    clearTimeout(reconnectTimer);
+    socket?.close();
+    entry();
+    toast('Tu sesión terminó. Inicia sesión otra vez.');
+  }
+  function connect() {
+    if (!state.user) return;
+    alive = true;
+    clearTimeout(reconnectTimer);
+    socket?.close();
+    const thisSocket = new WebSocket(
+      (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/realtime',
+    );
+    socket = thisSocket;
+    state.connection = 'connecting';
+    updateConnection();
+    thisSocket.onopen = () => {
+      if (socket !== thisSocket) return;
+      state.connection = 'live';
+      reconnectDelay = 700;
+      updateConnection();
+      refresh();
+    };
+    thisSocket.onmessage = e => {
+      if (socket !== thisSocket) return;
+      try {
+        const event = JSON.parse(e.data);
+        if (event.type === 'typing') {
+          if (event.userId !== state.user.id) {
+            state.typing[event.conversationId] = { name: event.name, until: event.expiresAt };
+            updateTyping();
+          }
+        } else if (event.type !== 'connected') scheduleRefresh();
+      } catch {}
+    };
+    thisSocket.onclose = () => {
+      if (socket !== thisSocket || !alive || !state.user) return;
+      state.connection = 'offline';
+      updateConnection();
+      reconnectTimer = setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 1.7, 10000);
+    };
+    thisSocket.onerror = () => {};
+  }
+  function updateConnection() {
+    const el = $('#connection');
+    if (el) {
+      el.className = 'connection ' + (state.connection === 'live' ? 'live' : '');
+      el.textContent =
+        state.connection === 'live'
+          ? 'En tiempo real'
+          : state.connection === 'connecting'
+            ? 'Conectando'
+            : 'Reconectando';
+    }
+    const notice = $('#notice');
+    if (notice)
+      notice.textContent =
+        state.connection === 'offline'
+          ? 'La conexión se interrumpió. Estamos intentando reconectar. Tu borrador sigue aquí.'
+          : '';
+  }
+  function updateTyping() {
+    const el = $('#typing');
+    if (!el) return;
+    const item = state.typing[state.selected];
+    el.textContent = item && item.until > Date.now() ? item.name + ' está escribiendo…' : '';
+  }
+  setInterval(updateTyping, 800);
+  document.addEventListener('visibilitychange', () => {
+    if (state.user && document.visibilityState === 'visible') refresh();
+  });
+  async function sendMessage(textOverride) {
+    const c = current();
+    if (!c || state.sending) return;
+    const text = typeof textOverride === 'string' ? textOverride : state.drafts[c.id] || '';
+    if (!text.trim() && !state.attachment) return;
+    state.sending = true;
+    const attachment = state.attachment;
+    const signature = c.id + '|' + text + '|' + (attachment?.key || '');
+    if (state.retry?.signature !== signature) state.retry = { signature, clientRef: crypto.randomUUID() };
+    const payload = {
+      text,
+      clientRef: state.retry.clientRef,
+      asAgent: agentMode(),
+      ...(attachment
+        ? { attachment: { name: attachment.name, type: attachment.type, base64: attachment.base64 } }
+        : {}),
+    };
+    const button = $('#send-button');
+    if (button) button.disabled = true;
+    try {
+      await api(`/api/conversations/${c.id}/messages`, { method: 'POST', body: payload });
+      if (typeof textOverride !== 'string' && state.drafts[c.id] === text) {
+        state.drafts[c.id] = '';
+        localStorage.removeItem('tc-draft-' + state.user.id + '-' + c.id);
+      }
+      if (state.selected === c.id) state.attachment = null;
+      state.retry = null;
+      await refresh();
+    } catch (error) {
+      toast(error.message || 'No se confirmó el envío. Puedes volver a intentarlo.');
+    } finally {
+      state.sending = false;
+      if (current()) renderChat();
+    }
+  }
+  async function openAdIfAny() {
+    const ad = sessionStorage.getItem('tc-ad');
+    if (!ad || isStaff()) return;
+    sessionStorage.removeItem('tc-ad');
+    try {
+      const r = await api('/api/ads/' + ad);
+      state.referral = { ad: r.ad, flyerId: r.flyerId, campaign: 'anuncio', headline: r.headline };
+      newChat(r.courseId, r.editionId);
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+  async function openSurvey(token) {
+    try {
+      const { survey: s } = await api('/api/survey/' + token);
+      const scale = (name, lo, hi) =>
+        `<div class="co-radios">${Array.from({ length: hi - lo + 1 }, (_, k) => lo + k)
+          .map(n => `<label><input type="radio" name="${name}" value="${n}" required> ${n}</label>`)
+          .join('')}</div>`;
+      showModal(
+        'Encuesta · ' + esc(s.title),
+        s.answered
+          ? `<div class="info-box">Ya respondiste esta encuesta. ¡Gracias!</div>`
+          : !s.open
+            ? `<div class="info-box">Esta encuesta ya cerró. Gracias de todos modos.</div>`
+            : `<p class="crm-hint">${esc(s.course)} · ${esc(s.edition)} · ${esc(s.brand)}. Tus respuestas las ve sólo el equipo de la marca.</p><form id="survey-form" class="form-grid survey-form"><input type="hidden" name="token" value="${esc(token)}">${s.questions.map(q => `<fieldset><legend>${esc(q.label)} · 1 = muy mal, 5 = excelente</legend>${scale(q.id, 1, 5)}</fieldset>`).join('')}<fieldset><legend>¿Recomendarías este curso? · 0 = nada, 10 = totalmente</legend>${scale('nps', 0, 10)}</fieldset><label class="field">Comentario (opcional)<textarea name="comment" rows="3" maxlength="1000" placeholder="Qué te gustó, qué mejorarías…"></textarea></label><button class="btn primary" type="submit">Enviar respuestas</button></form>`,
+      );
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+  async function openPaymentIfAny() {
+    const id = sessionStorage.getItem('tc-pay');
+    if (!id || isStaff()) return;
+    sessionStorage.removeItem('tc-pay');
+    await openPayment(id);
+  }
   // Modal de pago de prueba del cliente: ningún método cobra de verdad; el servidor registra el evento como lo haría un proveedor.
   // Pasarela de prueba a pantalla completa: el diálogo toma toda la pantalla mientras se paga y vuelve a ser una ventana normal al cerrarse.
-  let payOrder=null;
-  const payApi=id=>state.publicPay===id?'/api/pay/'+id:'/api/payments/orders/'+id;
+  let payOrder = null;
+  const payApi = id => (state.publicPay === id ? '/api/pay/' + id : '/api/payments/orders/' + id);
   // Pago sin sesión: quien llega por WhatsApp real no tiene perfil. Su enlace (/?pay=<pedido>) abre sólo ese pedido, sin pasar por «Crear perfil».
-  async function publicPayScreen(open){
-    const id=state.publicPay;let o;try{o=(await api('/api/pay/'+id+'/customer')).order;}catch{return false;}
-    const msg=o.status==='paid'?'Tu pago de prueba quedó registrado. Vuelve a WhatsApp: ahí te llega la confirmación.':o.status==='pending'?'Abre el pago de prueba para terminar tu inscripción. No se cobra nada real.':'Este pedido ya no admite pago ('+o.statusLabel.toLowerCase()+'). Pide uno nuevo por WhatsApp.';
-    app.innerHTML=`<div class="boot pay-public"><span class="brand-mark">tc</span><strong>${esc(o.brand||'')}</strong><p>${esc(o.course)} · ${esc(o.edition)}<br>${esc(o.amountLabel)} · ${esc(o.reference)}</p><p class="pay-public-msg">${icon(o.status==='paid'?'check-circle':'info')} ${esc(msg)}</p>${o.status==='pending'?`<button class="btn primary" data-action="public-pay-open">${icon('credit-card')} Abrir pago de prueba</button>`:''}</div>`;icons();
-    if(open&&o.status==='pending')await openPayment(id);
+  async function publicPayScreen(open) {
+    const id = state.publicPay;
+    let o;
+    try {
+      o = (await api('/api/pay/' + id + '/customer')).order;
+    } catch {
+      return false;
+    }
+    const msg =
+      o.status === 'paid'
+        ? 'Tu pago de prueba quedó registrado. Vuelve a WhatsApp: ahí te llega la confirmación.'
+        : o.status === 'pending'
+          ? 'Abre el pago de prueba para terminar tu inscripción. No se cobra nada real.'
+          : 'Este pedido ya no admite pago (' + o.statusLabel.toLowerCase() + '). Pide uno nuevo por WhatsApp.';
+    app.innerHTML = `<div class="boot pay-public"><span class="brand-mark">tc</span><strong>${esc(o.brand || '')}</strong><p>${esc(o.course)} · ${esc(o.edition)}<br>${esc(o.amountLabel)} · ${esc(o.reference)}</p><p class="pay-public-msg">${icon(o.status === 'paid' ? 'check-circle' : 'info')} ${esc(msg)}</p>${o.status === 'pending' ? `<button class="btn primary" data-action="public-pay-open">${icon('credit-card')} Abrir pago de prueba</button>` : ''}</div>`;
+    icons();
+    if (open && o.status === 'pending') await openPayment(id);
     return true;
   }
-  async function publicPayStart(){const id=sessionStorage.getItem('tc-pay');if(!id)return false;state.publicPay=id;if(await publicPayScreen(true)){sessionStorage.removeItem('tc-pay');return true;}state.publicPay=null;return false;}
-  modal.addEventListener('close',()=>modal.classList.remove('pay-page'));
-  async function openPayment(id){try{const {order:o}=await api(payApi(id)+'/customer');payOrder=o;modal.classList.toggle('pay-page',o.status==='pending'&&Boolean(window.simCheckout));showModal('Pago de prueba · '+o.reference,o.status==='pending'&&window.simCheckout?window.simCheckout.html(o,{esc,icon}):`<span class="pill">${esc(o.brand)} · ${esc(o.statusLabel)}</span><dl class="summary-grid"><div><dt>Curso</dt><dd>${esc(o.course)} · ${esc(o.edition)}</dd></div>${o.kind==='session'&&o.session?`<div><dt>Sesión</dt><dd>${o.session.number}. ${esc(o.session.title)} · ${new Date(o.session.startsAt).toLocaleString('es-MX')}</dd></div>`:o.plan==='per_session'?'<div><dt>Plan</dt><dd>Por sesión · este pago cubre tu primera sesión</dd></div>':''}<div><dt>Importe</dt><dd>${esc(o.amountLabel)}${o.promotion?' · '+esc(o.promotion):''}</dd></div><div><dt>Vigente hasta</dt><dd>${new Date(o.expiresAt).toLocaleString('es-MX')}</dd></div></dl>${o.status==='pending'?`<div class="info-box">Simulación: ningún método cobra de verdad. Elige cómo quieres probar el pago.</div><div class="actions pay-actions"><button class="btn primary" data-action="pay-sim" data-id="${o.id}" data-method="card">${icon('credit-card')} Pagar con tarjeta (simulado)</button><button class="btn" data-action="pay-sim" data-id="${o.id}" data-method="oxxo">Pagar en OXXO (simulado)</button><button class="btn" data-action="pay-sim" data-id="${o.id}" data-method="card" data-outcome="declined">Simular pago rechazado</button><button class="btn" data-action="close-modal">Enviaré mi comprobante por el chat</button></div>`:`<div class="info-box">${o.status==='paid'?'Este pedido ya está pagado y tu inscripción de práctica quedó registrada.':o.status==='review'?'Tu comprobante está en revisión; te confirmamos por el chat.':'Este pedido ya no admite pago ('+esc(o.statusLabel.toLowerCase())+'). Pide uno nuevo por el chat.'}</div>`}`);}catch(e){toast(e.message);}}
+  async function publicPayStart() {
+    const id = sessionStorage.getItem('tc-pay');
+    if (!id) return false;
+    state.publicPay = id;
+    if (await publicPayScreen(true)) {
+      sessionStorage.removeItem('tc-pay');
+      return true;
+    }
+    state.publicPay = null;
+    return false;
+  }
+  modal.addEventListener('close', () => modal.classList.remove('pay-page'));
+  async function openPayment(id) {
+    try {
+      const { order: o } = await api(payApi(id) + '/customer');
+      payOrder = o;
+      modal.classList.toggle('pay-page', o.status === 'pending' && Boolean(window.simCheckout));
+      showModal(
+        'Pago de prueba · ' + o.reference,
+        o.status === 'pending' && window.simCheckout
+          ? window.simCheckout.html(o, { esc, icon })
+          : `<span class="pill">${esc(o.brand)} · ${esc(o.statusLabel)}</span><dl class="summary-grid"><div><dt>Curso</dt><dd>${esc(o.course)} · ${esc(o.edition)}</dd></div>${o.kind === 'session' && o.session ? `<div><dt>Sesión</dt><dd>${o.session.number}. ${esc(o.session.title)} · ${new Date(o.session.startsAt).toLocaleString('es-MX')}</dd></div>` : o.plan === 'per_session' ? '<div><dt>Plan</dt><dd>Por sesión · este pago cubre tu primera sesión</dd></div>' : ''}<div><dt>Importe</dt><dd>${esc(o.amountLabel)}${o.promotion ? ' · ' + esc(o.promotion) : ''}</dd></div><div><dt>Vigente hasta</dt><dd>${new Date(o.expiresAt).toLocaleString('es-MX')}</dd></div></dl>${o.status === 'pending' ? `<div class="info-box">Simulación: ningún método cobra de verdad. Elige cómo quieres probar el pago.</div><div class="actions pay-actions"><button class="btn primary" data-action="pay-sim" data-id="${o.id}" data-method="card">${icon('credit-card')} Pagar con tarjeta (simulado)</button><button class="btn" data-action="pay-sim" data-id="${o.id}" data-method="oxxo">Pagar en OXXO (simulado)</button><button class="btn" data-action="pay-sim" data-id="${o.id}" data-method="card" data-outcome="declined">Simular pago rechazado</button><button class="btn" data-action="close-modal">Enviaré mi comprobante por el chat</button></div>` : `<div class="info-box">${o.status === 'paid' ? 'Este pedido ya está pagado y tu inscripción de práctica quedó registrada.' : o.status === 'review' ? 'Tu comprobante está en revisión; te confirmamos por el chat.' : 'Este pedido ya no admite pago (' + esc(o.statusLabel.toLowerCase()) + '). Pide uno nuevo por el chat.'}</div>`}`,
+      );
+    } catch (e) {
+      toast(e.message);
+    }
+  }
   // Enlace de invitación a probar (/?curso=<id>&canal=<canal>): tras crear su perfil, la persona cae directo en «Empieza una conversación» con ese curso y canal.
-  function openInviteIfAny(){const raw=sessionStorage.getItem('tc-invite');if(!raw||isStaff())return;sessionStorage.removeItem('tc-invite');try{const v=JSON.parse(raw);if(state.courses.some(c=>c.id===v.course))newChat(v.course,undefined,v.channel);}catch{}}
+  function openInviteIfAny() {
+    const raw = sessionStorage.getItem('tc-invite');
+    if (!raw || isStaff()) return;
+    sessionStorage.removeItem('tc-invite');
+    try {
+      const v = JSON.parse(raw);
+      if (state.courses.some(c => c.id === v.course)) newChat(v.course, undefined, v.channel);
+    } catch {}
+  }
   // «Invitar a probar» (equipo): enlace y código QR por curso y canal para que alguien lo abra en su celular. El QR lo arma el servidor.
   // Mensaje listo para enviar a quien va a probar: el enlace y los pasos, en palabras simples.
-  const inviteText=(url,what)=>['Hola. Te invito a probar el chat de prueba de '+what+'.','','1. Abre este enlace en Chrome (Android) o Safari (iPhone): '+url,'2. Pulsa «Crear perfil» y pon un nombre, un usuario y una contraseña inventados (8 caracteres o más).','3. Escribe como si fueras un cliente: «Hola», «¿Cuánto cuesta?», «¿Qué temas incluye?», «Quiero inscribirme».','4. Para pagar, pulsa «Abrir pago de prueba» y elige la tarjeta que dice «Aprueba el pago». No se cobra nada real.','5. Si quieres tenerla como app: menú del navegador → «Instalar app» (Android), o Compartir → «Agregar a inicio» (iPhone).','','Es una prueba: no uses datos ni tarjetas reales. Cuéntame qué te pareció.'].join('\n');
-  async function inviteModal(courseId,channel){
-    const courses=state.courses.filter(c=>(state.brand==='all'||c.brand_id===state.brand)&&(state.editions||[]).some(e=>e.course_id===c.id));
-    if(!courses.length)return toast('No hay cursos con edición disponible para invitar.');
-    const cid=courses.some(c=>c.id===courseId)?courseId:courses[0].id,ch=['whatsapp','instagram','facebook'].includes(channel)?channel:'whatsapp';
-    let r;try{r=await api('/api/presentation/invite?'+new URLSearchParams({course:cid,channel:ch}));}catch(e){return toast(e.message);}
-    showModal('Invitar a probar',`<p>Comparte este enlace o muestra el código para que alguien pruebe desde su celular. Crea su perfil de prueba y cae directo en este curso.</p><div class="invite-grid"><div class="invite-qr" role="img" aria-label="Código QR del enlace de invitación">${r.svg}</div><div class="form-grid"><label class="field">Curso<select id="invite-course">${courses.map(c=>`<option value="${esc(c.id)}" ${c.id===cid?'selected':''}>${esc(brandById(c.brand_id)?.name+' · '+c.title)}</option>`).join('')}</select></label><label class="field">Canal de prueba<select id="invite-channel">${['whatsapp','instagram','facebook'].map(id=>`<option value="${id}" ${id===ch?'selected':''}>${esc(channels[id].name)}</option>`).join('')}</select></label><label class="field">Enlace<input id="invite-url" readonly value="${esc(r.url)}"></label><div class="actions"><button type="button" class="btn primary" data-action="invite-copy">${icon('link')} Copiar enlace</button></div></div></div><label class="field invite-message">Mensaje con instrucciones para quien va a probar<textarea id="invite-text" readonly rows="9">${esc(inviteText(r.url,(brandById(courses.find(c=>c.id===cid)?.brand_id)?.name||'')+' · '+r.course))}</textarea></label><div class="actions"><button type="button" class="btn" data-action="invite-copy-text">${icon('copy')} Copiar mensaje con instrucciones</button></div><div class="info-box"><strong>Para instalarla como app:</strong> en Android, menú de Chrome → «Instalar app» o «Agregar a la pantalla principal». En iPhone, Safari → Compartir → «Agregar a inicio». Es un canal de prueba del laboratorio: no es WhatsApp ni envía mensajes reales.</div>`);
+  const inviteText = (url, what) =>
+    [
+      'Hola. Te invito a probar el chat de prueba de ' + what + '.',
+      '',
+      '1. Abre este enlace en Chrome (Android) o Safari (iPhone): ' + url,
+      '2. Pulsa «Crear perfil» y pon un nombre, un usuario y una contraseña inventados (8 caracteres o más).',
+      '3. Escribe como si fueras un cliente: «Hola», «¿Cuánto cuesta?», «¿Qué temas incluye?», «Quiero inscribirme».',
+      '4. Para pagar, pulsa «Abrir pago de prueba» y elige la tarjeta que dice «Aprueba el pago». No se cobra nada real.',
+      '5. Si quieres tenerla como app: menú del navegador → «Instalar app» (Android), o Compartir → «Agregar a inicio» (iPhone).',
+      '',
+      'Es una prueba: no uses datos ni tarjetas reales. Cuéntame qué te pareció.',
+    ].join('\n');
+  async function inviteModal(courseId, channel) {
+    const courses = state.courses.filter(
+      c =>
+        (state.brand === 'all' || c.brand_id === state.brand) && (state.editions || []).some(e => e.course_id === c.id),
+    );
+    if (!courses.length) return toast('No hay cursos con edición disponible para invitar.');
+    const cid = courses.some(c => c.id === courseId) ? courseId : courses[0].id,
+      ch = ['whatsapp', 'instagram', 'facebook'].includes(channel) ? channel : 'whatsapp';
+    let r;
+    try {
+      r = await api('/api/presentation/invite?' + new URLSearchParams({ course: cid, channel: ch }));
+    } catch (e) {
+      return toast(e.message);
+    }
+    showModal(
+      'Invitar a probar',
+      `<p>Comparte este enlace o muestra el código para que alguien pruebe desde su celular. Crea su perfil de prueba y cae directo en este curso.</p><div class="invite-grid"><div class="invite-qr" role="img" aria-label="Código QR del enlace de invitación">${r.svg}</div><div class="form-grid"><label class="field">Curso<select id="invite-course">${courses.map(c => `<option value="${esc(c.id)}" ${c.id === cid ? 'selected' : ''}>${esc(brandById(c.brand_id)?.name + ' · ' + c.title)}</option>`).join('')}</select></label><label class="field">Canal de prueba<select id="invite-channel">${['whatsapp', 'instagram', 'facebook'].map(id => `<option value="${id}" ${id === ch ? 'selected' : ''}>${esc(channels[id].name)}</option>`).join('')}</select></label><label class="field">Enlace<input id="invite-url" readonly value="${esc(r.url)}"></label><div class="actions"><button type="button" class="btn primary" data-action="invite-copy">${icon('link')} Copiar enlace</button></div></div></div><label class="field invite-message">Mensaje con instrucciones para quien va a probar<textarea id="invite-text" readonly rows="9">${esc(inviteText(r.url, (brandById(courses.find(c => c.id === cid)?.brand_id)?.name || '') + ' · ' + r.course))}</textarea></label><div class="actions"><button type="button" class="btn" data-action="invite-copy-text">${icon('copy')} Copiar mensaje con instrucciones</button></div><div class="info-box"><strong>Para instalarla como app:</strong> en Android, menú de Chrome → «Instalar app» o «Agregar a la pantalla principal». En iPhone, Safari → Compartir → «Agregar a inicio». Es un canal de prueba del laboratorio: no es WhatsApp ni envía mensajes reales.</div>`,
+    );
   }
-  document.addEventListener('change',e=>{if(e.target.id==='invite-course'||e.target.id==='invite-channel')inviteModal($('#invite-course')?.value,$('#invite-channel')?.value);});
-  function newChat(courseId,editionId,channel){state.newChannel=['whatsapp','instagram','facebook'].includes(channel)?channel:'whatsapp';const courses=state.courses.filter(c=>(state.brand==='all'||c.brand_id===state.brand)&&(state.editions||[]).some(e=>e.course_id===c.id));if(!courses.length)return toast('Esta marca todavía no tiene cursos.');showModal('Empieza una conversación',`<p>Elige un curso y el canal que quieres simular. Tus mensajes llegarán al CRM del equipo.</p><form id="new-chat-form" class="form-grid"><label class="field">Curso<select name="courseId" id="new-chat-course">${courses.map(c=>`<option value="${c.id}" ${c.id===courseId?'selected':''}>${esc(brandById(c.brand_id)?.name+' · '+c.title)}</option>`).join('')}</select></label><label class="field">Edición<select name="editionId" id="new-chat-edition" required></select></label><div class="field"><label>Canal de prueba</label><div class="channel-select">${['whatsapp','instagram','facebook'].map(id=>`<button type="button" class="channel-option ${id===state.newChannel?'selected':''}" data-new-channel="${id}">${provider(id)}${channels[id].name}</button>`).join('')}</div></div>${state.referral?`<div class="info-box">Llegaste desde el anuncio <strong>${esc(state.referral.ad)}</strong>. El equipo verá ese origen en la conversación.</div>`:''}<div class="info-box">Actuarás como cliente con el perfil <strong>${esc(state.user.name)}</strong>, número de prueba <strong>${state.user.testNumber}</strong>. No se conecta ninguna cuenta de Meta.</div><button type="submit" class="btn primary wide">Abrir conversación ${icon('arrow-right')}</button></form>`);catalogueUI.updateChatEditions($('#new-chat-course').value,editionId);}
-  function renderCourses(){return agentMode()?catalogueUI.render():catalogueUI.renderCustomer();}
-  function courseDetails(id){const c=courseById(id);showModal(c.title,`<span class="pill">${esc(brandById(c.brand_id)?.name)} · Versión ${c.version}</span><dl class="summary-grid"><div><dt>Precio de ejemplo</dt><dd>${currency(c.price)}</dd></div><div><dt>Fecha de práctica</dt><dd>${esc(c.date_label)}</dd></div></dl><p>Temario de prueba</p><pre>${esc(c.syllabus)}</pre><div class="actions"><button class="btn" data-course-flyer="${c.id}">${icon('image')} Ver flyer</button>${!agentMode()?`<button class="btn primary" data-start-course="${c.id}">Conversar sobre este curso</button>`:''}</div>`);}
-  function editCourse(id){const c=id?courseById(id):null;const fields=[['Título','title',c?.title||'','text'],['Precio de ejemplo (MXN)','price',c?.price??0,'number'],['Fecha y horario de prueba','dateLabel',c?.date_label||'Fecha de práctica por confirmar','text']];showModal(c?'Editar curso':'Nuevo curso',`<p>Los cambios se utilizan en las siguientes respuestas automáticas. Al editar, el flyer de diseño se sustituye por una ficha con los datos actualizados. Los flyers ya enviados conservan su versión.</p><form id="course-form" class="form-grid"><input type="hidden" name="id" value="${c?.id||''}"><label class="field">Marca<select name="brandId" ${c?'disabled':''}>${state.brands.map(b=>`<option value="${b.id}" ${b.id===c?.brand_id?'selected':''}>${esc(b.name)}</option>`).join('')}</select></label>${fields.map(([label,name,value,type])=>`<label class="field">${label}<input name="${name}" type="${type}" value="${esc(value)}" ${type==='number'?'min="0" max="1000000" step="0.01"':'maxlength="180"'} required></label>`).join('')}<label class="field">Temario<textarea name="syllabus" maxlength="5000" required>${esc(c?.syllabus||'')}</textarea></label><label class="field">Respuesta de presentación<textarea name="welcome" maxlength="2000" required>${esc(c?.welcome||'Hola, {{nombre}}. Te comparto la información de {{curso}}. ¿Quieres conocer el temario, el precio o cómo inscribirte?')}</textarea><small>Variables disponibles: {{nombre}} y {{curso}}.</small></label><button class="btn primary" type="submit">Guardar versión ${icon('check')}</button></form>`);}
+  document.addEventListener('change', e => {
+    if (e.target.id === 'invite-course' || e.target.id === 'invite-channel')
+      inviteModal($('#invite-course')?.value, $('#invite-channel')?.value);
+  });
+  function newChat(courseId, editionId, channel) {
+    state.newChannel = ['whatsapp', 'instagram', 'facebook'].includes(channel) ? channel : 'whatsapp';
+    const courses = state.courses.filter(
+      c =>
+        (state.brand === 'all' || c.brand_id === state.brand) && (state.editions || []).some(e => e.course_id === c.id),
+    );
+    if (!courses.length) return toast('Esta marca todavía no tiene cursos.');
+    showModal(
+      'Empieza una conversación',
+      `<p>Elige un curso y el canal que quieres simular. Tus mensajes llegarán al CRM del equipo.</p><form id="new-chat-form" class="form-grid"><label class="field">Curso<select name="courseId" id="new-chat-course">${courses.map(c => `<option value="${c.id}" ${c.id === courseId ? 'selected' : ''}>${esc(brandById(c.brand_id)?.name + ' · ' + c.title)}</option>`).join('')}</select></label><label class="field">Edición<select name="editionId" id="new-chat-edition" required></select></label><div class="field"><label>Canal de prueba</label><div class="channel-select">${['whatsapp', 'instagram', 'facebook'].map(id => `<button type="button" class="channel-option ${id === state.newChannel ? 'selected' : ''}" data-new-channel="${id}">${provider(id)}${channels[id].name}</button>`).join('')}</div></div>${state.referral ? `<div class="info-box">Llegaste desde el anuncio <strong>${esc(state.referral.ad)}</strong>. El equipo verá ese origen en la conversación.</div>` : ''}<div class="info-box">Actuarás como cliente con el perfil <strong>${esc(state.user.name)}</strong>, número de prueba <strong>${state.user.testNumber}</strong>. No se conecta ninguna cuenta de Meta.</div><button type="submit" class="btn primary wide">Abrir conversación ${icon('arrow-right')}</button></form>`,
+    );
+    catalogueUI.updateChatEditions($('#new-chat-course').value, editionId);
+  }
+  function renderCourses() {
+    return agentMode() ? catalogueUI.render() : catalogueUI.renderCustomer();
+  }
+  function courseDetails(id) {
+    const c = courseById(id);
+    showModal(
+      c.title,
+      `<span class="pill">${esc(brandById(c.brand_id)?.name)} · Versión ${c.version}</span><dl class="summary-grid"><div><dt>Precio de ejemplo</dt><dd>${currency(c.price)}</dd></div><div><dt>Fecha de práctica</dt><dd>${esc(c.date_label)}</dd></div></dl><p>Temario de prueba</p><pre>${esc(c.syllabus)}</pre><div class="actions"><button class="btn" data-course-flyer="${c.id}">${icon('image')} Ver flyer</button>${!agentMode() ? `<button class="btn primary" data-start-course="${c.id}">Conversar sobre este curso</button>` : ''}</div>`,
+    );
+  }
+  function editCourse(id) {
+    const c = id ? courseById(id) : null;
+    const fields = [
+      ['Título', 'title', c?.title || '', 'text'],
+      ['Precio de ejemplo (MXN)', 'price', c?.price ?? 0, 'number'],
+      ['Fecha y horario de prueba', 'dateLabel', c?.date_label || 'Fecha de práctica por confirmar', 'text'],
+    ];
+    showModal(
+      c ? 'Editar curso' : 'Nuevo curso',
+      `<p>Los cambios se utilizan en las siguientes respuestas automáticas. Al editar, el flyer de diseño se sustituye por una ficha con los datos actualizados. Los flyers ya enviados conservan su versión.</p><form id="course-form" class="form-grid"><input type="hidden" name="id" value="${c?.id || ''}"><label class="field">Marca<select name="brandId" ${c ? 'disabled' : ''}>${state.brands.map(b => `<option value="${b.id}" ${b.id === c?.brand_id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select></label>${fields.map(([label, name, value, type]) => `<label class="field">${label}<input name="${name}" type="${type}" value="${esc(value)}" ${type === 'number' ? 'min="0" max="1000000" step="0.01"' : 'maxlength="180"'} required></label>`).join('')}<label class="field">Temario<textarea name="syllabus" maxlength="5000" required>${esc(c?.syllabus || '')}</textarea></label><label class="field">Respuesta de presentación<textarea name="welcome" maxlength="2000" required>${esc(c?.welcome || 'Hola, {{nombre}}. Te comparto la información de {{curso}}. ¿Quieres conocer el temario, el precio o cómo inscribirte?')}</textarea><small>Variables disponibles: {{nombre}} y {{curso}}.</small></label><button class="btn primary" type="submit">Guardar versión ${icon('check')}</button></form>`,
+    );
+  }
   // Resultados de la prueba: embudo de personas (entraron → escribieron → pidieron inscribirse → pagaron) y cómo se atendió.
-  function funnelHtml(f){
-    const pct=(n,base)=>base>0?Math.round(n/base*100)+' %':'—',steps=[['Entraron',f.people,''],['Escribieron',f.wrote,pct(f.wrote,f.people)],['Pidieron inscribirse',f.requested,pct(f.requested,f.wrote)],['Pagaron',f.paid,pct(f.paid,f.requested)]];
-    const total=f.replies.rules+f.replies.ai+f.replies.person+f.replies.suggested;
-    return `<section class="funnel" aria-label="Resultados de la prueba"><div class="funnel-head"><h2>Resultados de la prueba</h2><small>Personas, últimos ${f.days} días</small></div><ol class="funnel-steps">${steps.map(([l,n,p])=>`<li><strong>${n}</strong><span>${l}</span>${p?`<small>${p} del paso anterior</small>`:''}</li>`).join('')}</ol><p class="funnel-how">${total?`De ${total} respuestas del asistente: <strong>${f.replies.rules}</strong> por reglas y conocimiento (sin costo), <strong>${f.replies.ai}</strong> redactadas por la IA y <strong>${f.replies.person}</strong> pasadas a una persona${f.replies.suggested?`; además, ${f.replies.suggested} borradores sugeridos al asesor`:''}.`:'Todavía no hay respuestas del asistente en este periodo.'}${f.aiDrafts?` Hay <strong>${f.aiDrafts}</strong> respuesta${f.aiDrafts===1?'':'s'} de la IA por revisar en Catálogo → Conocimiento.`:''}</p></section>`;
+  function funnelHtml(f) {
+    const pct = (n, base) => (base > 0 ? Math.round((n / base) * 100) + ' %' : '—'),
+      steps = [
+        ['Entraron', f.people, ''],
+        ['Escribieron', f.wrote, pct(f.wrote, f.people)],
+        ['Pidieron inscribirse', f.requested, pct(f.requested, f.wrote)],
+        ['Pagaron', f.paid, pct(f.paid, f.requested)],
+      ];
+    const total = f.replies.rules + f.replies.ai + f.replies.person + f.replies.suggested;
+    return `<section class="funnel" aria-label="Resultados de la prueba"><div class="funnel-head"><h2>Resultados de la prueba</h2><small>Personas, últimos ${f.days} días</small></div><ol class="funnel-steps">${steps.map(([l, n, p]) => `<li><strong>${n}</strong><span>${l}</span>${p ? `<small>${p} del paso anterior</small>` : ''}</li>`).join('')}</ol><p class="funnel-how">${total ? `De ${total} respuestas del asistente: <strong>${f.replies.rules}</strong> por reglas y conocimiento (sin costo), <strong>${f.replies.ai}</strong> redactadas por la IA y <strong>${f.replies.person}</strong> pasadas a una persona${f.replies.suggested ? `; además, ${f.replies.suggested} borradores sugeridos al asesor` : ''}.` : 'Todavía no hay respuestas del asistente en este periodo.'}${f.aiDrafts ? ` Hay <strong>${f.aiDrafts}</strong> respuesta${f.aiDrafts === 1 ? '' : 's'} de la IA por revisar en Catálogo → Conocimiento.` : ''}</p></section>`;
   }
-  async function renderActivity(){if(!agentMode())return;$('#page').innerHTML='<div class="loading-message">Cargando actividad…</div>';try{const [d,f]=await Promise.all([api('/api/metrics'),api('/api/presentation/funnel'+(state.brand&&state.brand!=='all'?'?brand='+encodeURIComponent(state.brand):'')).catch(()=>null)]);if(state.view!=='activity')return;const actions={'profile.created':'Creó su perfil','conversation.created':'Inició una conversación','conversation.take':'Tomó una conversación','conversation.automate':'Reactivó las reglas','conversation.resolve':'Cerró una conversación','conversation.stage':'Actualizó una etapa','course.saved':'Actualizó un curso','brand.created':'Añadió una marca'};$('#page').innerHTML=`<div class="content-page"><div class="page-heading"><div><span class="eyebrow">Lo que está pasando</span><h1>Una vista de la prueba.</h1><p>Actividad real del laboratorio. ${d.online} participantes conectados ahora.</p></div><button class="btn" data-action="copy-link">${icon('qr-code')} Invitar a probar</button></div><div class="metrics">${[['Perfiles creados',d.profiles],['Conversaciones',d.conversations],['Mensajes enviados',d.messages],['Esperando asesor',d.waiting]].map(([l,v])=>`<div class="metric"><span>${l}</span><strong>${v}</strong></div>`).join('')}</div>${f?funnelHtml(f):''}<div class="info-box">Los canales y los pagos de este laboratorio son de prueba: no hay mensajería real ni cobros reales.</div><h2 style="font-size:17px;margin-top:28px">Actividad reciente</h2><div class="activity-list">${d.recent.map(a=>`<div class="activity-item"><div>${esc(actions[a.action]||a.action)}<div class="activity-name">${esc(a.name||'Sistema')}</div></div><small>${time(a.created_at)}</small></div>`).join('')||'<div class="empty-list">La actividad aparecerá aquí.</div>'}</div></div>`;icons();}catch(e){toast(e.message);}}
-  function profile(){if(agentMode())return setView('settings');showModal('Tu perfil de prueba',`<span class="pill">${state.user.role==='admin'?'Administrador':state.user.role==='agent'?'Asesor':'Cliente de prueba'}</span><div class="profile-number">#${state.user.testNumber}</div><p>Este identificador acompaña tus mensajes. No es un teléfono real.</p><dl class="summary-grid"><div><dt>Nombre</dt><dd>${esc(state.user.name)}</dd></div><div><dt>Usuario</dt><dd>${esc(state.user.username)}</dd></div></dl><div class="info-box">Cada participante crea su propio perfil. Los clientes ven sólo sus conversaciones; los asesores autorizados atienden la bandeja del equipo.</div><div class="actions"><button class="btn" data-action="copy-link">${icon('link')} Copiar enlace</button><button class="btn" data-action="logout">Cerrar sesión</button></div>`);}
-  function contactDetails(){const c=current();if(!c)return;if(agentMode())return crmUI.contactForConversation(c.id);showModal('Ficha de la conversación',`<p>${esc(c.course_title)}</p><dl class="summary-grid">${[['Participante',c.customer_name],[c.wa_peer?'WhatsApp real':'Número de prueba',c.wa_peer?'+'+c.wa_peer:'#'+c.test_number],['Canal',channels[c.channel].name],['Marca',c.brand_name],['Etapa',stages[c.stage]],['Atención',c.bot_enabled?'Automatización por reglas':c.agent_name||'Pendiente de asesor']].map(([l,v])=>`<div><dt>${l}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><div class="info-box">Todo lo que se envía en este laboratorio permanece dentro de esta aplicación. No llega a WhatsApp, Facebook ni Instagram.</div>`);}
-  async function action(name,element){
-    if(await replyAssist.action(name,element))return;
-    if(name.startsWith('qr-')){await quickUI.action(name,element);return;}
-    if(name.startsWith('sum-')){await summaryUI.action(name,element);return;}
-    if(name.startsWith('sch-')){await scheduledUI.action(name,element);return;}
-    if(name.startsWith('apt-')){await appointmentsUI.action(name,element);return;}
-    if(name.startsWith('tg-')){await tagsUI.action(name,element);return;}
-    if(name==='auth-mfa-cancel'){state.mfaChallenge=null;entry();return;}
-    if(await operationsUI.action(name,element)){if(name==='ops-detail'){const t=document.querySelector('#ops-replies');if(t)replyAssist.renderLog(t.dataset.conversation,t);}return;}
-    if(await analyticsUI.action(name,element))return;
-    if(await portalUI.action(name,element))return;
-    if(await agendaUI.action(name,element))return;
-    if(await presentationUI.action(name,element))return;
-    if(await catalogueUI.action(name,element))return;
-    if(await crmUI.action(name,element))return;
-    if(name==='close-modal')return modal.close();
-    if(name==='auth-mode'){state.authMode=element.dataset.value;return entry();}
-    if(name==='reload')return location.reload();
-    if(name==='pay-open')return openPayment(element.dataset.id);
-    if(name==='survey-open'){await openSurvey(element.dataset.id);return;}
-    if(name==='order-copy-link'){try{await navigator.clipboard.writeText(element.dataset.link);toast('Enlace copiado.');}catch{toast('No se pudo copiar; selecciónalo y cópialo a mano.');}return;}
-    if(name==='pay-coupon-apply'){const id=element.dataset.id,code=(document.querySelector('#pg-coupon')?.value||'').trim(),msg=document.querySelector('#pg-coupon-msg');if(!code){if(msg)msg.textContent='Escribe tu código de cupón.';return;}try{await api('/api/payments/orders/'+id+'/coupon',{method:'POST',body:{code}});toast('Cupón aplicado.');await openPayment(id);}catch(e){if(msg)msg.textContent=e.message;else toast(e.message);}return;}
-    if(name==='pay-coupon-remove'){const id=element.dataset.id;try{await api('/api/payments/orders/'+id+'/coupon',{method:'DELETE'});toast('Cupón quitado.');await openPayment(id);}catch(e){toast(e.message);}return;}
-    if(name==='wa-template'){await waTemplateModal(element.dataset.id);return;}
-    if(name==='wa-template-send'){element.disabled=true;try{await api('/api/conversations/'+element.dataset.id+'/wa-templates',{method:'POST',body:{templateId:element.dataset.template,clientRef:waTplRef}});modal.close();toast('Plantilla enviada.');}catch(e){toast(e.message);element.disabled=false;}return refresh();}
-    if(name==='pay-done'){modal.close();if(state.publicPay)return publicPayScreen(false);return refresh();}
-    if(name==='public-pay-open'){if(state.publicPay)await openPayment(state.publicPay);return;}
-    if(name==='pay-sim'){
-      const id=element.dataset.id,method=element.dataset.method,outcome=element.dataset.outcome||'approved',last4=element.dataset.last4||'',sc=window.simCheckout,box=()=>$('#modal-content .pg');
-      if(sc&&box()){box().outerHTML=sc.processing({esc,icon});icons();}
-      const started=Date.now();let r=null,err=null;try{r=await api(payApi(id)+'/pay',{method:'POST',body:{method,outcome}});}catch(e){err=e;}
-      await new Promise(done=>setTimeout(done,Math.max(0,1400-(Date.now()-started))));   // un instante de «procesando», como en una pasarela real
-      if(sc&&modal.open&&box()){box().outerHTML=err?sc.failed(err.message,{esc,icon,id}):sc.result({...(payOrder||{}),...r.order,id},{status:r.order.status,method,last4,esc,icon});icons();}
-      else{if(modal.open)modal.close();toast(err?err.message:r.order.status==='paid'?'Pago simulado aprobado: tu inscripción de práctica quedó registrada.':'El pago simulado fue rechazado; puedes intentarlo de nuevo.');}
+  async function renderActivity() {
+    if (!agentMode()) return;
+    $('#page').innerHTML = '<div class="loading-message">Cargando actividad…</div>';
+    try {
+      const [d, f] = await Promise.all([
+        api('/api/metrics'),
+        api(
+          '/api/presentation/funnel' +
+            (state.brand && state.brand !== 'all' ? '?brand=' + encodeURIComponent(state.brand) : ''),
+        ).catch(() => null),
+      ]);
+      if (state.view !== 'activity') return;
+      const actions = {
+        'profile.created': 'Creó su perfil',
+        'conversation.created': 'Inició una conversación',
+        'conversation.take': 'Tomó una conversación',
+        'conversation.automate': 'Reactivó las reglas',
+        'conversation.resolve': 'Cerró una conversación',
+        'conversation.stage': 'Actualizó una etapa',
+        'course.saved': 'Actualizó un curso',
+        'brand.created': 'Añadió una marca',
+      };
+      $('#page').innerHTML =
+        `<div class="content-page"><div class="page-heading"><div><span class="eyebrow">Lo que está pasando</span><h1>Una vista de la prueba.</h1><p>Actividad real del laboratorio. ${d.online} participantes conectados ahora.</p></div><button class="btn" data-action="copy-link">${icon('qr-code')} Invitar a probar</button></div><div class="metrics">${[
+          ['Perfiles creados', d.profiles],
+          ['Conversaciones', d.conversations],
+          ['Mensajes enviados', d.messages],
+          ['Esperando asesor', d.waiting],
+        ]
+          .map(([l, v]) => `<div class="metric"><span>${l}</span><strong>${v}</strong></div>`)
+          .join(
+            '',
+          )}</div>${f ? funnelHtml(f) : ''}<div class="info-box">Los canales y los pagos de este laboratorio son de prueba: no hay mensajería real ni cobros reales.</div><h2 style="font-size:17px;margin-top:28px">Actividad reciente</h2><div class="activity-list">${d.recent.map(a => `<div class="activity-item"><div>${esc(actions[a.action] || a.action)}<div class="activity-name">${esc(a.name || 'Sistema')}</div></div><small>${time(a.created_at)}</small></div>`).join('') || '<div class="empty-list">La actividad aparecerá aquí.</div>'}</div></div>`;
+      icons();
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+  function profile() {
+    if (agentMode()) return setView('settings');
+    showModal(
+      'Tu perfil de prueba',
+      `<span class="pill">${state.user.role === 'admin' ? 'Administrador' : state.user.role === 'agent' ? 'Asesor' : 'Cliente de prueba'}</span><div class="profile-number">#${state.user.testNumber}</div><p>Este identificador acompaña tus mensajes. No es un teléfono real.</p><dl class="summary-grid"><div><dt>Nombre</dt><dd>${esc(state.user.name)}</dd></div><div><dt>Usuario</dt><dd>${esc(state.user.username)}</dd></div></dl><div class="info-box">Cada participante crea su propio perfil. Los clientes ven sólo sus conversaciones; los asesores autorizados atienden la bandeja del equipo.</div><div class="actions"><button class="btn" data-action="copy-link">${icon('link')} Copiar enlace</button><button class="btn" data-action="logout">Cerrar sesión</button></div>`,
+    );
+  }
+  function contactDetails() {
+    const c = current();
+    if (!c) return;
+    if (agentMode()) return crmUI.contactForConversation(c.id);
+    showModal(
+      'Ficha de la conversación',
+      `<p>${esc(c.course_title)}</p><dl class="summary-grid">${[
+        ['Participante', c.customer_name],
+        [c.wa_peer ? 'WhatsApp real' : 'Número de prueba', c.wa_peer ? '+' + c.wa_peer : '#' + c.test_number],
+        ['Canal', channels[c.channel].name],
+        ['Marca', c.brand_name],
+        ['Etapa', stages[c.stage]],
+        ['Atención', c.bot_enabled ? 'Automatización por reglas' : c.agent_name || 'Pendiente de asesor'],
+      ]
+        .map(([l, v]) => `<div><dt>${l}</dt><dd>${esc(v)}</dd></div>`)
+        .join(
+          '',
+        )}</dl><div class="info-box">Todo lo que se envía en este laboratorio permanece dentro de esta aplicación. No llega a WhatsApp, Facebook ni Instagram.</div>`,
+    );
+  }
+  async function action(name, element) {
+    if (await replyAssist.action(name, element)) return;
+    if (name.startsWith('qr-')) {
+      await quickUI.action(name, element);
+      return;
+    }
+    if (name.startsWith('sum-')) {
+      await summaryUI.action(name, element);
+      return;
+    }
+    if (name.startsWith('sch-')) {
+      await scheduledUI.action(name, element);
+      return;
+    }
+    if (name.startsWith('apt-')) {
+      await appointmentsUI.action(name, element);
+      return;
+    }
+    if (name.startsWith('tg-')) {
+      await tagsUI.action(name, element);
+      return;
+    }
+    if (name === 'auth-mfa-cancel') {
+      state.mfaChallenge = null;
+      entry();
+      return;
+    }
+    if (await operationsUI.action(name, element)) {
+      if (name === 'ops-detail') {
+        const t = document.querySelector('#ops-replies');
+        if (t) replyAssist.renderLog(t.dataset.conversation, t);
+      }
+      return;
+    }
+    if (await analyticsUI.action(name, element)) return;
+    if (await portalUI.action(name, element)) return;
+    if (await agendaUI.action(name, element)) return;
+    if (await presentationUI.action(name, element)) return;
+    if (await catalogueUI.action(name, element)) return;
+    if (await crmUI.action(name, element)) return;
+    if (name === 'close-modal') return modal.close();
+    if (name === 'auth-mode') {
+      state.authMode = element.dataset.value;
+      return entry();
+    }
+    if (name === 'reload') return location.reload();
+    if (name === 'pay-open') return openPayment(element.dataset.id);
+    if (name === 'survey-open') {
+      await openSurvey(element.dataset.id);
+      return;
+    }
+    if (name === 'order-copy-link') {
+      try {
+        await navigator.clipboard.writeText(element.dataset.link);
+        toast('Enlace copiado.');
+      } catch {
+        toast('No se pudo copiar; selecciónalo y cópialo a mano.');
+      }
+      return;
+    }
+    if (name === 'pay-coupon-apply') {
+      const id = element.dataset.id,
+        code = (document.querySelector('#pg-coupon')?.value || '').trim(),
+        msg = document.querySelector('#pg-coupon-msg');
+      if (!code) {
+        if (msg) msg.textContent = 'Escribe tu código de cupón.';
+        return;
+      }
+      try {
+        await api('/api/payments/orders/' + id + '/coupon', { method: 'POST', body: { code } });
+        toast('Cupón aplicado.');
+        await openPayment(id);
+      } catch (e) {
+        if (msg) msg.textContent = e.message;
+        else toast(e.message);
+      }
+      return;
+    }
+    if (name === 'pay-coupon-remove') {
+      const id = element.dataset.id;
+      try {
+        await api('/api/payments/orders/' + id + '/coupon', { method: 'DELETE' });
+        toast('Cupón quitado.');
+        await openPayment(id);
+      } catch (e) {
+        toast(e.message);
+      }
+      return;
+    }
+    if (name === 'wa-template') {
+      await waTemplateModal(element.dataset.id);
+      return;
+    }
+    if (name === 'wa-template-send') {
+      element.disabled = true;
+      try {
+        await api('/api/conversations/' + element.dataset.id + '/wa-templates', {
+          method: 'POST',
+          body: { templateId: element.dataset.template, clientRef: waTplRef },
+        });
+        modal.close();
+        toast('Plantilla enviada.');
+      } catch (e) {
+        toast(e.message);
+        element.disabled = false;
+      }
       return refresh();
     }
-    if(name==='pay-new'){const p=await api('/api/conversations/'+state.selected+'/orders/preview');if(!p.enabled)return toast('La venta con pago está apagada para esta marca. Actívala en Operación → Pagos.');if(p.reason)return toast(p.reason+'.');showModal('Cobrar · enlace de pago de prueba',`<dl class="summary-grid"><div><dt>Curso</dt><dd>${esc(p.course)} · ${esc(p.edition)}</dd></div><div><dt>Importe vigente</dt><dd>${esc(p.amountLabel)}${p.promotion?' · '+esc(p.promotion):''}</dd></div><div><dt>Vigencia del enlace</dt><dd>${p.linkHours} h</dd></div></dl>${p.existing?`<div class="info-box">Ya existe el pedido <strong>${esc(p.existing.reference)}</strong> (${esc(p.existing.statusLabel.toLowerCase())}). Se reenvía su enlace; no se crea otro.</div>`:'<div class="info-box">Se crea el pedido con el precio del catálogo de este momento y se envía el enlace al cliente por este chat. Tomas la conversación, como al enviar una plantilla.</div>'}<form id="order-link-form" class="form-grid"><input type="hidden" name="resend" value="${p.existing?'1':'0'}">${!p.existing&&p.sessionPriceCents?`<fieldset class="survey-form"><legend>Plan de pago</legend><div class="co-radios"><label><input type="radio" name="plan" value="full" checked> Curso completo · ${esc(p.amountLabel)}</label><label><input type="radio" name="plan" value="per_session"> Por sesión · ${esc(p.sessionPriceLabel)} ahora (primera sesión) y cada sesión antes de la clase</label></div></fieldset>`:''}${p.existing?'':`<label class="field">Cupón de descuento (opcional)<span class="co-coupon"><input name="coupon" maxlength="24" autocomplete="off" placeholder="Por ejemplo VERANO10" aria-describedby="order-coupon-result"><button type="button" class="btn" data-action="pay-coupon-check">Aplicar</button></span></label><p class="crm-hint" id="order-coupon-result" aria-live="polite">Aplica al curso completo. Se comprueba al crear el pedido.</p>`}<button class="btn primary" type="submit">${p.existing?'Reenviar enlace':'Crear pedido y enviar enlace'}</button></form>`);return;}
-    if(name==='pay-coupon-check'){const code=document.querySelector('#modal [name="coupon"]')?.value||'',out=document.querySelector('#order-coupon-result');if(!out)return;if(!code.trim()){out.textContent='Aplica al curso completo. Se comprueba al crear el pedido.';out.className='crm-hint';return;}try{const q=await api('/api/conversations/'+state.selected+'/orders/preview?coupon='+encodeURIComponent(code));out.textContent=q.coupon?`Cupón ${q.coupon.code}: −${q.coupon.discountLabel}. Total para el cliente: ${q.coupon.finalLabel}.`:(q.couponError||'No se pudo aplicar el cupón.');out.className='crm-hint '+(q.coupon?'coupon-ok':'coupon-bad');}catch(e){out.textContent=e.message;out.className='crm-hint coupon-bad';}return;}
-    if(name==='msg-retry'){await api('/api/messages/'+element.dataset.id+'/retry',{method:'POST',body:{}});toast('Mensaje reenviado al canal simulado.');return refresh();}
-    if(name==='profile')return profile();
-    if(name==='contact-details')return contactDetails();
-    if(name==='copy-link'){await inviteModal();return;}
-    if(name==='invite-copy-text'){const msg=$('#invite-text')?.value||'';try{await navigator.clipboard.writeText(msg);toast('Mensaje copiado. Pégalo donde vayas a enviarlo.');}catch{$('#invite-text')?.select();toast('Copia el mensaje seleccionado.');}return;}
-    if(name==='invite-copy'){const url=$('#invite-url')?.value||location.origin;try{await navigator.clipboard.writeText(url);toast('Enlace copiado.');}catch{$('#invite-url')?.select();toast('Copia el enlace seleccionado.');}return;}
-    if(name==='logout'){await api('/api/auth/logout',{method:'POST',body:{}});alive=false;clearTimeout(reconnectTimer);socket?.close();modal.close();state.user=null;state.selected=null;state.messages=[];entry();return;}
-    if(name==='back'){state.mobileChat=false;$('.workspace').classList.remove('mobile-chat');return;}
-    if(name==='new-chat')return newChat();
-    if(name==='attach')return $('#file-input')?.click();
-    if(name==='remove-attachment'){state.attachment=null;return renderChat();}
-    if(name==='more-threads')return loadThreads(true);
-    if(name==='search-messages'){messageSearch=state.query;showModal('Buscar en esta conversación',`<form id="message-search-form" class="crm-toolbar"><label class="search">${icon('search')}<input name="query" value="${esc(messageSearch)}" placeholder="Escribe una palabra o frase" maxlength="100" required></label><button class="btn" type="submit">Buscar</button></form><div id="message-search-results" aria-live="polite"></div>`);if(messageSearch)await searchMessages();return;}
-    if(name==='more-matches')return searchMessages(element.dataset.before);
-    if(name==='older')return loadMessages(true);
-    if(name==='new-course')return editCourse();
-    if(name==='new-brand')return showModal('Nueva marca',`<p>Añade otra marca al laboratorio y crea sus cursos.</p><form id="brand-form" class="form-grid"><label class="field">Nombre<input name="name" required minlength="2" maxlength="60"></label><label class="field">Descripción<input name="description" maxlength="200"></label><button class="btn primary" type="submit">Crear marca</button></form>`);
+    if (name === 'pay-done') {
+      modal.close();
+      if (state.publicPay) return publicPayScreen(false);
+      return refresh();
+    }
+    if (name === 'public-pay-open') {
+      if (state.publicPay) await openPayment(state.publicPay);
+      return;
+    }
+    if (name === 'pay-sim') {
+      const id = element.dataset.id,
+        method = element.dataset.method,
+        outcome = element.dataset.outcome || 'approved',
+        last4 = element.dataset.last4 || '',
+        sc = window.simCheckout,
+        box = () => $('#modal-content .pg');
+      if (sc && box()) {
+        box().outerHTML = sc.processing({ esc, icon });
+        icons();
+      }
+      const started = Date.now();
+      let r = null,
+        err = null;
+      try {
+        r = await api(payApi(id) + '/pay', { method: 'POST', body: { method, outcome } });
+      } catch (e) {
+        err = e;
+      }
+      await new Promise(done => setTimeout(done, Math.max(0, 1400 - (Date.now() - started)))); // un instante de «procesando», como en una pasarela real
+      if (sc && modal.open && box()) {
+        box().outerHTML = err
+          ? sc.failed(err.message, { esc, icon, id })
+          : sc.result({ ...(payOrder || {}), ...r.order, id }, { status: r.order.status, method, last4, esc, icon });
+        icons();
+      } else {
+        if (modal.open) modal.close();
+        toast(
+          err
+            ? err.message
+            : r.order.status === 'paid'
+              ? 'Pago simulado aprobado: tu inscripción de práctica quedó registrada.'
+              : 'El pago simulado fue rechazado; puedes intentarlo de nuevo.',
+        );
+      }
+      return refresh();
+    }
+    if (name === 'pay-new') {
+      const p = await api('/api/conversations/' + state.selected + '/orders/preview');
+      if (!p.enabled) return toast('La venta con pago está apagada para esta marca. Actívala en Operación → Pagos.');
+      if (p.reason) return toast(p.reason + '.');
+      showModal(
+        'Cobrar · enlace de pago de prueba',
+        `<dl class="summary-grid"><div><dt>Curso</dt><dd>${esc(p.course)} · ${esc(p.edition)}</dd></div><div><dt>Importe vigente</dt><dd>${esc(p.amountLabel)}${p.promotion ? ' · ' + esc(p.promotion) : ''}</dd></div><div><dt>Vigencia del enlace</dt><dd>${p.linkHours} h</dd></div></dl>${p.existing ? `<div class="info-box">Ya existe el pedido <strong>${esc(p.existing.reference)}</strong> (${esc(p.existing.statusLabel.toLowerCase())}). Se reenvía su enlace; no se crea otro.</div>` : '<div class="info-box">Se crea el pedido con el precio del catálogo de este momento y se envía el enlace al cliente por este chat. Tomas la conversación, como al enviar una plantilla.</div>'}<form id="order-link-form" class="form-grid"><input type="hidden" name="resend" value="${p.existing ? '1' : '0'}">${!p.existing && p.sessionPriceCents ? `<fieldset class="survey-form"><legend>Plan de pago</legend><div class="co-radios"><label><input type="radio" name="plan" value="full" checked> Curso completo · ${esc(p.amountLabel)}</label><label><input type="radio" name="plan" value="per_session"> Por sesión · ${esc(p.sessionPriceLabel)} ahora (primera sesión) y cada sesión antes de la clase</label></div></fieldset>` : ''}${p.existing ? '' : `<label class="field">Cupón de descuento (opcional)<span class="co-coupon"><input name="coupon" maxlength="24" autocomplete="off" placeholder="Por ejemplo VERANO10" aria-describedby="order-coupon-result"><button type="button" class="btn" data-action="pay-coupon-check">Aplicar</button></span></label><p class="crm-hint" id="order-coupon-result" aria-live="polite">Aplica al curso completo. Se comprueba al crear el pedido.</p>`}<button class="btn primary" type="submit">${p.existing ? 'Reenviar enlace' : 'Crear pedido y enviar enlace'}</button></form>`,
+      );
+      return;
+    }
+    if (name === 'pay-coupon-check') {
+      const code = document.querySelector('#modal [name="coupon"]')?.value || '',
+        out = document.querySelector('#order-coupon-result');
+      if (!out) return;
+      if (!code.trim()) {
+        out.textContent = 'Aplica al curso completo. Se comprueba al crear el pedido.';
+        out.className = 'crm-hint';
+        return;
+      }
+      try {
+        const q = await api(
+          '/api/conversations/' + state.selected + '/orders/preview?coupon=' + encodeURIComponent(code),
+        );
+        out.textContent = q.coupon
+          ? `Cupón ${q.coupon.code}: −${q.coupon.discountLabel}. Total para el cliente: ${q.coupon.finalLabel}.`
+          : q.couponError || 'No se pudo aplicar el cupón.';
+        out.className = 'crm-hint ' + (q.coupon ? 'coupon-ok' : 'coupon-bad');
+      } catch (e) {
+        out.textContent = e.message;
+        out.className = 'crm-hint coupon-bad';
+      }
+      return;
+    }
+    if (name === 'msg-retry') {
+      await api('/api/messages/' + element.dataset.id + '/retry', { method: 'POST', body: {} });
+      toast('Mensaje reenviado al canal simulado.');
+      return refresh();
+    }
+    if (name === 'profile') return profile();
+    if (name === 'contact-details') return contactDetails();
+    if (name === 'copy-link') {
+      await inviteModal();
+      return;
+    }
+    if (name === 'invite-copy-text') {
+      const msg = $('#invite-text')?.value || '';
+      try {
+        await navigator.clipboard.writeText(msg);
+        toast('Mensaje copiado. Pégalo donde vayas a enviarlo.');
+      } catch {
+        $('#invite-text')?.select();
+        toast('Copia el mensaje seleccionado.');
+      }
+      return;
+    }
+    if (name === 'invite-copy') {
+      const url = $('#invite-url')?.value || location.origin;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast('Enlace copiado.');
+      } catch {
+        $('#invite-url')?.select();
+        toast('Copia el enlace seleccionado.');
+      }
+      return;
+    }
+    if (name === 'logout') {
+      await api('/api/auth/logout', { method: 'POST', body: {} });
+      alive = false;
+      clearTimeout(reconnectTimer);
+      socket?.close();
+      modal.close();
+      state.user = null;
+      state.selected = null;
+      state.messages = [];
+      entry();
+      return;
+    }
+    if (name === 'back') {
+      state.mobileChat = false;
+      $('.workspace').classList.remove('mobile-chat');
+      return;
+    }
+    if (name === 'new-chat') return newChat();
+    if (name === 'attach') return $('#file-input')?.click();
+    if (name === 'remove-attachment') {
+      state.attachment = null;
+      return renderChat();
+    }
+    if (name === 'more-threads') return loadThreads(true);
+    if (name === 'search-messages') {
+      messageSearch = state.query;
+      showModal(
+        'Buscar en esta conversación',
+        `<form id="message-search-form" class="crm-toolbar"><label class="search">${icon('search')}<input name="query" value="${esc(messageSearch)}" placeholder="Escribe una palabra o frase" maxlength="100" required></label><button class="btn" type="submit">Buscar</button></form><div id="message-search-results" aria-live="polite"></div>`,
+      );
+      if (messageSearch) await searchMessages();
+      return;
+    }
+    if (name === 'more-matches') return searchMessages(element.dataset.before);
+    if (name === 'older') return loadMessages(true);
+    if (name === 'new-course') return editCourse();
+    if (name === 'new-brand')
+      return showModal(
+        'Nueva marca',
+        `<p>Añade otra marca al laboratorio y crea sus cursos.</p><form id="brand-form" class="form-grid"><label class="field">Nombre<input name="name" required minlength="2" maxlength="60"></label><label class="field">Descripción<input name="description" maxlength="200"></label><button class="btn primary" type="submit">Crear marca</button></form>`,
+      );
   }
-  document.addEventListener('click',async e=>{
-    const button=e.target.closest('button');const image=e.target.closest('[data-image]');if(image){showModal('Imagen enviada',`<img class="full-flyer" src="${esc(image.dataset.image)}" alt="Imagen enviada en la conversación">`);return;}if(!button)return;
-    try{
-      if(button.dataset.action)return await action(button.dataset.action,button);
-      if(button.dataset.view)return setView(button.dataset.view);
-      if(button.dataset.mode){state.mode=button.dataset.mode;localStorage.setItem('tc-mode-'+state.user.id,state.mode);state.selected=null;state.channel='all';state.filter='all';state.view=state.mode==='agent'?'day':'inbox';state.mobileChat=false;return shell();}
-      if(button.dataset.source){state.channel=button.dataset.source;renderPage();return;}
-      if(button.dataset.filter){state.filter=button.dataset.filter;$('.filters')?.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.filter===state.filter));await loadThreads();return;}
-      if(button.dataset.conversation){state.drafts[button.dataset.conversation]??=localStorage.getItem('tc-draft-'+state.user.id+'-'+button.dataset.conversation)||'';return selectConversation(button.dataset.conversation);}
-      if(button.dataset.newChannel){state.newChannel=button.dataset.newChannel;$('.channel-select').querySelectorAll('button').forEach(b=>b.classList.toggle('selected',b.dataset.newChannel===state.newChannel));return;}
-      if(button.dataset.quick)return sendMessage(button.dataset.quick);
-      if(button.dataset.chatAction){await api(`/api/conversations/${state.selected}/action`,{method:'POST',body:{action:button.dataset.chatAction}});return refresh();}
-      if(button.dataset.template)return catalogueUI.action('cat-materials',{dataset:{kind:button.dataset.template}});
-      if(button.dataset.startCourse){if(agentMode()){state.mode='customer';state.selected=null;shell();}return newChat(button.dataset.startCourse);}
-      if(button.dataset.courseDetail)return courseDetails(button.dataset.courseDetail);
-      if(button.dataset.editCourse)return editCourse(button.dataset.editCourse);
-      if(button.dataset.courseFlyer)return showModal('Flyer de práctica',`<img class="full-flyer" src="/api/courses/${button.dataset.courseFlyer}/flyer" alt="Flyer actual del curso">`);
-    }catch(error){toast(error.message);button.disabled=false;}
+  document.addEventListener('click', async e => {
+    const button = e.target.closest('button');
+    const image = e.target.closest('[data-image]');
+    if (image) {
+      showModal(
+        'Imagen enviada',
+        `<img class="full-flyer" src="${esc(image.dataset.image)}" alt="Imagen enviada en la conversación">`,
+      );
+      return;
+    }
+    if (!button) return;
+    try {
+      if (button.dataset.action) return await action(button.dataset.action, button);
+      if (button.dataset.view) return setView(button.dataset.view);
+      if (button.dataset.mode) {
+        state.mode = button.dataset.mode;
+        localStorage.setItem('tc-mode-' + state.user.id, state.mode);
+        state.selected = null;
+        state.channel = 'all';
+        state.filter = 'all';
+        state.view = state.mode === 'agent' ? 'day' : 'inbox';
+        state.mobileChat = false;
+        return shell();
+      }
+      if (button.dataset.source) {
+        state.channel = button.dataset.source;
+        renderPage();
+        return;
+      }
+      if (button.dataset.filter) {
+        state.filter = button.dataset.filter;
+        $('.filters')
+          ?.querySelectorAll('button')
+          .forEach(b => b.classList.toggle('active', b.dataset.filter === state.filter));
+        await loadThreads();
+        return;
+      }
+      if (button.dataset.conversation) {
+        state.drafts[button.dataset.conversation] ??=
+          localStorage.getItem('tc-draft-' + state.user.id + '-' + button.dataset.conversation) || '';
+        return selectConversation(button.dataset.conversation);
+      }
+      if (button.dataset.newChannel) {
+        state.newChannel = button.dataset.newChannel;
+        $('.channel-select')
+          .querySelectorAll('button')
+          .forEach(b => b.classList.toggle('selected', b.dataset.newChannel === state.newChannel));
+        return;
+      }
+      if (button.dataset.quick) return sendMessage(button.dataset.quick);
+      if (button.dataset.chatAction) {
+        await api(`/api/conversations/${state.selected}/action`, {
+          method: 'POST',
+          body: { action: button.dataset.chatAction },
+        });
+        return refresh();
+      }
+      if (button.dataset.template)
+        return catalogueUI.action('cat-materials', { dataset: { kind: button.dataset.template } });
+      if (button.dataset.startCourse) {
+        if (agentMode()) {
+          state.mode = 'customer';
+          state.selected = null;
+          shell();
+        }
+        return newChat(button.dataset.startCourse);
+      }
+      if (button.dataset.courseDetail) return courseDetails(button.dataset.courseDetail);
+      if (button.dataset.editCourse) return editCourse(button.dataset.editCourse);
+      if (button.dataset.courseFlyer)
+        return showModal(
+          'Flyer de práctica',
+          `<img class="full-flyer" src="/api/courses/${button.dataset.courseFlyer}/flyer" alt="Flyer actual del curso">`,
+        );
+    } catch (error) {
+      toast(error.message);
+      button.disabled = false;
+    }
   });
   // Cuadro de escribir: crece con el texto (hasta ~45 % de la altura) para poder leer y editar mensajes largos sin desplazarse; «Ampliar» lo deja alto fijo.
-  function fitComposer(){const ta=document.getElementById('message-input');if(!ta)return;const tall=ta.closest('.compose')?.classList.contains('compose-tall');ta.style.height='auto';const small=window.innerWidth<=680,max=Math.round(window.innerHeight*(tall?(small?.5:.62):(small?.3:.42))),min=tall?Math.round(window.innerHeight*(small?.28:.34)):0;ta.style.height=Math.max(min,Math.min(ta.scrollHeight+2,max))+'px';ta.style.overflowY=ta.scrollHeight+2>max?'auto':'hidden';}
-  document.addEventListener('click',e=>{const b=e.target.closest('[data-action="compose-expand"]');if(!b)return;const box=b.closest('.compose');const on=!box.classList.contains('compose-tall');box.classList.toggle('compose-tall',on);b.setAttribute('aria-pressed',String(on));fitComposer();document.getElementById('message-input')?.focus();});
-  window.addEventListener('resize',()=>fitComposer());
-  document.addEventListener('input',e=>{if(e.target.id==='thread-search'){state.query=e.target.value;inboxVersion++;inboxItems=[];inboxCursor=null;inboxLoading=true;renderThreads();clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadThreads(),250);}if(e.target.id==='message-input'){fitComposer();state.drafts[state.selected]=e.target.value;localStorage.setItem('tc-draft-'+state.user.id+'-'+state.selected,e.target.value);if(socket?.readyState===WebSocket.OPEN&&Date.now()-typingTime>1200){socket.send(JSON.stringify({type:'typing',conversationId:state.selected}));typingTime=Date.now();}}});
-  document.addEventListener('keydown',e=>{if(e.target.id==='message-input'&&e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();sendMessage();}});
-  document.addEventListener('change',async e=>{
-    try{
-      if(await operationsUI.change(e.target))return;
-      if(await analyticsUI.change(e.target))return;
-      if(await portalUI.change(e.target))return;
-      if(await presentationUI.change(e.target))return;
-      if(catalogueUI.change(e.target))return;
-      if(crmUI.change(e.target))return;
-      if(e.target.id==='tag-filter'){state.tag=e.target.value;await loadThreads();return;}
-      if(e.target.id==='brand-picker'){state.brand=e.target.value;state.tag='';state.selected=null;state.messages=[];state.mobileChat=false;return renderPage();}
-      if(e.target.id==='stage-picker'){if(e.target.value==='perdida'){e.target.value=current().stage;return crmUI.action('crm-opportunity',{dataset:{id:current().opportunity_id}});}try{await api(`/api/conversations/${state.selected}/action`,{method:'POST',body:{action:'stage',stage:e.target.value,expectedRevision:current().opportunity_revision}});}finally{await refresh();}return;}
-      if(e.target.id==='file-input'){const conversationId=state.selected;const file=e.target.files[0];if(!file)return;if(file.size>4*1024*1024)return toast('Máximo 4 MB por archivo.');const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file);});if(state.selected!==conversationId)return;state.attachment={name:file.name,type:file.type,base64:data.split(',')[1],key:crypto.randomUUID()};renderChat();}
-    }catch(error){toast(error.message||'No se pudo leer el archivo.');}
+  function fitComposer() {
+    const ta = document.getElementById('message-input');
+    if (!ta) return;
+    const tall = ta.closest('.compose')?.classList.contains('compose-tall');
+    ta.style.height = 'auto';
+    const small = window.innerWidth <= 680,
+      max = Math.round(window.innerHeight * (tall ? (small ? 0.5 : 0.62) : small ? 0.3 : 0.42)),
+      min = tall ? Math.round(window.innerHeight * (small ? 0.28 : 0.34)) : 0;
+    ta.style.height = Math.max(min, Math.min(ta.scrollHeight + 2, max)) + 'px';
+    ta.style.overflowY = ta.scrollHeight + 2 > max ? 'auto' : 'hidden';
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-action="compose-expand"]');
+    if (!b) return;
+    const box = b.closest('.compose');
+    const on = !box.classList.contains('compose-tall');
+    box.classList.toggle('compose-tall', on);
+    b.setAttribute('aria-pressed', String(on));
+    fitComposer();
+    document.getElementById('message-input')?.focus();
   });
-  document.addEventListener('submit',async e=>{
-    e.preventDefault();const form=e.target;const input=Object.fromEntries(new FormData(form));const button=$('button[type=submit]',form);if(button)button.disabled=true;
-    try{
-      if(form.id==='message-search-form'){messageSearch=input.query.trim();if(messageSearch)await searchMessages();return;}
-      if(await tagsUI.submit(form))return;
-      if(await quickUI.submit(form))return;
-      if(await operationsUI.submit(form,input))return;
-      if(await catalogueUI.submit(form,input))return;
-      if(await crmUI.submit(form,input))return;
-      if(form.getAttribute('id')==='auth-form'){let result;if(state.mfaChallenge){try{result=await api('/api/auth/mfa',{method:'POST',body:{challenge:state.mfaChallenge,code:input.code}});}catch(e){if(/venció|Demasiados|Vuelve/.test(e.message)){state.mfaChallenge=null;entry();$('#auth-error').textContent=e.message;$('#auth-error').hidden=false;return;}throw e;}state.mfaChallenge=null;}else{result=await api('/api/auth/'+state.authMode,{method:'POST',body:input});if(result.mfaRequired){state.mfaChallenge=result.challenge;const f=$('#auth-form');f.innerHTML='<p class="crm-hint">Escribe el código de 6 dígitos de tu app de autenticación, o un código de recuperación.</p><label class="field">Código de verificación<input name="code" inputmode="numeric" autocomplete="one-time-code" required maxlength="20" autocapitalize="none" spellcheck="false"></label><button type="submit" class="btn primary">Verificar y entrar</button><div class="form-error" id="auth-error" hidden></div><button type="button" class="btn" data-action="auth-mfa-cancel">Volver</button>';f.querySelector('input').focus();return;}}state.user=result.user;if(result.usedRecovery)setTimeout(()=>toast('Usaste un código de recuperación. Te quedan '+result.recoveryLeft+'. Genera nuevos en Mi configuración.'),800);state.mode=isStaff()?'agent':'customer';state.selected=null;state.view='inbox';await load();return;}
-      if(form.getAttribute('id')==='survey-form'){await api('/api/survey/'+input.token,{method:'POST',body:{content:input.content,instructor:input.instructor,organization:input.organization,nps:input.nps,comment:input.comment}});modal.close();toast('¡Gracias! Tus respuestas quedaron registradas.');return;}
-      if(form.getAttribute('id')==='order-link-form'){const r=await api('/api/conversations/'+state.selected+'/orders',{method:'POST',body:{resend:input.resend==='1',plan:input.plan||'full',coupon:(input.coupon||'').trim()||undefined}});modal.close();await refresh();const link=location.origin+r.order.link;showModal(r.created?'Pedido creado y enlace enviado':'Enlace reenviado',`<span class="pill">${esc(r.order.reference)}</span><dl class="summary-grid"><div><dt>Importe</dt><dd>${esc(r.order.amountLabel)}</dd></div><div><dt>Enlace de pago</dt><dd><code>${esc(link)}</code></dd></div></dl><div class="info-box">El cliente ya lo recibió en este chat. Si lo necesitas por otro medio, cópialo. Al abrirlo verá la pantalla de pago (tarjeta u OXXO simulados) y, al pagar, la venta entra sola a Finanzas.</div><div class="actions"><button type="button" class="btn primary" data-action="order-copy-link" data-link="${esc(link)}">${icon('link')} Copiar enlace</button><button type="button" class="btn" data-action="close-modal">Listo</button></div>`);return true;}
-      if(form.getAttribute('id')==='message-form')return await sendMessage();
-      if(form.getAttribute('id')==='new-chat-form'){const result=await api('/api/conversations',{method:'POST',body:{courseId:input.courseId,editionId:input.editionId,channel:state.newChannel,...(state.referral?{referral:state.referral}:{})}});state.referral=null;const data=await api('/api/bootstrap');Object.assign(state,{brands:data.brands,courses:data.courses,editions:data.editions,conversations:data.conversations});state.mode='customer';state.view='inbox';state.channel='all';state.filter='all';shell();await selectConversation(result.conversation.id);modal.close();return;}
-      if(form.getAttribute('id')==='course-form'){const existing=input.id?courseById(input.id):null;await api('/api/catalog',{method:'POST',body:{...input,brandId:existing?.brand_id||input.brandId}});modal.close();await refresh();renderCourses();toast('Nueva versión guardada. Las siguientes respuestas usarán estos datos.');return;}
-      if(form.getAttribute('id')==='brand-form'){await api('/api/brands',{method:'POST',body:input});modal.close();await refresh();shell();toast('Marca creada. Ya puedes añadir sus cursos.');}
-    }catch(error){if(form.getAttribute('id')==='auth-form'){$('#auth-error').textContent=error.message;$('#auth-error').hidden=false;}else toast(error.message);}
-    finally{if(button)button.disabled=false;}
+  window.addEventListener('resize', () => fitComposer());
+  document.addEventListener('input', e => {
+    if (e.target.id === 'thread-search') {
+      state.query = e.target.value;
+      inboxVersion++;
+      inboxItems = [];
+      inboxCursor = null;
+      inboxLoading = true;
+      renderThreads();
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadThreads(), 250);
+    }
+    if (e.target.id === 'message-input') {
+      fitComposer();
+      state.drafts[state.selected] = e.target.value;
+      localStorage.setItem('tc-draft-' + state.user.id + '-' + state.selected, e.target.value);
+      if (socket?.readyState === WebSocket.OPEN && Date.now() - typingTime > 1200) {
+        socket.send(JSON.stringify({ type: 'typing', conversationId: state.selected }));
+        typingTime = Date.now();
+      }
+    }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.target.id === 'message-input' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+  document.addEventListener('change', async e => {
+    try {
+      if (await operationsUI.change(e.target)) return;
+      if (await analyticsUI.change(e.target)) return;
+      if (await portalUI.change(e.target)) return;
+      if (await presentationUI.change(e.target)) return;
+      if (catalogueUI.change(e.target)) return;
+      if (crmUI.change(e.target)) return;
+      if (e.target.id === 'tag-filter') {
+        state.tag = e.target.value;
+        await loadThreads();
+        return;
+      }
+      if (e.target.id === 'brand-picker') {
+        state.brand = e.target.value;
+        state.tag = '';
+        state.selected = null;
+        state.messages = [];
+        state.mobileChat = false;
+        return renderPage();
+      }
+      if (e.target.id === 'stage-picker') {
+        if (e.target.value === 'perdida') {
+          e.target.value = current().stage;
+          return crmUI.action('crm-opportunity', { dataset: { id: current().opportunity_id } });
+        }
+        try {
+          await api(`/api/conversations/${state.selected}/action`, {
+            method: 'POST',
+            body: { action: 'stage', stage: e.target.value, expectedRevision: current().opportunity_revision },
+          });
+        } finally {
+          await refresh();
+        }
+        return;
+      }
+      if (e.target.id === 'file-input') {
+        const conversationId = state.selected;
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 4 * 1024 * 1024) return toast('Máximo 4 MB por archivo.');
+        const data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        if (state.selected !== conversationId) return;
+        state.attachment = { name: file.name, type: file.type, base64: data.split(',')[1], key: crypto.randomUUID() };
+        renderChat();
+      }
+    } catch (error) {
+      toast(error.message || 'No se pudo leer el archivo.');
+    }
+  });
+  document.addEventListener('submit', async e => {
+    e.preventDefault();
+    const form = e.target;
+    const input = Object.fromEntries(new FormData(form));
+    const button = $('button[type=submit]', form);
+    if (button) button.disabled = true;
+    try {
+      if (form.id === 'message-search-form') {
+        messageSearch = input.query.trim();
+        if (messageSearch) await searchMessages();
+        return;
+      }
+      if (await tagsUI.submit(form)) return;
+      if (await quickUI.submit(form)) return;
+      if (await operationsUI.submit(form, input)) return;
+      if (await catalogueUI.submit(form, input)) return;
+      if (await crmUI.submit(form, input)) return;
+      if (form.getAttribute('id') === 'auth-form') {
+        let result;
+        if (state.mfaChallenge) {
+          try {
+            result = await api('/api/auth/mfa', {
+              method: 'POST',
+              body: { challenge: state.mfaChallenge, code: input.code },
+            });
+          } catch (e) {
+            if (/venció|Demasiados|Vuelve/.test(e.message)) {
+              state.mfaChallenge = null;
+              entry();
+              $('#auth-error').textContent = e.message;
+              $('#auth-error').hidden = false;
+              return;
+            }
+            throw e;
+          }
+          state.mfaChallenge = null;
+        } else {
+          result = await api('/api/auth/' + state.authMode, { method: 'POST', body: input });
+          if (result.mfaRequired) {
+            state.mfaChallenge = result.challenge;
+            const f = $('#auth-form');
+            f.innerHTML =
+              '<p class="crm-hint">Escribe el código de 6 dígitos de tu app de autenticación, o un código de recuperación.</p><label class="field">Código de verificación<input name="code" inputmode="numeric" autocomplete="one-time-code" required maxlength="20" autocapitalize="none" spellcheck="false"></label><button type="submit" class="btn primary">Verificar y entrar</button><div class="form-error" id="auth-error" hidden></div><button type="button" class="btn" data-action="auth-mfa-cancel">Volver</button>';
+            f.querySelector('input').focus();
+            return;
+          }
+        }
+        state.user = result.user;
+        if (result.usedRecovery)
+          setTimeout(
+            () =>
+              toast(
+                'Usaste un código de recuperación. Te quedan ' +
+                  result.recoveryLeft +
+                  '. Genera nuevos en Mi configuración.',
+              ),
+            800,
+          );
+        state.mode = isStaff() ? 'agent' : 'customer';
+        state.selected = null;
+        state.view = 'inbox';
+        await load();
+        return;
+      }
+      if (form.getAttribute('id') === 'survey-form') {
+        await api('/api/survey/' + input.token, {
+          method: 'POST',
+          body: {
+            content: input.content,
+            instructor: input.instructor,
+            organization: input.organization,
+            nps: input.nps,
+            comment: input.comment,
+          },
+        });
+        modal.close();
+        toast('¡Gracias! Tus respuestas quedaron registradas.');
+        return;
+      }
+      if (form.getAttribute('id') === 'order-link-form') {
+        const r = await api('/api/conversations/' + state.selected + '/orders', {
+          method: 'POST',
+          body: {
+            resend: input.resend === '1',
+            plan: input.plan || 'full',
+            coupon: (input.coupon || '').trim() || undefined,
+          },
+        });
+        modal.close();
+        await refresh();
+        const link = location.origin + r.order.link;
+        showModal(
+          r.created ? 'Pedido creado y enlace enviado' : 'Enlace reenviado',
+          `<span class="pill">${esc(r.order.reference)}</span><dl class="summary-grid"><div><dt>Importe</dt><dd>${esc(r.order.amountLabel)}</dd></div><div><dt>Enlace de pago</dt><dd><code>${esc(link)}</code></dd></div></dl><div class="info-box">El cliente ya lo recibió en este chat. Si lo necesitas por otro medio, cópialo. Al abrirlo verá la pantalla de pago (tarjeta u OXXO simulados) y, al pagar, la venta entra sola a Finanzas.</div><div class="actions"><button type="button" class="btn primary" data-action="order-copy-link" data-link="${esc(link)}">${icon('link')} Copiar enlace</button><button type="button" class="btn" data-action="close-modal">Listo</button></div>`,
+        );
+        return true;
+      }
+      if (form.getAttribute('id') === 'message-form') return await sendMessage();
+      if (form.getAttribute('id') === 'new-chat-form') {
+        const result = await api('/api/conversations', {
+          method: 'POST',
+          body: {
+            courseId: input.courseId,
+            editionId: input.editionId,
+            channel: state.newChannel,
+            ...(state.referral ? { referral: state.referral } : {}),
+          },
+        });
+        state.referral = null;
+        const data = await api('/api/bootstrap');
+        Object.assign(state, {
+          brands: data.brands,
+          courses: data.courses,
+          editions: data.editions,
+          conversations: data.conversations,
+        });
+        state.mode = 'customer';
+        state.view = 'inbox';
+        state.channel = 'all';
+        state.filter = 'all';
+        shell();
+        await selectConversation(result.conversation.id);
+        modal.close();
+        return;
+      }
+      if (form.getAttribute('id') === 'course-form') {
+        const existing = input.id ? courseById(input.id) : null;
+        await api('/api/catalog', { method: 'POST', body: { ...input, brandId: existing?.brand_id || input.brandId } });
+        modal.close();
+        await refresh();
+        renderCourses();
+        toast('Nueva versión guardada. Las siguientes respuestas usarán estos datos.');
+        return;
+      }
+      if (form.getAttribute('id') === 'brand-form') {
+        await api('/api/brands', { method: 'POST', body: input });
+        modal.close();
+        await refresh();
+        shell();
+        toast('Marca creada. Ya puedes añadir sus cursos.');
+      }
+    } catch (error) {
+      if (form.getAttribute('id') === 'auth-form') {
+        $('#auth-error').textContent = error.message;
+        $('#auth-error').hidden = false;
+      } else toast(error.message);
+    } finally {
+      if (button) button.disabled = false;
+    }
   });
   load();
 })();

@@ -1,192 +1,890 @@
-window.createCatalogueUI=function({state,api,esc,icon,icons,showModal,toast,refresh,setView,newChat}){
-  const $=s=>document.querySelector(s),admin=()=>state.user.role==='admin';
-  const knowledgeUI=window.createKnowledgeUI({state,api,esc,icon,showModal,toast,reload:()=>render()}),evaluationUI=window.createEvaluationUI({state,api,esc,icon,showModal,toast,reload:()=>render()}),contentUI=window.createContentUI({state,api,esc,icon,showModal,toast,reload:()=>render()});
+window.createCatalogueUI = function ({ state, api, esc, icon, icons, showModal, toast, refresh, setView, newChat }) {
+  const $ = s => document.querySelector(s),
+    admin = () => state.user.role === 'admin';
+  const knowledgeUI = window.createKnowledgeUI({ state, api, esc, icon, showModal, toast, reload: () => render() }),
+    evaluationUI = window.createEvaluationUI({ state, api, esc, icon, showModal, toast, reload: () => render() }),
+    contentUI = window.createContentUI({ state, api, esc, icon, showModal, toast, reload: () => render() });
   // Funciones de contenido (bloque 2.6): diseño crea/edita flyers y plantillas; aprobación aprueba/archiva; administración todo.
-  const canDesign=()=>admin()||contentUI.access().design,canApprove=()=>admin()||contentUI.access().approve;
-  const importUI=window.createCatalogueImportUI({api,esc,icon,showModal,toast,reload:()=>render()}),knowledgeImportUI=window.createKnowledgeImportUI({api,esc,icon,showModal,toast,reload:()=>render()});
-  const tabs={courses:'Cursos',editions:'Ediciones',promotions:'Promociones',flyers:'Flyers',templates:'Plantillas',content:'Contenido',knowledge:'Conocimiento',evaluation:'Evaluación'};
-  const scenarios={info:'Información',syllabus:'Temario',schedule:'Fecha y docente',price:'Precio',enroll:'Inscripción',followup:'Seguimiento',after_sale:'Posventa',ad_welcome:'Evento · bienvenida por anuncio',away_hours:'Evento · fuera de horario',payment_pending:'Evento · pago pendiente',payment_confirmed:'Evento · pago confirmado',session_reminder:'Evento · recordatorio de sesión',recording_available:'Evento · grabación disponible',certificate_ready:'Evento · certificado listo',session_payment:'Evento · pago de sesión',survey_request:'Evento · invitación a encuesta'};
-  const states={draft:'Borrador',published:'Publicada',approved:'Aprobado',archived:'Archivado'};
-  let data={courses:[],editions:[],promotions:[],flyers:[],templates:[],variables:[]},tab='courses',query='',status='',version=0,material=null;
-  const brand=id=>state.brands.find(b=>b.id===id)?.name||'',course=id=>data.courses.find(c=>c.id===id),edition=id=>data.editions.find(e=>e.id===id);
-  const money=(n,c='MXN')=>new Intl.NumberFormat('es-MX',{style:'currency',currency:c}).format(n/100)+' '+c;
-  const stamp=(n,zone)=>n==null?'Por confirmar':new Intl.DateTimeFormat('es-MX',{dateStyle:'medium',timeStyle:'short',...(zone?{timeZone:zone}:{})}).format(n);
-  const opts=(items,key,label,selected='')=>items.map(x=>`<option value="${esc(x[key])}" ${x[key]===selected?'selected':''}>${esc(typeof label==='function'?label(x):x[label])}</option>`).join('');
-  const btn=(action,label,id='',type='',extra='')=>`<button type="button" class="btn" data-action="cat-${action}" data-id="${esc(id)}" data-type="${type}" ${extra}>${label}</button>`;
-  const field=(label,name,value='',type='text',extra='')=>`<label class="field">${label}<input name="${name}" type="${type}" value="${esc(value??'')}" ${extra}></label>`;
-  const select=(label,name,options,extra='')=>`<label class="field">${label}<select name="${name}" ${extra}>${options}</select></label>`;
-  const hidden=(name,value)=>`<input type="hidden" name="${name}" value="${esc(value??'')}">`;
-  const statusOptions=(current,content=false)=>opts((content?['draft','approved','archived']:['draft','published','archived']).map(id=>({id,name:states[id]})),'id','name',current);
-  const channelOptions=value=>opts([{id:'all',name:'Todos los canales'},{id:'whatsapp',name:'WhatsApp'},{id:'instagram',name:'Instagram'},{id:'facebook',name:'Facebook'}],'id','name',value||'all');
-  const filtered=items=>items.filter(x=>(state.brand==='all'||x.brand_id===state.brand)&&(!status||(x.status||(!x.active?'archived':'published'))===status)&&(!query||JSON.stringify([x.title,x.name,x.body,brand(x.brand_id),course(x.course_id)?.title,edition(x.edition_id)?.name]).toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').includes(query.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''))));
-  const badge=(label,good=false)=>`<span class="cat-badge ${good?'ready':''}">${esc(label)}</span>`;
-  const editionOptions=(courseId,selected,onlyPublished=false)=>opts(data.editions.filter(e=>(!courseId||e.course_id===courseId)&&(!onlyPublished||e.status==='published')),'id',e=>course(e.course_id)?.title+' · '+e.name,selected);
-  function zonedInput(n,zone='America/Mexico_City'){
-    if(n==null)return '';const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(n).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+  const canDesign = () => admin() || contentUI.access().design,
+    canApprove = () => admin() || contentUI.access().approve;
+  const importUI = window.createCatalogueImportUI({ api, esc, icon, showModal, toast, reload: () => render() }),
+    knowledgeImportUI = window.createKnowledgeImportUI({ api, esc, icon, showModal, toast, reload: () => render() });
+  const tabs = {
+    courses: 'Cursos',
+    editions: 'Ediciones',
+    promotions: 'Promociones',
+    flyers: 'Flyers',
+    templates: 'Plantillas',
+    content: 'Contenido',
+    knowledge: 'Conocimiento',
+    evaluation: 'Evaluación',
+  };
+  const scenarios = {
+    info: 'Información',
+    syllabus: 'Temario',
+    schedule: 'Fecha y docente',
+    price: 'Precio',
+    enroll: 'Inscripción',
+    followup: 'Seguimiento',
+    after_sale: 'Posventa',
+    ad_welcome: 'Evento · bienvenida por anuncio',
+    away_hours: 'Evento · fuera de horario',
+    payment_pending: 'Evento · pago pendiente',
+    payment_confirmed: 'Evento · pago confirmado',
+    session_reminder: 'Evento · recordatorio de sesión',
+    recording_available: 'Evento · grabación disponible',
+    certificate_ready: 'Evento · certificado listo',
+    session_payment: 'Evento · pago de sesión',
+    survey_request: 'Evento · invitación a encuesta',
+  };
+  const states = { draft: 'Borrador', published: 'Publicada', approved: 'Aprobado', archived: 'Archivado' };
+  let data = { courses: [], editions: [], promotions: [], flyers: [], templates: [], variables: [] },
+    tab = 'courses',
+    query = '',
+    status = '',
+    version = 0,
+    material = null;
+  const brand = id => state.brands.find(b => b.id === id)?.name || '',
+    course = id => data.courses.find(c => c.id === id),
+    edition = id => data.editions.find(e => e.id === id);
+  const money = (n, c = 'MXN') =>
+    new Intl.NumberFormat('es-MX', { style: 'currency', currency: c }).format(n / 100) + ' ' + c;
+  const stamp = (n, zone) =>
+    n == null
+      ? 'Por confirmar'
+      : new Intl.DateTimeFormat('es-MX', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+          ...(zone ? { timeZone: zone } : {}),
+        }).format(n);
+  const opts = (items, key, label, selected = '') =>
+    items
+      .map(
+        x =>
+          `<option value="${esc(x[key])}" ${x[key] === selected ? 'selected' : ''}>${esc(typeof label === 'function' ? label(x) : x[label])}</option>`,
+      )
+      .join('');
+  const btn = (action, label, id = '', type = '', extra = '') =>
+    `<button type="button" class="btn" data-action="cat-${action}" data-id="${esc(id)}" data-type="${type}" ${extra}>${label}</button>`;
+  const field = (label, name, value = '', type = 'text', extra = '') =>
+    `<label class="field">${label}<input name="${name}" type="${type}" value="${esc(value ?? '')}" ${extra}></label>`;
+  const select = (label, name, options, extra = '') =>
+    `<label class="field">${label}<select name="${name}" ${extra}>${options}</select></label>`;
+  const hidden = (name, value) => `<input type="hidden" name="${name}" value="${esc(value ?? '')}">`;
+  const statusOptions = (current, content = false) =>
+    opts(
+      (content ? ['draft', 'approved', 'archived'] : ['draft', 'published', 'archived']).map(id => ({
+        id,
+        name: states[id],
+      })),
+      'id',
+      'name',
+      current,
+    );
+  const channelOptions = value =>
+    opts(
+      [
+        { id: 'all', name: 'Todos los canales' },
+        { id: 'whatsapp', name: 'WhatsApp' },
+        { id: 'instagram', name: 'Instagram' },
+        { id: 'facebook', name: 'Facebook' },
+      ],
+      'id',
+      'name',
+      value || 'all',
+    );
+  const filtered = items =>
+    items.filter(
+      x =>
+        (state.brand === 'all' || x.brand_id === state.brand) &&
+        (!status || (x.status || (!x.active ? 'archived' : 'published')) === status) &&
+        (!query ||
+          JSON.stringify([
+            x.title,
+            x.name,
+            x.body,
+            brand(x.brand_id),
+            course(x.course_id)?.title,
+            edition(x.edition_id)?.name,
+          ])
+            .toLocaleLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .includes(
+              query
+                .toLocaleLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, ''),
+            )),
+    );
+  const badge = (label, good = false) => `<span class="cat-badge ${good ? 'ready' : ''}">${esc(label)}</span>`;
+  const editionOptions = (courseId, selected, onlyPublished = false) =>
+    opts(
+      data.editions.filter(
+        e => (!courseId || e.course_id === courseId) && (!onlyPublished || e.status === 'published'),
+      ),
+      'id',
+      e => course(e.course_id)?.title + ' · ' + e.name,
+      selected,
+    );
+  function zonedInput(n, zone = 'America/Mexico_City') {
+    if (n == null) return '';
+    const p = Object.fromEntries(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: zone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      })
+        .formatToParts(n)
+        .filter(x => x.type !== 'literal')
+        .map(x => [x.type, x.value]),
+    );
+    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
   }
-  function instant(value,zone){
-    if(!value)return null;const raw=Date.parse(value+'Z');if(!Number.isFinite(raw))throw Error('Fecha no válida.');let guess=raw;
-    for(let n=0;n<3;n++)guess+=raw-Date.parse(zonedInput(guess,zone)+'Z');
-    if(zonedInput(guess,zone)!==value)throw Error('Esa hora no existe en la zona seleccionada. Revisa el cambio de horario.');return guess;
+  function instant(value, zone) {
+    if (!value) return null;
+    const raw = Date.parse(value + 'Z');
+    if (!Number.isFinite(raw)) throw Error('Fecha no válida.');
+    let guess = raw;
+    for (let n = 0; n < 3; n++) guess += raw - Date.parse(zonedInput(guess, zone) + 'Z');
+    if (zonedInput(guess, zone) !== value)
+      throw Error('Esa hora no existe en la zona seleccionada. Revisa el cambio de horario.');
+    return guess;
   }
-  const wizardUI=window.createCourseWizardUI({state,api,esc,icon,icons,showModal,toast,field,select,opts,instant,getData:()=>data,load:()=>load(),render:()=>render(),canApprove});
-  async function load(){const [cat,kn,ev]=await Promise.all([api('/api/catalogue'),api('/api/replies/knowledge').catch(()=>({entries:[]})),api('/api/evaluation/cases').catch(()=>({cases:[]}))]);if(ev.intents)evaluationUI.setMeta(ev);data={...cat,knowledge:kn.entries||[],evaluation:ev.cases||[],content:[]};return data;}
-  async function render(){const own=++version;try{await load();if(tab==='content')await contentUI.load();else{try{await contentUI.load();}catch{}}if(own!==version||state.view!=='courses')return;draw();}catch(e){toast(e.message);}}
-  function draw(){
-    const rows=tab==='knowledge'?knowledgeUI.filter(data.knowledge,query,status):tab==='evaluation'?evaluationUI.filter(data.evaluation,query,status):tab==='content'?[]:filtered(data[tab]);
-    const toolbar=`<div class="cat-toolbar"><form id="cat-search-form" class="cat-search"><label class="search">${icon('search')}<input name="query" aria-label="Buscar en catálogo" placeholder="Buscar curso, edición o material" value="${esc(query)}"></label><button class="btn" type="submit">Buscar</button></form><label class="cat-filter">Estado<select id="cat-state-filter"><option value="">Todos</option>${tab==='evaluation'?`<option value="active" ${status==='active'?'selected':''}>Activos</option><option value="archived" ${status==='archived'?'selected':''}>Archivados</option>`:statusOptions(status,['flyers','templates','knowledge'].includes(tab))}</select></label>${admin()&&tab!=='content'?btn(tab==='courses'?'wizard':'edit',icon('plus')+' '+{courses:'Nuevo curso',editions:'Nueva edición',promotions:'Nueva promoción',flyers:'Subir flyer',templates:'Nueva plantilla',knowledge:'Nueva pregunta',evaluation:'Nuevo caso'}[tab],'',tab,'')+`<button type="button" class="btn" data-action="${tab==='knowledge'?'kimp-open':'imp-open'}">${icon('upload')} ${tab==='knowledge'?'Importar preguntas (CSV)':'Importar CSV'}</button>`:''}</div>`;
-    let content='';
-    if(tab==='courses')content=`<div class="cat-course-grid">${rows.map(c=>{const editions=data.editions.filter(e=>e.course_id===c.id),flyer=data.flyers.find(f=>f.course_id===c.id&&f.availability==='Listo para enviar'&&f.mime.startsWith('image/')),hidden=flyer?null:data.flyers.find(f=>f.course_id===c.id&&f.status!=='archived'&&f.mime.startsWith('image/')),why=hidden?({'Edición en borrador':'la edición está en borrador: publícala (con fecha futura) para que se vea aquí.','Borrador':'el flyer está en borrador: apruébalo.','Requiere revisión':'cambió el precio o la fecha: revisa y vuelve a aprobar el flyer.'}[hidden.availability]||'todavía no está lista ('+hidden.availability.toLowerCase()+'). Ábrela en Editar.'):'';return `<article class="cat-course"><div class="cat-course-cover">${flyer?`<img src="${flyer.fileUrl}" alt="${esc(c.title)}" loading="lazy">`:`<span>${icon('book-open')}</span>`}${badge(c.active?'Curso activo':'Archivado')}</div><div class="cat-card-body"><small>${esc(brand(c.brand_id))}</small><h2>${esc(c.title)}</h2><p>${editions.filter(e=>e.status==='published').length} ediciones publicadas · ${editions.length} en total</p>${hidden?`<p class="cat-cover-note">Imagen «${esc(hidden.title)}» sin mostrar: ${esc(why)}</p>`:''}<div class="actions">${btn('course-editions','Ver ediciones',c.id)}${btn('edit',admin()?'Editar':'Ver ficha',c.id,'courses')}${btn('history',icon('history'),c.id,'course','aria-label="Historial del curso"')}</div></div></article>`;}).join('')}</div>`;
-    if(tab==='editions')content=`<div class="cat-edition-list">${rows.map(e=>`<article class="cat-edition"><div class="cat-date"><strong>${e.starts_at?new Intl.DateTimeFormat('es-MX',{day:'2-digit',timeZone:e.timezone}).format(e.starts_at):'—'}</strong><span>${e.starts_at?new Intl.DateTimeFormat('es-MX',{month:'short',timeZone:e.timezone}).format(e.starts_at):'por confirmar'}</span></div><div class="cat-edition-info"><small>${esc(brand(e.brand_id))} · ${esc(course(e.course_id)?.title)}</small><h2>${esc(e.name)}</h2><p>${stamp(e.starts_at,e.timezone)} · ${esc(e.timezone)}</p><p>${esc(e.instructor||'Docente por confirmar')} · ${e.available_seats===null?'Cupo por confirmar':e.available_seats+' lugares informativos'}</p></div><div class="cat-edition-price"><strong>${money(e.effectivePriceCents,e.currency)}</strong>${e.effectivePriceCents!==e.price_cents?`<del>${money(e.price_cents,e.currency)}</del>`:''}${e.session_price_cents>0?`<small>${money(e.session_price_cents,e.currency)} por sesión</small>`:''}${badge(e.availability,e.availability==='Disponible')}</div><div class="actions">${btn('edit',admin()?'Gestionar':'Ver edición',e.id,'editions')}<button type="button" class="btn" data-action="ct-sheet" data-id="${e.id}" data-name="${esc(course(e.course_id)?.title||'')} · ${esc(e.name)}">${icon('image')} Ficha</button>${btn('timeline',icon('trending-up')+' Precio y cupo',e.id)}${btn('history',icon('history'),e.id,'edition','aria-label="Historial de edición"')}</div></article>`).join('')}</div>`;
-    if(tab==='promotions')content=`<div class="cat-grid">${rows.map(p=>{const e=edition(p.edition_id);return `<article class="cat-panel"><div class="cat-card-heading">${icon('tag')}${badge(p.availability,p.availability==='Vigente')}</div><small>${esc(brand(p.brand_id))} · ${esc(e?.name)}</small><h2>${esc(p.name)}</h2><div class="cat-big-price">${money(p.price_cents,e?.currency)} <del>${money(e?.price_cents||0,e?.currency)}</del></div><p>${stamp(p.starts_at,e?.timezone)} → ${stamp(p.ends_at,e?.timezone)}</p><small>${esc(e?.timezone)} · ${esc(course(e?.course_id)?.title)}</small><div class="actions">${btn('edit',admin()?'Editar':'Ver promoción',p.id,'promotions')}${btn('history',icon('history'),p.id,'promotion','aria-label="Historial de promoción"')}</div></article>`;}).join('')}</div>`;
-    if(tab==='flyers')content=`<div class="cat-flyer-grid">${rows.map(f=>`<article class="cat-flyer"><button class="cat-flyer-preview" data-action="cat-file" data-id="${f.id}">${f.mime==='application/pdf'?`<span>${icon('file-text')}<b>PDF</b></span>`:`<img src="${f.fileUrl}" alt="${esc(f.title)}" loading="lazy">`}</button><div class="cat-card-body"><div class="cat-badges">${badge(f.availability,f.availability==='Listo para enviar')}${badge('v'+f.revision)}</div><h2>${esc(f.title)}</h2><small>${esc(brand(f.brand_id))} · ${esc(edition(f.edition_id)?.name)}</small><p>${f.channel==='all'?'Todos los canales':esc(f.channel)} · ${f.expires_at?'Vence '+stamp(f.expires_at):'Sin caducidad adicional'}</p><div class="actions">${btn('edit',canDesign()?'Revisar':'Ver detalle',f.id,'flyers')}<button type="button" class="btn" data-action="cat-ad-link" data-id="${f.id}" ${f.status==='approved'?'':'disabled'} title="Copiar enlace de anuncio (clic al anuncio → conversación de este curso)">${icon('megaphone')} Anuncio</button>${btn('history',icon('history'),f.id,'flyer','aria-label="Historial del flyer"')}</div></div></article>`).join('')}</div>`;
-    if(tab==='templates')content=`<div class="cat-template-grid">${rows.map(t=>`<article class="cat-template"><div class="cat-card-heading"><span>${icon('text-cursor-input')} ${scenarios[t.scenario]||''}</span>${badge(states[t.status],t.status==='approved')}</div><h2>${esc(t.title)}</h2><small>${esc(brand(t.brand_id))} · ${t.course_id?esc(course(t.course_id)?.title):'Todos los cursos de la marca'}</small><p class="cat-template-copy">${esc(t.body)}</p><div class="actions">${btn('preview','Previsualizar',t.id)}${btn('edit',canDesign()?'Editar':'Ver',t.id,'templates')}<button type="button" class="btn" data-action="ct-variants" data-id="${t.id}" data-title="${esc(t.title)}">${icon('sparkles')} Variantes</button>${btn('history',icon('history'),t.id,'template','aria-label="Historial de plantilla"')}</div></article>`).join('')}</div>`;
-    if(tab==='knowledge')content='<div id="kn-gaps"></div>'+knowledgeUI.render(rows);
-    if(tab==='evaluation')content=evaluationUI.render(rows);
-    if(tab==='content')content=contentUI.render();
-    $('#page').innerHTML=`<div class="content-page catalogue-page"><div class="page-heading"><div><span class="eyebrow">Contenido comercial · Por marca</span><h1>El catálogo, al día.</h1><p>Una fuente para cada edición, promoción y conversación.</p></div>${admin()?btn('brand','Nueva marca'):''}</div><div class="cat-topline"><label class="cat-filter">Marca<select id="cat-brand-filter"><option value="all">Todas mis marcas</option>${opts(state.brands,'id','name',state.brand)}</select></label><span>${data.editions.filter(e=>(state.brand==='all'||e.brand_id===state.brand)&&e.availability==='Disponible').length} ediciones disponibles</span><span>${data.flyers.filter(f=>(state.brand==='all'||f.brand_id===state.brand)&&f.availability==='Requiere revisión').length} piezas por revisar</span></div><nav class="cat-tabs" aria-label="Secciones del catálogo">${Object.entries(tabs).map(([id,label])=>`<button data-action="cat-tab" data-id="${id}" class="${tab===id?'active':''}" aria-current="${tab===id?'page':'false'}">${label}<span>${data[id].filter(x=>state.brand==='all'||x.brand_id===state.brand).length}</span></button>`).join('')}</nav>${toolbar}<div class="cat-result-count">${rows.length} resultados</div>${rows.length||tab==='content'?content:`<div class="crm-empty">${icon('layers')}<h2>Aún no hay contenido en esta vista</h2><p>Ajusta los filtros${admin()?' o crea el primer registro para esta marca.':'.'}</p></div>`}<p class="crm-hint">${icon('flask-conical')} Laboratorio: precios y cupos informativos. Publicar contenido aquí no crea pagos, reservas ni inscripciones.</p></div>`;icons();if(tab==='knowledge')knowledgeUI.mountGaps();
+  const wizardUI = window.createCourseWizardUI({
+    state,
+    api,
+    esc,
+    icon,
+    icons,
+    showModal,
+    toast,
+    field,
+    select,
+    opts,
+    instant,
+    getData: () => data,
+    load: () => load(),
+    render: () => render(),
+    canApprove,
+  });
+  async function load() {
+    const [cat, kn, ev] = await Promise.all([
+      api('/api/catalogue'),
+      api('/api/replies/knowledge').catch(() => ({ entries: [] })),
+      api('/api/evaluation/cases').catch(() => ({ cases: [] })),
+    ]);
+    if (ev.intents) evaluationUI.setMeta(ev);
+    data = { ...cat, knowledge: kn.entries || [], evaluation: ev.cases || [], content: [] };
+    return data;
   }
-  function editionFields(item={}){
-    const zone=item.timezone||'America/Mexico_City';return `${field('Nombre de la edición','name',item.name||'','text','required maxlength="120"')}<div class="cat-form-columns">${field('Inicio · hora de la edición','startsAt',zonedInput(item.starts_at,zone),'datetime-local')}${field('Finalización (opcional)','endsAt',zonedInput(item.ends_at,zone),'datetime-local')}</div>${field('Zona horaria','timezone',zone,'text','required placeholder="America/Mexico_City"')}<p class="crm-hint">Las horas se interpretan en esta zona, aunque tu dispositivo esté en otra. Usa una zona IANA como America/Mexico_City.</p>${field('Docente','instructor',item.instructor||'','text','maxlength="120"')}<div class="cat-form-columns">${select('Modalidad','modality',opts([{id:'online',name:'En línea'},{id:'in_person',name:'Presencial'},{id:'hybrid',name:'Híbrida'}],'id','name',item.modality||'online'))}${select('Moneda','currency',opts(['MXN','USD','COP','PEN','EUR'].map(id=>({id})),'id','id',item.currency||'MXN'))}</div>${field('Lugar / plataforma','location',item.location||'','text','maxlength="250"')}<div class="cat-form-columns">${field('Cupo total (opcional)','capacity',item.capacity,'number','min="1" step="1"')}${field('Lugares disponibles (opcional)','availableSeats',item.available_seats,'number','min="0" step="1"')}</div><p class="crm-hint">El cupo es informativo. Esta fase no descuenta lugares ni confirma reservas.</p>${field('Enlace público de información','infoUrl',item.info_url||'','url','maxlength="1000" placeholder="https://…"')}<div class="cat-form-columns">${field('Precio regular','price',item.price_cents===undefined?'':item.price_cents/100,'number','required min="0" max="1000000" step="0.01"')}${field('Precio por sesión (opcional)','sessionPrice',item.session_price_cents===undefined||item.session_price_cents===null?'':item.session_price_cents/100,'number','min="0" max="1000000" step="0.01"')}</div><p class="crm-hint">Con precio por sesión, el equipo puede cobrar la inscripción «por sesión»: el primer pago cubre la primera sesión y cada sesión siguiente se cobra antes de la clase desde Coordinación.</p>${select('Estado','status',statusOptions(item.status||'draft'))}`;
+  async function render() {
+    const own = ++version;
+    try {
+      await load();
+      if (tab === 'content') await contentUI.load();
+      else {
+        try {
+          await contentUI.load();
+        } catch {}
+      }
+      if (own !== version || state.view !== 'courses') return;
+      draw();
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+  function draw() {
+    const rows =
+      tab === 'knowledge'
+        ? knowledgeUI.filter(data.knowledge, query, status)
+        : tab === 'evaluation'
+          ? evaluationUI.filter(data.evaluation, query, status)
+          : tab === 'content'
+            ? []
+            : filtered(data[tab]);
+    const toolbar = `<div class="cat-toolbar"><form id="cat-search-form" class="cat-search"><label class="search">${icon('search')}<input name="query" aria-label="Buscar en catálogo" placeholder="Buscar curso, edición o material" value="${esc(query)}"></label><button class="btn" type="submit">Buscar</button></form><label class="cat-filter">Estado<select id="cat-state-filter"><option value="">Todos</option>${tab === 'evaluation' ? `<option value="active" ${status === 'active' ? 'selected' : ''}>Activos</option><option value="archived" ${status === 'archived' ? 'selected' : ''}>Archivados</option>` : statusOptions(status, ['flyers', 'templates', 'knowledge'].includes(tab))}</select></label>${admin() && tab !== 'content' ? btn(tab === 'courses' ? 'wizard' : 'edit', icon('plus') + ' ' + { courses: 'Nuevo curso', editions: 'Nueva edición', promotions: 'Nueva promoción', flyers: 'Subir flyer', templates: 'Nueva plantilla', knowledge: 'Nueva pregunta', evaluation: 'Nuevo caso' }[tab], '', tab, '') + `<button type="button" class="btn" data-action="${tab === 'knowledge' ? 'kimp-open' : 'imp-open'}">${icon('upload')} ${tab === 'knowledge' ? 'Importar preguntas (CSV)' : 'Importar CSV'}</button>` : ''}</div>`;
+    let content = '';
+    if (tab === 'courses')
+      content = `<div class="cat-course-grid">${rows
+        .map(c => {
+          const editions = data.editions.filter(e => e.course_id === c.id),
+            flyer = data.flyers.find(
+              f => f.course_id === c.id && f.availability === 'Listo para enviar' && f.mime.startsWith('image/'),
+            ),
+            hidden = flyer
+              ? null
+              : data.flyers.find(f => f.course_id === c.id && f.status !== 'archived' && f.mime.startsWith('image/')),
+            why = hidden
+              ? {
+                  'Edición en borrador':
+                    'la edición está en borrador: publícala (con fecha futura) para que se vea aquí.',
+                  'Borrador': 'el flyer está en borrador: apruébalo.',
+                  'Requiere revisión': 'cambió el precio o la fecha: revisa y vuelve a aprobar el flyer.',
+                }[hidden.availability] ||
+                'todavía no está lista (' + hidden.availability.toLowerCase() + '). Ábrela en Editar.'
+              : '';
+          return `<article class="cat-course"><div class="cat-course-cover">${flyer ? `<img src="${flyer.fileUrl}" alt="${esc(c.title)}" loading="lazy">` : `<span>${icon('book-open')}</span>`}${badge(c.active ? 'Curso activo' : 'Archivado')}</div><div class="cat-card-body"><small>${esc(brand(c.brand_id))}</small><h2>${esc(c.title)}</h2><p>${editions.filter(e => e.status === 'published').length} ediciones publicadas · ${editions.length} en total</p>${hidden ? `<p class="cat-cover-note">Imagen «${esc(hidden.title)}» sin mostrar: ${esc(why)}</p>` : ''}<div class="actions">${btn('course-editions', 'Ver ediciones', c.id)}${btn('edit', admin() ? 'Editar' : 'Ver ficha', c.id, 'courses')}${btn('history', icon('history'), c.id, 'course', 'aria-label="Historial del curso"')}</div></div></article>`;
+        })
+        .join('')}</div>`;
+    if (tab === 'editions')
+      content = `<div class="cat-edition-list">${rows.map(e => `<article class="cat-edition"><div class="cat-date"><strong>${e.starts_at ? new Intl.DateTimeFormat('es-MX', { day: '2-digit', timeZone: e.timezone }).format(e.starts_at) : '—'}</strong><span>${e.starts_at ? new Intl.DateTimeFormat('es-MX', { month: 'short', timeZone: e.timezone }).format(e.starts_at) : 'por confirmar'}</span></div><div class="cat-edition-info"><small>${esc(brand(e.brand_id))} · ${esc(course(e.course_id)?.title)}</small><h2>${esc(e.name)}</h2><p>${stamp(e.starts_at, e.timezone)} · ${esc(e.timezone)}</p><p>${esc(e.instructor || 'Docente por confirmar')} · ${e.available_seats === null ? 'Cupo por confirmar' : e.available_seats + ' lugares informativos'}</p></div><div class="cat-edition-price"><strong>${money(e.effectivePriceCents, e.currency)}</strong>${e.effectivePriceCents !== e.price_cents ? `<del>${money(e.price_cents, e.currency)}</del>` : ''}${e.session_price_cents > 0 ? `<small>${money(e.session_price_cents, e.currency)} por sesión</small>` : ''}${badge(e.availability, e.availability === 'Disponible')}</div><div class="actions">${btn('edit', admin() ? 'Gestionar' : 'Ver edición', e.id, 'editions')}<button type="button" class="btn" data-action="ct-sheet" data-id="${e.id}" data-name="${esc(course(e.course_id)?.title || '')} · ${esc(e.name)}">${icon('image')} Ficha</button>${btn('timeline', icon('trending-up') + ' Precio y cupo', e.id)}${btn('history', icon('history'), e.id, 'edition', 'aria-label="Historial de edición"')}</div></article>`).join('')}</div>`;
+    if (tab === 'promotions')
+      content = `<div class="cat-grid">${rows
+        .map(p => {
+          const e = edition(p.edition_id);
+          return `<article class="cat-panel"><div class="cat-card-heading">${icon('tag')}${badge(p.availability, p.availability === 'Vigente')}</div><small>${esc(brand(p.brand_id))} · ${esc(e?.name)}</small><h2>${esc(p.name)}</h2><div class="cat-big-price">${money(p.price_cents, e?.currency)} <del>${money(e?.price_cents || 0, e?.currency)}</del></div><p>${stamp(p.starts_at, e?.timezone)} → ${stamp(p.ends_at, e?.timezone)}</p><small>${esc(e?.timezone)} · ${esc(course(e?.course_id)?.title)}</small><div class="actions">${btn('edit', admin() ? 'Editar' : 'Ver promoción', p.id, 'promotions')}${btn('history', icon('history'), p.id, 'promotion', 'aria-label="Historial de promoción"')}</div></article>`;
+        })
+        .join('')}</div>`;
+    if (tab === 'flyers')
+      content = `<div class="cat-flyer-grid">${rows.map(f => `<article class="cat-flyer"><button class="cat-flyer-preview" data-action="cat-file" data-id="${f.id}">${f.mime === 'application/pdf' ? `<span>${icon('file-text')}<b>PDF</b></span>` : `<img src="${f.fileUrl}" alt="${esc(f.title)}" loading="lazy">`}</button><div class="cat-card-body"><div class="cat-badges">${badge(f.availability, f.availability === 'Listo para enviar')}${badge('v' + f.revision)}</div><h2>${esc(f.title)}</h2><small>${esc(brand(f.brand_id))} · ${esc(edition(f.edition_id)?.name)}</small><p>${f.channel === 'all' ? 'Todos los canales' : esc(f.channel)} · ${f.expires_at ? 'Vence ' + stamp(f.expires_at) : 'Sin caducidad adicional'}</p><div class="actions">${btn('edit', canDesign() ? 'Revisar' : 'Ver detalle', f.id, 'flyers')}<button type="button" class="btn" data-action="cat-ad-link" data-id="${f.id}" ${f.status === 'approved' ? '' : 'disabled'} title="Copiar enlace de anuncio (clic al anuncio → conversación de este curso)">${icon('megaphone')} Anuncio</button>${btn('history', icon('history'), f.id, 'flyer', 'aria-label="Historial del flyer"')}</div></div></article>`).join('')}</div>`;
+    if (tab === 'templates')
+      content = `<div class="cat-template-grid">${rows.map(t => `<article class="cat-template"><div class="cat-card-heading"><span>${icon('text-cursor-input')} ${scenarios[t.scenario] || ''}</span>${badge(states[t.status], t.status === 'approved')}</div><h2>${esc(t.title)}</h2><small>${esc(brand(t.brand_id))} · ${t.course_id ? esc(course(t.course_id)?.title) : 'Todos los cursos de la marca'}</small><p class="cat-template-copy">${esc(t.body)}</p><div class="actions">${btn('preview', 'Previsualizar', t.id)}${btn('edit', canDesign() ? 'Editar' : 'Ver', t.id, 'templates')}<button type="button" class="btn" data-action="ct-variants" data-id="${t.id}" data-title="${esc(t.title)}">${icon('sparkles')} Variantes</button>${btn('history', icon('history'), t.id, 'template', 'aria-label="Historial de plantilla"')}</div></article>`).join('')}</div>`;
+    if (tab === 'knowledge') content = '<div id="kn-gaps"></div>' + knowledgeUI.render(rows);
+    if (tab === 'evaluation') content = evaluationUI.render(rows);
+    if (tab === 'content') content = contentUI.render();
+    $('#page').innerHTML =
+      `<div class="content-page catalogue-page"><div class="page-heading"><div><span class="eyebrow">Contenido comercial · Por marca</span><h1>El catálogo, al día.</h1><p>Una fuente para cada edición, promoción y conversación.</p></div>${admin() ? btn('brand', 'Nueva marca') : ''}</div><div class="cat-topline"><label class="cat-filter">Marca<select id="cat-brand-filter"><option value="all">Todas mis marcas</option>${opts(state.brands, 'id', 'name', state.brand)}</select></label><span>${data.editions.filter(e => (state.brand === 'all' || e.brand_id === state.brand) && e.availability === 'Disponible').length} ediciones disponibles</span><span>${data.flyers.filter(f => (state.brand === 'all' || f.brand_id === state.brand) && f.availability === 'Requiere revisión').length} piezas por revisar</span></div><nav class="cat-tabs" aria-label="Secciones del catálogo">${Object.entries(
+        tabs,
+      )
+        .map(
+          ([id, label]) =>
+            `<button data-action="cat-tab" data-id="${id}" class="${tab === id ? 'active' : ''}" aria-current="${tab === id ? 'page' : 'false'}">${label}<span>${data[id].filter(x => state.brand === 'all' || x.brand_id === state.brand).length}</span></button>`,
+        )
+        .join(
+          '',
+        )}</nav>${toolbar}<div class="cat-result-count">${rows.length} resultados</div>${rows.length || tab === 'content' ? content : `<div class="crm-empty">${icon('layers')}<h2>Aún no hay contenido en esta vista</h2><p>Ajusta los filtros${admin() ? ' o crea el primer registro para esta marca.' : '.'}</p></div>`}<p class="crm-hint">${icon('flask-conical')} Laboratorio: precios y cupos informativos. Publicar contenido aquí no crea pagos, reservas ni inscripciones.</p></div>`;
+    icons();
+    if (tab === 'knowledge') knowledgeUI.mountGaps();
+  }
+  function editionFields(item = {}) {
+    const zone = item.timezone || 'America/Mexico_City';
+    return `${field('Nombre de la edición', 'name', item.name || '', 'text', 'required maxlength="120"')}<div class="cat-form-columns">${field('Inicio · hora de la edición', 'startsAt', zonedInput(item.starts_at, zone), 'datetime-local')}${field('Finalización (opcional)', 'endsAt', zonedInput(item.ends_at, zone), 'datetime-local')}</div>${field('Zona horaria', 'timezone', zone, 'text', 'required placeholder="America/Mexico_City"')}<p class="crm-hint">Las horas se interpretan en esta zona, aunque tu dispositivo esté en otra. Usa una zona IANA como America/Mexico_City.</p>${field('Docente', 'instructor', item.instructor || '', 'text', 'maxlength="120"')}<div class="cat-form-columns">${select(
+      'Modalidad',
+      'modality',
+      opts(
+        [
+          { id: 'online', name: 'En línea' },
+          { id: 'in_person', name: 'Presencial' },
+          { id: 'hybrid', name: 'Híbrida' },
+        ],
+        'id',
+        'name',
+        item.modality || 'online',
+      ),
+    )}${select(
+      'Moneda',
+      'currency',
+      opts(
+        ['MXN', 'USD', 'COP', 'PEN', 'EUR'].map(id => ({ id })),
+        'id',
+        'id',
+        item.currency || 'MXN',
+      ),
+    )}</div>${field('Lugar / plataforma', 'location', item.location || '', 'text', 'maxlength="250"')}<div class="cat-form-columns">${field('Cupo total (opcional)', 'capacity', item.capacity, 'number', 'min="1" step="1"')}${field('Lugares disponibles (opcional)', 'availableSeats', item.available_seats, 'number', 'min="0" step="1"')}</div><p class="crm-hint">El cupo es informativo. Esta fase no descuenta lugares ni confirma reservas.</p>${field('Enlace público de información', 'infoUrl', item.info_url || '', 'url', 'maxlength="1000" placeholder="https://…"')}<div class="cat-form-columns">${field('Precio regular', 'price', item.price_cents === undefined ? '' : item.price_cents / 100, 'number', 'required min="0" max="1000000" step="0.01"')}${field('Precio por sesión (opcional)', 'sessionPrice', item.session_price_cents === undefined || item.session_price_cents === null ? '' : item.session_price_cents / 100, 'number', 'min="0" max="1000000" step="0.01"')}</div><p class="crm-hint">Con precio por sesión, el equipo puede cobrar la inscripción «por sesión»: el primer pago cubre la primera sesión y cada sesión siguiente se cobra antes de la clase desde Coordinación.</p>${select('Estado', 'status', statusOptions(item.status || 'draft'))}`;
   }
   // Imagen del curso: la imagen siempre es un flyer aprobado de una edición (precio y fecha vigentes); este bloque sólo lo hace fácil de encontrar.
-  function courseImageBlock(c){
-    const mine=data.flyers.filter(f=>f.course_id===c.id&&f.status!=='archived'),cover=mine.find(f=>f.availability==='Listo para enviar'&&f.mime.startsWith('image/')),pending=mine.filter(f=>f!==cover&&f.status!=='approved').length;
-    const blocked=cover?null:mine.find(f=>f.status==='approved'&&f.mime.startsWith('image/')),note=cover?`Es el flyer aprobado «${esc(cover.title)}». Es la imagen que se ve en la tarjeta del curso.`:blocked?`El flyer «${esc(blocked.title)}» está aprobado, pero todavía no se muestra: ${esc(blocked.availability)}. En cuanto eso se resuelva aparecerá aquí y en la tarjeta del curso.`:pending?`Hay ${pending} flyer${pending===1?'':'s'} sin aprobar. Ábrelos en la pestaña Flyers y apruébalos para que se vea aquí.`:'Este curso todavía no tiene imagen.';
-    return `<div class="cat-course-image"><strong>Imagen del curso</strong>${cover?`<img class="cat-edit-image" src="${cover.fileUrl}" alt="Imagen actual del curso">`:''}<p class="crm-hint">${note}</p>${canDesign()?btn('course-image',cover||blocked?'Cambiar imagen':'Agregar imagen',c.id):''}</div>`;
+  function courseImageBlock(c) {
+    const mine = data.flyers.filter(f => f.course_id === c.id && f.status !== 'archived'),
+      cover = mine.find(f => f.availability === 'Listo para enviar' && f.mime.startsWith('image/')),
+      pending = mine.filter(f => f !== cover && f.status !== 'approved').length;
+    const blocked = cover ? null : mine.find(f => f.status === 'approved' && f.mime.startsWith('image/')),
+      note = cover
+        ? `Es el flyer aprobado «${esc(cover.title)}». Es la imagen que se ve en la tarjeta del curso.`
+        : blocked
+          ? `El flyer «${esc(blocked.title)}» está aprobado, pero todavía no se muestra: ${esc(blocked.availability)}. En cuanto eso se resuelva aparecerá aquí y en la tarjeta del curso.`
+          : pending
+            ? `Hay ${pending} flyer${pending === 1 ? '' : 's'} sin aprobar. Ábrelos en la pestaña Flyers y apruébalos para que se vea aquí.`
+            : 'Este curso todavía no tiene imagen.';
+    return `<div class="cat-course-image"><strong>Imagen del curso</strong>${cover ? `<img class="cat-edit-image" src="${cover.fileUrl}" alt="Imagen actual del curso">` : ''}<p class="crm-hint">${note}</p>${canDesign() ? btn('course-image', cover || blocked ? 'Cambiar imagen' : 'Agregar imagen', c.id) : ''}</div>`;
   }
-  async function edit(type,id='',preset={}){
-    await load();const item=data[type].find(x=>x.id===id),writable=admin()||(['flyers','templates'].includes(type)&&canDesign());let fields='';
-    if(type==='courses')fields=`${item?'':select('Marca','brandId',opts(state.brands,'id','name',state.brand))}${field('Título del curso','title',item?.title||'','text','required minlength="3" maxlength="180"')}<label class="field">Temario<textarea name="syllabus" rows="6" required maxlength="5000">${esc(item?.syllabus||'')}</textarea></label>${item?select('Disponibilidad del curso','active',opts([{id:'true',name:'Activo'},{id:'false',name:'Archivado'}],'id','name',item.active?'true':'false')):''}<p class="crm-hint">El precio, fecha, docente y cupo se configuran en cada edición. Un curso nuevo comienza con una edición en borrador.</p>${item?courseImageBlock(item):''}`;
-    if(type==='editions')fields=`${item?`<p class="crm-hint">${esc(course(item.course_id)?.title)} · ${esc(brand(item.brand_id))}</p>`:select('Curso','courseId',opts(data.courses.filter(c=>c.active&&(state.brand==='all'||c.brand_id===state.brand)),'id',c=>brand(c.brand_id)+' · '+c.title))}${editionFields(item)}`;
-    if(type==='promotions'){
-      const available=data.editions.filter(e=>state.brand==='all'||e.brand_id===state.brand),selected=item?.edition_id||available[0]?.id,e=edition(selected),zone=e?.timezone||'America/Mexico_City';
-      fields=`${select('Edición','editionId',opts(available,'id',e=>course(e.course_id)?.title+' · '+e.name,selected),item?'disabled':'id="cat-promo-edition"')}${hidden('editionId',item?.edition_id||'')}${field('Nombre de la promoción','name',item?.name||'','text','required maxlength="120"')}${field('Precio promocional','price',item?item.price_cents/100:'','number','required min="0" step="0.01"')}<p class="crm-hint" id="cat-promo-price">Precio regular: ${e?money(e.price_cents,e.currency):'elige una edición'}. Una promoción publicada no puede coincidir en fechas con otra.</p>${field('Comienza · hora de la edición','startsAt',zonedInput(item?.starts_at,zone),'datetime-local','required')}${field('Termina · hora de la edición','endsAt',zonedInput(item?.ends_at,zone),'datetime-local','required')}<p class="crm-hint" id="cat-promo-zone">Zona: ${esc(zone)}. La vigencia termina antes del inicio del curso.</p>${select('Estado','status',statusOptions(item?.status||'draft'))}`;
+  async function edit(type, id = '', preset = {}) {
+    await load();
+    const item = data[type].find(x => x.id === id),
+      writable = admin() || (['flyers', 'templates'].includes(type) && canDesign());
+    let fields = '';
+    if (type === 'courses')
+      fields = `${item ? '' : select('Marca', 'brandId', opts(state.brands, 'id', 'name', state.brand))}${field('Título del curso', 'title', item?.title || '', 'text', 'required minlength="3" maxlength="180"')}<label class="field">Temario<textarea name="syllabus" rows="6" required maxlength="5000">${esc(item?.syllabus || '')}</textarea></label>${
+        item
+          ? select(
+              'Disponibilidad del curso',
+              'active',
+              opts(
+                [
+                  { id: 'true', name: 'Activo' },
+                  { id: 'false', name: 'Archivado' },
+                ],
+                'id',
+                'name',
+                item.active ? 'true' : 'false',
+              ),
+            )
+          : ''
+      }<p class="crm-hint">El precio, fecha, docente y cupo se configuran en cada edición. Un curso nuevo comienza con una edición en borrador.</p>${item ? courseImageBlock(item) : ''}`;
+    if (type === 'editions')
+      fields = `${
+        item
+          ? `<p class="crm-hint">${esc(course(item.course_id)?.title)} · ${esc(brand(item.brand_id))}</p>`
+          : select(
+              'Curso',
+              'courseId',
+              opts(
+                data.courses.filter(c => c.active && (state.brand === 'all' || c.brand_id === state.brand)),
+                'id',
+                c => brand(c.brand_id) + ' · ' + c.title,
+              ),
+            )
+      }${editionFields(item)}`;
+    if (type === 'promotions') {
+      const available = data.editions.filter(e => state.brand === 'all' || e.brand_id === state.brand),
+        selected = item?.edition_id || available[0]?.id,
+        e = edition(selected),
+        zone = e?.timezone || 'America/Mexico_City';
+      fields = `${select(
+        'Edición',
+        'editionId',
+        opts(available, 'id', e => course(e.course_id)?.title + ' · ' + e.name, selected),
+        item ? 'disabled' : 'id="cat-promo-edition"',
+      )}${hidden('editionId', item?.edition_id || '')}${field('Nombre de la promoción', 'name', item?.name || '', 'text', 'required maxlength="120"')}${field('Precio promocional', 'price', item ? item.price_cents / 100 : '', 'number', 'required min="0" step="0.01"')}<p class="crm-hint" id="cat-promo-price">Precio regular: ${e ? money(e.price_cents, e.currency) : 'elige una edición'}. Una promoción publicada no puede coincidir en fechas con otra.</p>${field('Comienza · hora de la edición', 'startsAt', zonedInput(item?.starts_at, zone), 'datetime-local', 'required')}${field('Termina · hora de la edición', 'endsAt', zonedInput(item?.ends_at, zone), 'datetime-local', 'required')}<p class="crm-hint" id="cat-promo-zone">Zona: ${esc(zone)}. La vigencia termina antes del inicio del curso.</p>${select('Estado', 'status', statusOptions(item?.status || 'draft'))}`;
     }
-    if(type==='flyers'){
-      const available=data.editions.filter(e=>state.brand==='all'||e.brand_id===state.brand||e.id===preset.editionId),selected=item?.edition_id||preset.editionId||available[0]?.id,e=edition(selected);
-      fields=`${field('Nombre de la pieza','title',item?.title||preset.title||'','text','required maxlength="180"')}${select('Edición','editionId',opts(available,'id',e=>brand(e.brand_id)+' · '+course(e.course_id)?.title+' · '+e.name,selected),'id="cat-flyer-edition"')}${select('Promoción asociada','promotionId','<option value="">Precio regular · sin promoción</option>'+opts(data.promotions.filter(p=>p.edition_id===selected),'id','name',item?.promotion_id),'id="cat-flyer-promotion"')}${select('Canal','channel',channelOptions(item?.channel))}${field('Caducidad adicional (opcional)','expiresAt',zonedInput(item?.expires_at,e?.timezone),'datetime-local')}<p class="crm-hint" id="cat-flyer-zone">Zona: ${esc(e?.timezone||'America/Mexico_City')}. Los cambios de curso, edición o promoción requieren volver a revisar la pieza.</p><label class="field">${item?'Reemplazar archivo (opcional)':'Elige la imagen o el PDF del flyer'}<input type="file" name="file" id="cat-file-input" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" ${!item?'required':''}><small>Hasta 4 MB. El archivo anterior permanece en los mensajes y versiones históricas.</small></label>${hidden('fileId',item?.file_id||'')}<div id="cat-file-preview">${item?(item.mime==='application/pdf'?`<a class="btn" target="_blank" rel="noopener" href="${item.fileUrl}">Abrir PDF</a>`:`<img class="cat-edit-image" src="${item.fileUrl}" alt="Flyer actual">`):''}</div><label class="checkbox-field"><input type="checkbox" name="reviewed" required> Revisé que el archivo coincide con la fecha, precio y edición elegidos.</label><p class="crm-hint">Guardar crea un borrador. Después podrás aprobarlo para habilitar su envío.</p>`;
+    if (type === 'flyers') {
+      const available = data.editions.filter(
+          e => state.brand === 'all' || e.brand_id === state.brand || e.id === preset.editionId,
+        ),
+        selected = item?.edition_id || preset.editionId || available[0]?.id,
+        e = edition(selected);
+      fields = `${field('Nombre de la pieza', 'title', item?.title || preset.title || '', 'text', 'required maxlength="180"')}${select(
+        'Edición',
+        'editionId',
+        opts(available, 'id', e => brand(e.brand_id) + ' · ' + course(e.course_id)?.title + ' · ' + e.name, selected),
+        'id="cat-flyer-edition"',
+      )}${select(
+        'Promoción asociada',
+        'promotionId',
+        '<option value="">Precio regular · sin promoción</option>' +
+          opts(
+            data.promotions.filter(p => p.edition_id === selected),
+            'id',
+            'name',
+            item?.promotion_id,
+          ),
+        'id="cat-flyer-promotion"',
+      )}${select('Canal', 'channel', channelOptions(item?.channel))}${field('Caducidad adicional (opcional)', 'expiresAt', zonedInput(item?.expires_at, e?.timezone), 'datetime-local')}<p class="crm-hint" id="cat-flyer-zone">Zona: ${esc(e?.timezone || 'America/Mexico_City')}. Los cambios de curso, edición o promoción requieren volver a revisar la pieza.</p><label class="field">${item ? 'Reemplazar archivo (opcional)' : 'Elige la imagen o el PDF del flyer'}<input type="file" name="file" id="cat-file-input" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" ${!item ? 'required' : ''}><small>Hasta 4 MB. El archivo anterior permanece en los mensajes y versiones históricas.</small></label>${hidden('fileId', item?.file_id || '')}<div id="cat-file-preview">${item ? (item.mime === 'application/pdf' ? `<a class="btn" target="_blank" rel="noopener" href="${item.fileUrl}">Abrir PDF</a>` : `<img class="cat-edit-image" src="${item.fileUrl}" alt="Flyer actual">`) : ''}</div><label class="checkbox-field"><input type="checkbox" name="reviewed" required> Revisé que el archivo coincide con la fecha, precio y edición elegidos.</label><p class="crm-hint">Guardar crea un borrador. Después podrás aprobarlo para habilitar su envío.</p>`;
     }
-    if(type==='templates'){
-      const brandId=item?.brand_id||(state.brand!=='all'?state.brand:state.brands[0]?.id),courseId=item?.course_id||'',editionId=item?.edition_id||'';
-      fields=`${select('Marca','brandId',opts(state.brands,'id','name',brandId),item?'disabled':'id="cat-template-brand"')}${item?hidden('brandId',brandId):''}${field('Nombre','title',item?.title||'','text','required maxlength="180"')}<div class="cat-form-columns">${select('Escenario','scenario',opts(Object.entries(scenarios).map(([id,name])=>({id,name})),'id','name',item?.scenario||'info'))}${select('Canal','channel',channelOptions(item?.channel))}</div>${select('Curso','courseId','<option value="">Todos los cursos de esta marca</option>'+opts(data.courses.filter(c=>c.brand_id===brandId),'id','title',courseId),'id="cat-template-course"')}${select('Edición','editionId','<option value="">Todas las ediciones del curso</option>'+opts(data.editions.filter(e=>e.course_id===courseId),'id','name',editionId),'id="cat-template-edition"')}${select('Flyer adjunto (opcional)','flyerId','<option value="">Sin adjunto</option>'+opts(data.flyers.filter(f=>f.edition_id===editionId),'id','title',item?.flyer_id),'id="cat-template-flyer"')}<label class="field">Mensaje<textarea name="text" id="cat-template-text" rows="9" maxlength="3000" required>${esc(item?.body||'Hola, {{nombre}}. Te comparto la información de {{curso}}.\nEdición: {{edicion}} · {{fecha}}\nPrecio: {{precio}}')}</textarea></label><div class="cat-variable-list">${data.variables.map(v=>`<button type="button" data-action="cat-variable" data-id="${v}">{{${v}}}</button>`).join('')}</div><p class="crm-hint">Inserta variables para consultar los datos vigentes al enviar. Cada cambio de la plantilla vuelve a borrador y requiere aprobación interna del equipo.</p>`;
+    if (type === 'templates') {
+      const brandId = item?.brand_id || (state.brand !== 'all' ? state.brand : state.brands[0]?.id),
+        courseId = item?.course_id || '',
+        editionId = item?.edition_id || '';
+      fields = `${select('Marca', 'brandId', opts(state.brands, 'id', 'name', brandId), item ? 'disabled' : 'id="cat-template-brand"')}${item ? hidden('brandId', brandId) : ''}${field('Nombre', 'title', item?.title || '', 'text', 'required maxlength="180"')}<div class="cat-form-columns">${select(
+        'Escenario',
+        'scenario',
+        opts(
+          Object.entries(scenarios).map(([id, name]) => ({ id, name })),
+          'id',
+          'name',
+          item?.scenario || 'info',
+        ),
+      )}${select('Canal', 'channel', channelOptions(item?.channel))}</div>${select(
+        'Curso',
+        'courseId',
+        '<option value="">Todos los cursos de esta marca</option>' +
+          opts(
+            data.courses.filter(c => c.brand_id === brandId),
+            'id',
+            'title',
+            courseId,
+          ),
+        'id="cat-template-course"',
+      )}${select(
+        'Edición',
+        'editionId',
+        '<option value="">Todas las ediciones del curso</option>' +
+          opts(
+            data.editions.filter(e => e.course_id === courseId),
+            'id',
+            'name',
+            editionId,
+          ),
+        'id="cat-template-edition"',
+      )}${select(
+        'Flyer adjunto (opcional)',
+        'flyerId',
+        '<option value="">Sin adjunto</option>' +
+          opts(
+            data.flyers.filter(f => f.edition_id === editionId),
+            'id',
+            'title',
+            item?.flyer_id,
+          ),
+        'id="cat-template-flyer"',
+      )}<label class="field">Mensaje<textarea name="text" id="cat-template-text" rows="9" maxlength="3000" required>${esc(item?.body || 'Hola, {{nombre}}. Te comparto la información de {{curso}}.\nEdición: {{edicion}} · {{fecha}}\nPrecio: {{precio}}')}</textarea></label><div class="cat-variable-list">${data.variables.map(v => `<button type="button" data-action="cat-variable" data-id="${v}">{{${v}}}</button>`).join('')}</div><p class="crm-hint">Inserta variables para consultar los datos vigentes al enviar. Cada cambio de la plantilla vuelve a borrador y requiere aprobación interna del equipo.</p>`;
     }
-    const formId='cat-edit-form';showModal((item?'Gestionar ':'Crear ')+({courses:'curso',editions:'edición',promotions:'promoción',flyers:'flyer',templates:'plantilla'}[type]),`<div class="cat-badges">${item?badge(states[item.status]||(item.active?'Activo':'Archivado'))+badge('v'+(item.revision||item.version)):badge('Nuevo')}</div><form id="${formId}" class="form-grid">${hidden('type',type)}${hidden('id',id)}${hidden('expectedRevision',item?.revision||item?.version||'')}<fieldset class="cat-fields" ${!writable?'disabled':''}>${fields}</fieldset><div id="cat-feedback" role="status"></div><div class="actions">${writable?'<button type="submit" class="btn primary">'+(['flyers','templates'].includes(type)?'Guardar borrador':'Guardar cambios')+'</button>':''}${item?btn('history','Historial de versiones',id,{courses:'course',editions:'edition',promotions:'promotion',flyers:'flyer',templates:'template'}[type]):''}</div></form>${item&&writable?`<div class="cat-publish-actions">${['flyers','templates'].includes(type)&&item.status!=='approved'&&canApprove()?btn('approve','Aprobar para enviar',id,type,`data-revision="${item.revision}"`):''}${item.status!=='archived'&&item.active!==0?btn('archive','Archivar',id,type,`data-revision="${item.revision||item.version}"`):''}</div>`:''}`);
+    const formId = 'cat-edit-form';
+    showModal(
+      (item ? 'Gestionar ' : 'Crear ') +
+        { courses: 'curso', editions: 'edición', promotions: 'promoción', flyers: 'flyer', templates: 'plantilla' }[
+          type
+        ],
+      `<div class="cat-badges">${item ? badge(states[item.status] || (item.active ? 'Activo' : 'Archivado')) + badge('v' + (item.revision || item.version)) : badge('Nuevo')}</div><form id="${formId}" class="form-grid">${hidden('type', type)}${hidden('id', id)}${hidden('expectedRevision', item?.revision || item?.version || '')}<fieldset class="cat-fields" ${!writable ? 'disabled' : ''}>${fields}</fieldset><div id="cat-feedback" role="status"></div><div class="actions">${writable ? '<button type="submit" class="btn primary">' + (['flyers', 'templates'].includes(type) ? 'Guardar borrador' : 'Guardar cambios') + '</button>' : ''}${item ? btn('history', 'Historial de versiones', id, { courses: 'course', editions: 'edition', promotions: 'promotion', flyers: 'flyer', templates: 'template' }[type]) : ''}</div></form>${item && writable ? `<div class="cat-publish-actions">${['flyers', 'templates'].includes(type) && item.status !== 'approved' && canApprove() ? btn('approve', 'Aprobar para enviar', id, type, `data-revision="${item.revision}"`) : ''}${item.status !== 'archived' && item.active !== 0 ? btn('archive', 'Archivar', id, type, `data-revision="${item.revision || item.version}"`) : ''}</div>` : ''}`,
+    );
     // A disabled edition selector needs its value retained; a new selector must not be shadowed.
-    if(type==='promotions'&&!item)$('#cat-edit-form input[name=editionId]').remove();icons();
+    if (type === 'promotions' && !item) $('#cat-edit-form input[name=editionId]').remove();
+    icons();
   }
   // Línea de tiempo de una edición: precio, estado y cupo a lo largo del tiempo (GET /api/catalogue/edition/:id/timeline).
-  async function timelineView(id){
-    const r=await api('/api/catalogue/edition/'+id+'/timeline'),e=r.edition,at=t=>new Intl.DateTimeFormat('es-MX',{dateStyle:'medium',timeStyle:'short'}).format(t);
-    const m=n=>n===null||n===undefined?'—':money(n,e.currency),pct=p=>p===null||p===undefined?'':' ('+(p>0?'+':'')+p+' %)',why={manual:'edición manual',inscripcion:'nueva inscripción',baja:'baja de una inscripción'};
-    const look={creada:['plus',''],precio_subio:['trending-up','high'],precio_bajo:['trending-down','good'],precio_sesion:['tag',''],estado:['circle-dot',''],capacidad:['users',''],cupo:['users',''],cupo_agotado:['ban','urgent'],cupo_liberado:['door-open','good'],cupo_bajo:['triangle-alert','high']};
-    const detail=x=>x.kind==='creada'?'Precio inicial '+m(x.priceCents):['precio_subio','precio_bajo'].includes(x.kind)?'De '+m(x.from)+' a '+m(x.to)+pct(x.deltaPct):x.kind==='precio_sesion'?'De '+m(x.from)+' a '+m(x.to):x.kind==='capacidad'?'De '+(x.from??'—')+' a '+(x.to??'—')+' lugares en total':x.kind==='cupo'?'De '+x.from+' a '+x.to+' disponibles · '+(why[x.reason]||x.reason):x.kind==='cupo_agotado'?'Ya no quedan lugares':x.kind==='cupo_liberado'?'Ahora hay '+x.available+' disponible'+(x.available===1?'':'s'):x.kind==='cupo_bajo'?'Quedan '+x.available+(x.capacity?' de '+x.capacity:''):'';
-    const rows=r.timeline.map(x=>{const [ic,kind]=look[x.kind]||['circle',''];return `<article class="tl-row"><span class="ops-chip ${kind}">${icon(ic)}</span><div><strong>${esc(x.title)}</strong><small>${esc(detail(x))}</small><small>${esc(at(x.at))}${x.actor?' · '+esc(x.actor):''}</small></div></article>`;}).join('')||'<p class="crm-hint">Todavía no hay cambios registrados.</p>';
-    showModal('Precio y cupo · '+e.name,`<div class="tl-summary"><div><small>Precio regular</small><strong>${m(e.priceCents)}</strong></div>${e.sessionPriceCents?`<div><small>Por sesión</small><strong>${m(e.sessionPriceCents)}</strong></div>`:''}<div><small>Cupo disponible</small><strong>${e.availableSeats===null?'Por confirmar':e.availableSeats+(e.capacity?' de '+e.capacity:'')}</strong></div></div><p class="crm-hint">Cada cambio de precio y de cupo queda registrado con su fecha y quién lo hizo. Las automatizaciones futuras (avisos, llamadas, alertas) leen estos mismos registros.</p><div class="tl-list">${rows}</div>`);icons();
+  async function timelineView(id) {
+    const r = await api('/api/catalogue/edition/' + id + '/timeline'),
+      e = r.edition,
+      at = t => new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(t);
+    const m = n => (n === null || n === undefined ? '—' : money(n, e.currency)),
+      pct = p => (p === null || p === undefined ? '' : ' (' + (p > 0 ? '+' : '') + p + ' %)'),
+      why = { manual: 'edición manual', inscripcion: 'nueva inscripción', baja: 'baja de una inscripción' };
+    const look = {
+      creada: ['plus', ''],
+      precio_subio: ['trending-up', 'high'],
+      precio_bajo: ['trending-down', 'good'],
+      precio_sesion: ['tag', ''],
+      estado: ['circle-dot', ''],
+      capacidad: ['users', ''],
+      cupo: ['users', ''],
+      cupo_agotado: ['ban', 'urgent'],
+      cupo_liberado: ['door-open', 'good'],
+      cupo_bajo: ['triangle-alert', 'high'],
+    };
+    const detail = x =>
+      x.kind === 'creada'
+        ? 'Precio inicial ' + m(x.priceCents)
+        : ['precio_subio', 'precio_bajo'].includes(x.kind)
+          ? 'De ' + m(x.from) + ' a ' + m(x.to) + pct(x.deltaPct)
+          : x.kind === 'precio_sesion'
+            ? 'De ' + m(x.from) + ' a ' + m(x.to)
+            : x.kind === 'capacidad'
+              ? 'De ' + (x.from ?? '—') + ' a ' + (x.to ?? '—') + ' lugares en total'
+              : x.kind === 'cupo'
+                ? 'De ' + x.from + ' a ' + x.to + ' disponibles · ' + (why[x.reason] || x.reason)
+                : x.kind === 'cupo_agotado'
+                  ? 'Ya no quedan lugares'
+                  : x.kind === 'cupo_liberado'
+                    ? 'Ahora hay ' + x.available + ' disponible' + (x.available === 1 ? '' : 's')
+                    : x.kind === 'cupo_bajo'
+                      ? 'Quedan ' + x.available + (x.capacity ? ' de ' + x.capacity : '')
+                      : '';
+    const rows =
+      r.timeline
+        .map(x => {
+          const [ic, kind] = look[x.kind] || ['circle', ''];
+          return `<article class="tl-row"><span class="ops-chip ${kind}">${icon(ic)}</span><div><strong>${esc(x.title)}</strong><small>${esc(detail(x))}</small><small>${esc(at(x.at))}${x.actor ? ' · ' + esc(x.actor) : ''}</small></div></article>`;
+        })
+        .join('') || '<p class="crm-hint">Todavía no hay cambios registrados.</p>';
+    showModal(
+      'Precio y cupo · ' + e.name,
+      `<div class="tl-summary"><div><small>Precio regular</small><strong>${m(e.priceCents)}</strong></div>${e.sessionPriceCents ? `<div><small>Por sesión</small><strong>${m(e.sessionPriceCents)}</strong></div>` : ''}<div><small>Cupo disponible</small><strong>${e.availableSeats === null ? 'Por confirmar' : e.availableSeats + (e.capacity ? ' de ' + e.capacity : '')}</strong></div></div><p class="crm-hint">Cada cambio de precio y de cupo queda registrado con su fecha y quién lo hizo. Las automatizaciones futuras (avisos, llamadas, alertas) leen estos mismos registros.</p><div class="tl-list">${rows}</div>`,
+    );
+    icons();
   }
-  async function history(kind,id,before=''){
-    const result=await api(`/api/catalogue/${kind}/${id}/history${before?'?before='+before:''}`);
-    if(!before)showModal('Historial de versiones','<p class="crm-hint">Las versiones registran quién guardó, aprobó o archivó el contenido. Los mensajes enviados conservan su versión.</p><div id="cat-history"></div>');
-    const target=$('#cat-history');if(!target)return;target.querySelector('[data-action=cat-history-more]')?.remove();
-    target.insertAdjacentHTML('beforeend',result.events.map(e=>{const s=e.snapshot;return `<article class="timeline-event"><span class="timeline-dot"></span><div><strong>Versión ${e.revision} · ${{created:'Creado',updated:'Actualizado',approve:'Aprobado',archive:'Archivado'}[e.action]||e.action}</strong><p>${esc(s.title||s.name)}${s.price_cents!==undefined?' · '+money(s.price_cents,s.currency||edition(s.edition_id)?.currency):''}</p><small>${esc(e.actor_name||'Sistema')} · ${stamp(e.created_at)}</small><details><summary>Ver contenido de esta versión</summary>${s.body?`<pre class="cat-version-copy">${esc(s.body)}</pre>`:''}${s.syllabus?`<pre class="cat-version-copy">${esc(s.syllabus)}</pre>`:''}${s.starts_at?`<p>${stamp(s.starts_at,s.timezone||edition(s.edition_id)?.timezone)}${s.ends_at?' → '+stamp(s.ends_at,s.timezone||edition(s.edition_id)?.timezone):''}</p>`:''}${s.instructor?`<p>Docente: ${esc(s.instructor)}</p>`:''}${s.file_id?`<a class="btn" href="/api/library/files/${s.file_id}" target="_blank" rel="noopener">Abrir archivo de esta versión</a>`:''}<p>Estado: ${states[s.status]||'Activo'}</p></details></div></article>`;}).join('')||'<p class="crm-hint">Contenido inicial conservado. Las siguientes modificaciones quedarán registradas aquí.</p>');
-    if(result.nextBefore)target.insertAdjacentHTML('beforeend',btn('history-more','Ver versiones anteriores',id,kind,`data-before="${result.nextBefore}"`));icons();
+  async function history(kind, id, before = '') {
+    const result = await api(`/api/catalogue/${kind}/${id}/history${before ? '?before=' + before : ''}`);
+    if (!before)
+      showModal(
+        'Historial de versiones',
+        '<p class="crm-hint">Las versiones registran quién guardó, aprobó o archivó el contenido. Los mensajes enviados conservan su versión.</p><div id="cat-history"></div>',
+      );
+    const target = $('#cat-history');
+    if (!target) return;
+    target.querySelector('[data-action=cat-history-more]')?.remove();
+    target.insertAdjacentHTML(
+      'beforeend',
+      result.events
+        .map(e => {
+          const s = e.snapshot;
+          return `<article class="timeline-event"><span class="timeline-dot"></span><div><strong>Versión ${e.revision} · ${{ created: 'Creado', updated: 'Actualizado', approve: 'Aprobado', archive: 'Archivado' }[e.action] || e.action}</strong><p>${esc(s.title || s.name)}${s.price_cents !== undefined ? ' · ' + money(s.price_cents, s.currency || edition(s.edition_id)?.currency) : ''}</p><small>${esc(e.actor_name || 'Sistema')} · ${stamp(e.created_at)}</small><details><summary>Ver contenido de esta versión</summary>${s.body ? `<pre class="cat-version-copy">${esc(s.body)}</pre>` : ''}${s.syllabus ? `<pre class="cat-version-copy">${esc(s.syllabus)}</pre>` : ''}${s.starts_at ? `<p>${stamp(s.starts_at, s.timezone || edition(s.edition_id)?.timezone)}${s.ends_at ? ' → ' + stamp(s.ends_at, s.timezone || edition(s.edition_id)?.timezone) : ''}</p>` : ''}${s.instructor ? `<p>Docente: ${esc(s.instructor)}</p>` : ''}${s.file_id ? `<a class="btn" href="/api/library/files/${s.file_id}" target="_blank" rel="noopener">Abrir archivo de esta versión</a>` : ''}<p>Estado: ${states[s.status] || 'Activo'}</p></details></div></article>`;
+        })
+        .join('') ||
+        '<p class="crm-hint">Contenido inicial conservado. Las siguientes modificaciones quedarán registradas aquí.</p>',
+    );
+    if (result.nextBefore)
+      target.insertAdjacentHTML(
+        'beforeend',
+        btn('history-more', 'Ver versiones anteriores', id, kind, `data-before="${result.nextBefore}"`),
+      );
+    icons();
   }
-  async function previewTemplate(id){
-    await load();const t=data.templates.find(t=>t.id===id),editions=data.editions.filter(e=>e.brand_id===t.brand_id&&(!t.course_id||e.course_id===t.course_id)&&(!t.edition_id||e.id===t.edition_id));
-    showModal('Previsualizar plantilla',`<p class="crm-hint">${esc(t.title)} · ${states[t.status]}. Esta vista no envía mensajes.</p><form id="cat-preview-form" class="form-grid">${hidden('templateId',id)}${select('Edición de ejemplo','editionId',opts(editions,'id',e=>course(e.course_id)?.title+' · '+e.name))}${field('Nombre de ejemplo','name','Cliente de prueba')}<button type="submit" class="btn">Resolver variables</button></form><pre class="cat-preview-text" id="cat-preview-result"></pre>`);
+  async function previewTemplate(id) {
+    await load();
+    const t = data.templates.find(t => t.id === id),
+      editions = data.editions.filter(
+        e =>
+          e.brand_id === t.brand_id &&
+          (!t.course_id || e.course_id === t.course_id) &&
+          (!t.edition_id || e.id === t.edition_id),
+      );
+    showModal(
+      'Previsualizar plantilla',
+      `<p class="crm-hint">${esc(t.title)} · ${states[t.status]}. Esta vista no envía mensajes.</p><form id="cat-preview-form" class="form-grid">${hidden('templateId', id)}${select(
+        'Edición de ejemplo',
+        'editionId',
+        opts(editions, 'id', e => course(e.course_id)?.title + ' · ' + e.name),
+      )}${field('Nombre de ejemplo', 'name', 'Cliente de prueba')}<button type="submit" class="btn">Resolver variables</button></form><pre class="cat-preview-text" id="cat-preview-result"></pre>`,
+    );
   }
-  async function materials(id,kind='flyer'){
-    const result=await api('/api/conversations/'+id+'/materials');material={id,result,selection:null};
-    const ctx=result.context;showModal('Biblioteca para esta conversación',`<p class="crm-hint">${esc(ctx.course.title)} · ${esc(ctx.edition.name)}<br>${esc(ctx.dateLabel)} · ${money(ctx.priceCents,ctx.currency)}</p>${ctx.reason?`<div class="form-error">${esc(ctx.reason)}</div>`:''}<form id="cat-material-form" class="form-grid">${select('Contenido','content','<option value="kind:flyer">Ficha vigente con imagen</option><option value="kind:price">Precio vigente</option><option value="kind:syllabus">Temario vigente</option><option value="kind:schedule">Fecha y docente vigentes</option>'+result.templates.map(t=>`<option value="template:${t.id}">${esc(t.title)} · ${scenarios[t.scenario]}</option>`).join('')+result.flyers.filter(f=>f.availability==='Listo para enviar').map(f=>`<option value="flyer:${f.id}">${esc(f.title)} · Flyer v${f.revision}</option>`).join(''))}<button type="submit" class="btn">Previsualizar antes de enviar</button></form><div id="cat-material-preview" aria-live="polite"></div><p class="crm-hint">Sólo aparecen plantillas aprobadas y flyers vigentes para esta marca, edición y canal.</p>`);$('#cat-material-form [name=content]').value='kind:'+kind;
+  async function materials(id, kind = 'flyer') {
+    const result = await api('/api/conversations/' + id + '/materials');
+    material = { id, result, selection: null };
+    const ctx = result.context;
+    showModal(
+      'Biblioteca para esta conversación',
+      `<p class="crm-hint">${esc(ctx.course.title)} · ${esc(ctx.edition.name)}<br>${esc(ctx.dateLabel)} · ${money(ctx.priceCents, ctx.currency)}</p>${ctx.reason ? `<div class="form-error">${esc(ctx.reason)}</div>` : ''}<form id="cat-material-form" class="form-grid">${select(
+        'Contenido',
+        'content',
+        '<option value="kind:flyer">Ficha vigente con imagen</option><option value="kind:price">Precio vigente</option><option value="kind:syllabus">Temario vigente</option><option value="kind:schedule">Fecha y docente vigentes</option>' +
+          result.templates
+            .map(t => `<option value="template:${t.id}">${esc(t.title)} · ${scenarios[t.scenario]}</option>`)
+            .join('') +
+          result.flyers
+            .filter(f => f.availability === 'Listo para enviar')
+            .map(f => `<option value="flyer:${f.id}">${esc(f.title)} · Flyer v${f.revision}</option>`)
+            .join(''),
+      )}<button type="submit" class="btn">Previsualizar antes de enviar</button></form><div id="cat-material-preview" aria-live="polite"></div><p class="crm-hint">Sólo aparecen plantillas aprobadas y flyers vigentes para esta marca, edición y canal.</p>`,
+    );
+    $('#cat-material-form [name=content]').value = 'kind:' + kind;
   }
-  async function action(name,el){
-    if(name.startsWith('imp-'))return importUI.action(name,el);
-    if(name.startsWith('kimp-'))return knowledgeImportUI.action(name,el);
-    if(name==='cat-ad-link'){const url=location.origin+'/?ad='+el.dataset.id;try{await navigator.clipboard.writeText(url);toast('Enlace de anuncio copiado. Quien lo abra llegará a la conversación de este curso con el origen «anuncio».');}catch{showModal('Enlace de anuncio',`<label class="field">Copia este enlace<input readonly value="${esc(url)}"></label><p class="crm-hint">Simula el clic en un anuncio: abre la conversación del curso de este flyer con el origen registrado.</p>`);}return true;}
-    if(name==='cat-edit'&&el.dataset.type==='knowledge')return knowledgeUI.action('kn-new',el,data.knowledge);
-    if(name.startsWith('kn-'))return knowledgeUI.action(name,el,data.knowledge);
-    if(name==='cat-edit'&&el.dataset.type==='evaluation')return evaluationUI.action('ev-new',el,data.evaluation);
-    if(name.startsWith('ev-'))return evaluationUI.action(name,el,data.evaluation);
-    if(name.startsWith('ct-'))return contentUI.action(name,el);
-    if(!name.startsWith('cat-'))return false;const id=el.dataset.id,type=el.dataset.type;
-    if(name==='cat-tab'){tab=id;status='';query='';draw();}
-    if(name==='cat-course-editions'){tab='editions';query=course(id).title;status='';draw();}
-    if(name==='cat-wizard'||name.startsWith('cat-wz-')){if(await wizardUI.action(name,el)){if(name==='cat-wz-view'){tab='courses';draw();}return true;}}
-    if(name==='cat-edit')await edit(type,id);
-    if(name==='cat-course-image'){
-      const c=course(id),eds=data.editions.filter(e=>e.course_id===id&&e.status!=='archived'),pick=eds.find(e=>e.status==='published')||eds[0];
-      if(!pick){tab='editions';query=c.title;status='';draw();return toast('Primero crea una edición para este curso: el precio y la fecha viven ahí, y la imagen se liga a una edición.');}
-      return edit('flyers','',{editionId:pick.id,title:'Imagen · '+c.title});
+  async function action(name, el) {
+    if (name.startsWith('imp-')) return importUI.action(name, el);
+    if (name.startsWith('kimp-')) return knowledgeImportUI.action(name, el);
+    if (name === 'cat-ad-link') {
+      const url = location.origin + '/?ad=' + el.dataset.id;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast(
+          'Enlace de anuncio copiado. Quien lo abra llegará a la conversación de este curso con el origen «anuncio».',
+        );
+      } catch {
+        showModal(
+          'Enlace de anuncio',
+          `<label class="field">Copia este enlace<input readonly value="${esc(url)}"></label><p class="crm-hint">Simula el clic en un anuncio: abre la conversación del curso de este flyer con el origen registrado.</p>`,
+        );
+      }
+      return true;
     }
-    if(name==='cat-approve'||name==='cat-archive'){
-      await api(`/api/catalogue/${type}/${id}/${name==='cat-approve'?'approve':'archive'}`,{method:'POST',body:{expectedRevision:Number(el.dataset.revision)}});await edit(type,id);await refresh();toast(name==='cat-approve'?'Contenido aprobado':'Contenido archivado');
+    if (name === 'cat-edit' && el.dataset.type === 'knowledge') return knowledgeUI.action('kn-new', el, data.knowledge);
+    if (name.startsWith('kn-')) return knowledgeUI.action(name, el, data.knowledge);
+    if (name === 'cat-edit' && el.dataset.type === 'evaluation')
+      return evaluationUI.action('ev-new', el, data.evaluation);
+    if (name.startsWith('ev-')) return evaluationUI.action(name, el, data.evaluation);
+    if (name.startsWith('ct-')) return contentUI.action(name, el);
+    if (!name.startsWith('cat-')) return false;
+    const id = el.dataset.id,
+      type = el.dataset.type;
+    if (name === 'cat-tab') {
+      tab = id;
+      status = '';
+      query = '';
+      draw();
     }
-    if(name==='cat-timeline'){await timelineView(id);return true;}
-    if(name==='cat-history'||name==='cat-history-more')await history(type,id,el.dataset.before);
-    if(name==='cat-preview')await previewTemplate(id);
-    if(name==='cat-variable'){const area=$('#cat-template-text');area.setRangeText('{{'+id+'}}',area.selectionStart,area.selectionEnd,'end');area.focus();}
-    if(name==='cat-file'){const f=data.flyers.find(f=>f.id===id);showModal(f.title,f.mime==='application/pdf'?`<p>Documento PDF · ${esc(f.filename)}</p><a class="btn" href="${f.fileUrl}" target="_blank" rel="noopener">Abrir PDF</a>`:`<img class="cat-full-image" src="${f.fileUrl}" alt="${esc(f.title)}">`);}
-    if(name==='cat-materials')await materials(state.selected,el.dataset.kind||'flyer');
-    if(name==='cat-send'){
-      if(!material?.selection)return true;el.disabled=true;
-      try{await api('/api/conversations/'+material.id+'/materials/send',{method:'POST',body:material.selection});$('#modal').close();await refresh();toast('Material enviado con su versión');}catch(e){el.disabled=false;const target=$('#cat-material-preview');if(target)target.insertAdjacentHTML('beforeend',`<p class="form-error">${esc(e.message)} Previsualiza otra vez para actualizar.</p>`);}
+    if (name === 'cat-course-editions') {
+      tab = 'editions';
+      query = course(id).title;
+      status = '';
+      draw();
     }
-    if(name==='cat-brand')showModal('Nueva marca',`<form id="brand-form" class="form-grid">${field('Nombre','name','','text','required minlength="2" maxlength="60"')}${field('Descripción','description','','text','maxlength="200"')}<button type="submit" class="btn primary">Crear marca</button></form>`);
-    if(name==='cat-start')newChat(el.dataset.course,id);
+    if (name === 'cat-wizard' || name.startsWith('cat-wz-')) {
+      if (await wizardUI.action(name, el)) {
+        if (name === 'cat-wz-view') {
+          tab = 'courses';
+          draw();
+        }
+        return true;
+      }
+    }
+    if (name === 'cat-edit') await edit(type, id);
+    if (name === 'cat-course-image') {
+      const c = course(id),
+        eds = data.editions.filter(e => e.course_id === id && e.status !== 'archived'),
+        pick = eds.find(e => e.status === 'published') || eds[0];
+      if (!pick) {
+        tab = 'editions';
+        query = c.title;
+        status = '';
+        draw();
+        return toast(
+          'Primero crea una edición para este curso: el precio y la fecha viven ahí, y la imagen se liga a una edición.',
+        );
+      }
+      return edit('flyers', '', { editionId: pick.id, title: 'Imagen · ' + c.title });
+    }
+    if (name === 'cat-approve' || name === 'cat-archive') {
+      await api(`/api/catalogue/${type}/${id}/${name === 'cat-approve' ? 'approve' : 'archive'}`, {
+        method: 'POST',
+        body: { expectedRevision: Number(el.dataset.revision) },
+      });
+      await edit(type, id);
+      await refresh();
+      toast(name === 'cat-approve' ? 'Contenido aprobado' : 'Contenido archivado');
+    }
+    if (name === 'cat-timeline') {
+      await timelineView(id);
+      return true;
+    }
+    if (name === 'cat-history' || name === 'cat-history-more') await history(type, id, el.dataset.before);
+    if (name === 'cat-preview') await previewTemplate(id);
+    if (name === 'cat-variable') {
+      const area = $('#cat-template-text');
+      area.setRangeText('{{' + id + '}}', area.selectionStart, area.selectionEnd, 'end');
+      area.focus();
+    }
+    if (name === 'cat-file') {
+      const f = data.flyers.find(f => f.id === id);
+      showModal(
+        f.title,
+        f.mime === 'application/pdf'
+          ? `<p>Documento PDF · ${esc(f.filename)}</p><a class="btn" href="${f.fileUrl}" target="_blank" rel="noopener">Abrir PDF</a>`
+          : `<img class="cat-full-image" src="${f.fileUrl}" alt="${esc(f.title)}">`,
+      );
+    }
+    if (name === 'cat-materials') await materials(state.selected, el.dataset.kind || 'flyer');
+    if (name === 'cat-send') {
+      if (!material?.selection) return true;
+      el.disabled = true;
+      try {
+        await api('/api/conversations/' + material.id + '/materials/send', {
+          method: 'POST',
+          body: material.selection,
+        });
+        $('#modal').close();
+        await refresh();
+        toast('Material enviado con su versión');
+      } catch (e) {
+        el.disabled = false;
+        const target = $('#cat-material-preview');
+        if (target)
+          target.insertAdjacentHTML(
+            'beforeend',
+            `<p class="form-error">${esc(e.message)} Previsualiza otra vez para actualizar.</p>`,
+          );
+      }
+    }
+    if (name === 'cat-brand')
+      showModal(
+        'Nueva marca',
+        `<form id="brand-form" class="form-grid">${field('Nombre', 'name', '', 'text', 'required minlength="2" maxlength="60"')}${field('Descripción', 'description', '', 'text', 'maxlength="200"')}<button type="submit" class="btn primary">Crear marca</button></form>`,
+      );
+    if (name === 'cat-start') newChat(el.dataset.course, id);
     return true;
   }
-  async function submit(form,input){
-    if(form.getAttribute('id')==='cat-wiz-form')return wizardUI.submit(form,input);
-    if(form.getAttribute('id')==='kn-form')return knowledgeUI.submit(form,input);
-    if(form.getAttribute('id')==='ev-form')return evaluationUI.submit(form,input);
-    if(form.getAttribute('id')?.startsWith('ct-'))return contentUI.submit(form,input);
-    if(!form.getAttribute('id').startsWith('cat-'))return false;
-    if(form.getAttribute('id')==='cat-search-form'){query=input.query;draw();return true;}
-    if(form.getAttribute('id')==='cat-preview-form'){const r=await api('/api/catalogue/preview',{method:'POST',body:input});$('#cat-preview-result').textContent=r.text;return true;}
-    if(form.getAttribute('id')==='cat-material-form'){
-      const [kind,id]=input.content.split(':'),payload=kind==='template'?{templateId:id}:kind==='flyer'?{kind:'flyer',flyerId:id}:{kind:id};
-      const preview=await api('/api/conversations/'+material.id+'/materials/preview',{method:'POST',body:payload});material.selection={...payload,previewToken:preview.previewToken,clientRef:crypto.randomUUID()};
-      const selectedFile=material.result.flyers.find(f=>f.id===preview.commercial.flyerId),pdf=selectedFile?.mime==='application/pdf';
-      $('#cat-material-preview').innerHTML=`${preview.flyerUrl?(pdf?`<a href="${preview.flyerUrl}" target="_blank" rel="noopener" class="btn">Abrir PDF adjunto</a>`:`<img class="cat-send-image" src="${preview.flyerUrl}" alt="Vista previa del flyer">`):''}<pre class="cat-preview-text">${esc(preview.text)}</pre>${btn('send','Enviar material al chat')}<p class="crm-hint">El precio y la vigencia se vuelven a comprobar al enviar.</p>`;return true;
+  async function submit(form, input) {
+    if (form.getAttribute('id') === 'cat-wiz-form') return wizardUI.submit(form, input);
+    if (form.getAttribute('id') === 'kn-form') return knowledgeUI.submit(form, input);
+    if (form.getAttribute('id') === 'ev-form') return evaluationUI.submit(form, input);
+    if (form.getAttribute('id')?.startsWith('ct-')) return contentUI.submit(form, input);
+    if (!form.getAttribute('id').startsWith('cat-')) return false;
+    if (form.getAttribute('id') === 'cat-search-form') {
+      query = input.query;
+      draw();
+      return true;
     }
-    if(form.getAttribute('id')==='cat-edit-form'){
-      const type=input.type,body={...input,active:input.active!=='false'};delete body.file;
-      try{
-        if(type==='editions'){body.startsAt=instant(input.startsAt,input.timezone);body.endsAt=instant(input.endsAt,input.timezone);}
-        if(type==='promotions'){const e=edition(input.editionId);body.startsAt=instant(input.startsAt,e.timezone);body.endsAt=instant(input.endsAt,e.timezone);}
-        if(type==='flyers'){
-          const e=edition(input.editionId);body.expiresAt=instant(input.expiresAt,e.timezone);const file=$('#cat-file-input').files[0];
-          if(file&&!$('#cat-file-input').dataset.uploaded){if(file.size>4*1024*1024)throw Error('Máximo 4 MB por archivo.');const base64=await new Promise((done,fail)=>{const reader=new FileReader();reader.onload=()=>done(reader.result.split(',')[1]);reader.onerror=fail;reader.readAsDataURL(file);});const saved=await api('/api/catalogue/files',{method:'POST',body:{brandId:e.brand_id,file:{name:file.name,type:file.type,base64}}});$('#cat-file-input').dataset.uploaded=saved.id;}
-          body.fileId=$('#cat-file-input').dataset.uploaded||input.fileId;
+    if (form.getAttribute('id') === 'cat-preview-form') {
+      const r = await api('/api/catalogue/preview', { method: 'POST', body: input });
+      $('#cat-preview-result').textContent = r.text;
+      return true;
+    }
+    if (form.getAttribute('id') === 'cat-material-form') {
+      const [kind, id] = input.content.split(':'),
+        payload =
+          kind === 'template' ? { templateId: id } : kind === 'flyer' ? { kind: 'flyer', flyerId: id } : { kind: id };
+      const preview = await api('/api/conversations/' + material.id + '/materials/preview', {
+        method: 'POST',
+        body: payload,
+      });
+      material.selection = { ...payload, previewToken: preview.previewToken, clientRef: crypto.randomUUID() };
+      const selectedFile = material.result.flyers.find(f => f.id === preview.commercial.flyerId),
+        pdf = selectedFile?.mime === 'application/pdf';
+      $('#cat-material-preview').innerHTML =
+        `${preview.flyerUrl ? (pdf ? `<a href="${preview.flyerUrl}" target="_blank" rel="noopener" class="btn">Abrir PDF adjunto</a>` : `<img class="cat-send-image" src="${preview.flyerUrl}" alt="Vista previa del flyer">`) : ''}<pre class="cat-preview-text">${esc(preview.text)}</pre>${btn('send', 'Enviar material al chat')}<p class="crm-hint">El precio y la vigencia se vuelven a comprobar al enviar.</p>`;
+      return true;
+    }
+    if (form.getAttribute('id') === 'cat-edit-form') {
+      const type = input.type,
+        body = { ...input, active: input.active !== 'false' };
+      delete body.file;
+      try {
+        if (type === 'editions') {
+          body.startsAt = instant(input.startsAt, input.timezone);
+          body.endsAt = instant(input.endsAt, input.timezone);
         }
-        const result=await api('/api/catalogue/'+type+(input.id?'/'+input.id:''),{method:input.id?'PATCH':'POST',body});
-        const nextStep=['flyers','templates'].includes(type)||!input.id;   // un borrador por aprobar o un registro recién creado: la ventana sigue abierta
-        if(nextStep)await edit(type,result.item.id);else document.getElementById('modal')?.close();
-        await refresh();toast(['flyers','templates'].includes(type)?'Borrador guardado. Revísalo y apruébalo.':'Datos guardados');
-      }catch(e){$('#cat-feedback').innerHTML=`<div class="form-error">${esc(e.message)}</div>`;toast(e.message);}
+        if (type === 'promotions') {
+          const e = edition(input.editionId);
+          body.startsAt = instant(input.startsAt, e.timezone);
+          body.endsAt = instant(input.endsAt, e.timezone);
+        }
+        if (type === 'flyers') {
+          const e = edition(input.editionId);
+          body.expiresAt = instant(input.expiresAt, e.timezone);
+          const file = $('#cat-file-input').files[0];
+          if (file && !$('#cat-file-input').dataset.uploaded) {
+            if (file.size > 4 * 1024 * 1024) throw Error('Máximo 4 MB por archivo.');
+            const base64 = await new Promise((done, fail) => {
+              const reader = new FileReader();
+              reader.onload = () => done(reader.result.split(',')[1]);
+              reader.onerror = fail;
+              reader.readAsDataURL(file);
+            });
+            const saved = await api('/api/catalogue/files', {
+              method: 'POST',
+              body: { brandId: e.brand_id, file: { name: file.name, type: file.type, base64 } },
+            });
+            $('#cat-file-input').dataset.uploaded = saved.id;
+          }
+          body.fileId = $('#cat-file-input').dataset.uploaded || input.fileId;
+        }
+        const result = await api('/api/catalogue/' + type + (input.id ? '/' + input.id : ''), {
+          method: input.id ? 'PATCH' : 'POST',
+          body,
+        });
+        const nextStep = ['flyers', 'templates'].includes(type) || !input.id; // un borrador por aprobar o un registro recién creado: la ventana sigue abierta
+        if (nextStep) await edit(type, result.item.id);
+        else document.getElementById('modal')?.close();
+        await refresh();
+        toast(['flyers', 'templates'].includes(type) ? 'Borrador guardado. Revísalo y apruébalo.' : 'Datos guardados');
+      } catch (e) {
+        $('#cat-feedback').innerHTML = `<div class="form-error">${esc(e.message)}</div>`;
+        toast(e.message);
+      }
       return true;
     }
     return false;
   }
-  function change(target){
-    if(target.id==='wz-file')return wizardUI.change(target);
-    if(target.id==='kn-brand')return knowledgeUI.change(target);
-    if(target.id==='ev-brand')return evaluationUI.change(target);
-    if(target.id==='cat-brand-filter'){state.brand=target.value;query='';draw();return true;}
-    if(target.id==='cat-state-filter'){status=target.value;draw();return true;}
-    if(target.id==='cat-file-input'){delete target.dataset.uploaded;const file=target.files[0],preview=$('#cat-file-preview');if(file?.type.startsWith('image/')){const url=URL.createObjectURL(file);preview.innerHTML=`<img class="cat-edit-image" src="${url}" alt="Archivo por subir">`;preview.querySelector('img').onload=()=>URL.revokeObjectURL(url);}else preview.textContent=file?.name||'';return true;}
-    if(target.id==='cat-flyer-edition'){const e=edition(target.value);$('#cat-flyer-promotion').innerHTML='<option value="">Precio regular · sin promoción</option>'+opts(data.promotions.filter(p=>p.edition_id===e.id),'id','name');$('#cat-flyer-zone').textContent='Zona: '+e.timezone+'. Revisa que la pieza corresponda a esta edición.';return true;}
-    if(target.id==='cat-promo-edition'){const e=edition(target.value);$('#cat-promo-price').textContent='Precio regular: '+money(e.price_cents,e.currency);$('#cat-promo-zone').textContent='Zona: '+e.timezone;return true;}
-    if(target.id==='cat-template-brand'){$('#cat-template-course').innerHTML='<option value="">Todos los cursos de esta marca</option>'+opts(data.courses.filter(c=>c.brand_id===target.value),'id','title');$('#cat-template-edition').innerHTML='<option value="">Todas las ediciones del curso</option>';$('#cat-template-flyer').innerHTML='<option value="">Sin adjunto</option>';return true;}
-    if(target.id==='cat-template-course'){$('#cat-template-edition').innerHTML='<option value="">Todas las ediciones del curso</option>'+opts(data.editions.filter(e=>e.course_id===target.value),'id','name');$('#cat-template-flyer').innerHTML='<option value="">Sin adjunto</option>';return true;}
-    if(target.id==='cat-template-edition'){$('#cat-template-flyer').innerHTML='<option value="">Sin adjunto</option>'+opts(data.flyers.filter(f=>f.edition_id===target.value),'id','title');return true;}
-    if(target.id==='new-chat-course'){updateChatEditions(target.value);return true;}
+  function change(target) {
+    if (target.id === 'wz-file') return wizardUI.change(target);
+    if (target.id === 'kn-brand') return knowledgeUI.change(target);
+    if (target.id === 'ev-brand') return evaluationUI.change(target);
+    if (target.id === 'cat-brand-filter') {
+      state.brand = target.value;
+      query = '';
+      draw();
+      return true;
+    }
+    if (target.id === 'cat-state-filter') {
+      status = target.value;
+      draw();
+      return true;
+    }
+    if (target.id === 'cat-file-input') {
+      delete target.dataset.uploaded;
+      const file = target.files[0],
+        preview = $('#cat-file-preview');
+      if (file?.type.startsWith('image/')) {
+        const url = URL.createObjectURL(file);
+        preview.innerHTML = `<img class="cat-edit-image" src="${url}" alt="Archivo por subir">`;
+        preview.querySelector('img').onload = () => URL.revokeObjectURL(url);
+      } else preview.textContent = file?.name || '';
+      return true;
+    }
+    if (target.id === 'cat-flyer-edition') {
+      const e = edition(target.value);
+      $('#cat-flyer-promotion').innerHTML =
+        '<option value="">Precio regular · sin promoción</option>' +
+        opts(
+          data.promotions.filter(p => p.edition_id === e.id),
+          'id',
+          'name',
+        );
+      $('#cat-flyer-zone').textContent = 'Zona: ' + e.timezone + '. Revisa que la pieza corresponda a esta edición.';
+      return true;
+    }
+    if (target.id === 'cat-promo-edition') {
+      const e = edition(target.value);
+      $('#cat-promo-price').textContent = 'Precio regular: ' + money(e.price_cents, e.currency);
+      $('#cat-promo-zone').textContent = 'Zona: ' + e.timezone;
+      return true;
+    }
+    if (target.id === 'cat-template-brand') {
+      $('#cat-template-course').innerHTML =
+        '<option value="">Todos los cursos de esta marca</option>' +
+        opts(
+          data.courses.filter(c => c.brand_id === target.value),
+          'id',
+          'title',
+        );
+      $('#cat-template-edition').innerHTML = '<option value="">Todas las ediciones del curso</option>';
+      $('#cat-template-flyer').innerHTML = '<option value="">Sin adjunto</option>';
+      return true;
+    }
+    if (target.id === 'cat-template-course') {
+      $('#cat-template-edition').innerHTML =
+        '<option value="">Todas las ediciones del curso</option>' +
+        opts(
+          data.editions.filter(e => e.course_id === target.value),
+          'id',
+          'name',
+        );
+      $('#cat-template-flyer').innerHTML = '<option value="">Sin adjunto</option>';
+      return true;
+    }
+    if (target.id === 'cat-template-edition') {
+      $('#cat-template-flyer').innerHTML =
+        '<option value="">Sin adjunto</option>' +
+        opts(
+          data.flyers.filter(f => f.edition_id === target.value),
+          'id',
+          'title',
+        );
+      return true;
+    }
+    if (target.id === 'new-chat-course') {
+      updateChatEditions(target.value);
+      return true;
+    }
     return false;
   }
-  function updateChatEditions(courseId,selected=''){const target=$('#new-chat-edition');if(target)target.innerHTML=opts((state.editions||[]).filter(e=>e.course_id===courseId),'id',e=>e.name+' · '+e.dateLabel,selected);}
-  function renderCustomer(){
-    const courses=state.courses.filter(c=>state.brand==='all'||c.brand_id===state.brand);$('#page').innerHTML=`<div class="content-page catalogue-page"><div class="page-heading"><div><span class="eyebrow">Catálogo del laboratorio</span><h1>Elige tu próxima conversación.</h1><p>Consulta las ediciones disponibles y prueba la atención del equipo.</p></div></div><div class="cat-course-grid">${courses.map(c=>{const editions=(state.editions||[]).filter(e=>e.course_id===c.id),e=editions[0];return `<article class="cat-course"><div class="cat-course-cover">${e?`<img src="/api/courses/${c.id}/flyer?editionId=${e.id}" alt="Información de ${esc(c.title)}" loading="lazy">`:icon('book-open')}</div><div class="cat-card-body"><small>${esc(brand(c.brand_id))}</small><h2>${esc(c.title)}</h2><p>${editions.length} ediciones disponibles</p>${e?`<strong>${money(e.priceCents,e.currency)}</strong><p>${esc(e.dateLabel)}</p>`:'<p>Próximas fechas por confirmar.</p>'}<div class="actions">${btn('customer-detail','Ver ediciones',c.id)}</div></div></article>`;}).join('')}</div><p class="crm-hint">Material de práctica. No se realizan cobros ni inscripciones comerciales.</p></div>`;icons();
+  function updateChatEditions(courseId, selected = '') {
+    const target = $('#new-chat-edition');
+    if (target)
+      target.innerHTML = opts(
+        (state.editions || []).filter(e => e.course_id === courseId),
+        'id',
+        e => e.name + ' · ' + e.dateLabel,
+        selected,
+      );
   }
-  function customerDetails(id){const c=state.courses.find(c=>c.id===id),editions=(state.editions||[]).filter(e=>e.course_id===id);showModal(c.title,`<pre class="cat-version-copy">${esc(c.syllabus)}</pre><h3 class="modal-section-title">Ediciones disponibles</h3>${editions.map(e=>`<article class="cat-detail-edition"><h3>${esc(e.name)}</h3><p>${esc(e.dateLabel)}</p><p>${esc(e.instructor||'Docente por confirmar')} · ${money(e.priceCents,e.currency)}</p>${btn('start','Conversar sobre esta edición',e.id,'',`data-course="${c.id}"`)}</article>`).join('')||'<p class="crm-hint">No hay ediciones abiertas en este momento.</p>'}`);}
-  return {render,action:async(name,el)=>{if(name==='cat-customer-detail'){customerDetails(el.dataset.id);return true;}return action(name,el);},submit,change,updateChatEditions,renderCustomer,customerDetails};
+  function renderCustomer() {
+    const courses = state.courses.filter(c => state.brand === 'all' || c.brand_id === state.brand);
+    $('#page').innerHTML =
+      `<div class="content-page catalogue-page"><div class="page-heading"><div><span class="eyebrow">Catálogo del laboratorio</span><h1>Elige tu próxima conversación.</h1><p>Consulta las ediciones disponibles y prueba la atención del equipo.</p></div></div><div class="cat-course-grid">${courses
+        .map(c => {
+          const editions = (state.editions || []).filter(e => e.course_id === c.id),
+            e = editions[0];
+          return `<article class="cat-course"><div class="cat-course-cover">${e ? `<img src="/api/courses/${c.id}/flyer?editionId=${e.id}" alt="Información de ${esc(c.title)}" loading="lazy">` : icon('book-open')}</div><div class="cat-card-body"><small>${esc(brand(c.brand_id))}</small><h2>${esc(c.title)}</h2><p>${editions.length} ediciones disponibles</p>${e ? `<strong>${money(e.priceCents, e.currency)}</strong><p>${esc(e.dateLabel)}</p>` : '<p>Próximas fechas por confirmar.</p>'}<div class="actions">${btn('customer-detail', 'Ver ediciones', c.id)}</div></div></article>`;
+        })
+        .join(
+          '',
+        )}</div><p class="crm-hint">Material de práctica. No se realizan cobros ni inscripciones comerciales.</p></div>`;
+    icons();
+  }
+  function customerDetails(id) {
+    const c = state.courses.find(c => c.id === id),
+      editions = (state.editions || []).filter(e => e.course_id === id);
+    showModal(
+      c.title,
+      `<pre class="cat-version-copy">${esc(c.syllabus)}</pre><h3 class="modal-section-title">Ediciones disponibles</h3>${editions.map(e => `<article class="cat-detail-edition"><h3>${esc(e.name)}</h3><p>${esc(e.dateLabel)}</p><p>${esc(e.instructor || 'Docente por confirmar')} · ${money(e.priceCents, e.currency)}</p>${btn('start', 'Conversar sobre esta edición', e.id, '', `data-course="${c.id}"`)}</article>`).join('') || '<p class="crm-hint">No hay ediciones abiertas en este momento.</p>'}`,
+    );
+  }
+  return {
+    render,
+    action: async (name, el) => {
+      if (name === 'cat-customer-detail') {
+        customerDetails(el.dataset.id);
+        return true;
+      }
+      return action(name, el);
+    },
+    submit,
+    change,
+    updateChatEditions,
+    renderCustomer,
+    customerDetails,
+  };
 };
