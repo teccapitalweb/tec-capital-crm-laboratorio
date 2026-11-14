@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { laneOf, peerIdentifier, inboxWaitMs } from '../server/connectors.mjs';
+import { laneOf as keyedLaneOf, peerIdentifier, inboxWaitMs } from '../server/connectors.mjs';
+import { createPeerHash } from '../server/lib/peer-key.mjs';
 import { startServer } from './helpers/server.mjs';
 import { metaHook, metaInbound, metaText, NUMBER, SECRET } from './helpers/fake-meta.mjs';
 import { PASSWORD, call, crash, openDb, sleep, until, whatsappLab as lab } from './helpers/crm.mjs';
 
+// el carril lleva la huella con llave de quien escribe (server/lib/peer-key.mjs); aquí, una llave fija de prueba
+const laneOf = (kind, provider, ev) => keyedLaneOf(kind, provider, ev, createPeerHash(Buffer.alloc(32, 7)));
 const MARIA = '5215512345678';
 const LUIS = '5215500000001';
 const ANA = '5215500000002';
@@ -101,7 +104,8 @@ test('con espera 0 el webhook responde «en cola» y el mensaje entra después; 
   assert.notEqual(inboxRow('wamid.maria-1').lane, inboxRow('wamid.luis-1').lane);
   assert.equal(inboxRow('wamid.maria-1').lane.includes('5512345678'), false);
   assert.ok(JSON.parse(inboxRow('wamid.maria-2').payload).event.data.text, 'mientras espera conserva su carga');
-  assert.equal(JSON.parse(inboxRow('wamid.maria-2').payload).v, '1.0', 'con la versión del contrato con la que llegó');
+  // contrato de canal 1.1 (docs/PLAN_CONTRATO_CANAL.md): la versión cambió a propósito; el lector acepta también 1.0
+  assert.equal(JSON.parse(inboxRow('wamid.maria-2').payload).v, '1.1', 'con la versión del contrato con la que llegó');
 
   meta.release('download');
   await until(() => mine('maria').length === 2, 'entran los dos mensajes de María', { logs: state.server.logs });

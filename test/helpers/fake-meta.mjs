@@ -3,6 +3,10 @@
 //   hold('send' | 'download')  las peticiones de ese tipo se quedan sin respuesta hasta release(…): así un envío o
 //                              una descarga se queda «en vuelo» todo el tiempo que la prueba necesite.
 //   delays.send                milisegundos que tarda en responder un envío.
+// Y los webhooks que manda Meta, con lo que lee el contrato de canal 1.1 (docs/PLAN_CONTRATO_CANAL.md): entrantes con
+// identificador de usuario, mensaje citado, botón de plantilla o reacción (metaInbound), estados con tarificación y
+// código de fallo (metaStatus) y avisos de cuenta, número, plantilla y preferencias (metaNotice). Es el único Meta de
+// mentira para lo nuevo; las pruebas antiguas que montan su propio servidor se quedan como están.
 // Nada sale a internet y todos los datos son inventados.
 import { createServer } from 'node:http';
 import { hmacHex } from '../../server/connectors.mjs';
@@ -107,12 +111,23 @@ export async function startFakeMeta() {
   };
 }
 
-// Un webhook firmado como lo manda Meta. `value` es el contenido de entry[].changes[].value.
-export async function metaHook(origin, value, { secret = SECRET } = {}) {
-  const raw = JSON.stringify({
-    object: 'whatsapp_business_account',
-    entry: [{ id: 'waba', changes: [{ field: 'messages', value: { messaging_product: 'whatsapp', ...value } }] }],
-  });
+// Cuerpo de un webhook como lo manda Meta: una entrada de la cuenta WABA con un cambio. `value` es el contenido de
+// entry[].changes[].value; `field` el campo («messages» o un aviso de cuenta, número o plantilla).
+export const WABA = 'waba';
+export const metaBody = (value, { field = 'messages', entryId = WABA, time } = {}) => ({
+  object: 'whatsapp_business_account',
+  entry: [
+    {
+      id: entryId,
+      ...(time ? { time } : {}),
+      changes: [{ field, value: field === 'messages' ? { messaging_product: 'whatsapp', ...value } : value }],
+    },
+  ],
+});
+
+// Un webhook firmado como lo manda Meta.
+export async function metaHook(origin, value, { secret = SECRET, field, entryId, time } = {}) {
+  const raw = JSON.stringify(metaBody(value, { field, entryId, time }));
   const response = await fetch(origin + '/api/webhooks/channel/meta', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-hub-signature-256': 'sha256=' + hmacHex(secret, raw) },
@@ -121,12 +136,79 @@ export async function metaHook(origin, value, { secret = SECRET } = {}) {
   return { status: response.status, body: await response.json() };
 }
 
-// Un mensaje entrante de una persona. `message` es lo propio del tipo: {type:'text', text:{body}} o {type:'image', image:{…}}.
-export const metaInbound = (origin, from, id, message, { to = NUMBER, name = 'Persona de prueba' } = {}) =>
-  metaHook(origin, {
+// Lo de un mensaje entrante (entry[].changes[].value). `message` es lo propio del tipo: {type:'text', text:{body}},
+// {type:'image', image:{…}}, {type:'button', button:{text, payload}}, {type:'reaction', reaction:{…}}…
+// Contrato 1.1: `bsuid` (identificador de usuario; con `from` vacío, la persona escribe sin teléfono visible),
+// `username`, `replyTo` (wamid citado) y `forwarded`.
+export function metaInboundValue(
+  from,
+  id,
+  message,
+  { to = NUMBER, name = 'Persona de prueba', bsuid, username, replyTo, forwarded } = {},
+) {
+  const context = {
+    ...(replyTo ? { from: '15550100000', id: replyTo } : {}),
+    ...(forwarded ? { forwarded: true } : {}),
+  };
+  return {
     metadata: { display_phone_number: '15550100000', phone_number_id: to },
-    contacts: [{ profile: { name }, ...(from ? { wa_id: from } : {}) }],
-    messages: [{ ...(from ? { from } : {}), id, timestamp: String(Math.floor(Date.now() / 1000)), ...message }],
-  });
+    contacts: [
+      {
+        profile: { name, ...(username ? { username } : {}) },
+        ...(from ? { wa_id: from } : {}),
+        ...(bsuid ? { user_id: bsuid } : {}),
+      },
+    ],
+    messages: [
+      {
+        ...(from ? { from } : {}),
+        ...(bsuid ? { from_user_id: bsuid } : {}),
+        id,
+        timestamp: String(Math.floor(Date.now() / 1000)),
+        ...(Object.keys(context).length ? { context } : {}),
+        ...message,
+      },
+    ],
+  };
+}
+export const metaInbound = (origin, from, id, message, options = {}) =>
+  metaHook(origin, metaInboundValue(from, id, message, options));
 export const metaText = (origin, from, id, body, options) =>
   metaInbound(origin, from, id, { type: 'text', text: { body } }, options);
+
+// Un estado de un mensaje saliente (entry[].changes[].value.statuses[]). Contrato 1.1: `pricing` (como lo manda Meta:
+// {billable, pricing_model, category, type}), `error` ({code, title, message, error_data:{details}}), `callback`
+// (biz_opaque_callback_data) y el destinatario (`recipient`, sus dígitos; `recipientUserId`).
+export function metaStatusValue(
+  wamid,
+  status,
+  { to = NUMBER, recipient = '5215512345678', recipientUserId, pricing, error, callback, timestamp } = {},
+) {
+  return {
+    metadata: { display_phone_number: '15550100000', phone_number_id: to },
+    statuses: [
+      {
+        id: wamid,
+        status,
+        timestamp: String(timestamp ?? Math.floor(Date.now() / 1000)),
+        ...(recipient ? { recipient_id: recipient } : {}),
+        ...(recipientUserId ? { recipient_user_id: recipientUserId } : {}),
+        ...(pricing ? { pricing } : {}),
+        ...(error ? { errors: [error] } : {}),
+        ...(callback ? { biz_opaque_callback_data: callback } : {}),
+      },
+    ],
+  };
+}
+export const metaStatus = (origin, wamid, status, options) => metaHook(origin, metaStatusValue(wamid, status, options));
+// Tarificación por mensaje como la informa Meta desde julio de 2025.
+export const metaPricing = (category, { billable = true, type = 'regular' } = {}) => ({
+  billable,
+  pricing_model: 'PMP',
+  category,
+  type,
+});
+
+// Un aviso de cuenta, número o plantilla (change.field distinto de «messages»), con su instante de entrada.
+export const metaNotice = (origin, field, value, { time = Math.floor(Date.now() / 1000) } = {}) =>
+  metaHook(origin, value, { field, time });

@@ -154,7 +154,7 @@ export function createChannel({
       )
       .run(m.id, m.conversation_id, m.brand_id, state, reason || null, actor || null, t);
   // Índice común: sólo entregado y fallido (los estados intermedios quedan en channel_events).
-  const emit = (m, state, reason, providerRef) => {
+  const emit = (m, state, reason, providerRef, code = null) => {
     if (!domainEvents || !['delivered', 'failed'].includes(state)) return;
     domainEvents.publish({
       type: state === 'failed' ? 'mensaje.fallido' : 'mensaje.entregado',
@@ -166,6 +166,7 @@ export function createChannel({
         category: m.category || null,
         reason: reason || undefined,
         providerRef: providerRef || undefined,
+        code: code || undefined,
       },
       source: 'channel',
       dedupeKey:
@@ -408,7 +409,9 @@ export function createChannel({
     };
   };
   // Estado reportado por el proveedor (webhook ya verificado): se localiza el mensaje por su referencia y se avanza sin retroceder.
-  function applyStatus({ providerRef, state, reason = null, at = null }) {
+  // Contrato 1.1: el estado puede traer el código numérico del fallo y la tarificación de Meta; se guardan en las
+  // columnas canónicas (fail_code, wa_pricing) sin cambiar lo demás.
+  function applyStatus({ providerRef, state, reason = null, at = null, code = null, pricing = null }) {
     const m = providerRef
       ? db
           .prepare(
@@ -420,18 +423,22 @@ export function createChannel({
     const order = { sent: 0, delivered: 1, read: 2, failed: 3 };
     if (order[state] === undefined) return null;
     const t = at && Number.isFinite(Number(at)) ? Number(at) : now();
+    const failCode = Number.isInteger(code) && code > 0 ? code : null;
+    if (pricing && typeof pricing === 'object')
+      db.prepare('UPDATE messages SET wa_pricing=? WHERE id=?').run(JSON.stringify(pricing).slice(0, 500), m.id);
     if (state === 'failed')
-      db.prepare("UPDATE messages SET delivery_state='failed',failed_reason=? WHERE id=?").run(
+      db.prepare("UPDATE messages SET delivery_state='failed',failed_reason=?,fail_code=? WHERE id=?").run(
         reason || 'Fallo reportado por el proveedor',
+        failCode,
         m.id,
       );
     else if (order[state] > order[m.delivery_state] || m.delivery_state === 'failed')
       db.prepare(
-        'UPDATE messages SET delivery_state=?,delivered_at=COALESCE(delivered_at,?),failed_reason=NULL WHERE id=?',
+        'UPDATE messages SET delivery_state=?,delivered_at=COALESCE(delivered_at,?),failed_reason=NULL,fail_code=NULL WHERE id=?',
       ).run(state, state === 'sent' ? null : t, m.id);
     else return m.delivery_state + ' (sin cambio)';
     event(m, state, reason || null, null, now());
-    emit(m, state, reason, providerRef);
+    emit(m, state, reason, providerRef, failCode);
     broadcast('conversation', m.conversation_id);
     return state;
   }
@@ -455,7 +462,7 @@ export function createChannel({
     const t = now();
     transaction(db, () => {
       db.prepare(
-        "UPDATE messages SET delivery_state='sent',failed_reason=NULL,delivered_at=NULL,send_attempts=0,send_lease_until=NULL,provider_ref=CASE WHEN ? THEN NULL ELSE provider_ref END WHERE id=? AND delivery_state='failed'",
+        "UPDATE messages SET delivery_state='sent',failed_reason=NULL,fail_code=NULL,delivered_at=NULL,send_attempts=0,send_lease_until=NULL,provider_ref=CASE WHEN ? THEN NULL ELSE provider_ref END WHERE id=? AND delivery_state='failed'",
       ).run(c.wa_number ? 1 : 0, m.id);
       event(m, 'retry', null, user.id, t);
     });

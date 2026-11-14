@@ -32,6 +32,20 @@ const MEDIA_LABEL = {
 };
 const MEDIA_NOTE = { audio: 'Audio', video: 'Video', sticker: 'Sticker', image: 'Imagen', document: 'Archivo' };
 const SKIPPED = new Set(['reaction', 'system', 'ephemeral', 'request_welcome', 'order', 'unsupported', 'unknown']);
+// Tipo de Meta → messages.content_kind (columna canónica). Un botón de plantilla y un botón o lista interactivos son
+// la misma cosa para el CRM: una pulsación, cuyo detalle va en messages.reply.
+const CONTENT_KIND = {
+  text: 'text',
+  image: 'image',
+  audio: 'audio',
+  video: 'video',
+  document: 'document',
+  sticker: 'sticker',
+  location: 'location',
+  contacts: 'contacts',
+  interactive: 'interactive',
+  button: 'interactive',
+};
 
 export function createWhatsApp({
   db,
@@ -63,6 +77,33 @@ export function createWhatsApp({
     if (!u || u.disabled || u.role !== 'admin') throw fail(403, 'WhatsApp real lo configura un administrador.');
   };
   const numberRow = id => db.prepare('SELECT * FROM wa_numbers WHERE phone_number_id=?').get(String(id || ''));
+
+  // ---- Contrato de canal 1.1 (docs/PLAN_CONTRATO_CANAL.md): lo que el entrante trae además del texto queda en las
+  // columnas canónicas del mensaje ya guardado. Paso con nombre del camino del entrante (conciliación, fila 33): corre
+  // dentro de la transacción del entrante, sin abrir otra ni hacer red, y no cambia el texto ni lo demás que ya se guardaba.
+  function recordChannelFacts(messageId, conversationId, d) {
+    const kind = CONTENT_KIND[String(d.kind || 'text')] || 'unsupported';
+    const quoted = d.replyTo?.providerRef ? String(d.replyTo.providerRef).slice(0, 200) : null;
+    const replyTo = quoted
+      ? db
+          .prepare('SELECT id FROM messages WHERE provider_ref=? AND conversation_id=? AND id!=?')
+          .get(quoted, conversationId, messageId)?.id || null
+      : null;
+    const meta = {};
+    if (quoted && !replyTo) meta.replyTo = { providerRef: quoted }; // citó algo que el CRM no tiene (p. ej. una difusión)
+    if (d.media) meta.media = d.media;
+    if (d.location) meta.location = d.location;
+    if (Array.isArray(d.contacts)) meta.contacts = d.contacts;
+    if (d.system) meta.system = d.system;
+    db.prepare('UPDATE messages SET content_kind=?,reply=?,reply_to_id=?,forwarded=?,channel_meta=? WHERE id=?').run(
+      kind,
+      d.interaction ? JSON.stringify(d.interaction).slice(0, 2000) : null,
+      replyTo,
+      d.forwarded ? 1 : 0,
+      Object.keys(meta).length ? JSON.stringify(meta).slice(0, 4000) : null,
+      messageId,
+    );
+  }
 
   // ---- Qué curso y edición recibe a quien escribe por primera vez: el curso por omisión del número si tiene una edición disponible;
   // si no, la primera edición disponible de la marca; en último caso un curso activo (el asistente dirá que no hay fechas y pasará a una persona).
@@ -303,6 +344,7 @@ export function createWhatsApp({
         if (!attachmentId) replies.resumeIfPausedByMode(c);
         const messageId = insertMessage(c, { id: userId, role: 'customer' }, content, 'customer', ref, attachmentId);
         db.prepare('UPDATE messages SET provider_ref=? WHERE id=?').run(String(d.providerRef).slice(0, 200), messageId);
+        recordChannelFacts(messageId, c.id, d);
         const fresh = db.prepare('SELECT * FROM conversations WHERE id=?').get(c.id),
           receiptId = attachmentId ? payments.attachReceipt(fresh, messageId, attachmentId) : null,
           botOn = Boolean(fresh.bot_enabled && !fresh.assigned_to && fresh.status === 'open');

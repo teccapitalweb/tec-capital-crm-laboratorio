@@ -1,6 +1,7 @@
-import { createHash, createHmac, timingSafeEqual, randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, timingSafeEqual, randomBytes, randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { createWebhookInbox } from './app/webhook-inbox.mjs';
+import { createPeerHash, loadPeerKey } from './lib/peer-key.mjs';
 
 // Contrato de conectores (Fase 1 · bloque 6). Define la interfaz que tendrán los proveedores reales de canal (Meta:
 // WhatsApp Cloud API, Instagram, Messenger) y de pago (Stripe, Conekta), y la cumple hoy con adaptadores simulados.
@@ -13,7 +14,21 @@ import { createWebhookInbox } from './app/webhook-inbox.mjs';
 //   {id, type:'message.inbound', data:{channel, from, text, providerRef, referral?}}   (se registra; el laboratorio no mapea identidades)
 //   {id, type:'payment.succeeded', data:{orderId?|reference?, providerRef, method?, amountCents?}}
 //   {id, type:'payment.failed',    data:{orderId?|reference?, providerRef, reason?}}
-export const CONTRACT_VERSION = '1.0';
+// Contrato 1.1 (docs/PLAN_CONTRATO_CANAL.md): todo aditivo, las claves de 1.0 se conservan y las nuevas sólo viajan
+// cuando el proveedor las dio.
+//   message.inbound  + peer:{ids:[{kind:'wa_phone'|'wa_bsuid'|'wa_parent_bsuid', value}], name, username}
+//                    + account:{provider, externalId (número que recibe), scopeId (cuenta), displayPhone}
+//                    + replyTo:{providerRef} · forwarded · interaction:{kind:'button'|'list'|'template_button', id,
+//                      title, payload, description} · reaction:{emoji, providerRef} · media.voice · location · contacts
+//                    + system:{kind, newPhone, newUserId}
+//   message.status   + code (número del fallo) · detail · pricing:{billable, category, type, model} · callback
+//                    + recipient:{phone, userId} · account
+//   template.update  {account, scopeId, templateId, name, language, field:'status'|'quality'|'category', value, previous, reason}
+//   account.update   {account, scopeId, field:'status'|'quality'|'limit'|'name'|'review'|'restriction'|'capability'|'alert', value, previous, details}
+//   user.preference  {account, scopeId, peer, category, value:'stop'|'resume', at}
+export const CONTRACT_VERSION = '1.1';
+// Versiones que el lector de la bandeja entiende: una carga guardada con cualquiera de ellas se procesa.
+export const CONTRACT_VERSIONS = Object.freeze(['1.0', '1.1']);
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const hex = n => randomBytes(n).toString('hex');
 export const FAILURES = [
@@ -46,20 +61,14 @@ export function peerIdentifier(data) {
 //   estado de mensaje   st:<proveedor>:<referencia del mensaje>
 //   pago                pay:<proveedor>:<pedido, referencia o id del evento>
 //   cualquier otro      ev:<proveedor>:<id del evento>
-// El identificador de la persona va como huella: el carril sólo se compara y no debe guardar otro teléfono en claro.
-export function laneOf(kind, provider, ev) {
+// El identificador de la persona va como huella CON LLAVE (`peerHash`, de server/lib/peer-key.mjs): el carril sólo se
+// compara, se queda en la fila después de vaciar la carga y no debe permitir recuperar el teléfono.
+export function laneOf(kind, provider, ev, peerHash) {
+  if (typeof peerHash !== 'function') throw new TypeError('laneOf necesita la huella con llave (peerHash).');
   const d = ev?.data || {};
   if (kind === 'channel' && ev.type === 'message.inbound') {
     const who = peerIdentifier(d);
-    if (who)
-      return (
-        'in:' +
-        provider +
-        ':' +
-        String(d.account?.externalId ?? d.to ?? '') +
-        ':' +
-        createHash('sha256').update(who).digest('hex').slice(0, 16)
-      );
+    if (who) return 'in:' + provider + ':' + String(d.account?.externalId ?? d.to ?? '') + ':' + peerHash(who);
   }
   if (kind === 'channel' && ev.type === 'message.status' && d.providerRef)
     return 'st:' + provider + ':' + d.providerRef;
@@ -72,6 +81,58 @@ export function inboxWaitMs(env) {
   const raw = String(env.WEBHOOK_INBOX_WAIT_MS ?? '').trim(),
     n = raw === '' ? NaN : Number(raw);
   return Number.isFinite(n) && n >= 0 ? Math.min(9000, n) : env.NODE_ENV === 'test' ? 8000 : 3000;
+}
+
+// ---- Lector tolerante de la bandeja (docs/PLAN_CONTRATO_CANAL.md). La carga se guarda como {v, event}: v es la
+// versión del contrato con la que se recibió. Se procesan las versiones de la misma familia (1.0, 1.1 y cualquier 1.x
+// posterior, que sólo añade claves) y la forma sin sobre; una de otra familia (2.x, escrita por un despliegue más
+// nuevo) queda en cuarentena para que la procese el código que la entiende.
+const permanentError = message => Object.assign(new Error(message), { permanent: true });
+const family = v => String(v).split('.')[0];
+export function readStoredEvent(stored, provider = '') {
+  const wrapped = Boolean(stored && typeof stored === 'object' && 'event' in stored);
+  const v = wrapped ? String(stored.v ?? '1.0') : '1.0',
+    event = wrapped ? stored.event : stored;
+  if (!event || typeof event !== 'object') throw permanentError('El evento guardado no se puede leer.');
+  if (family(v) !== family(CONTRACT_VERSION)) throw permanentError('contract_version');
+  return { v, event: withContract(event, provider) };
+}
+// Completa un entrante con la forma 1.1 aunque se haya guardado con 1.0 o el proveedor no diera más datos: `peer.ids`
+// lleva al menos el teléfono de `from`, y `account` el número que recibe. Las claves de 1.0 no se tocan.
+export function withContract(ev, provider = '') {
+  if (ev?.type !== 'message.inbound' || !ev.data || typeof ev.data !== 'object') return ev;
+  const d = ev.data,
+    phone = String(d.from ?? '').trim();
+  const peer =
+    d.peer && Array.isArray(d.peer.ids)
+      ? d.peer
+      : { ids: phone ? [{ kind: 'wa_phone', value: phone }] : [], name: d.name || null, username: null };
+  const account =
+    d.account ??
+    (d.to
+      ? {
+          provider: provider === 'meta' ? 'meta-whatsapp' : provider || null,
+          externalId: String(d.to),
+          scopeId: null,
+          displayPhone: null,
+        }
+      : null);
+  return { ...ev, data: { ...d, peer, ...(account ? { account } : {}) } };
+}
+// Lo que queda en la bitácora de conectores: de un entrante, sólo metadatos; de un estado o un aviso de preferencias,
+// el número de la persona enmascarado (nunca el teléfono ni el identificador completos).
+const tail = v => (v ? '…' + String(v).slice(-4) : null);
+function loggable(ev) {
+  const d = ev?.data;
+  if (!d || typeof d !== 'object') return ev;
+  if (ev.type === 'message.status' && d.recipient)
+    return { ...ev, data: { ...d, recipient: { phone: tail(d.recipient.phone), userId: tail(d.recipient.userId) } } };
+  if (ev.type === 'user.preference')
+    return {
+      ...ev,
+      data: { ...d, peer: { ids: (d.peer?.ids || []).map(id => ({ kind: id.kind, value: tail(id.value) })) } },
+    };
+  return ev;
 }
 
 // Qué debe entregar cada consultora (o el equipo técnico) para encender un proveedor real. Es la fuente de docs/CONECTORES.md.
@@ -288,9 +349,227 @@ export function explainMeta(error, status = 0) {
     (detail ? ': ' + detail : '.')
   );
 }
+
+// ---- Lectura del webhook de Meta, contrato 1.1 (docs/PLAN_CONTRATO_CANAL.md). Cada función devuelve sólo las claves
+// que Meta dio: un entrante o un estado de hoy, sin los datos nuevos, se traduce exactamente igual que con 1.0.
+// Meta no ha confirmado todos los nombres de los campos del identificador de usuario (BSUID): se prueban varios.
+const clip = (v, max) => (v === undefined || v === null || v === '' ? null : String(v).slice(0, max));
+const lower = (v, max = 60) => clip(v, max)?.toLowerCase() ?? null;
+const onlyDigits = v => String(v ?? '').replace(/\D/g, '');
+// La cuenta de WhatsApp Business (entry.id) y el número que recibe o envía. Sin la cuenta no se añade nada: el
+// número solo ya viaja en `to` desde 1.0.
+function metaAccount(entry, v) {
+  const scopeId = clip(entry?.id, 40);
+  if (!scopeId) return null;
+  return {
+    provider: 'meta-whatsapp',
+    externalId: clip(v?.metadata?.phone_number_id, 40),
+    scopeId,
+    displayPhone: clip(v?.metadata?.display_phone_number, 30),
+  };
+}
+function metaStatusExtras(s, account) {
+  const out = {},
+    error = s.errors?.[0],
+    code = Number(error?.code);
+  if (Number.isInteger(code) && code > 0) out.code = code;
+  const detail = clip(error?.error_data?.details || error?.message || error?.title, 300);
+  if (detail) out.detail = detail;
+  if (s.pricing && typeof s.pricing === 'object')
+    out.pricing = {
+      billable: typeof s.pricing.billable === 'boolean' ? s.pricing.billable : null,
+      category: lower(s.pricing.category),
+      type: lower(s.pricing.type),
+      model: clip(s.pricing.pricing_model, 20),
+    };
+  const callback = clip(s.biz_opaque_callback_data, 512);
+  if (callback) out.callback = callback;
+  const phone = onlyDigits(s.recipient_id),
+    userId = clip(s.recipient_user_id, 140);
+  if (phone || userId) out.recipient = { phone: phone || null, userId };
+  if (account) out.account = account;
+  return out;
+}
+function metaInboundExtras(m, v, kind, account) {
+  const out = {},
+    phone = onlyDigits(m.from);
+  const contacts = Array.isArray(v.contacts) ? v.contacts : [];
+  const bsuidOf = c => clip(c?.user_id, 140);
+  const contact =
+    contacts.find(c => phone && c?.wa_id === m.from) ||
+    contacts.find(c => bsuidOf(c) && bsuidOf(c) === clip(m.from_user_id || m.user_id, 140)) ||
+    contacts[0];
+  const bsuid = clip(m.from_user_id || m.user_id, 140) || bsuidOf(contact),
+    parent = clip(m.from_parent_user_id, 140) || clip(contact?.parent_user_id, 140),
+    username = clip(contact?.profile?.username || contact?.username, 80);
+  if (bsuid || parent || username) {
+    const ids = [];
+    if (phone) ids.push({ kind: 'wa_phone', value: phone });
+    if (bsuid) ids.push({ kind: 'wa_bsuid', value: bsuid });
+    if (parent) ids.push({ kind: 'wa_parent_bsuid', value: parent });
+    out.peer = { ids, name: clip(contact?.profile?.name, 120), username };
+  }
+  if (account) out.account = account;
+  const quoted = clip(m.context?.id, 200);
+  if (quoted) out.replyTo = { providerRef: quoted };
+  if (m.context?.forwarded || m.context?.frequently_forwarded) out.forwarded = true;
+  if (kind === 'button' && m.button)
+    out.interaction = {
+      kind: 'template_button',
+      id: null,
+      title: clip(m.button.text, 200),
+      payload: clip(m.button.payload, 1000),
+      description: null,
+    };
+  const chosen = m.interactive?.button_reply || m.interactive?.list_reply;
+  if (chosen)
+    out.interaction = {
+      kind: m.interactive.button_reply ? 'button' : 'list',
+      id: clip(chosen.id, 200),
+      title: clip(chosen.title, 200),
+      payload: null,
+      description: clip(chosen.description, 300),
+    };
+  if (kind === 'reaction' && m.reaction)
+    out.reaction = {
+      emoji: String(m.reaction.emoji ?? '').slice(0, 16),
+      providerRef: clip(m.reaction.message_id, 200),
+    };
+  if (m.location && typeof m.location === 'object')
+    out.location = {
+      latitude: Number(m.location.latitude) || null,
+      longitude: Number(m.location.longitude) || null,
+      name: clip(m.location.name, 200),
+      address: clip(m.location.address, 300),
+    };
+  if (Array.isArray(m.contacts))
+    out.contacts = m.contacts.slice(0, 5).map(c => ({
+      name: clip(c?.name?.formatted_name, 120),
+      phones: (Array.isArray(c?.phones) ? c.phones : [])
+        .slice(0, 3)
+        .map(p => clip(p?.phone || p?.wa_id, 30))
+        .filter(Boolean),
+    }));
+  if (kind === 'system' && m.system)
+    out.system = {
+      kind: lower(m.system.type),
+      newPhone: onlyDigits(m.system.wa_id || m.system.new_wa_id) || null,
+      newUserId: clip(m.system.user_id || m.system.new_user_id, 140),
+    };
+  return out;
+}
+// Avisos de cuenta, número y plantillas (change.field distinto de «messages»). Meta no da un identificador por
+// cambio: el id se compone de campo, entidad, valor e instante de la entrada, así la bitácora lo aplica una sola vez.
+const TEMPLATE_FIELDS = {
+  message_template_status_update: 'status',
+  message_template_quality_update: 'quality',
+  template_category_update: 'category',
+};
+const ACCOUNT_FIELDS = new Set([
+  'phone_number_quality_update',
+  'phone_number_name_update',
+  'account_update',
+  'account_review_update',
+  'business_capability_update',
+  'account_alerts',
+]);
+function accountFieldOf(field, v) {
+  const event = String(v.event || '').toUpperCase();
+  if (field === 'phone_number_quality_update')
+    return ['FLAGGED', 'UNFLAGGED'].includes(event) ? ['quality', lower(event)] : ['limit', lower(v.current_limit)];
+  if (field === 'phone_number_name_update') return ['name', lower(v.decision)];
+  if (field === 'account_review_update') return ['review', lower(v.decision)];
+  if (field === 'business_capability_update') return ['capability', null];
+  if (field === 'account_alerts') return ['alert', lower(v.alert_type, 120)];
+  if (/RESTRICTION|VIOLATION/.test(event)) return ['restriction', lower(event)];
+  if (/VERIFIED|REVIEW/.test(event)) return ['review', lower(event)];
+  return ['status', lower(event)];
+}
+function compact(obj) {
+  const out = {};
+  for (const [key, value] of Object.entries(obj))
+    if (value !== null && value !== undefined && value !== '') out[key] = value;
+  return out;
+}
+function metaNoticeEvents(entry, field, v, account, peerHash) {
+  const scopeId = clip(entry?.id, 40),
+    when = Number(entry?.time) || null,
+    stamp = when ? String(when) : peerHash(JSON.stringify(v)); // sin instante: huella con llave del contenido
+  if (TEMPLATE_FIELDS[field]) {
+    const kind = TEMPLATE_FIELDS[field];
+    const value =
+      kind === 'status'
+        ? lower(v.event)
+        : kind === 'quality'
+          ? lower(v.new_quality_score)
+          : lower(v.new_category || v.correct_category);
+    const data = {
+      account,
+      scopeId,
+      templateId: clip(v.message_template_id, 40),
+      name: clip(v.message_template_name, 512),
+      language: clip(v.message_template_language, 20),
+      field: kind,
+      value,
+      previous:
+        kind === 'quality' ? lower(v.previous_quality_score) : kind === 'category' ? lower(v.previous_category) : null,
+      reason: v.reason && String(v.reason).toUpperCase() !== 'NONE' ? clip(v.reason, 300) : null,
+    };
+    return [{ id: [field, data.templateId || data.name, value, stamp].join(':'), type: 'template.update', data }];
+  }
+  if (ACCOUNT_FIELDS.has(field)) {
+    const [kind, value] = accountFieldOf(field, v);
+    const details = compact({
+      event: clip(v.event, 60),
+      displayPhone: clip(v.display_phone_number || v.phone_number, 30),
+      requestedName: clip(v.requested_verified_name, 120),
+      rejectionReason: clip(v.rejection_reason, 300),
+      severity: clip(v.alert_severity, 30),
+      status: clip(v.alert_status, 30),
+      description: clip(v.alert_description, 500),
+      maxDailyConversationsPerBusiness: clip(v.max_daily_conversations_per_business, 30),
+      maxPhoneNumbersPerBusiness: clip(v.max_phone_numbers_per_business, 30),
+      restriction: v.restriction_info ? clip(JSON.stringify(v.restriction_info), 500) : null,
+      violation: v.violation_info ? clip(JSON.stringify(v.violation_info), 500) : null,
+      ban: v.ban_info ? clip(JSON.stringify(v.ban_info), 500) : null,
+    });
+    const data = {
+      account,
+      scopeId,
+      field: kind,
+      value,
+      previous: kind === 'limit' ? lower(v.old_limit) : null,
+      details,
+    };
+    const entity = details.displayPhone || scopeId || 'cuenta';
+    return [{ id: [field, entity, value, stamp].join(':'), type: 'account.update', data }];
+  }
+  if (field === 'user_preferences')
+    return (Array.isArray(v.user_preferences) ? v.user_preferences : []).map(p => {
+      const phone = onlyDigits(p?.wa_id),
+        userId = clip(p?.user_id, 140);
+      const ids = [];
+      if (phone) ids.push({ kind: 'wa_phone', value: phone });
+      if (userId) ids.push({ kind: 'wa_bsuid', value: userId });
+      const at = Number(p?.timestamp) ? Number(p.timestamp) * 1000 : when ? when * 1000 : null;
+      return {
+        // la persona va como huella con llave: el id se guarda en claro en la bitácora y en la bandeja
+        id: ['user_preferences', peerHash(phone || userId), lower(p?.value), at || stamp].join(':'),
+        type: 'user.preference',
+        data: { account, scopeId, peer: { ids }, category: lower(p?.category), value: lower(p?.value), at },
+      };
+    });
+  return [];
+}
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png']),
   MEDIA_HOSTS = ['fbsbx.com', 'facebook.com', 'fbcdn.net', 'whatsapp.net', 'whatsapp.com'];
-export function metaChannel({ env, fetchImpl = (...a) => fetch(...a) }) {
+// peerHash: huella con llave de la instalación (server/lib/peer-key.mjs) para los ids que dependen de una persona. Sin
+// ella (un adaptador suelto en una prueba), la de PEER_HASH_KEY o una llave al azar de este proceso.
+export function metaChannel({
+  env,
+  fetchImpl = (...a) => fetch(...a),
+  peerHash = createPeerHash(loadPeerKey({ env })),
+}) {
   const missing = missingOf(env, ['META_ACCESS_TOKEN', 'META_APP_SECRET', 'META_VERIFY_TOKEN', 'META_PHONE_NUMBER_ID']);
   const STATE = { sent: 'sent', delivered: 'delivered', read: 'read', failed: 'failed' };
   const production = env.NODE_ENV === 'production';
@@ -609,7 +888,9 @@ export function metaChannel({ env, fetchImpl = (...a) => fetch(...a) }) {
       const out = [];
       for (const entry of body?.entry || [])
         for (const change of entry.changes || []) {
-          const v = change.value || {};
+          const v = change.value || {},
+            account = metaAccount(entry, v);
+          out.push(...metaNoticeEvents(entry, change.field, v, account, peerHash));
           for (const s of v.statuses || [])
             out.push({
               id: s.id + ':' + s.status,
@@ -619,6 +900,7 @@ export function metaChannel({ env, fetchImpl = (...a) => fetch(...a) }) {
                 state: STATE[s.status] || 'sent',
                 reason: s.errors?.[0] ? explainMeta(s.errors[0]) : null,
                 at: s.timestamp ? Number(s.timestamp) * 1000 : null,
+                ...metaStatusExtras(s, account),
               },
             });
           for (const m of v.messages || []) {
@@ -664,6 +946,7 @@ export function metaChannel({ env, fetchImpl = (...a) => fetch(...a) }) {
                         .split(';')[0]
                         .trim(),
                       filename: media.filename ? String(media.filename) : null,
+                      ...(media.voice ? { voice: true } : {}),
                     }
                   : null,
                 providerRef: m.id,
@@ -677,6 +960,7 @@ export function metaChannel({ env, fetchImpl = (...a) => fetch(...a) }) {
                       headline: m.referral.body || null,
                     }
                   : null,
+                ...metaInboundExtras(m, v, kind, account),
               },
             });
           }
@@ -848,15 +1132,18 @@ export function createConnectors({
   audit,
   rate,
   selfOrigin,
+  dataDir = null,
   now = Date.now,
   log = console,
 }) {
+  // Huella con llave de quien escribe (server/lib/peer-key.mjs): carril de la bandeja e ids que dependen de una persona.
+  const peerHash = createPeerHash(loadPeerKey({ env, dataDir }));
   const channelProvider = ['simulated', 'meta'].includes(env.CHANNEL_CONNECTOR) ? env.CHANNEL_CONNECTOR : 'simulated';
   const paymentProvider = ['simulated', 'stripe', 'conekta'].includes(env.PAYMENT_CONNECTOR)
     ? env.PAYMENT_CONNECTOR
     : 'simulated';
   const adapters = {
-    channel: { simulated: simulatedChannel({ env }), meta: metaChannel({ env }) },
+    channel: { simulated: simulatedChannel({ env }), meta: metaChannel({ env, peerHash }) },
     payment: {
       simulated: simulatedPayment({ env }),
       stripe: stripePayment({ env, now }),
@@ -913,6 +1200,35 @@ export function createConnectors({
     now,
     log,
   });
+  // Al arrancar: ningún carril guarda una huella que no sea la de la llave vigente. Un evento terminado (o una
+  // cuarentena ya vaciada) no vuelve a usar su carril: pierde la huella de la persona. Uno pendiente, reservado o en
+  // cuarentena con carga recalcula la suya con la llave: así un carril guardado antes con SHA-256 sin llave, o con
+  // otra llave, queda igual que el de los eventos nuevos de esa persona. Idempotente y acotado a la bandeja.
+  function rekeyLanes() {
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='webhook_inbox'").get()) return;
+    transaction(db, () => {
+      db.prepare(
+        "UPDATE webhook_inbox SET lane='ev:'||provider||':'||event_id WHERE lane LIKE 'in:%' AND (state='done' OR payload IS NULL)",
+      ).run();
+      const set = db.prepare('UPDATE webhook_inbox SET lane=? WHERE seq=?');
+      for (const row of db
+        .prepare("SELECT seq,kind,provider,payload FROM webhook_inbox WHERE lane LIKE 'in:%' AND payload IS NOT NULL")
+        .all()) {
+        try {
+          const lane = laneOf(
+            row.kind,
+            row.provider,
+            readStoredEvent(JSON.parse(row.payload), row.provider).event,
+            peerHash,
+          );
+          set.run(lane.slice(0, 200), row.seq);
+        } catch {
+          // una carga ilegible no tiene a quién ordenar: conserva su carril y la bandeja la deja en cuarentena
+        }
+      }
+    });
+  }
+  rekeyLanes();
   const requireAdmin = user => {
     const u = db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);
     if (!u || u.disabled || u.role !== 'admin') throw fail(403, 'Los conectores los administra un administrador.');
@@ -951,6 +1267,39 @@ export function createConnectors({
         .all(),
     };
   }
+  // Oyentes del contrato 1.1 (docs/PLAN_CONTRATO_CANAL.md): otros módulos se apuntan a un tipo de evento de canal
+  // sin editar este archivo. Se llaman en orden de `order` (menor primero) DESPUÉS de lo que hace el canal; deben ser
+  // síncronos, no abrir transacción ni hacer red. Lo que devuelven (texto) se añade al resultado; un fallo de un
+  // oyente se anota y no impide a los demás.
+  //   connectors.on('message.status', data => costs.record(data), { order: 300, name: 'costos' })
+  // Orden acordado para los estados (conciliación, fila 40): canal → difusiones (200) → costos (300).
+  const LISTENED = new Set(['message.status', 'template.update', 'account.update', 'user.preference']);
+  const listeners = new Map();
+  function on(type, fn, { order = 100, name = 'oyente' } = {}) {
+    if (!LISTENED.has(type)) throw new TypeError('Tipo de evento de canal sin oyentes: ' + String(type));
+    if (typeof fn !== 'function') throw new TypeError('El oyente debe ser una función.');
+    const list = [...(listeners.get(type) || []), { fn, order, name }].sort((a, b) => a.order - b.order);
+    listeners.set(type, list);
+    return () =>
+      listeners.set(
+        type,
+        (listeners.get(type) || []).filter(l => l.fn !== fn),
+      );
+  }
+  function notify(type, data, context) {
+    const notes = [];
+    for (const l of listeners.get(type) || []) {
+      try {
+        const note = l.fn(data, context);
+        if (note && typeof note.then === 'function') throw new Error('el oyente debe ser síncrono');
+        if (note) notes.push(String(note));
+      } catch (e) {
+        log.error('Channel listener failed:', l.name, type, e?.message);
+        notes.push(l.name + ': error: ' + String(e?.message || e).slice(0, 120));
+      }
+    }
+    return notes;
+  }
   // Aplica un evento normalizado una sola vez por (proveedor, id). Devuelve texto legible del resultado.
   function apply(kind, provider, ev) {
     if (!ev.id || !ev.type) return { result: 'rechazado: evento sin id o tipo' };
@@ -961,6 +1310,13 @@ export function createConnectors({
       if (kind === 'channel' && ev.type === 'message.status') {
         const r = channel.applyStatus(ev.data);
         result = r ? 'aplicado: mensaje ' + r : 'ignorado: no hay mensaje con esa referencia del proveedor';
+        const notes = notify(ev.type, ev.data, { provider, applied: r });
+        if (notes.length) result += ' · ' + notes.join(' · ');
+      } else if (kind === 'channel' && LISTENED.has(ev.type)) {
+        const notes = notify(ev.type, ev.data, { provider });
+        result = notes.length
+          ? 'aplicado: ' + notes.join(' · ')
+          : 'registrado: todavía nada en el CRM atiende «' + ev.type + '»';
       } else if (kind === 'channel' && ev.type === 'message.inbound')
         result =
           provider === 'meta'
@@ -983,7 +1339,7 @@ export function createConnectors({
               kind: ev.data?.kind || 'text',
             },
           }
-        : ev; // de un entrante nunca se guarda el texto ni el número completo
+        : loggable(ev); // de un entrante nunca se guarda el texto ni el número completo
     db.prepare(
       'INSERT OR IGNORE INTO connector_events(kind,provider,event_id,type,payload,result,created_at) VALUES(?,?,?,?,?,?,?)',
     ).run(
@@ -1037,9 +1393,9 @@ export function createConnectors({
     } catch {
       // se trata abajo: una carga ilegible no mejora por reintentarla
     }
-    const ev = stored?.event ?? stored; // se guarda como {v, event}: la versión del contrato con la que se recibió
-    if (!ev || typeof ev !== 'object')
-      throw Object.assign(new Error('El evento guardado no se puede leer.'), { permanent: true });
+    // Se guarda como {v, event}: la versión del contrato con la que se recibió. El lector acepta 1.0 y 1.1 (y la
+    // forma sin sobre) y completa el entrante con la forma 1.1.
+    const { event: ev } = readStoredEvent(stored, row.provider);
     if (row.kind === 'channel' && row.provider === 'meta' && ev.type === 'message.inbound') {
       if (channelProvider === 'meta' && !metaLive())
         throw fail(
@@ -1049,7 +1405,10 @@ export function createConnectors({
       if (inbound && metaLive()) {
         // Sin teléfono ni identificador de usuario no se sabe quién escribe: el entrante queda en cuarentena (fila
         // fallida con su carga), sin anotarse como procesado, para reprocesarlo cuando se sepa leer su identificador.
-        if (!peerIdentifier(ev.data)) throw Object.assign(new Error('no_identifier'), { permanent: true });
+        if (!peerIdentifier(ev.data)) throw permanentError('no_identifier');
+        // Sólo con identificador de usuario (BSUID), sin teléfono: el CRM todavía identifica por número. Queda en
+        // cuarentena con su carga 1.1 completa, para reprocesarlo cuando la identidad por BSUID exista.
+        if (!String(ev.data.from ?? '').trim()) throw permanentError('no_phone');
         return (await applyInbound(row.provider, ev)).result;
       }
     }
@@ -1129,7 +1488,7 @@ export function createConnectors({
             provider: x[2],
             id: ev.id,
             type: ev.type,
-            lane: laneOf(kind, x[2], ev),
+            lane: laneOf(kind, x[2], ev, peerHash),
             payload: { v: CONTRACT_VERSION, event: ev },
           });
           accepted.push({ ev, row });
@@ -1247,5 +1606,5 @@ export function createConnectors({
     }
     throw fail(404, 'Ruta de conectores no encontrada.');
   }
-  return { status, handle, handlePublic, apply, effective, selected, adapters, useInbound, metaLive, inbox };
+  return { status, handle, handlePublic, apply, effective, selected, adapters, useInbound, metaLive, inbox, on };
 }
