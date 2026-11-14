@@ -26,6 +26,7 @@ La fusión manual movía intereses, notas, etiquetas y consentimiento y después
 | `legacy` | `legacy_records` | Igual que certificados |
 | `surveys` | `survey_invites` | Se mueven |
 | `campaigns` | `campaign_recipients` | Se mueven; si los dos recibieron la misma campaña se conserva la fila del que queda |
+| `attributes` (módulo, N-1) | `contact_attribute_values`, `contact_attribute_events`, `contact_attribute_requests` | Gana el valor del que queda; lo vacío se llena; historial y respuestas pasan ([PLAN_ATRIBUTOS_CONTACTO.md](PLAN_ATRIBUTOS_CONTACTO.md)) |
 
 Los registros de los servicios que ya existían están en `registerExistingTables` (una declaración por servicio), para no tocar esos archivos.
 
