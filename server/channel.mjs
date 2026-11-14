@@ -39,6 +39,8 @@ export function createChannel({
   accessConversation,
   domainEvents = null,
   now = Date.now,
+  uncertainSend = process.env.WA_UNCERTAIN_SEND,
+  sendLeaseMs = 120_000,
 }) {
   const defaults = b => ({
     brand_id: b,
@@ -64,6 +66,14 @@ export function createChannel({
   const HOLD_MS = Math.max(1, Number(process.env.WA_HOLD_DAYS) || 7) * DAY,
     SWEEP_MS = Math.max(200, Number(process.env.WA_HOLD_SWEEP_MS) || 60000);
   let sweptAt = 0;
+  // Envío en duda (docs/PLAN_RECEPCION_DURADERA.md). Un saliente real se marca «en vuelo» en la base antes de llamar a
+  // Meta. Si el proceso muere con el mensaje en vuelo, al vencer la marca no se sabe si salió: «retry» (por omisión)
+  // lo vuelve a enviar dejando rastro; «fail» (WA_UNCERTAIN_SEND=fail) lo deja como no entregado para que alguien lo
+  // revise. Al tercer envío en duda seguido se deja de insistir en cualquier caso.
+  const UNCERTAIN_POLICY = uncertainSend === 'fail' ? 'fail' : 'retry',
+    UNCERTAIN_MAX = 3,
+    UNCERTAIN_REASON =
+      'No se confirmó si este mensaje salió: el servidor se reinició durante el envío. Revisa el chat antes de pulsar «Reintentar».';
   const requireAdmin = user => {
     const u = db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);
     if (!u || u.disabled || u.role !== 'admin') throw fail(403, 'El canal simulado lo configura un administrador.');
@@ -183,7 +193,53 @@ export function createChannel({
     emit(m, 'failed', reason, null);
     return true;
   };
+  // Marca duradera de «en vuelo» de los salientes reales (send_lease_until), en UNA transacción para todo el lote y
+  // antes de llamar a Meta. Sale del lote lo que otro proceso ya tomó y, para no desordenar una conversación, lo de
+  // cualquier conversación que tenga un envío en vuelo en otra parte. Si la fila traía una marca ya vencida, el envío
+  // anterior murió sin anotar su resultado: es un envío en duda. Los mensajes del laboratorio no llevan marca.
+  function claim(candidates, t) {
+    if (!candidates.some(m => m.wa_number)) return candidates;
+    return transaction(db, () => {
+      const elsewhere = new Set(
+        db
+          .prepare('SELECT conversation_id FROM messages INDEXED BY messages_send_lease WHERE send_lease_until>?')
+          .all(t)
+          .map(m => m.conversation_id),
+      );
+      return candidates.filter(m => {
+        if (!m.wa_number) return true;
+        if (elsewhere.has(m.conversation_id)) return false;
+        const live = db
+          .prepare(
+            "SELECT send_attempts,send_lease_until FROM messages WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL AND (send_lease_until IS NULL OR send_lease_until<=?)",
+          )
+          .get(m.id, t);
+        if (!live) return false;
+        db.prepare('UPDATE messages SET send_lease_until=?,send_attempts=send_attempts+1 WHERE id=?').run(
+          t + sendLeaseMs,
+          m.id,
+        );
+        if (live.send_lease_until !== null) {
+          m.uncertain = UNCERTAIN_POLICY === 'fail' || live.send_attempts >= UNCERTAIN_MAX ? 'fail' : 'retry';
+          if (m.uncertain === 'retry') event(m, 'lease_expired', null, null, t); // un posible duplicado deja rastro
+        }
+        return true;
+      });
+    });
+  }
+  // Lotes en vuelo de este proceso: el apagado ordenado espera a que terminen (idle) antes de cerrar la base.
+  let batches = 0;
+  const idleWaiters = [];
   async function tick() {
+    batches++;
+    try {
+      return await deliver();
+    } finally {
+      if (!--batches) for (const done of idleWaiters.splice(0)) done();
+    }
+  }
+  const idle = () => (batches ? new Promise(done => idleWaiters.push(done)) : Promise.resolve());
+  async function deliver() {
     const t = now();
     // Un mensaje en espera que nadie liberó en WA_HOLD_DAYS (7) días ya no tiene sentido: queda como no entregado.
     if (t - sweptAt > SWEEP_MS) {
@@ -200,12 +256,15 @@ export function createChannel({
         for (const id of new Set(old.map(m => m.conversation_id))) broadcast('conversation', id);
       }
     }
-    const rows = db
-      .prepare(
-        "SELECT m.id,m.conversation_id,c.brand_id,c.channel,m.category,COALESCE(s.failure_rate,0) failure_rate,c.wa_number,c.wa_peer FROM messages m JOIN conversations c ON c.id=m.conversation_id LEFT JOIN channel_settings s ON s.brand_id=c.brand_id WHERE m.delivery_state='sent' AND m.sender_kind IN ('agent','automation') AND ((c.wa_number IS NOT NULL AND m.provider_ref IS NULL AND (m.wa_hold IS NULL OR EXISTS(SELECT 1 FROM messages x WHERE x.conversation_id=m.conversation_id AND x.sender_kind='customer' AND x.created_at>m.wa_hold))) OR (c.wa_number IS NULL AND s.enabled=1 AND m.created_at<=?-s.delivery_delay_ms)) ORDER BY m.seq LIMIT 100",
-      )
-      .all(t)
-      .filter(m => !flying.has(m.id) && !(m.wa_number && busy.has(m.conversation_id)));
+    const rows = claim(
+      db
+        .prepare(
+          "SELECT m.id,m.conversation_id,c.brand_id,c.channel,m.category,COALESCE(s.failure_rate,0) failure_rate,c.wa_number,c.wa_peer FROM messages m JOIN conversations c ON c.id=m.conversation_id LEFT JOIN channel_settings s ON s.brand_id=c.brand_id WHERE m.delivery_state='sent' AND m.sender_kind IN ('agent','automation') AND ((c.wa_number IS NOT NULL AND m.provider_ref IS NULL AND (m.send_lease_until IS NULL OR m.send_lease_until<=?) AND (m.wa_hold IS NULL OR EXISTS(SELECT 1 FROM messages x WHERE x.conversation_id=m.conversation_id AND x.sender_kind='customer' AND x.created_at>m.wa_hold))) OR (c.wa_number IS NULL AND s.enabled=1 AND m.created_at<=?-s.delivery_delay_ms)) ORDER BY m.seq LIMIT 100",
+        )
+        .all(t, t)
+        .filter(m => !flying.has(m.id) && !(m.wa_number && busy.has(m.conversation_id))),
+      t,
+    );
     if (!rows.length) return [];
     const one = async m => {
       try {
@@ -225,6 +284,8 @@ export function createChannel({
               : simulate(m),
           };
         }
+        // Envío en duda que no se debe repetir: no se le pide nada a Meta y queda como no entregado, con su motivo.
+        if (m.uncertain === 'fail') return { m, r: { providerRef: null, state: 'failed', reason: UNCERTAIN_REASON } };
         if (!connectorOf || !outboundOf) throw fail(503, 'WhatsApp real no está disponible en este servidor.');
         // Ventana cerrada: whatsapp.mjs decide. Una plantilla sale; un aviso del negocio queda EN ESPERA (se manda la plantilla de aviso de la marca
         // y el mensaje sale cuando la persona responda); sin plantilla de aviso, falla con el motivo. Nunca se le pide a Meta lo que va a rechazar.
@@ -232,17 +293,17 @@ export function createChannel({
           closed: !windowOf({ id: m.conversation_id, brand_id: m.brand_id, wa_number: m.wa_number }).open,
         });
         if (out.hold) {
-          db.prepare("UPDATE messages SET wa_hold=? WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL").run(
-            now(),
-            m.id,
-          );
+          // en espera: ese mensaje no llegó a salir, así que deja de estar «en vuelo»
+          db.prepare(
+            "UPDATE messages SET wa_hold=?,send_lease_until=NULL,send_attempts=0 WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL",
+          ).run(now(), m.id);
           return { m, r: { state: 'held', reason: null } };
         }
         const r = await connectorOf(out).send(out);
         // la referencia de Meta se guarda en cuanto llega: su aviso de «entregado» puede venir antes de que termine el resto del lote
         if (r.state !== 'failed' && r.providerRef)
           db.prepare(
-            "UPDATE messages SET provider_ref=?,wa_hold=NULL WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL",
+            "UPDATE messages SET provider_ref=?,wa_hold=NULL,send_lease_until=NULL,send_attempts=0 WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL",
           ).run(r.providerRef, m.id);
         return { m, r };
       } catch (e) {
@@ -288,7 +349,7 @@ export function createChannel({
             if (
               !db
                 .prepare(
-                  "UPDATE messages SET delivery_state='failed',failed_reason=?,wa_hold=NULL WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL",
+                  "UPDATE messages SET delivery_state='failed',failed_reason=?,wa_hold=NULL,send_lease_until=NULL,send_attempts=0 WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL",
                 )
                 .run(r.reason || 'Meta no aceptó el mensaje', m.id).changes
             )
@@ -392,7 +453,7 @@ export function createChannel({
     const t = now();
     transaction(db, () => {
       db.prepare(
-        "UPDATE messages SET delivery_state='sent',failed_reason=NULL,delivered_at=NULL,provider_ref=CASE WHEN ? THEN NULL ELSE provider_ref END WHERE id=? AND delivery_state='failed'",
+        "UPDATE messages SET delivery_state='sent',failed_reason=NULL,delivered_at=NULL,send_attempts=0,send_lease_until=NULL,provider_ref=CASE WHEN ? THEN NULL ELSE provider_ref END WHERE id=? AND delivery_state='failed'",
       ).run(c.wa_number ? 1 : 0, m.id);
       event(m, 'retry', null, user.id, t);
     });
@@ -496,6 +557,7 @@ export function createChannel({
     categoryOf,
     before,
     tick,
+    idle,
     markRead,
     retry,
     events,
