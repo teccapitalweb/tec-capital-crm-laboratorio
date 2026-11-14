@@ -199,6 +199,8 @@ export function createIntegrations({
   lookup = dns.lookup,
   baseDelayMs = 5000,
   capDelayMs = 15 * 60000,
+  workerId = randomUUID(),
+  leaseMs = 45_000,
 }) {
   const urlOpts = () => ({
     allowPrivate: env.WEBHOOK_ALLOW_PRIVATE === '1',
@@ -480,16 +482,27 @@ export function createIntegrations({
     running = true;
     let sent = 0;
     try {
-      const due = db
-        .prepare(
-          "SELECT d.*,w.url,w.secret,w.status wstatus FROM webhook_deliveries d JOIN webhook_endpoints w ON w.id=d.endpoint_id WHERE d.state='pending' AND d.next_attempt_at<=? ORDER BY d.next_attempt_at LIMIT ?",
-        )
-        .all(now(), LIMITS.batch);
+      const started = now(),
+        due = db
+          .prepare(
+            "SELECT d.*,w.url,w.secret,w.status wstatus FROM webhook_deliveries d JOIN webhook_endpoints w ON w.id=d.endpoint_id WHERE d.state='pending' AND d.next_attempt_at<=? AND (d.lease_until IS NULL OR d.lease_until<=?) ORDER BY d.next_attempt_at LIMIT ?",
+          )
+          .all(started, started, LIMITS.batch);
       for (const d of due) {
+        // Reclamo con arrendamiento (docs/PLAN_RECEPCION_DURADERA.md): la entrega sigue «pending» mientras se envía;
+        // otro proceso no la toma con el arrendamiento vigente y el resultado sólo lo anota quien lo conserva.
+        if (
+          !db
+            .prepare(
+              "UPDATE webhook_deliveries SET lease_owner=?,lease_until=? WHERE id=? AND state='pending' AND attempts=? AND (lease_until IS NULL OR lease_until<=?)",
+            )
+            .run(workerId, now() + leaseMs, d.id, d.attempts, now()).changes
+        )
+          continue;
         const finish = (state, fields) =>
           db
             .prepare(
-              'UPDATE webhook_deliveries SET state=?,attempts=?,last_status=?,error=?,next_attempt_at=?,updated_at=? WHERE id=?',
+              'UPDATE webhook_deliveries SET state=?,attempts=?,last_status=?,error=?,next_attempt_at=?,updated_at=?,lease_owner=NULL,lease_until=NULL WHERE id=? AND lease_owner=?',
             )
             .run(
               state,
@@ -499,6 +512,7 @@ export function createIntegrations({
               fields.next ?? d.next_attempt_at,
               now(),
               d.id,
+              workerId,
             );
         if (d.wstatus !== 'active') {
           finish('failed', {

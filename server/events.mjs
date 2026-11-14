@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { backoff } from './automation.mjs';
 import { csvCell } from './contacts.mjs';
+import { hasColumn, withTimeout } from './app/leases.mjs';
 
 // Eventos de dominio (Fase 2 · bloque 2.1). Cada hecho relevante del negocio queda registrado UNA sola vez en
 // domain_events (tipo, marca, entidad, carga breve, actor, origen, clave de idempotencia). Los módulos lo publican dentro
@@ -180,11 +181,22 @@ export function createEvents({
   capDelayMs = 15 * 60_000,
   maxAttempts = 5,
   batch = 20,
+  workerId = randomUUID(),
+  leaseMs = 60_000,
+  handlerTimeoutMs = 30_000,
 }) {
   const subscribers = new Map(); // tipo -> [{name,handler}]
   // Catálogo de esta instancia: los tipos y entidades de arriba más los que cada módulo registra con registerTypes().
   const catalog = Object.assign(Object.create(null), EVENT_TYPES),
     kinds = Object.assign(Object.create(null), ENTITY_KINDS);
+  // Reclamo con arrendamiento (docs/PLAN_RECEPCION_DURADERA.md): la entrega sigue «pending» mientras se trabaja, otro
+  // proceso no la toma con el arrendamiento vigente y el resultado sólo lo anota quien lo conserva. Sobre una base sin
+  // esas columnas (anterior a la migración queues/0001-leases) se entrega sin reclamo, como antes.
+  const leased = hasColumn(db, 'domain_deliveries', 'lease_until'),
+    FREE = leased ? ' AND (d.lease_until IS NULL OR d.lease_until<=?)' : '',
+    RELEASE = leased ? ',lease_owner=NULL,lease_until=NULL' : '',
+    MINE = leased ? ' AND lease_owner=?' : '',
+    mine = leased ? [workerId] : [];
   const view = e => ({ ...e, payload: JSON.parse(e.payload) });
   const get = seq => db.prepare('SELECT * FROM domain_events WHERE seq=?').get(seq);
   const types = () =>
@@ -281,33 +293,52 @@ export function createEvents({
     return { seq, id, duplicate: false };
   }
   // Entrega a suscriptores fuera de transacción: cada manejador abre la suya si la necesita. Un error con status 4xx o
-  // permanent=true no se reintenta; cualquier otro espera con retroceso exponencial hasta maxAttempts.
+  // permanent=true no se reintenta; cualquier otro espera con retroceso exponencial hasta maxAttempts. Un suscriptor
+  // que no termina a tiempo cuenta como fallo transitorio: no detiene a las demás entregas.
   let running = false;
   async function tick() {
     if (running) return 0;
     running = true;
     try {
-      const due = db
-        .prepare(
-          "SELECT d.*,e.type FROM domain_deliveries d JOIN domain_events e ON e.seq=d.event_seq WHERE d.state='pending' AND d.next_attempt_at<=? ORDER BY d.next_attempt_at,d.event_seq LIMIT ?",
-        )
-        .all(now(), batch);
+      const started = now(),
+        due = db
+          .prepare(
+            "SELECT d.*,e.type FROM domain_deliveries d JOIN domain_events e ON e.seq=d.event_seq WHERE d.state='pending' AND d.next_attempt_at<=?" +
+              FREE +
+              ' ORDER BY d.next_attempt_at,d.event_seq LIMIT ?',
+          )
+          .all(...(leased ? [started, started] : [started]), batch);
       let delivered = 0;
       for (const d of due) {
+        if (
+          leased &&
+          !db
+            .prepare(
+              "UPDATE domain_deliveries SET lease_owner=?,lease_until=? WHERE event_seq=? AND subscriber=? AND state='pending' AND attempts=? AND (lease_until IS NULL OR lease_until<=?)",
+            )
+            .run(workerId, now() + leaseMs, d.event_seq, d.subscriber, d.attempts, now()).changes
+        )
+          continue; // otro proceso tomó esta entrega (o ya la intentó y la dejó para después)
         const handler = (subscribers.get(d.type) || []).find(s => s.name === d.subscriber)?.handler;
         const attempt = d.attempts + 1,
           t0 = now();
         if (!handler) {
           db.prepare(
-            "UPDATE domain_deliveries SET state='failed',attempts=?,error='Suscriptor no registrado en este proceso',updated_at=? WHERE event_seq=? AND subscriber=?",
-          ).run(attempt, t0, d.event_seq, d.subscriber);
+            "UPDATE domain_deliveries SET state='failed',attempts=?,error='Suscriptor no registrado en este proceso',updated_at=?" +
+              RELEASE +
+              ' WHERE event_seq=? AND subscriber=?' +
+              MINE,
+          ).run(attempt, t0, d.event_seq, d.subscriber, ...mine);
           continue;
         }
         try {
-          await handler(view(get(d.event_seq)));
+          await withTimeout((async () => handler(view(get(d.event_seq))))(), handlerTimeoutMs);
           db.prepare(
-            "UPDATE domain_deliveries SET state='done',attempts=?,error=NULL,updated_at=? WHERE event_seq=? AND subscriber=?",
-          ).run(attempt, now(), d.event_seq, d.subscriber);
+            "UPDATE domain_deliveries SET state='done',attempts=?,error=NULL,updated_at=?" +
+              RELEASE +
+              ' WHERE event_seq=? AND subscriber=?' +
+              MINE,
+          ).run(attempt, now(), d.event_seq, d.subscriber, ...mine);
           delivered++;
         } catch (e) {
           const permanent = e?.permanent === true || (e?.status >= 400 && e?.status < 500),
@@ -315,12 +346,26 @@ export function createEvents({
             t = now();
           if (permanent || attempt >= maxAttempts)
             db.prepare(
-              "UPDATE domain_deliveries SET state='failed',attempts=?,error=?,updated_at=? WHERE event_seq=? AND subscriber=?",
-            ).run(attempt, message, t, d.event_seq, d.subscriber);
+              "UPDATE domain_deliveries SET state='failed',attempts=?,error=?,updated_at=?" +
+                RELEASE +
+                ' WHERE event_seq=? AND subscriber=?' +
+                MINE,
+            ).run(attempt, message, t, d.event_seq, d.subscriber, ...mine);
           else
             db.prepare(
-              'UPDATE domain_deliveries SET attempts=?,error=?,next_attempt_at=?,updated_at=? WHERE event_seq=? AND subscriber=?',
-            ).run(attempt, message, t + backoff(attempt, baseDelayMs, capDelayMs), t, d.event_seq, d.subscriber);
+              'UPDATE domain_deliveries SET attempts=?,error=?,next_attempt_at=?,updated_at=?' +
+                RELEASE +
+                ' WHERE event_seq=? AND subscriber=?' +
+                MINE,
+            ).run(
+              attempt,
+              message,
+              t + backoff(attempt, baseDelayMs, capDelayMs),
+              t,
+              d.event_seq,
+              d.subscriber,
+              ...mine,
+            );
           log.error('Event delivery failed:', d.type, d.subscriber, message.slice(0, 80));
         }
       }

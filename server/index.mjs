@@ -13,6 +13,7 @@ import { loadScreens } from './app/screens.mjs';
 import { loadModules } from './app/modules.mjs';
 import { clientAddress, limitKey, proxyConfig } from './app/client-address.mjs';
 import { createRateLimiter } from './app/rate-limit.mjs';
+import { createShutdown, shutdownGraceMs } from './app/shutdown.mjs';
 import { fail, errorBody } from './app/http.mjs';
 import { createRealtime } from './app/realtime.mjs';
 import { createAccess } from './lib/access.mjs';
@@ -606,6 +607,8 @@ function messageList(id, before = Number.MAX_SAFE_INTEGER) {
     .map(m => ({
       ...m,
       flyer_snapshot: undefined,
+      send_lease_until: undefined, // marcas internas del envío (docs/PLAN_RECEPCION_DURADERA.md): no salen por la API
+      send_attempts: undefined,
       buttons: m.buttons ? JSON.parse(m.buttons) : null,
       commercial_snapshot: m.commercial_snapshot ? JSON.parse(m.commercial_snapshot) : null,
       attachmentUrl: m.attachment_id
@@ -692,6 +695,10 @@ function insertMessage(c, user, text, kind, ref, attachmentId = null, flyer = nu
 // Respuestas automáticas v2 (server/replies.mjs): plan síncrono, proveedor de IA fuera de la transacción y confirmación
 // con revalidación. Un trabajo en vuelo no se vuelve a tomar; el resultado se descarta si el trabajo o el chat cambiaron.
 const jobsInFlight = new Set();
+// Arrendamiento del trabajo (docs/PLAN_RECEPCION_DURADERA.md): sigue «pending» mientras se atiende, y otro proceso no lo
+// toma hasta que el arrendamiento se suelta (al terminar) o vence (si el proceso murió a la mitad).
+const JOB_WORKER = randomUUID(),
+  JOB_LEASE_MS = 5 * 60_000;
 async function processJob(job) {
   jobsInFlight.add(job.id);
   try {
@@ -751,6 +758,14 @@ async function processJob(job) {
     jobFailed(job, error);
   } finally {
     jobsInFlight.delete(job.id);
+    try {
+      db.prepare('UPDATE jobs SET lease_owner=NULL,lease_until=NULL WHERE id=? AND lease_owner=?').run(
+        job.id,
+        JOB_WORKER,
+      );
+    } catch (e) {
+      console.error('Automation job release failed', e.name); // el arrendamiento vencerá por su cuenta
+    }
   }
 }
 const JOB_MAX_ATTEMPTS = 5,
@@ -788,13 +803,20 @@ function jobFailed(job, error) {
   }
 }
 function processJobs() {
+  const t = Date.now();
   const jobs = db
     .prepare(
-      "SELECT * FROM jobs WHERE state='pending' AND due_at<=? AND (next_attempt_at IS NULL OR next_attempt_at<=?) LIMIT 15",
+      "SELECT * FROM jobs WHERE state='pending' AND due_at<=? AND (next_attempt_at IS NULL OR next_attempt_at<=?) AND (lease_until IS NULL OR lease_until<=?) ORDER BY rowid LIMIT 15",
     )
-    .all(Date.now(), Date.now());
+    .all(t, t, t);
   for (const job of jobs) {
     if (jobsInFlight.has(job.id)) continue;
+    const claimed = db
+      .prepare(
+        "UPDATE jobs SET lease_owner=?,lease_until=? WHERE id=? AND state='pending' AND attempts=? AND (lease_until IS NULL OR lease_until<=?)",
+      )
+      .run(JOB_WORKER, t + JOB_LEASE_MS, job.id, job.attempts, t).changes;
+    if (!claimed) continue; // otro proceso lo tomó (o ya lo intentó y lo dejó para después)
     processJob(job);
   }
 }
@@ -1589,6 +1611,15 @@ const webhooksTimer = setInterval(
   },
   process.env.NODE_ENV === 'test' ? 300 : 2000,
 );
+// Bandeja de entrada de webhooks (docs/PLAN_RECEPCION_DURADERA.md): red de seguridad, porque lo normal es que cada
+// petición despierte al trabajador al guardar. Cada pasada toma como mucho los huecos libres y no espera a que terminen.
+const inboxTimer = setInterval(() => {
+  try {
+    connectors.inbox.tick();
+  } catch (e) {
+    console.error('Inbox tick failed:', e.name);
+  }
+}, 250);
 const heartbeat = setInterval(() => {
   for (const [ws, user] of sessions) {
     if (
@@ -1608,24 +1639,52 @@ const heartbeat = setInterval(() => {
 }, 30000);
 modules.startTimers();
 server.listen(port, host, () => console.log(`TEC Capital Laboratorio: http://${host}:${server.address().port}`));
-function stop() {
-  modules.stopTimers();
-  clearInterval(webhooksTimer);
-  clearInterval(scheduledTimer);
-  clearInterval(jobsTimer);
-  clearInterval(operationsTimer);
-  clearInterval(automationTimer);
-  clearInterval(simulatorTimer);
-  clearInterval(channelTimer);
-  clearInterval(paymentsTimer);
-  clearInterval(backupTimer);
-  clearInterval(heartbeat);
-  for (const ws of sessions.keys()) ws.close(1001, 'Servidor reiniciando');
-  server.close(() => {
-    db.close();
-    process.exit(0);
+// Apagado ordenado (server/app/shutdown.mjs · docs/PLAN_RECEPCION_DURADERA.md): se deja de aceptar trabajo, se espera
+// como mucho SHUTDOWN_GRACE_MS a lo que ya estaba en vuelo (eventos de la bandeja, envíos del canal y trabajos del
+// asistente) y entonces se cierran los sockets y la base.
+let connectionsClosed;
+const allClosed = new Promise(done => (connectionsClosed = done));
+const jobsIdle = () =>
+  new Promise(done => {
+    const check = () => (jobsInFlight.size ? setTimeout(check, 25) : done());
+    check();
   });
-  setTimeout(() => process.exit(0), 1500).unref();
-}
+const stop = createShutdown({
+  graceMs: shutdownGraceMs(),
+  stopIntake() {
+    modules.stopTimers();
+    clearInterval(inboxTimer);
+    clearInterval(webhooksTimer);
+    clearInterval(scheduledTimer);
+    clearInterval(jobsTimer);
+    clearInterval(operationsTimer);
+    clearInterval(automationTimer);
+    clearInterval(simulatorTimer);
+    clearInterval(channelTimer);
+    clearInterval(paymentsTimer);
+    clearInterval(pushTimer);
+    clearInterval(eventsTimer);
+    clearInterval(coordinationTimer);
+    clearInterval(backupTimer);
+    clearInterval(heartbeat);
+    connectors.inbox.stop();
+    server.close(() => connectionsClosed()); // deja de aceptar conexiones y avisa cuando ya no queda ninguna
+  },
+  inFlight: [() => connectors.inbox.idle(), () => channel.idle(), jobsIdle],
+  closeConnections() {
+    for (const ws of sessions.keys()) ws.close(1001, 'Servidor reiniciando');
+    return allClosed;
+  },
+  finish() {
+    // Lo que este proceso tenía tomado sin terminar queda disponible para el siguiente arranque, sin esperar a que
+    // venza su arrendamiento. Un envío de WhatsApp en vuelo NO se suelta: su resultado se desconoce.
+    try {
+      connectors.inbox.release();
+      db.prepare('UPDATE jobs SET lease_owner=NULL,lease_until=NULL WHERE lease_owner=?').run(JOB_WORKER);
+    } finally {
+      db.close();
+    }
+  },
+});
 process.on('SIGTERM', stop);
 process.on('SIGINT', stop);
