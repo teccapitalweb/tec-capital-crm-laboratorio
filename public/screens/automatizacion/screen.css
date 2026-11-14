@@ -1,0 +1,45 @@
+/*
+ * Composición de la pantalla «Automatización»: un encabezado breve y el editor de recorridos ocupando el resto del
+ * alto. Los estilos del editor están en lienzo.css; aquí sólo va el marco, con variables de public/tokens.css.
+ */
+
+.au-page {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-7);
+}
+
+.au-head {
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.au-head h1 {
+  font-size: var(--font-2xl);
+}
+
+.au-lead {
+  margin-bottom: var(--space-6);
+}
+
+/* El lienzo necesita un alto propio: toma lo que sobra de la página y nunca menos de lo que hace falta para trabajar. */
+.au-editor {
+  flex: 1 0 560px;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-5);
+}
+
+@media (max-width: 680px) {
+  .au-page {
+    padding: var(--space-3);
+  }
+
+  .au-lead {
+    margin-bottom: var(--space-3);
+  }
+
+  .au-editor {
+    flex-basis: 620px;
+  }
+}

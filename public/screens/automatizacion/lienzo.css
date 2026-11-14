@@ -1,9 +1,10 @@
 /* Lienzo de recorridos, en Niebla: superficies blancas y grises, bordes finos, composición compacta.
  *
  * Reglas de esta hoja:
- *  - Los colores salen de las variables de la aplicación (--ink, --line, --accent…); aquí no se escribe ninguno.
+ *  - Colores, sombras y tamaños de letra salen de public/tokens.css. Lo que el lienzo necesita y no está ahí
+ *    (el color de las conexiones, los rótulos que crecen al alejar) se declara aquí a partir de esas variables.
  *  - Ningún texto baja de 11 px, tampoco con el lienzo alejado: los rótulos crecen en la proporción en que el lienzo
- *    se achica (--lz-min) y, por debajo del 80 %, la tarjeta pasa a modo compacto.
+ *    se achica (--font-lz-…) y, por debajo del 80 %, la tarjeta pasa a modo compacto.
  *  - El movimiento se limita a la respuesta al cursor (160 ms en color, borde y sombra). Arrastrar es manipulación
  *    directa y «Acomodar» recoloca de golpe.
  *  - En pantalla angosta o táctil, los controles miden 40 px; donde la tarjeta es más pequeña, el área se amplía
@@ -12,10 +13,20 @@
  */
 
 .lz {
-  /* Niebla no tiene variable para el blanco de tarjetas y paneles: se nombra una vez aquí. */
-  --lz-surface: white;
-  /* Conexiones: entre el acento y su línea, para que se distingan sobre el fondo sin competir con las tarjetas. */
-  --lz-edge: color-mix(in srgb, var(--accent) 70%, var(--accent-line));
+  /* Conexiones: un tono medio de la rampa del acento, que se distingue sobre el fondo (3:1) sin competir con las
+     tarjetas. */
+  --lz-edge: var(--ch-seq-3);
+  /* Rótulos de las tarjetas. Fuera del lienzo (el esquema) valen lo que la escala; dentro, .lz-canvas los agranda
+     al alejar. */
+  --font-lz-title: var(--font-md);
+  --font-lz-text: var(--font-sm);
+  --font-lz-small: var(--font-min);
+  /* Paso al que se puede soltar una conexión, y paso en el que va la prueba: un anillo además de la sombra. */
+  --shadow-lz-drop: 0 0 0 3px var(--accent-soft), var(--shadow-lift);
+  --shadow-lz-now: 0 0 0 3px var(--ok-line), var(--shadow-lift);
+  /* Desplazamiento de la rejilla de puntos: lo pone view.js con la posición de la vista. */
+  --lz-x: 0px;
+  --lz-y: 0px;
   --lz-radius: 14px;
   --lz-zoom: 1;
   --lz-inv: 1;
@@ -35,7 +46,7 @@
   overflow: hidden;
   background: var(--bg);
   color: var(--ink);
-  font-size: 13px;
+  font-size: var(--font-md);
   line-height: 1.45;
 }
 
@@ -131,13 +142,13 @@
 
 .lz-hint {
   color: var(--text-3);
-  font-size: 12px;
+  font-size: var(--font-sm);
   line-height: 1.45;
 }
 
 .lz-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--font-sm);
 }
 
 /* ---- Barra de herramientas ---------------------------------------------------------------------------------------- */
@@ -149,7 +160,7 @@
   gap: 6px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--line);
-  background: var(--lz-surface);
+  background: var(--surface);
 }
 
 .lz-tool {
@@ -161,9 +172,9 @@
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--lz-surface);
+  background: var(--surface);
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-weight: 600;
   white-space: nowrap;
   transition:
@@ -198,7 +209,7 @@
 .lz-primary:hover {
   border-color: var(--accent);
   background: var(--accent);
-  color: var(--lz-surface);
+  color: var(--on-accent);
 }
 
 .lz-primary:hover {
@@ -232,7 +243,7 @@
 .lz-zoom-n {
   min-width: 46px;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -270,7 +281,7 @@
 .lz-state {
   min-width: 74px;
   color: var(--text-3);
-  font-size: 12px;
+  font-size: var(--font-sm);
   text-align: right;
 }
 
@@ -307,7 +318,7 @@
   padding: 12px;
   overflow-y: auto;
   border-right: 1px solid var(--line);
-  background: var(--lz-surface);
+  background: var(--surface);
 }
 
 .lz[data-readonly='true'] .lz-palette {
@@ -322,14 +333,14 @@
 }
 
 .lz-palette-title {
-  font-size: 13px;
+  font-size: var(--font-md);
   font-weight: 700;
 }
 
 .lz-palette-group h3 {
   margin: 14px 0 6px;
   color: var(--text-3);
-  font-size: 11px;
+  font-size: var(--font-min);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -351,7 +362,7 @@
   border: 1px solid transparent;
   border-radius: 10px;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-weight: 600;
   text-align: left;
   cursor: grab;
@@ -379,9 +390,9 @@
   transform: translate(-50%, -50%);
   border: 1px solid var(--accent-line);
   border-radius: 10px;
-  background: var(--lz-surface);
+  background: var(--surface);
   box-shadow: var(--shadow-lift);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-weight: 700;
   pointer-events: none;
 }
@@ -400,7 +411,7 @@
   min-height: 0;
   overflow: hidden;
   border-left: 1px solid var(--line);
-  background: var(--lz-surface);
+  background: var(--surface);
 }
 
 .lz-side-pane {
@@ -412,15 +423,17 @@
 /* ---- Lienzo -------------------------------------------------------------------------------------------------------- */
 
 .lz-canvas {
-  /* Tamaño de letra que en pantalla mide 11 px con el acercamiento actual. Se declara aquí, donde view.js pone
-     --lz-inv: una variable calculada se resuelve en el elemento que la declara, no en quien la hereda. */
-  --lz-min: calc(11px * var(--lz-inv));
+  /* Con el lienzo alejado los rótulos crecen lo justo para medir 11 px en pantalla. Se declara aquí, donde view.js
+     pone --lz-inv: una variable calculada se resuelve en el elemento que la declara, no en quien la hereda. */
+  --font-lz-title: max(var(--font-md), calc(var(--font-min) * var(--lz-inv)));
+  --font-lz-text: max(var(--font-sm), calc(var(--font-min) * var(--lz-inv)));
+  --font-lz-small: calc(var(--font-min) * max(1, var(--lz-inv)));
   position: absolute;
   inset: 0;
   overflow: hidden;
   background-color: var(--bg);
   background-image: radial-gradient(var(--line) 1.2px, transparent 1.7px);
-  background-position: var(--lz-x, 0) var(--lz-y, 0);
+  background-position: var(--lz-x) var(--lz-y);
   background-size: calc(20px * var(--lz-zoom)) calc(20px * var(--lz-zoom));
   cursor: grab;
   /* Los gestos son del lienzo: sin esto el navegador desplazaría la página en lugar de mover el recorrido. */
@@ -517,7 +530,7 @@
   width: var(--lz-node-w);
   border: 1px solid var(--line);
   border-radius: var(--lz-radius);
-  background: var(--lz-surface);
+  background: var(--surface);
   box-shadow: var(--shadow-card);
   cursor: grab;
   transition:
@@ -556,9 +569,7 @@
 
 .lz-node[data-drop='true'] {
   border-color: var(--accent);
-  box-shadow:
-    0 0 0 3px var(--accent-soft),
-    var(--shadow-lift);
+  box-shadow: var(--shadow-lz-drop);
 }
 
 /* El paso en el que va la prueba, y los que ya recorrió. */
@@ -568,9 +579,7 @@
 
 .lz-node[data-sim='now'] {
   border-color: var(--ok);
-  box-shadow:
-    0 0 0 3px var(--ok-line),
-    var(--shadow-lift);
+  box-shadow: var(--shadow-lz-now);
 }
 
 .lz-node-head {
@@ -592,7 +601,7 @@
 
 .lz-node-title {
   overflow: hidden;
-  font-size: max(13px, var(--lz-min, 11px));
+  font-size: var(--font-lz-title);
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -601,7 +610,7 @@
 .lz-node-kind {
   overflow: hidden;
   color: var(--text-3);
-  font-size: max(11px, var(--lz-min, 11px));
+  font-size: var(--font-lz-small);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -612,7 +621,7 @@
   padding: 1px 12px 0;
   overflow: hidden;
   color: var(--text-2);
-  font-size: max(12px, var(--lz-min, 11px));
+  font-size: var(--font-lz-text);
   line-height: 1.3;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
@@ -649,7 +658,7 @@
   padding: 0 16px 0 12px;
   border-top: 1px solid var(--line);
   color: var(--text-2);
-  font-size: max(12px, var(--lz-min, 11px));
+  font-size: var(--font-lz-text);
 }
 
 .lz-port-label {
@@ -676,7 +685,7 @@
   margin-top: -6.5px;
   border: 2px solid var(--lz-edge);
   border-radius: 50%;
-  background: var(--lz-surface);
+  background: var(--surface);
   cursor: crosshair;
   transition:
     background-color 0.16s var(--ease),
@@ -713,7 +722,7 @@
   height: 12px;
   border: 2px solid var(--accent);
   border-radius: 50%;
-  background: var(--lz-surface);
+  background: var(--surface);
 }
 
 .lz-canvas[data-connecting='true'] .lz-in {
@@ -730,7 +739,7 @@
   padding: 0 6px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: max(11px, var(--lz-min, 11px));
+  font-size: var(--font-lz-small);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   white-space: nowrap;
@@ -800,9 +809,9 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: var(--lz-surface);
+  background: var(--surface);
   color: var(--text-2);
-  font-size: max(11px, var(--lz-min, 11px));
+  font-size: var(--font-lz-small);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   white-space: nowrap;
@@ -864,7 +873,8 @@
   position: absolute;
   border: 1px solid var(--accent);
   border-radius: 4px;
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  background: var(--accent-soft);
+  opacity: 0.6;
   pointer-events: none;
 }
 
@@ -877,7 +887,7 @@
   margin: -13px 0 0 -13px;
   border: 1px solid var(--bad-line);
   border-radius: 50%;
-  background: var(--lz-surface);
+  background: var(--surface);
   box-shadow: var(--shadow-card);
   color: var(--bad);
 }
@@ -895,7 +905,7 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--lz-surface) 90%, transparent);
+  background: var(--glass);
   box-shadow: var(--shadow-card);
 }
 
@@ -918,7 +928,8 @@
 }
 
 .lz-mini-view {
-  fill: color-mix(in srgb, var(--accent) 12%, transparent);
+  fill: var(--accent);
+  fill-opacity: 0.12;
   stroke: var(--accent);
   stroke-width: 1.5px;
   vector-effect: non-scaling-stroke;
@@ -932,9 +943,9 @@
   padding: 4px 10px;
   overflow: hidden;
   border-radius: 9px;
-  background: color-mix(in srgb, var(--lz-surface) 88%, transparent);
+  background: var(--glass);
   color: var(--text-2);
-  font-size: 11px;
+  font-size: var(--font-min);
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
@@ -966,7 +977,7 @@
   max-width: 760px;
   margin: 18px auto 8px;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-weight: 700;
 }
 
@@ -975,7 +986,7 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--lz-radius);
-  background: var(--lz-surface);
+  background: var(--surface);
   box-shadow: var(--shadow-card);
 }
 
@@ -1025,7 +1036,7 @@
   flex: none;
   min-width: 20px;
   color: var(--text-3);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   text-align: right;
@@ -1039,19 +1050,19 @@
 }
 
 .lz-row-name {
-  font-size: 13px;
+  font-size: var(--font-md);
   font-weight: 700;
   overflow-wrap: anywhere;
 }
 
 .lz-row-kind {
   color: var(--text-3);
-  font-size: 11px;
+  font-size: var(--font-min);
 }
 
 .lz-row-sum {
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--font-sm);
   overflow-wrap: anywhere;
 }
 
@@ -1068,7 +1079,7 @@
   gap: 6px;
   min-height: 40px;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--font-sm);
 }
 
 /* La salida, una flecha y a dónde lleva, en un renglón: el nombre de la salida cede sitio si no cabe. */
@@ -1082,7 +1093,7 @@
 .lz-out-pick {
   flex: 1 1 140px;
   width: auto;
-  font-size: 12px;
+  font-size: var(--font-sm);
 }
 
 .lz-out > .lz-ico {
@@ -1114,7 +1125,7 @@
   padding: 8px 12px 8px 46px;
   border-top: 1px solid var(--line);
   color: var(--text-3);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1138,7 +1149,7 @@
 }
 
 .lz-panel-title {
-  font-size: 15px;
+  font-size: var(--font-lg);
   font-weight: 700;
   overflow-wrap: anywhere;
 }
@@ -1160,7 +1171,7 @@
 .lz-group > legend,
 .lz-list > legend {
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-weight: 600;
 }
 
@@ -1171,10 +1182,10 @@
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--lz-surface);
+  background: var(--surface);
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--font-md);
 }
 
 .lz :where(textarea) {
@@ -1209,7 +1220,7 @@
 
 .lz-count {
   color: var(--text-3);
-  font-size: 11px;
+  font-size: var(--font-min);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1226,12 +1237,12 @@
   min-height: 32px;
   padding: 3px 8px;
   color: var(--accent-strong);
-  font-size: 12px;
+  font-size: var(--font-sm);
 }
 
 .lz-err {
   color: var(--bad);
-  font-size: 12px;
+  font-size: var(--font-sm);
   line-height: 1.4;
 }
 
@@ -1247,7 +1258,7 @@
   gap: 8px;
   min-height: 32px;
   padding-top: 6px;
-  font-size: 13px;
+  font-size: var(--font-md);
   font-weight: 400;
   cursor: pointer;
 }
@@ -1286,7 +1297,7 @@
 }
 
 .lz-item .lz-item {
-  background: var(--lz-surface);
+  background: var(--surface);
 }
 
 .lz-item-head {
@@ -1294,7 +1305,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--font-sm);
 }
 
 .lz-item-tools {
@@ -1335,9 +1346,9 @@
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--lz-surface);
+  background: var(--surface);
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-weight: 600;
   transition:
     background-color 0.16s var(--ease),
@@ -1376,7 +1387,7 @@
 .lz-link {
   display: inline;
   color: var(--accent-strong);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-weight: 600;
   text-align: left;
   text-decoration: underline;
@@ -1397,7 +1408,7 @@
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  font-size: 12px;
+  font-size: var(--font-sm);
   line-height: 1.45;
 }
 
@@ -1432,7 +1443,7 @@
   border-radius: 10px;
   background: var(--ok-soft);
   color: var(--ok);
-  font-size: 12px;
+  font-size: var(--font-sm);
 }
 
 .lz-section {
@@ -1442,7 +1453,7 @@
 }
 
 .lz-section h3 {
-  font-size: 13px;
+  font-size: var(--font-md);
   font-weight: 700;
 }
 
@@ -1465,7 +1476,7 @@
 
 .lz-keys {
   margin-top: 18px;
-  font-size: 12px;
+  font-size: var(--font-sm);
 }
 
 .lz-keys summary {
@@ -1514,7 +1525,7 @@
   border-radius: 10px;
   background: var(--warn-soft);
   color: var(--warn);
-  font-size: 12px;
+  font-size: var(--font-sm);
 }
 
 .lz-banner .lz-link {
@@ -1541,7 +1552,7 @@
   padding: 8px 11px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  font-size: 13px;
+  font-size: var(--font-md);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -1549,7 +1560,7 @@
 .lz-bubble[data-who='out'] {
   align-self: flex-start;
   border-bottom-left-radius: 4px;
-  background: var(--lz-surface);
+  background: var(--surface);
 }
 
 .lz-bubble[data-who='in'] {
@@ -1565,7 +1576,7 @@
 
 .lz-bubble-tag {
   color: var(--accent-strong);
-  font-size: 11px;
+  font-size: var(--font-min);
   font-weight: 700;
 }
 
@@ -1578,7 +1589,7 @@
   border-radius: 9px;
   background: var(--accent-soft);
   color: var(--accent-strong);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-weight: 600;
 }
 
@@ -1588,7 +1599,7 @@
 
 .lz-bubble-foot {
   color: var(--text-3);
-  font-size: 11px;
+  font-size: var(--font-min);
 }
 
 .lz-bubble-opts {
@@ -1606,7 +1617,7 @@
   border: 1px solid var(--accent-line);
   border-radius: 10px;
   color: var(--accent-strong);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-weight: 600;
   text-align: center;
 }
@@ -1621,7 +1632,7 @@
   border-radius: 9px;
   background: var(--soft);
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--font-sm);
   line-height: 1.4;
 }
 
@@ -1647,9 +1658,9 @@
   padding: 8px 12px;
   border: 1px solid var(--accent-line);
   border-radius: 12px;
-  background: var(--lz-surface);
+  background: var(--surface);
   color: var(--accent-strong);
-  font-size: 13px;
+  font-size: var(--font-md);
   font-weight: 600;
   transition: background-color 0.16s var(--ease);
 }
@@ -1687,7 +1698,7 @@
   border-radius: 10px;
   background: var(--soft);
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--font-sm);
 }
 
 /* ---- Avisos -------------------------------------------------------------------------------------------------------- */
@@ -1703,8 +1714,8 @@
   border-radius: 12px;
   background: var(--ink);
   box-shadow: var(--shadow-lift);
-  color: var(--lz-surface);
-  font-size: 13px;
+  color: var(--surface);
+  font-size: var(--font-md);
 }
 
 /* ---- Angosto: una sola columna; la paleta y el panel son hojas que cubren la vista ----------------------------------- */
@@ -1780,13 +1791,13 @@
   white-space: nowrap;
 }
 
-.lz[data-layout='narrow'][data-pane='outline'] [data-k='acomodar'] {
+.lz[data-layout='narrow'][data-pane='outline'] [data-do='acomodar'] {
   display: none;
 }
 
 /* Cuando la barra no cabe en un renglón, estos botones quedan sólo con su icono: el texto sigue ahí para el lector de
    pantalla y como título al pasar el cursor. */
-.lz[data-bar='tight'] :is([data-k='acomodar'], [data-k='ajustar'], [data-k='rendimiento'], [data-k='probar']) span {
+.lz[data-bar='tight'] :is([data-do='acomodar'], [data-do='ajustar'], [data-do='rendimiento'], [data-do='probar']) span {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1796,13 +1807,13 @@
   white-space: nowrap;
 }
 
-.lz[data-bar='tight'] :is([data-k='acomodar'], [data-k='ajustar'], [data-k='rendimiento'], [data-k='probar']) {
+.lz[data-bar='tight'] :is([data-do='acomodar'], [data-do='ajustar'], [data-do='rendimiento'], [data-do='probar']) {
   position: relative;
   width: 34px;
   padding: 0;
 }
 
-.lz[data-layout='narrow'] :is([data-k='acomodar'], [data-k='ajustar'], [data-k='rendimiento'], [data-k='probar']) {
+.lz[data-layout='narrow'] :is([data-do='acomodar'], [data-do='ajustar'], [data-do='rendimiento'], [data-do='probar']) {
   width: 40px;
 }
 

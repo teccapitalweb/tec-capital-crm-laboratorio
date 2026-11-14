@@ -19,7 +19,8 @@ import {
   portsOf,
   typeOf,
 } from '../../../kit/shared/flow-model.js';
-import { html, render, svgEl } from './dom.js';
+import { html, render } from '../../../kit/html.js';
+import { svgEl } from './dom.js';
 import { icon } from './icons.js';
 import { statsText } from './outline.js';
 import { ZOOM } from './store.js';
@@ -48,7 +49,7 @@ function cardHtml(node, info) {
         <span class="lz-node-kind">${kind}</span>
       </span>
       ${badge}
-      ${info.deletable ? html`<button type="button" class="lz-node-x" data-k="nodo-borrar" tabindex="-1" aria-label="Eliminar este paso" title="Eliminar">${icon('trash')}</button>` : ''}
+      ${info.deletable ? html`<button type="button" class="lz-node-x" data-do="nodo-borrar" tabindex="-1" aria-label="Eliminar este paso" title="Eliminar">${icon('trash')}</button>` : ''}
     </div>
     <p class="lz-node-sum">${node.type === 'start' ? 'Aquí empieza el recorrido' : nodeSummary(node, info.ctx)}</p>
     ${
@@ -215,7 +216,7 @@ export function createView(canvas, store) {
       const key = e.from + '\n' + e.port;
       let line = lines.get(key);
       if (!line) {
-        const g = svgEl(doc, 'g', { class: 'lz-edge', 'data-k': 'arista', 'data-from': e.from, 'data-port': e.port });
+        const g = svgEl(doc, 'g', { class: 'lz-edge', 'data-do': 'arista', 'data-from': e.from, 'data-port': e.port });
         line = {
           g,
           hit: svgEl(doc, 'path', { class: 'lz-edge-hit' }),
@@ -253,7 +254,7 @@ export function createView(canvas, store) {
       const middle = edgeMiddle(chosen.a, chosen.b);
       render(
         toolsLayer,
-        html`<button type="button" class="lz-edge-x" data-k="arista-quitar" aria-label="Quitar esta conexión" title="Quitar la conexión">${icon('close')}</button>`,
+        html`<button type="button" class="lz-edge-x" data-do="arista-quitar" aria-label="Quitar esta conexión" title="Quitar la conexión">${icon('close')}</button>`,
       );
       toolsLayer.firstElementChild.style.left = `${middle.x}px`;
       toolsLayer.firstElementChild.style.top = `${middle.y}px`;

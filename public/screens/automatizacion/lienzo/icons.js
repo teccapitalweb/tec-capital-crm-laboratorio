@@ -2,7 +2,7 @@
 // la isla se carga sola, sin la biblioteca de iconos de la portada, y porque cada tipo de paso necesita el suyo.
 // Cada icono es una lista de trazos (el atributo `d` de un <path>); el color lo pone quien lo usa con `currentColor`.
 
-import { html } from './dom.js';
+import { html } from '../../../kit/html.js';
 
 const CIRCLE = 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z';
 

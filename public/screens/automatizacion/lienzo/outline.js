@@ -16,7 +16,7 @@ import {
   readingOrder,
   typeOf,
 } from '../../../kit/shared/flow-model.js';
-import { flag, html, render } from './dom.js';
+import { attrs, html, render } from '../../../kit/html.js';
 import { icon } from './icons.js';
 
 const GROUP_LABEL = Object.fromEntries(GROUPS.map(g => [g.id, g.label]));
@@ -70,9 +70,9 @@ export function targetOptions(graph, ctx, selected) {
   const order = readingOrder(graph);
   const byId = new Map(graph.nodes.map(n => [n.id, n]));
   const targets = order.map(id => byId.get(id)).filter(acceptsInput);
-  return html`<option value="" ${flag('selected', !selected)}>Sin conectar</option>
+  return html`<option value="" ${attrs({ selected: !selected })}>Sin conectar</option>
     <optgroup label="Llevar a un paso que ya existe">
-      ${targets.map(n => html`<option value="${n.id}" ${flag('selected', n.id === selected)}>${order.indexOf(n.id) + 1}. ${nodeName(n, ctx)}</option>`)}
+      ${targets.map(n => html`<option value="${n.id}" ${attrs({ selected: n.id === selected })}>${order.indexOf(n.id) + 1}. ${nodeName(n, ctx)}</option>`)}
     </optgroup>
     ${PALETTE.map(
       group => html`<optgroup label="Crear aquí · ${group.label}">
@@ -111,8 +111,8 @@ export function createOutline(container, store, options) {
     const stats = store.overlay.showStats ? store.overlay.stats?.nodes?.[row.id] : null;
     const trail = store.overlay.simTrail.includes(row.id);
     const editable = !store.readOnly;
-    return html`<li class="lz-row" data-node="${row.id}" data-group="${row.group}" data-sim="${store.overlay.simNode === row.id ? 'now' : trail ? 'seen' : ''}">
-      <button type="button" class="lz-row-main" data-k="fila" aria-current="${selected ? 'true' : 'false'}">
+    return html`<li class="lz-row" data-key="${row.id}" data-node="${row.id}" data-group="${row.group}" data-sim="${store.overlay.simNode === row.id ? 'now' : trail ? 'seen' : ''}">
+      <button type="button" class="lz-row-main" data-do="fila" aria-current="${selected ? 'true' : 'false'}">
         <span class="lz-row-n" aria-hidden="true">${row.index}</span>
         <span class="lz-pill">${icon(row.icon)}</span>
         <span class="lz-row-text">
@@ -147,22 +147,21 @@ export function createOutline(container, store, options) {
       ${icon('arrow')}
       ${
         editable
-          ? html`<select class="lz-out-pick" data-k="fila-salida" data-node="${row.id}" data-port="${o.port}" aria-label="Salida «${o.label}» del paso ${row.index}: a dónde lleva">
+          ? html`<select class="lz-out-pick" data-do="fila-salida" data-node="${row.id}" data-port="${o.port}" aria-label="Salida «${o.label}» del paso ${row.index}: a dónde lleva">
             <option value="${o.to || ''}" selected>${where}</option>
           </select>`
           : html`<span class="lz-out-text">${where}</span>`
       }
       ${
         o.to
-          ? html`<button type="button" class="lz-icon-btn" data-k="fila-ir" data-to="${o.to}" aria-label="Ir al paso ${o.toIndex}: ${o.toName}" title="Ir a ese paso">${icon('jump')}</button>`
+          ? html`<button type="button" class="lz-icon-btn" data-do="fila-ir" data-to="${o.to}" aria-label="Ir al paso ${o.toIndex}: ${o.toName}" title="Ir a ese paso">${icon('jump')}</button>`
           : ''
       }
     </li>`;
   }
 
   function fill(event, el) {
-    if (el.dataset.full) return;
-    el.dataset.full = '1';
+    if (el.options.length > 1) return;
     const current = store.edgeFrom(el.dataset.node, el.dataset.port);
     render(el, targetOptions(store.graph, store.context, current));
   }
@@ -176,7 +175,7 @@ export function createOutline(container, store, options) {
     const focused = container.contains(active)
       ? {
           node: active.closest('[data-node]')?.dataset.node,
-          k: active.dataset.k,
+          k: active.dataset.do,
           port: active.dataset.port,
           to: active.dataset.to,
         }
@@ -197,15 +196,15 @@ export function createOutline(container, store, options) {
       const row = container.querySelector(`[data-node="${focused.node}"]`);
       const again =
         row &&
-        [...row.querySelectorAll(`[data-k="${focused.k}"]`)].find(
+        [...row.querySelectorAll(`[data-do="${focused.k}"]`)].find(
           el => el.dataset.port === focused.port && el.dataset.to === focused.to,
         );
-      (again || row?.querySelector('[data-k="fila"]'))?.focus({ preventScroll: true });
+      (again || row?.querySelector('[data-do="fila"]'))?.focus({ preventScroll: true });
     }
   }
 
   function focusRow(id) {
-    const main = container.querySelector(`[data-node="${id}"] [data-k="fila"]`);
+    const main = container.querySelector(`[data-node="${id}"] [data-do="fila"]`);
     if (!main) return false;
     main.scrollIntoView({ block: 'nearest' });
     main.focus({ preventScroll: true });
@@ -232,6 +231,7 @@ export function createOutline(container, store, options) {
     // Antes de que la lista se abra, con el ratón, el dedo o el teclado.
     pointerdown: { 'fila-salida': fill },
     focusin: { 'fila-salida': fill },
+    keydown: { 'fila-salida': fill },
   };
 
   return {
