@@ -104,7 +104,9 @@ export function loadScreens({ root, preview = false, strict = false }) {
       try {
         raw = JSON.parse(readFileSync(join(dir, 'screen.json'), 'utf8'));
       } catch (error) {
-        throw new Error(`public/screens/${folder}/screen.json: no es JSON válido (${error.message}).`);
+        throw new Error(`public/screens/${folder}/screen.json: no es JSON válido (${error.message}).`, {
+          cause: error,
+        });
       }
       all.push(validateScreen(raw, folder, dir));
     } catch (error) {
