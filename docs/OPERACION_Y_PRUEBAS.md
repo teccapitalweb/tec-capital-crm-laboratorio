@@ -63,8 +63,13 @@ Para una prueba nueva usa un directorio de datos vacío e independiente. No cone
 | `SIMULATOR_DISABLED` | vacío | `1` oculta el simulador de clientes: `/api/simulator` responde 404 y el barrido no corre. Úsalo en un entorno con clientes reales |
 | `MFA_KEY` | Opcional | Clave para cifrar los secretos de la verificación en dos pasos; si falta se usa `DATA_DIR/mfa.key`. Guárdala aparte; sin ella, los 2FA no se pueden verificar tras una restauración |
 | `MFA_RESET_USER` | Sólo emergencia | Usuario cuya verificación en dos pasos se restablece al arrancar; retirarla después |
+| `TRUSTED_PROXY_HOPS` | vacío (`0`: no se confía en ninguna cabecera) | Número de proxies **propios** delante del servidor. Con `1` (Railway) la dirección de quien visita se lee de la última posición de `X-Forwarded-For`, la que añade el proxy; lo que el cliente escriba a la izquierda se ignora. Sin definir, todos los visitantes comparten los límites por dirección (240 accesos por hora, 12 recuperaciones cada 15 minutos, 60 verificaciones por minuto…), porque todos llegan con la dirección del proxy. **Antes de activarla hay que comprobarla** (ver abajo): un número mayor que el real permitiría falsificar la dirección |
+| `TRUSTED_PROXY_CIDRS` | vacío | Opcional: rangos desde los que se acepta la cabecera; si la conexión no viene de ahí, se usa la dirección del socket |
+| `LOG_CLIENT_ADDRESS` | vacío | `1` anota en el registro, por cada petición a `/api/health`, la dirección del socket, la cabecera recibida y la dirección resuelta. Sólo para la comprobación; se retira después |
 | `ADMIN_INVITE_CODE` | Secreto aleatorio privado para inicializar una instalación vacía | Sólo permite crear el primer administrador |
 | `STAFF_INVITE_CODE` | No usar | Variable heredada, sin efecto desde v0.2 |
+
+**Cómo activar `TRUSTED_PROXY_HOPS` en producción** (lo hace quien administra Railway): (1) poner `LOG_CLIENT_ADDRESS=1` y `TRUSTED_PROXY_HOPS=1`; (2) hacer **una** petición a `/api/health` desde fuera con una cabecera inventada, por ejemplo `curl -H "X-Forwarded-For: 203.0.113.99" https://…/api/health`; (3) leer en el registro de Railway la línea `client-address`: `resolved` debe ser la dirección pública real de quien hizo la petición y **no** `203.0.113.99`; (4) si es así, dejar `TRUSTED_PROXY_HOPS=1` y quitar `LOG_CLIENT_ADDRESS`; si `resolved` es la inventada o la del proxy, quitar las dos y revisar cuántos proxies hay delante.
 
 No hay claves de IA/Meta necesarias para esta versión. Generar un código inicial no crea automáticamente un usuario: en una base vacía se registra la primera cuenta con ese código. Una base que ya tiene administrador no concede más administradores por repetirlo.
 
