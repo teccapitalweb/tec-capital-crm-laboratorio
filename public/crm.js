@@ -139,13 +139,14 @@ window.createCRMUI = function ({
     try {
       const [result, tagInfo] = await Promise.all([api('/api/crm'), api('/api/crm/tags')]);
       if (version !== renderVersion || state.view !== view) return;
+      if (!$('#page')) return; // la sesión se cerró mientras llegaba la respuesta: ya no hay dónde pintar
       result.tagInfo = tagInfo;
       data = result;
       draw();
     } catch (e) {
-      if (state.view === view)
-        $('#page').innerHTML =
-          `<div class="content-page">${blank('No pudimos abrir este espacio', esc(e.message))}${button('reload', 'Volver a intentar')}</div>`;
+      const page = $('#page');
+      if (page && state.view === view)
+        page.innerHTML = `<div class="content-page">${blank('No pudimos abrir este espacio', esc(e.message))}${button('reload', 'Volver a intentar')}</div>`;
     }
   }
   function draw() {

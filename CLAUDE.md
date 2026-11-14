@@ -97,9 +97,11 @@ npm start
 
 `npm run check` comprueba codificación (UTF-8, LF), sintaxis y formato (Prettier); antes de entregar, `npx prettier --write` sobre lo que tocaste.
 
-La referencia vigente es **218 pruebas aprobadas en `main`** y 279 con los cimientos sin publicar (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **279 pruebas aprobadas** más 9 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
+
+**13 nov 2026:** se publicaron los cimientos para construir módulos y pantallas en paralelo (migraciones con nombre, `server/modules/`, `public/screens/`, `server/lib/`, formato automático y pruebas de humo en navegador), sin cambios visibles: ver [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md) y [docs/GUIA_MODULOS.md](docs/GUIA_MODULOS.md). Lo que sigue de este apartado es anterior a esa fecha.
 
 Última publicación (7 nov 2026): sobre la **v0.34.0** (`/api/health` sigue diciendo 0.34.0) se publicaron, todo en `main` y **apagado o acotado por marca** hasta que administración lo active: menú por grupos y Operación por áreas, mensajes programados (esquema 32) con avisos, panel en Mi día y materiales del catálogo (37), agenda de citas (33) y su vista semanal, cupones (34) y cupón escrito por el cliente (36), API pública de lectura y webhooks salientes (35), estado de la IA con su guía de activación, resumen de conversación (31), Aliados (30) y Pauta (29). Antes: etiquetas en la bandeja v0.34.0, respuestas rápidas v0.33.0 (28), push v0.32.0 (27; la entrega real a un teléfono sigue sin probarse), rendimiento del equipo v0.31.0, portal por roles v0.30.0, campañas v0.29.0 (26) y las Fases 1 y 2 completas en lo que no depende de terceros (esquemas 13–25). No hay proveedores reales, secretos de webhook ni históricos importados en producción. Interruptores, límites e historial completo: [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md).
 

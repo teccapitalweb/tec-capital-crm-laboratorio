@@ -50,6 +50,20 @@ export function watch(page) {
   return { problems, done: () => expect(problems, 'la página no debe dejar errores').toEqual([]) };
 }
 
+// Espera a que la vista termine de pintarse: sin peticiones en curso, con texto y sin cambiar entre dos lecturas.
+// Las vistas piden sus datos después de cambiar el título, así que el título solo no basta.
+export async function settled(page, selector = '#page') {
+  await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+  await page.waitForFunction(target => (document.querySelector(target)?.innerText ?? '').trim().length > 0, selector);
+  let last = -1;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const size = await page.evaluate(target => document.querySelector(target)?.innerHTML.length ?? 0, selector);
+    if (size === last) return;
+    last = size;
+    await page.waitForTimeout(150);
+  }
+}
+
 export async function login(page, user, path = '/crm') {
   await page.goto(path);
   await page.locator('#auth-form [name="username"]').fill(user.username);
@@ -74,6 +88,7 @@ export async function logout(page) {
 // La línea base (niebla-baseline.json) se graba con UPDATE_NIEBLA=1 y sólo puede bajar. Una pantalla nueva no
 // tiene línea base: su límite es cero.
 export async function expectNiebla(page, name, testInfo) {
+  await settled(page);
   const result = await page.evaluate(nieblaAudit);
   const key = `${testInfo.project.name}:${name}`;
   const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {};
