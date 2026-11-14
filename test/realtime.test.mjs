@@ -162,6 +162,16 @@ test('realtime.emit: sobre v2 exacto, y sin marca ni conversación válidas no s
   db.prepare('UPDATE users SET disabled=1 WHERE id=?').run(people.vet.id);
   assert.equal(realtime.emit('x.y', { brandId: 'globalvet' }), 1, 'la suspensión vale aunque el socket siga abierto');
   assert.deepEqual([second.got.length, attempts], [1, 1]);
+
+  // Una cuenta suspendida o borrada no recibe ni aunque la regla de visibilidad que se le pase dijera que sí.
+  const lax = createRealtime({ db, crm, sessions, canSee: () => true, now: () => AT });
+  const ana = tab(people.ana);
+  const erased = tab({ ...people.ana, id: 'u-borrada' });
+  const toAll = () => lax.emit('thread.message', { conversationId: 'c-aves', includeCustomer: true });
+  assert.equal(toAll(), 2, 'administración y la persona que escribe');
+  db.prepare('UPDATE users SET disabled=1 WHERE id=?').run(people.ana.id);
+  assert.equal(toAll(), 1);
+  assert.deepEqual([ana.got.length, erased.got.length, gone.got.length, second.got.length], [1, 0, 0, 1]);
 });
 
 test('realtime.emit con sockets reales: sólo llega a quien puede ver esa marca o esa conversación', async t => {
