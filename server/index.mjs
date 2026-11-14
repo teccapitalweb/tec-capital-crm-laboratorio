@@ -754,7 +754,8 @@ async function processJob(job) {
         return;
       }
       replies.commit(c, planned.trigger, planned.plan, draft);
-      db.prepare("UPDATE jobs SET state='done' WHERE id=?").run(job.id);
+      // Hecho y sin dueño en el mismo paso: un trabajo terminado nunca se ve con un arrendamiento vivo.
+      db.prepare("UPDATE jobs SET state='done',lease_owner=NULL,lease_until=NULL WHERE id=?").run(job.id);
     });
     broadcast('conversation', job.conversation_id);
     if (!db.prepare('SELECT bot_enabled FROM conversations WHERE id=?').get(job.conversation_id)?.bot_enabled)
@@ -1003,6 +1004,12 @@ const server = http.createServer(async (req, res) => {
     if (path.startsWith('/api/')) {
       const user = requireUser(req);
       if (await connectors.handle(req, res, path, user)) return;
+      // salud del canal (módulo channel-health): /api/whatsapp/health* es del módulo, no de server/whatsapp.mjs
+      if (
+        /^\/api\/whatsapp\/health(\/|$)/.test(path) &&
+        (await modules.get('channel-health')?.handle(req, res, path, user))
+      )
+        return;
       if (await whatsapp.handle(req, res, path, user)) return;
       if (await flows.handle(req, res, path, user)) return;
       if (await coordination.handle(req, res, path, user)) return;

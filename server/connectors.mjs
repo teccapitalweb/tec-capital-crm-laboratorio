@@ -275,6 +275,23 @@ export function simulatedChannel({ env }) {
         reason: failed ? FAILURES[Math.floor(Math.random() * FAILURES.length)] : null,
       };
     },
+    // Salud (X3): el canal simulado no tiene número real ni cuenta; valores neutros («sin dato»).
+    async numberInfo(id) {
+      return {
+        phoneNumberId: String(id || ''),
+        displayPhone: '',
+        verifiedName: '',
+        quality: '',
+        status: '',
+        nameStatus: '',
+        official: null,
+        limitTier: '',
+        unavailable: [],
+      };
+    },
+    async accountInfo() {
+      return null;
+    },
     verifyWebhook: (headers, raw) =>
       Boolean(env.CONNECTOR_WEBHOOK_SECRET) &&
       safeEqual(headers['x-lab-signature'], hmacHex(env.CONNECTOR_WEBHOOK_SECRET, raw)),
@@ -565,6 +582,17 @@ const IMAGE_MIME = new Set(['image/jpeg', 'image/png']),
   MEDIA_HOSTS = ['fbsbx.com', 'facebook.com', 'fbcdn.net', 'whatsapp.net', 'whatsapp.com'];
 // peerHash: huella con llave de la instalación (server/lib/peer-key.mjs) para los ids que dependen de una persona. Sin
 // ella (un adaptador suelto en una prueba), la de PEER_HASH_KEY o una llave al azar de este proceso.
+// Grupos de campos ampliados de la salud (X3). Los nombres no están todos confirmados contra la versión de Graph en
+// uso (docs/PLAN_SALUD_NUMERO.md): el del límite vigente es whatsapp_business_manager_messaging_limit y
+// messaging_limit_tier, el obsoleto, queda como respaldo en su propio grupo.
+const NUMBER_FIELD_GROUPS = [
+  ['status'],
+  ['name_status'],
+  ['is_official_business_account'],
+  ['whatsapp_business_manager_messaging_limit'],
+  ['messaging_limit_tier'],
+];
+const ACCOUNT_FIELD_GROUPS = [['account_review_status'], ['business_verification_status']];
 export function metaChannel({
   env,
   fetchImpl = (...a) => fetch(...a),
@@ -630,6 +658,28 @@ export function metaChannel({
       );
     return id;
   };
+  // Campos ampliados de salud (X3): cada grupo se pide aparte y uno rechazado por Meta (código 100, campo desconocido)
+  // no se vuelve a pedir en este proceso. Otro fallo (red, límite de Meta) deja el dato «sin dato» sólo esta vez.
+  const rejectedFields = new Set();
+  async function optionalFields(path, groups) {
+    const out = { unavailable: [] };
+    for (const group of groups) {
+      const key = group.join(',');
+      if (rejectedFields.has(key)) {
+        out.unavailable.push(...group);
+        continue;
+      }
+      try {
+        const d = await graph(path + key);
+        for (const field of group) if (d[field] !== undefined && d[field] !== null) out[field] = d[field];
+      } catch (e) {
+        if (e.metaCode === 100) rejectedFields.add(key);
+        else if (e.metaCode === 190 || e.network) throw e;
+        out.unavailable.push(...group);
+      }
+    }
+    return out;
+  }
   const param = v =>
     String(v ?? '')
       .replace(/\s+/g, ' ')
@@ -1057,6 +1107,41 @@ export function metaChannel({
         displayPhone: String(d.display_phone_number || ''),
         verifiedName: String(d.verified_name || ''),
         quality: String(d.quality_rating || ''),
+      };
+    },
+    // Salud del número (X3, docs/PLAN_SALUD_NUMERO.md). Primero lo que ya funciona en producción (lo mismo que ping);
+    // después, aparte, cada grupo de campos ampliados: si Meta rechaza uno (nombre de campo sin confirmar), ese dato
+    // queda «sin dato» y no se vuelve a pedir en este proceso. Devuelve los valores tal como los da Meta.
+    async numberInfo(id) {
+      if (missing.length) throw fail(503, 'Conector de Meta sin configurar: faltan ' + missing.join(', ') + '.');
+      const path = '/' + numberId(id) + '?fields=';
+      const d = await graph(path + 'display_phone_number,verified_name,quality_rating');
+      const extra = await optionalFields(path, NUMBER_FIELD_GROUPS);
+      return {
+        phoneNumberId: numberId(id),
+        displayPhone: String(d.display_phone_number || ''),
+        verifiedName: String(d.verified_name || ''),
+        quality: String(d.quality_rating || ''),
+        status: String(extra.status || ''),
+        nameStatus: String(extra.name_status || ''),
+        official: typeof extra.is_official_business_account === 'boolean' ? extra.is_official_business_account : null,
+        limitTier: String(extra.whatsapp_business_manager_messaging_limit || extra.messaging_limit_tier || ''),
+        unavailable: extra.unavailable,
+      };
+    },
+    // Salud de la cuenta de WhatsApp Business: revisión de la cuenta y verificación del negocio. Sin META_WABA_ID
+    // (laboratorio) devuelve null: no hay cuenta que leer.
+    async accountInfo() {
+      if (missing.length) throw fail(503, 'Conector de Meta sin configurar: faltan ' + missing.join(', ') + '.');
+      if (!/^\d{5,25}$/.test(String(env.META_WABA_ID || '').trim())) return null;
+      const path = '/' + wabaId() + '?fields=';
+      const d = await graph(path + 'name');
+      const extra = await optionalFields(path, ACCOUNT_FIELD_GROUPS);
+      return {
+        name: String(d.name || ''),
+        reviewStatus: String(extra.account_review_status || ''),
+        businessVerification: String(extra.business_verification_status || ''),
+        unavailable: extra.unavailable,
       };
     },
     verifyWebhook: (headers, raw) =>

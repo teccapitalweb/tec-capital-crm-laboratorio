@@ -1,0 +1,87 @@
+/*
+ * Pantalla «Salud de WhatsApp»: sólo la composición que el kit no trae, con el prefijo sal- y variables de
+ * public/tokens.css.
+ */
+
+.sal-numeros {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+
+.sal-numero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.sal-titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.sal-titulo h2 {
+  margin: 0;
+  font-size: var(--font-xl);
+  overflow-wrap: anywhere;
+}
+
+.sal-datos {
+  display: grid;
+  grid-template-columns: minmax(160px, auto) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+/* en las tarjetas de número, angostas, la etiqueta no se come la mitad */
+.sal-numero .sal-datos {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+}
+
+.sal-datos dt {
+  color: var(--text-2);
+}
+
+.sal-datos dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sal-historial {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sal-historial li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.sal-historial li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+@media (max-width: 520px) {
+  .sal-datos,
+  .sal-numero .sal-datos {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+
+  .sal-datos dd {
+    margin-bottom: var(--space-2);
+  }
+}
