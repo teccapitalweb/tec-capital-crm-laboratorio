@@ -1034,7 +1034,18 @@ export default {
         for (const job of jobs) inflight.add(job.id);
         let next = 0;
         const lane = async () => {
-          while (next < jobs.length) await deliver(jobs[next++]);
+          while (next < jobs.length) {
+            const job = jobs[next++];
+            // la campaña se detuvo, pausó o canceló mientras esperaba su turno: vuelve a la cola sin salir
+            const status = repo.campaignAny(job.campaign.id)?.status;
+            if (status !== 'sending') {
+              repo.requeue(1, now(), null, null, now(), job.id);
+              if (status === 'cancelled') repo.cancelPending(now(), job.campaign.id);
+              inflight.delete(job.id);
+              continue;
+            }
+            await deliver(job);
+          }
         };
         await Promise.all(Array.from({ length: Math.min(PARALLEL, jobs.length) }, lane));
         close(now());
@@ -1083,24 +1094,29 @@ export default {
     // entrante de WhatsApp dentro de la suya, antes de buscar o crear la conversación.
     function attribute({ waId, numberId, contextRef = null, payload = null, at = now() } = {}) {
       const days = Number(repo.attributionDays()) || 7;
-      const live = c => c && json(c.options).mode !== 'rehearsal' && (!c.wa_number || c.wa_number === numberId);
+      const sender = String(waId || '');
+      const key = canonicalPhone(sender, { international: true }).key ?? sender;
+      // Sólo cuenta una difusión real, del número por el que entró el mensaje (y por tanto de su marca), y un
+      // destinatario que ES quien escribe (su teléfono canónico o el wa_id que Meta devolvió). Una carga de botón o una
+      // cita de otra persona no se atribuye: así nadie puede marcar respuestas, clics ni conversaciones ajenas.
+      const own = r => Boolean(r && ((r.wa_to && r.wa_to === key) || (r.wa_id && r.wa_id === sender)));
       const hit = (r, exact, button = null) => {
         const c = r ? repo.campaignAny(r.campaign_id) : null;
-        return live(c) && r.sent_at ? { recipient: r, campaign: c, exact, button } : null;
+        const usable = c && json(c.options).mode !== 'rehearsal' && c.wa_number === numberId;
+        return usable && own(r) && r.sent_at ? { recipient: r, campaign: c, exact, button } : null;
       };
       const p = parsePayload(payload);
       if (p) {
         const r = repo.recipient(p.recipientId);
         const label = r ? (json(r.params).quickReplies?.[p.index] ?? null) : null;
-        const found = hit(r, true, { index: p.index, label });
+        const found = hit(r, true, label === null ? null : { index: p.index, label });
         if (found) return found;
       }
       if (contextRef) {
         const found = hit(repo.recipientByRef(String(contextRef).slice(0, 200)), true);
         if (found) return found;
       }
-      const key = canonicalPhone(String(waId || ''), { international: true }).key ?? String(waId || '');
-      return hit(repo.lastSentTo(key, String(waId || ''), numberId, at - days * DAY), false);
+      return hit(repo.lastSentTo(key, sender, numberId, at - days * DAY), false);
     }
     // El contacto de la lista pasa a ser el de la persona que respondió (un solo contacto por persona y marca).
     function adopt(hit, userId) {
@@ -1319,7 +1335,11 @@ export default {
       const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
       const { rows, total } = repo.list(brandIds, { status, limit, offset });
       const stats = statsOf(rows.map(r => r.id));
-      return { broadcasts: rows.map(r => view(r, stats.get(r.id))), total };
+      return {
+        broadcasts: rows.map(r => view(r, stats.get(r.id))),
+        total,
+        brands: access.brandIds(user, 'campaigns.view').map(id => ({ id, name: repo.brand(id)?.name ?? id })),
+      };
     }
     function options(user, brandId) {
       if (!repo.brand(brandId) || !access.can(user, 'campaigns.view', brandId)) throw fail(404, 'Marca no encontrada.');

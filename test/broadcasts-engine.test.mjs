@@ -372,8 +372,18 @@ test('envío suelto: idempotente, sale una vez, su estado, y en duda nunca se re
   ).run(a.id);
   const approx = second.attribute({ waId: '521' + key.slice(2), numberId: NUMBER });
   assert.deepEqual([approx.recipient.id, approx.exact], [a.id, false]);
-  const exact = second.attribute({ waId: '000', numberId: NUMBER, payload: model.buttonPayload(a.id, 0) });
+  const exact = second.attribute({
+    waId: '521' + key.slice(2),
+    numberId: NUMBER,
+    payload: model.buttonPayload(a.id, 0),
+  });
   assert.deepEqual([exact.exact, exact.button], [true, { index: 0, label: 'Confirmo' }]);
+  // otra persona (B) que manda la carga del botón de A o cita su mensaje no queda atribuida a A
+  const keyB = db.prepare('SELECT wa_to FROM campaign_recipients WHERE id=?').get(b.id).wa_to;
+  const ref = db.prepare('SELECT provider_ref FROM campaign_recipients WHERE id=?').get(a.id).provider_ref;
+  for (const forged of [{ payload: model.buttonPayload(a.id, 0) }, { contextRef: ref }])
+    assert.equal(second.attribute({ waId: '521' + keyB.slice(2), numberId: NUMBER, ...forged }), null, 'no es suya');
+  assert.equal(second.attribute({ waId: '000', numberId: NUMBER, payload: model.buttonPayload(a.id, 0) }), null);
   assert.equal(second.attribute({ waId: '521' + key.slice(2), numberId: '999' }), null, 'otro número: no es suya');
 });
 
@@ -603,16 +613,24 @@ test('de punta a punta: 300 contactos, cada motivo de exclusión, costo, estados
   await metaText(lab.origin(), '521' + r5.wa_to.slice(2), 'wamid.in-texto', '¿Cuánto cuesta?');
   await until(() => state(r5.id).replied_at, 'la respuesta de texto se atribuye');
   assert.equal(state(r5.id).reply_kind, 'text');
+  // otra persona manda la carga del botón de rows[1]: no se le atribuye ni le suma respuesta ni clic a rows[1]
+  await metaInbound(lab.origin(), '521' + rows[0].wa_to.slice(2), 'wamid.in-falsa', {
+    type: 'button',
+    button: { text: 'Me interesa', payload: model.buttonPayload(rows[1].id, 0) },
+  });
+  await until(() => state(rows[0].id).replied_at, 'la respuesta queda en su propia difusión');
+  assert.deepEqual([state(rows[1].id).replied_at, state(rows[1].id).clicked_at], [null, null]);
+  assert.equal(state(rows[0].id).reply_kind, 'text', 'sin botón válido: aproximada, sin clic');
   assert.ok(db.prepare('SELECT 1 FROM messages WHERE client_ref=?').get('campaign:' + r5.id));
   const events = db.prepare("SELECT count(*) n FROM domain_events WHERE type='difusion.respondida'").get().n;
-  assert.equal(events, 2);
+  assert.equal(events, 3);
 
   // contadores y detalle
   const detail = (await api('/api/broadcasts/' + draft.id)).campaign;
   assert.equal(detail.status, 'completed');
   assert.deepEqual(
     [detail.stats.replied, detail.stats.clicked, detail.stats.read, detail.stats.failed, detail.stats.skipped],
-    [2, 1, 1, 1, 38],
+    [3, 1, 1, 1, 38],
   );
   const page = await api(`/api/broadcasts/${draft.id}/recipients?state=skipped&limit=50`);
   assert.equal(page.total, 38);
@@ -639,6 +657,7 @@ test('detención automática, pausa, reanudación, cancelación, tope diario, pr
   await launchNow(api, c1);
   await until(() => stateOf(db, c1.id).status === 'stopped', 'se detiene por fallos');
   assert.equal(stateOf(db, c1.id).status_reason, 'high_failure_rate');
+  await until(() => !counts(db, c1.id).sending, 'lo que estaba en vuelo termina');
   const stopped = counts(db, c1.id);
   assert.ok(stopped.failed >= 10 && stopped.queued > 0, JSON.stringify(stopped));
   lab.meta.refuse.clear();
@@ -653,7 +672,9 @@ test('detención automática, pausa, reanudación, cancelación, tope diario, pr
   await launchNow(api, c2);
   await until(() => stateOf(db, c2.id).status === 'stopped', 'se detiene por plantilla pausada');
   assert.equal(stateOf(db, c2.id).status_reason, 'template_paused');
+  await until(() => !counts(db, c2.id).sending, 'lo que estaba en vuelo termina');
   assert.deepEqual(counts(db, c2.id), { queued: 30 }, 'vuelven a la cola sin gastar el intento');
+  assert.equal(db.prepare('SELECT max(attempts) n FROM campaign_recipients WHERE campaign_id=?').get(c2.id).n, 0);
   // con la plantilla pausada en el CRM no se reanuda
   db.prepare("UPDATE wa_templates SET status='paused' WHERE id=?").run(tpl);
   fresh = (await api('/api/broadcasts/' + c2.id)).campaign;
