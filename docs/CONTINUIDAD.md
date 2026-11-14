@@ -34,7 +34,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Cuarta tanda de la construcción (rama `chore/f0-01-codificacion`, 14 nov 2026; sin publicar)
+## Cuarta tanda de la construcción (publicada en `main`, 14 nov 2026)
 
 Sin cambios visibles en producción: las dos pantallas nacen en vista previa. Cada pieza tiene su página.
 
@@ -44,6 +44,8 @@ Sin cambios visibles en producción: las dos pantallas nacen en vista previa. Ca
 - **Corrección al integrar:** una campaña dirigida a una audiencia no amplía su público si el módulo de audiencias no cargó: no entra nadie.
 - **Base de datos:** una migración con nombre más (`audiences/0001-audiences`, aditiva); identidad `41+10.f226e990`.
 - **Evidencia:** 616 pruebas (dos corridas) y 23 de navegador; `npm run check` limpio; las dos pantallas revisadas en computadora y celular con la base de demostración.
+- **Publicado y comprobado en producción (14 nov 2026, commit `39f3dc7`):** despliegue de Railway correcto (unos segundos de 502 durante el reinicio); `/api/health` devuelve `"schema":"41+10.f226e990"` y no informa módulos fallidos; `/screens/index.json` sigue vacío (pantallas ocultas); sin sesión, `/api/audiences`, `/api/whatsapp/templates`, `/api/wa-templates/files/<id>`, `/api/contacts` y `/api/crm` responden 401; el webhook de Meta sin firma responde 401; `GET //` responde 400; CI en verde (`verify` y `ui`). No se entró con ninguna cuenta: falta comprobar con sesión que las plantillas de Conectores y «Enviar plantilla» del chat se ven y funcionan igual que antes.
+- **Corrección de la revisión de seguridad (commit `65983ff`, en la rama, SIN publicar):** sincronizar con Meta y ver o adoptar lo que hay en la cuenta actúan sobre toda la cuenta de WhatsApp y sólo pedían `templates.manage` en una marca cualquiera; ahora lo piden en todas. Hoy sólo administración tiene ese permiso, así que no era alcanzable. 617 pruebas.
 - **Sin verificar contra Meta real** (lista completa en PLAN_PLANTILLAS_COMPLETAS.md): la subida de la muestra del encabezado (pide `META_APP_ID`), corregir y borrar una plantilla, la forma exacta de los avisos de plantillas, el envío con encabezado de archivo y con botones, y la paginación sobre la cuenta real.
 - **Falta:** el motor y el asistente de difusiones (D-5), que une plantillas y audiencias; salud del número (X3); identidad sin teléfono (I-2); la API de escritura. De audiencias: exportar y buscar miembros, añadir a una lista desde la lista de contactos y editar las condiciones de un segmento desde la pantalla (la API ya lo permite). De plantillas: biblioteca de muestras, uso por plantilla y traducción. El `clientRef` de crear, duplicar y subir plantillas se recuerda en memoria (vale con una sola instancia). Los respaldos `before-*` siguen sin rotarse.
 

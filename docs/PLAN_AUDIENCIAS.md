@@ -1,6 +1,6 @@
 # Audiencias: listas y segmentos para difundir (D-2)
 
-Estado: **construido en la rama de integración, sin publicar**. Migración con nombre `audiences/0001-audiences` (la escalera sigue en 41). La pantalla nace en vista previa (`SCREENS_PREVIEW=1`). Fuente: diseño de difusiones §3.3 y §4, adaptado a la conciliación técnica (filas 12, 14, 15, 16, 18 y 28), que manda.
+Estado: **publicado en `main`** (14 nov 2026). Migración con nombre `audiences/0001-audiences` (la escalera sigue en 41). La pantalla nace en vista previa (`SCREENS_PREVIEW=1`). Fuente: diseño de difusiones §3.3 y §4, adaptado a la conciliación técnica (filas 12, 14, 15, 16, 18 y 28), que manda.
 
 ## Qué es
 

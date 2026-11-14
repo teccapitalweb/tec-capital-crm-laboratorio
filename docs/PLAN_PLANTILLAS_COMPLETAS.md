@@ -1,6 +1,6 @@
 # Plantillas completas de WhatsApp (D-3)
 
-Estado: construido en la rama de integración, **sin publicar** y **sin esquema nuevo**. Continúa [PLAN_PLANTILLAS_WHATSAPP.md](PLAN_PLANTILLAS_WHATSAPP.md) (sólo cuerpo) sobre la tabla `wa_templates` que reconstruyó `broadcasts/0001-foundations` ([PLAN_CIMIENTOS_DIFUSIONES.md](PLAN_CIMIENTOS_DIFUSIONES.md)). Fuente: diseño de difusiones §6 adaptado a la conciliación técnica (filas 2, 3, 13, 28, 36, 38, 44, 45 y D-3), que manda.
+Estado: **publicado en `main`** (14 nov 2026) y **sin esquema nuevo**. Continúa [PLAN_PLANTILLAS_WHATSAPP.md](PLAN_PLANTILLAS_WHATSAPP.md) (sólo cuerpo) sobre la tabla `wa_templates` que reconstruyó `broadcasts/0001-foundations` ([PLAN_CIMIENTOS_DIFUSIONES.md](PLAN_CIMIENTOS_DIFUSIONES.md)). Fuente: diseño de difusiones §6 adaptado a la conciliación técnica (filas 2, 3, 13, 28, 36, 38, 44, 45 y D-3), que manda.
 
 ## Qué hace
 

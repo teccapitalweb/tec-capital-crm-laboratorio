@@ -97,11 +97,11 @@ npm start
 
 `npm run check` comprueba codificación (UTF-8, LF), sintaxis y formato (Prettier); antes de entregar, `npx prettier --write` sobre lo que tocaste.
 
-La referencia vigente es **605 pruebas aprobadas** más 19 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **616 pruebas aprobadas** más 23 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 
-**14 nov 2026 (noche):** la cuarta tanda (plantillas completas de WhatsApp con encabezado y botones y su adopción por lote, subida única de archivos, y audiencias: listas, segmentos y listas de exclusión) está en la rama `chore/f0-01-codificacion`, **sin publicar**; esquema `41+10.f226e990`. Planes: [PLAN_PLANTILLAS_COMPLETAS.md](docs/PLAN_PLANTILLAS_COMPLETAS.md) y [PLAN_AUDIENCIAS.md](docs/PLAN_AUDIENCIAS.md).
+**14 nov 2026 (noche):** la cuarta tanda (plantillas completas de WhatsApp con encabezado y botones y su adopción por lote, subida única de archivos, y audiencias: listas, segmentos y listas de exclusión) se **publicó** en `main` (commit `39f3dc7`; esquema `41+10.f226e990`); queda en la rama, sin publicar, una corrección de permisos de plantillas (`65983ff`). Planes: [PLAN_PLANTILLAS_COMPLETAS.md](docs/PLAN_PLANTILLAS_COMPLETAS.md) y [PLAN_AUDIENCIAS.md](docs/PLAN_AUDIENCIAS.md).
 
 **14 nov 2026 (tarde):** la tercera tanda (contrato del canal 1.1, cimientos de difusiones con motor de costos, importación de contactos por CSV y cola de trabajos) se **publicó** en `main` (commit `2383fcc`; esquema `41+9.f15ae3d9`).
 
