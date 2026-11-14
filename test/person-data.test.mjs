@@ -203,7 +203,7 @@ const SEEDS = {
     add.run('campaign-shared', c.id, 'step-shared-' + s);
     add.run('campaign-' + s, c.id, 'step-' + s);
   },
-  // Atributos: los dos tienen «ciudad» (gana la del que queda) y sólo el absorbido tiene «curso_wati» (se hereda).
+  // Atributos: los dos tienen «ciudad» (gana la del que queda) y sólo el absorbido tiene «curso_origen» (se hereda).
   contact_attribute_values: (db, c, s) => {
     const attribute = key =>
       db.prepare('SELECT id FROM contact_attributes WHERE brand_id=? AND key=?').get(c.brand, key).id;
@@ -211,7 +211,7 @@ const SEEDS = {
       "INSERT INTO contact_attribute_values(contact_id,attribute_id,brand_id,value,source,updated_at) VALUES(?,?,?,?,'staff',1)",
     );
     set.run(c.id, attribute('ciudad'), c.brand, s === 'keep' ? 'Puebla' : 'Toluca');
-    if (s === 'merged') set.run(c.id, attribute('curso_wati'), c.brand, 'Aves');
+    if (s === 'merged') set.run(c.id, attribute('curso_origen'), c.brand, 'Aves');
   },
   contact_attribute_events: (db, c, s) =>
     db
@@ -247,7 +247,7 @@ function seedWorld(db, personData) {
       tag,
       tag,
     );
-  for (const key of ['ciudad', 'curso_wati'])
+  for (const key of ['ciudad', 'curso_origen'])
     db.prepare(
       "INSERT INTO contact_attributes(id,brand_id,key,label,type,created_at,updated_at) VALUES(?,?,?,?,'text',1,1)",
     ).run(randomUUID(), brand, key, key);
@@ -314,7 +314,7 @@ test('fusión interna: mueve las filas de TODAS las tablas registradas, sin hué
       )
       .all(keep.id)
       .map(row => `${row.key}=${row.value}`),
-    ['ciudad=Puebla', 'curso_wati=Aves'],
+    ['ciudad=Puebla', 'curso_origen=Aves'],
   );
   assert.equal(db.prepare('SELECT phone FROM contacts WHERE id=?').get(keep.id).phone, '+525512345678');
   const snapshot = db

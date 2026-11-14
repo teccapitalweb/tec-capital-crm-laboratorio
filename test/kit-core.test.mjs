@@ -145,7 +145,7 @@ test('api convierte {error, code} del servidor en un ApiError con estado y códi
   const answers = [
     json(409, {
       error: 'Otra persona cambió este registro. Recarga sus datos antes de guardar.',
-      code: 'STALE_RECORD',
+      code: 'stale_record',
       contactId: 'c1',
     }),
     json(400, { error: 'Escribe el nombre.' }),
@@ -159,10 +159,12 @@ test('api convierte {error, code} del servidor en un ApiError con estado y códi
   assert.ok(stale instanceof ApiError && stale instanceof Error);
   assert.deepEqual(
     [stale.name, stale.status, stale.code, stale.message],
-    ['ApiError', 409, 'STALE_RECORD', 'Otra persona cambió este registro. Recarga sus datos antes de guardar.'],
+    ['ApiError', 409, 'stale_record', 'Otra persona cambió este registro. Recarga sus datos antes de guardar.'],
   );
   assert.equal(stale.data.contactId, 'c1', 'el cuerpo completo queda a mano');
   assert.equal(isStale(stale), true);
+  // las rutas actuales lo escriben en mayúsculas: también cuenta
+  assert.equal(isStale(new ApiError('x', { status: 409, code: 'STALE_RECORD' })), true);
 
   const invalid = await api.post('/api/contacts', {}).catch(error => error);
   assert.deepEqual(

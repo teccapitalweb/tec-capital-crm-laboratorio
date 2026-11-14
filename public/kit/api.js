@@ -22,7 +22,7 @@ export class ApiError extends Error {
     this.name = 'ApiError';
     /** Estado HTTP; 0 si la petición no llegó al servidor. */
     this.status = status;
-    /** Código estable para decidir en código: 'STALE_RECORD', 'DUPLICATE'… ('' si no hay). */
+    /** Código estable para decidir en código: 'stale_record', 'duplicate'… ('' si no hay). */
     this.code = code;
     /** El cuerpo completo de la respuesta, por si trae más datos (el registro actual, un id…). */
     this.data = data;
@@ -34,7 +34,9 @@ export class ApiError extends Error {
 export const isAbort = error => error?.name === 'AbortError';
 
 /** ¿Otra persona cambió el registro desde que se cargó? Hay que recargarlo sin tirar el borrador. */
-export const isStale = error => error instanceof ApiError && error.status === 409 && error.code === 'STALE_RECORD';
+// Las rutas actuales responden «STALE_RECORD» y los módulos nuevos «stale_record»: valen las dos.
+export const isStale = error =>
+  error instanceof ApiError && error.status === 409 && String(error.code).toLowerCase() === 'stale_record';
 
 /** Referencia única de una acción (un clic en «Guardar»). El servidor la usa para no repetir el cambio. */
 export const newClientRef = () => globalThis.crypto.randomUUID();
