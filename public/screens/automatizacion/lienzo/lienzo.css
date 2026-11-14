@@ -1,0 +1,1870 @@
+/* Lienzo de recorridos, en Niebla: superficies blancas y grises, bordes finos, composición compacta.
+ *
+ * Reglas de esta hoja:
+ *  - Los colores salen de las variables de la aplicación (--ink, --line, --accent…); aquí no se escribe ninguno.
+ *  - Ningún texto baja de 11 px, tampoco con el lienzo alejado: los rótulos crecen en la proporción en que el lienzo
+ *    se achica (--lz-min) y, por debajo del 80 %, la tarjeta pasa a modo compacto.
+ *  - El movimiento se limita a la respuesta al cursor (160 ms en color, borde y sombra). Arrastrar es manipulación
+ *    directa y «Acomodar» recoloca de golpe.
+ *  - En pantalla angosta o táctil, los controles miden 40 px; donde la tarjeta es más pequeña, el área se amplía
+ *    con un pseudo-elemento.
+ *  - El ancho que decide la composición es el del contenedor ([data-layout]), no el de la ventana.
+ */
+
+.lz {
+  /* Niebla no tiene variable para el blanco de tarjetas y paneles: se nombra una vez aquí. */
+  --lz-surface: white;
+  /* Conexiones: entre el acento y su línea, para que se distingan sobre el fondo sin competir con las tarjetas. */
+  --lz-edge: color-mix(in srgb, var(--accent) 70%, var(--accent-line));
+  --lz-radius: 14px;
+  --lz-zoom: 1;
+  --lz-inv: 1;
+  /* Medidas de la tarjeta: las pone view.js desde el modelo, que es quien calcula conexiones y acomodo. */
+  --lz-node-w: 240px;
+  --lz-head: 44px;
+  --lz-body: 40px;
+  --lz-note-body: 96px;
+  --lz-port: 32px;
+
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  height: 100%;
+  min-height: 480px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.lz *,
+.lz *::before,
+.lz *::after {
+  box-sizing: border-box;
+}
+
+.lz [hidden] {
+  display: none;
+}
+
+:where(.lz) :is(h2, h3, p, ul, ol, dl, dd, fieldset, legend) {
+  margin: 0;
+  padding: 0;
+}
+
+:where(.lz) button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.lz :is(button, select, input, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.lz-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
+.lz-ico {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Cada grupo de pasos se distingue por una marca lateral y el color de su icono, nunca por tarjetas de color. */
+.lz [data-group='mensajes'] {
+  --lz-g: var(--accent);
+  --lz-g-soft: var(--accent-soft);
+}
+.lz [data-group='catalogo'] {
+  --lz-g: var(--ok);
+  --lz-g-soft: var(--ok-soft);
+}
+.lz [data-group='logica'] {
+  --lz-g: var(--text-2);
+  --lz-g-soft: var(--soft);
+}
+.lz [data-group='contacto'] {
+  --lz-g: var(--accent-strong);
+  --lz-g-soft: var(--accent-tint);
+}
+.lz [data-group='atencion'] {
+  --lz-g: var(--warn);
+  --lz-g-soft: var(--warn-soft);
+}
+.lz [data-group='integraciones'] {
+  --lz-g: var(--ink);
+  --lz-g-soft: var(--soft);
+}
+
+.lz-pill {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--lz-g-soft, var(--soft));
+  color: var(--lz-g, var(--text-2));
+}
+
+.lz-hint {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.lz-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+/* ---- Barra de herramientas ---------------------------------------------------------------------------------------- */
+
+.lz-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--lz-surface);
+}
+
+.lz-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--lz-surface);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color 0.16s var(--ease),
+    border-color 0.16s var(--ease),
+    color 0.16s var(--ease);
+}
+
+.lz-tool:hover {
+  border-color: var(--accent-line);
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.lz-tool[aria-pressed='true'] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.lz-tool[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lz-tool-icon {
+  width: 34px;
+  padding: 0;
+}
+
+.lz-primary,
+.lz-primary:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--lz-surface);
+}
+
+.lz-primary:hover {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+}
+
+.lz-seg {
+  display: inline-flex;
+}
+
+.lz-seg .lz-tool {
+  border-radius: 10px 0 0 10px;
+}
+
+.lz-seg .lz-tool + .lz-tool {
+  margin-left: -1px;
+  border-radius: 0 10px 10px 0;
+}
+
+.lz-seg .lz-tool[aria-pressed='true'] {
+  position: relative;
+}
+
+.lz-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lz-zoom-n {
+  min-width: 46px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.lz-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--line);
+}
+
+.lz-grow {
+  flex: 1 1 auto;
+}
+
+.lz-chip[data-level='error'] {
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.lz-chip[data-level='warn'] {
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.lz-chip[data-level='ok'] {
+  border-color: var(--ok-line);
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+/* Ancho reservado: que aparezca «Sin guardar» no debe empujar los botones a otro renglón. */
+.lz-state {
+  min-width: 74px;
+  color: var(--text-3);
+  font-size: 12px;
+  text-align: right;
+}
+
+.lz-state[data-level='warn'] {
+  color: var(--warn);
+}
+
+.lz-state[data-level='error'] {
+  color: var(--bad);
+}
+
+.lz:not([data-layout='narrow']) .lz-narrow-only {
+  display: none;
+}
+
+.lz[data-pane='outline'] .lz-canvas-only {
+  display: none;
+}
+
+/* ---- Cuerpo: paleta, vista y panel --------------------------------------------------------------------------------- */
+
+.lz-body {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 340px;
+  min-height: 0;
+}
+
+/* Cada pieza tiene su columna fija: al ocultarse la paleta (sólo lectura) las demás no se recorren. */
+.lz-palette {
+  grid-column: 1;
+  width: 208px;
+  min-height: 0;
+  padding: 12px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: var(--lz-surface);
+}
+
+.lz[data-readonly='true'] .lz-palette {
+  display: none;
+}
+
+.lz-palette-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lz-palette-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lz-palette-group h3 {
+  margin: 14px 0 6px;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lz-palette-group ul {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+}
+
+.lz-pal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: grab;
+  transition:
+    background-color 0.16s var(--ease),
+    border-color 0.16s var(--ease),
+    color 0.16s var(--ease);
+}
+
+.lz-pal:hover {
+  border-color: var(--line);
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.lz-pal .lz-pill {
+  width: 26px;
+  height: 26px;
+}
+
+.lz-ghost {
+  position: fixed;
+  z-index: 8;
+  padding: 8px 12px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--accent-line);
+  border-radius: 10px;
+  background: var(--lz-surface);
+  box-shadow: var(--shadow-lift);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.lz-stage {
+  position: relative;
+  grid-column: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lz-side {
+  display: grid;
+  grid-column: 3;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  background: var(--lz-surface);
+}
+
+.lz-side-pane {
+  min-height: 0;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+/* ---- Lienzo -------------------------------------------------------------------------------------------------------- */
+
+.lz-canvas {
+  /* Tamaño de letra que en pantalla mide 11 px con el acercamiento actual. Se declara aquí, donde view.js pone
+     --lz-inv: una variable calculada se resuelve en el elemento que la declara, no en quien la hereda. */
+  --lz-min: calc(11px * var(--lz-inv));
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--line) 1.2px, transparent 1.7px);
+  background-position: var(--lz-x, 0) var(--lz-y, 0);
+  background-size: calc(20px * var(--lz-zoom)) calc(20px * var(--lz-zoom));
+  cursor: grab;
+  /* Los gestos son del lienzo: sin esto el navegador desplazaría la página en lugar de mover el recorrido. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.lz-canvas:focus-visible {
+  outline-offset: -2px;
+}
+
+.lz-canvas[data-dragging='true'],
+.lz-canvas[data-dragging='true'] .lz-node {
+  cursor: grabbing;
+}
+
+.lz-world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+
+.lz-edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.lz-edge {
+  cursor: pointer;
+}
+
+.lz-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 16px;
+  pointer-events: stroke;
+}
+
+.lz-edge-line {
+  fill: none;
+  stroke: var(--lz-edge);
+  stroke-width: 1.5px;
+  pointer-events: none;
+  transition: stroke 0.16s var(--ease);
+}
+
+.lz-edge-head {
+  fill: var(--lz-edge);
+  stroke: none;
+  pointer-events: none;
+  transition: fill 0.16s var(--ease);
+}
+
+.lz-edge:hover .lz-edge-line,
+.lz-edge[data-selected='true'] .lz-edge-line {
+  stroke: var(--accent-strong);
+}
+
+.lz-edge:hover .lz-edge-head,
+.lz-edge[data-selected='true'] .lz-edge-head {
+  fill: var(--accent-strong);
+}
+
+.lz-edge[data-selected='true'] .lz-edge-line {
+  stroke-width: 2.5px;
+}
+
+.lz-edge-draft {
+  fill: none;
+  stroke: var(--accent);
+  stroke-dasharray: 6 5;
+  stroke-width: 2px;
+  pointer-events: none;
+}
+
+.lz-nodes,
+.lz-tools {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.lz-node {
+  position: absolute;
+  width: var(--lz-node-w);
+  border: 1px solid var(--line);
+  border-radius: var(--lz-radius);
+  background: var(--lz-surface);
+  box-shadow: var(--shadow-card);
+  cursor: grab;
+  transition:
+    border-color 0.16s var(--ease),
+    box-shadow 0.16s var(--ease);
+}
+
+.lz-node::before {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: -1px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--lz-g, var(--text-3));
+  content: '';
+}
+
+.lz-node:hover {
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow-lift);
+}
+
+.lz-node[data-level='error'] {
+  border-color: var(--bad-line);
+}
+
+.lz-node[data-selected='true'] {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-lift);
+}
+
+.lz-node[data-selected='true'] .lz-node-head {
+  background: var(--accent-soft);
+}
+
+.lz-node[data-drop='true'] {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 3px var(--accent-soft),
+    var(--shadow-lift);
+}
+
+/* El paso en el que va la prueba, y los que ya recorrió. */
+.lz-node[data-sim='seen'] {
+  border-color: var(--ok-line);
+}
+
+.lz-node[data-sim='now'] {
+  border-color: var(--ok);
+  box-shadow:
+    0 0 0 3px var(--ok-line),
+    var(--shadow-lift);
+}
+
+.lz-node-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--lz-head);
+  padding: 0 8px 0 12px;
+  border-radius: 13px 13px 0 0;
+  transition: background-color 0.16s var(--ease);
+}
+
+.lz-node-names {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.lz-node-title {
+  overflow: hidden;
+  font-size: max(13px, var(--lz-min, 11px));
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lz-node-kind {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: max(11px, var(--lz-min, 11px));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lz-node-sum {
+  display: -webkit-box;
+  height: var(--lz-body);
+  padding: 1px 12px 0;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: max(12px, var(--lz-min, 11px));
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Una nota no es un paso: se ve como una nota. */
+.lz-node[data-type='note'] {
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+}
+
+.lz-node[data-type='note'] .lz-node-sum {
+  height: var(--lz-note-body);
+  color: var(--ink);
+  -webkit-line-clamp: 5;
+}
+
+.lz-node[data-type='note'][data-selected='true'] .lz-node-head {
+  background: none;
+}
+
+.lz-ports {
+  list-style: none;
+}
+
+.lz-port {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  height: var(--lz-port);
+  padding: 0 16px 0 12px;
+  border-top: 1px solid var(--line);
+  color: var(--text-2);
+  font-size: max(12px, var(--lz-min, 11px));
+}
+
+.lz-port-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lz-port-count {
+  flex: none;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* Punto del que sale una conexión. El área para tomarlo con el dedo es de 40 px aunque el punto mida 13. */
+.lz-handle {
+  position: absolute;
+  top: 50%;
+  right: -7px;
+  width: 13px;
+  height: 13px;
+  margin-top: -6.5px;
+  border: 2px solid var(--lz-edge);
+  border-radius: 50%;
+  background: var(--lz-surface);
+  cursor: crosshair;
+  transition:
+    background-color 0.16s var(--ease),
+    border-color 0.16s var(--ease);
+}
+
+.lz-handle::after {
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  content: '';
+}
+
+.lz-port[data-linked='true'] .lz-handle {
+  background: var(--lz-edge);
+}
+
+.lz-port:hover .lz-handle {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.lz[data-readonly='true'] .lz-handle {
+  cursor: default;
+}
+
+/* Punto al que llegan las conexiones. Sólo se ve mientras se tiende una: el resto del tiempo basta la punta de flecha. */
+.lz-in {
+  position: absolute;
+  top: calc(var(--lz-head) / 2 - 6px);
+  left: -7px;
+  display: none;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--lz-surface);
+}
+
+.lz-canvas[data-connecting='true'] .lz-in {
+  display: block;
+}
+
+.lz-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: max(11px, var(--lz-min, 11px));
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lz-badge .lz-ico {
+  width: 12px;
+  height: 12px;
+}
+
+.lz-badge[data-level='error'] {
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.lz-badge[data-level='warn'] {
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.lz-node-x {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  color: var(--text-3);
+  opacity: 0;
+  transition:
+    background-color 0.16s var(--ease),
+    color 0.16s var(--ease),
+    opacity 0.16s var(--ease);
+}
+
+.lz-node-x::after,
+.lz-edge-x::after {
+  position: absolute;
+  inset: -7px;
+  content: '';
+}
+
+.lz-node:hover .lz-node-x,
+.lz-node:focus-within .lz-node-x,
+.lz-node[data-selected='true'] .lz-node-x {
+  opacity: 1;
+}
+
+.lz-node-x:hover {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+/* Capa de rendimiento: las cifras del paso, sobre su tarjeta. */
+.lz-node-stats {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--lz-surface);
+  color: var(--text-2);
+  font-size: max(11px, var(--lz-min, 11px));
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.lz-node-stats span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lz-node-stats .lz-ico {
+  width: 12px;
+  height: 12px;
+}
+
+/* Modo compacto (menos del 80 %): icono y título, con el rótulo agrandado para que en pantalla mida 11 px. */
+.lz-canvas[data-compact='true'] .lz-node-sum,
+.lz-canvas[data-compact='true'] .lz-node-kind,
+.lz-canvas[data-compact='true'] .lz-port-label,
+.lz-canvas[data-compact='true'] .lz-port-count,
+.lz-canvas[data-compact='true'] .lz-node-stats,
+.lz-canvas[data-compact='true'] .lz-node-x {
+  display: none;
+}
+
+.lz-canvas[data-compact='true'] .lz-node-head {
+  height: calc(var(--lz-head) + var(--lz-body));
+}
+
+.lz-canvas[data-compact='true'] .lz-node-title {
+  display: -webkit-box;
+  line-height: 1.15;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.lz-compact-only,
+.lz-canvas[data-compact='true'] .lz-node-title.lz-full-only {
+  display: none;
+}
+
+.lz-canvas[data-compact='true'] .lz-node-title.lz-compact-only {
+  display: -webkit-box;
+}
+
+.lz-canvas[data-compact='true'] .lz-pill {
+  width: calc(20px * var(--lz-inv));
+  height: calc(20px * var(--lz-inv));
+}
+
+.lz-canvas[data-compact='true'] .lz-pill .lz-ico {
+  width: calc(12px * var(--lz-inv));
+  height: calc(12px * var(--lz-inv));
+}
+
+.lz-marquee {
+  position: absolute;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  pointer-events: none;
+}
+
+.lz-edge-x {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border: 1px solid var(--bad-line);
+  border-radius: 50%;
+  background: var(--lz-surface);
+  box-shadow: var(--shadow-card);
+  color: var(--bad);
+}
+
+.lz-edge-x:hover {
+  background: var(--bad-soft);
+}
+
+.lz-minimap {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 184px;
+  height: 116px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--lz-surface) 90%, transparent);
+  box-shadow: var(--shadow-card);
+}
+
+.lz-mini {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.lz-mini-node {
+  fill: var(--lz-g, var(--text-3));
+  opacity: 0.5;
+}
+
+.lz-mini-node[data-selected='true'] {
+  fill: var(--accent);
+  opacity: 1;
+}
+
+.lz-mini-view {
+  fill: color-mix(in srgb, var(--accent) 12%, transparent);
+  stroke: var(--accent);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.lz-tip {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  max-width: calc(100% - 230px);
+  padding: 4px 10px;
+  overflow: hidden;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--lz-surface) 88%, transparent);
+  color: var(--text-2);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.lz[data-pane='outline'] .lz-tip {
+  display: none;
+}
+
+/* ---- Esquema ------------------------------------------------------------------------------------------------------- */
+
+.lz-outline {
+  position: absolute;
+  inset: 0;
+  padding: 12px 16px 28px;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.lz-outline-list {
+  display: grid;
+  gap: 8px;
+  max-width: 760px;
+  margin: 0 auto;
+  list-style: none;
+}
+
+.lz-outline-title {
+  max-width: 760px;
+  margin: 18px auto 8px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lz-row {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--lz-radius);
+  background: var(--lz-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.lz-row::before {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  width: 3px;
+  height: 28px;
+  border-radius: 0 3px 3px 0;
+  background: var(--lz-g, var(--text-3));
+  content: '';
+}
+
+.lz-row[data-sim='seen'] {
+  border-color: var(--ok-line);
+}
+
+.lz-row[data-sim='now'] {
+  border-color: var(--ok);
+}
+
+.lz-row-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px 8px 14px;
+  text-align: left;
+  transition: background-color 0.16s var(--ease);
+}
+
+.lz-row-main:hover {
+  background: var(--soft);
+}
+
+.lz-row-main[aria-current='true'] {
+  background: var(--accent-soft);
+}
+
+.lz-row-main:focus-visible {
+  outline-offset: -2px;
+}
+
+.lz-row-n {
+  flex: none;
+  min-width: 20px;
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+.lz-row-text {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+}
+
+.lz-row-name {
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.lz-row-kind {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.lz-row-sum {
+  color: var(--text-2);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.lz-row-outs {
+  display: grid;
+  padding: 2px 12px 6px 46px;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.lz-out {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+/* La salida, una flecha y a dónde lleva, en un renglón: el nombre de la salida cede sitio si no cabe. */
+.lz-out-label {
+  flex: 0 1 auto;
+  min-width: 64px;
+  max-width: 42%;
+  overflow-wrap: anywhere;
+}
+
+.lz-out-pick {
+  flex: 1 1 140px;
+  width: auto;
+  font-size: 12px;
+}
+
+.lz-out > .lz-ico {
+  width: 14px;
+  height: 14px;
+  color: var(--text-3);
+}
+
+.lz-out-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.lz-out-count {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.lz-out-text {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.lz-row-end,
+.lz-row-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 8px 46px;
+  border-top: 1px solid var(--line);
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lz-side-pane .lz-row-end {
+  padding: 8px 0 0;
+  border-top: 0;
+}
+
+/* ---- Panel --------------------------------------------------------------------------------------------------------- */
+
+.lz-panel-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.lz-panel-names {
+  flex: 1;
+  min-width: 0;
+}
+
+.lz-panel-title {
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.lz-fs {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border: 0;
+}
+
+.lz-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lz-field > label,
+.lz-group > legend,
+.lz-list > legend {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lz :where(input:not([type='checkbox']), select, textarea) {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--lz-surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.lz :where(textarea) {
+  min-height: 76px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.lz :where(input, select, textarea)[aria-invalid='true'] {
+  border-color: var(--bad);
+}
+
+.lz :where(input, select, textarea):disabled {
+  background: var(--soft);
+  color: var(--text-2);
+}
+
+.lz-control {
+  position: relative;
+}
+
+.lz-control input {
+  padding-right: 58px;
+}
+
+.lz-control .lz-count {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+}
+
+.lz-count {
+  color: var(--text-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lz-under {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lz-token {
+  width: auto;
+  max-width: 72%;
+  min-height: 32px;
+  padding: 3px 8px;
+  color: var(--accent-strong);
+  font-size: 12px;
+}
+
+.lz-err {
+  color: var(--bad);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* El aviso no depende sólo del color: lleva la palabra. */
+.lz-err::before {
+  font-weight: 700;
+  content: 'Revisa: ';
+}
+
+.lz-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 32px;
+  padding-top: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.lz-check input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.lz-group,
+.lz-list {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.lz-group > legend,
+.lz-list > legend {
+  padding: 0 4px;
+}
+
+.lz-item {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--accent-tint);
+}
+
+.lz-item .lz-item {
+  background: var(--lz-surface);
+}
+
+.lz-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.lz-item-tools {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.lz-icon-btn {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--text-3);
+  transition:
+    background-color 0.16s var(--ease),
+    color 0.16s var(--ease);
+}
+
+.lz-icon-btn:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.lz-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.lz-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--lz-surface);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  transition:
+    background-color 0.16s var(--ease),
+    border-color 0.16s var(--ease),
+    color 0.16s var(--ease);
+}
+
+.lz-btn:hover {
+  border-color: var(--accent-line);
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.lz-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lz-add {
+  justify-self: start;
+  border-style: dashed;
+}
+
+.lz-danger:hover {
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.lz-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lz-link {
+  display: inline;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.lz-issues {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  list-style: none;
+}
+
+.lz-issues li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.lz-issues li > .lz-ico {
+  margin-top: 1px;
+}
+
+.lz-issues li[data-level='error'] {
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.lz-issues li[data-level='warn'] {
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.lz-issues .lz-link {
+  display: block;
+  margin-top: 2px;
+  color: inherit;
+}
+
+.lz-ok {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ok-line);
+  border-radius: 10px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 12px;
+}
+
+.lz-section {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.lz-section h3 {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lz-vars {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+}
+
+.lz-vars li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.lz-vars .lz-hint {
+  flex: 1;
+}
+
+.lz-keys {
+  margin-top: 18px;
+  font-size: 12px;
+}
+
+.lz-keys summary {
+  min-height: 32px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lz-keys dl {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.lz-keys dl > div {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.lz-keys dt {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.lz-keys dd {
+  color: var(--text-2);
+}
+
+/* ---- Probar -------------------------------------------------------------------------------------------------------- */
+
+.lz-sim-setup {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.lz-sim-setup .lz-btn {
+  justify-self: start;
+}
+
+.lz-banner {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--warn-line);
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.lz-banner .lz-link {
+  color: inherit;
+}
+
+.lz-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 200px;
+  max-height: 46vh;
+  padding: 12px 10px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+}
+
+.lz-bubble {
+  display: grid;
+  gap: 4px;
+  max-width: 88%;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.lz-bubble[data-who='out'] {
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+  background: var(--lz-surface);
+}
+
+.lz-bubble[data-who='in'] {
+  align-self: flex-end;
+  border-color: var(--accent-line);
+  border-bottom-right-radius: 4px;
+  background: var(--accent-soft);
+}
+
+.lz-bubble-text {
+  white-space: pre-wrap;
+}
+
+.lz-bubble-tag {
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.lz-bubble-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 10px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lz-bubble-head {
+  font-weight: 700;
+}
+
+.lz-bubble-foot {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.lz-bubble-opts {
+  display: grid;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.lz-bubble-opt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--accent-line);
+  border-radius: 10px;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.lz-chat-note {
+  display: flex;
+  align-items: flex-start;
+  align-self: center;
+  gap: 6px;
+  max-width: 94%;
+  padding: 5px 9px;
+  border-radius: 9px;
+  background: var(--soft);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.lz-chat-note .lz-ico {
+  width: 13px;
+  height: 13px;
+  margin-top: 2px;
+}
+
+.lz-sim-controls {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.lz-sim-options {
+  display: grid;
+  gap: 6px;
+}
+
+.lz-sim-option {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: 12px;
+  background: var(--lz-surface);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background-color 0.16s var(--ease);
+}
+
+.lz-sim-option:hover {
+  background: var(--accent-tint);
+}
+
+.lz-sim-form {
+  display: flex;
+  gap: 6px;
+}
+
+.lz-sim-form input {
+  flex: 1;
+}
+
+.lz-sim-form .lz-btn {
+  flex: none;
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+}
+
+.lz-sim-controls > .lz-link {
+  justify-self: start;
+  min-height: 32px;
+}
+
+.lz-sim-end {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--soft);
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+/* ---- Avisos -------------------------------------------------------------------------------------------------------- */
+
+.lz-flash {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  z-index: 9;
+  max-width: min(92%, 520px);
+  padding: 10px 14px;
+  transform: translateX(-50%);
+  border-radius: 12px;
+  background: var(--ink);
+  box-shadow: var(--shadow-lift);
+  color: var(--lz-surface);
+  font-size: 13px;
+}
+
+/* ---- Angosto: una sola columna; la paleta y el panel son hojas que cubren la vista ----------------------------------- */
+
+.lz[data-layout='narrow'] .lz-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.lz[data-layout='narrow'] .lz-stage {
+  grid-column: 1;
+}
+
+.lz[data-layout='narrow'] .lz-palette,
+.lz[data-layout='narrow'] .lz-side {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: none;
+  width: auto;
+  border: 0;
+}
+
+.lz[data-layout='narrow'][data-sheet='paleta'] .lz-palette {
+  display: block;
+}
+
+.lz[data-layout='narrow'][data-sheet='panel'] .lz-side {
+  display: grid;
+}
+
+.lz[data-layout='narrow'] .lz-wide-only,
+.lz[data-layout='narrow'] .lz-sep,
+.lz[data-layout='narrow'] .lz-zoom-n,
+.lz[data-layout='narrow'] .lz-minimap {
+  display: none;
+}
+
+.lz[data-layout='narrow'] .lz-narrow-only {
+  display: inline-flex;
+}
+
+.lz[data-layout='narrow'] .lz-icon-btn.lz-narrow-only {
+  display: inline-grid;
+}
+
+.lz[data-layout='narrow'] .lz-bar {
+  padding: 8px;
+}
+
+/* En angosto la barra se aprieta para caber en dos renglones: sin separador flexible, sin ancho reservado para el
+   estado y, si no hay problemas, la pastilla queda en su icono (el texto sigue para el lector de pantalla). */
+.lz[data-layout='narrow'] .lz-grow {
+  display: none;
+}
+
+.lz[data-layout='narrow'] .lz-state {
+  min-width: 0;
+}
+
+.lz[data-layout='narrow'] .lz-chip[data-level='ok'] {
+  position: relative;
+  width: 40px;
+  padding: 0;
+}
+
+.lz[data-layout='narrow'] .lz-chip[data-level='ok'] span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.lz[data-layout='narrow'][data-pane='outline'] [data-k='acomodar'] {
+  display: none;
+}
+
+/* Cuando la barra no cabe en un renglón, estos botones quedan sólo con su icono: el texto sigue ahí para el lector de
+   pantalla y como título al pasar el cursor. */
+.lz[data-bar='tight'] :is([data-k='acomodar'], [data-k='ajustar'], [data-k='rendimiento'], [data-k='probar']) span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.lz[data-bar='tight'] :is([data-k='acomodar'], [data-k='ajustar'], [data-k='rendimiento'], [data-k='probar']) {
+  position: relative;
+  width: 34px;
+  padding: 0;
+}
+
+.lz[data-layout='narrow'] :is([data-k='acomodar'], [data-k='ajustar'], [data-k='rendimiento'], [data-k='probar']) {
+  width: 40px;
+}
+
+.lz[data-layout='narrow'] .lz-outline {
+  padding: 10px 10px 24px;
+}
+
+.lz[data-layout='narrow'] .lz-row-outs,
+.lz[data-layout='narrow'] .lz-row-end,
+.lz[data-layout='narrow'] .lz-row-stats {
+  padding-left: 14px;
+}
+
+/* Controles de 40 px en pantalla angosta y en cualquier pantalla táctil. */
+.lz[data-layout='narrow'] :is(.lz-tool, .lz-btn, .lz-pal, .lz-sim-option),
+.lz[data-layout='narrow'] :where(input:not([type='checkbox']), select) {
+  min-height: 40px;
+}
+
+.lz[data-layout='narrow'] .lz-tool-icon {
+  width: 40px;
+}
+
+.lz[data-layout='narrow'] .lz-icon-btn {
+  width: 40px;
+  height: 40px;
+}
+
+.lz[data-layout='narrow'] .lz-check {
+  min-height: 40px;
+  padding-top: 10px;
+}
+
+@media (pointer: coarse) {
+  .lz :is(.lz-tool, .lz-btn, .lz-pal, .lz-sim-option),
+  .lz :where(input:not([type='checkbox']), select) {
+    min-height: 40px;
+  }
+
+  .lz .lz-tool-icon {
+    width: 40px;
+  }
+
+  .lz .lz-icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .lz .lz-check {
+    min-height: 40px;
+    padding-top: 10px;
+  }
+
+  .lz-node-x {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lz *,
+  .lz *::before,
+  .lz *::after {
+    transition: none;
+  }
+}

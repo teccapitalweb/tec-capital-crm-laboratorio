@@ -1,0 +1,34 @@
+{
+  "celular:contacts": {
+    "contrastFailures": 0,
+    "smallTargets": 3
+  },
+  "celular:courses": {
+    "contrastFailures": 0,
+    "smallTargets": 4
+  },
+  "celular:day": {
+    "contrastFailures": 0,
+    "smallTargets": 3
+  },
+  "celular:inbox-chat": {
+    "contrastFailures": 0,
+    "smallTargets": 2
+  },
+  "escritorio:contacts": {
+    "contrastFailures": 0,
+    "smallTargets": 8
+  },
+  "escritorio:courses": {
+    "contrastFailures": 0,
+    "smallTargets": 23
+  },
+  "escritorio:day": {
+    "contrastFailures": 0,
+    "smallTargets": 2
+  },
+  "escritorio:inbox-chat": {
+    "contrastFailures": 1,
+    "smallTargets": 25
+  }
+}

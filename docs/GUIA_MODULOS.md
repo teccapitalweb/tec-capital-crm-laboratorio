@@ -133,7 +133,7 @@ public/screens/<id>/screen.css        opcional
 - **`visibility`**: `"preview"` (por omisión) sólo aparece con `SCREENS_PREVIEW=1`, que se usa al desarrollar y en las pruebas; `"live"` aparece siempre. Una pantalla puede estar en `main` sin verse en producción hasta que se decide publicarla.
 - `nav` es opcional (sin él la pantalla no sale en el menú); `permission` es opcional (clave del catálogo de permisos, además de `roles`). La lista no es un secreto: el permiso real lo impone cada API.
 - Una carpeta sin `screen.json` todavía no es una pantalla y se ignora.
-- El contrato de `index.js` (`mount(root, ctx)`, `onEvent`), el kit (`public/kit/`), las variables de diseño (`public/tokens.css`) y las reglas de Niebla para lo nuevo están en [GUIA_PANTALLAS.md](GUIA_PANTALLAS.md) y [DISENO_Y_AUDITORIA.md](DISENO_Y_AUDITORIA.md).
+- El contrato de `index.js` (`mount(root, ctx)`, `onEvent`), el kit (`public/kit/`) y las variables de diseño (`public/tokens.css`) llegan con la entrega del kit, que traerá su propia guía de pantallas (`docs/GUIA_PANTALLAS.md`; todavía sin publicar). Las reglas de Niebla que toda pantalla debe cumplir están en [DISENO_Y_AUDITORIA.md](DISENO_Y_AUDITORIA.md).
 
 Los archivos estáticos se sirven por carpeta: cualquier archivo de `public/` con ruta en minúsculas y extensión `.js`, `.css`, `.svg`, `.png`, `.webmanifest`, `.json` o `.woff2`, salvo `flyers/` (se sirven con sesión) y la portada por su nombre. Llevan `Cache-Control: no-cache` y `ETag`: el navegador pregunta siempre y, tras un despliegue, la primera carga ya trae el código nuevo.
 
@@ -142,8 +142,9 @@ Los archivos estáticos se sirven por carpeta: cualquier archivo de `public/` co
 ```sh
 npm run check     # codificación, sintaxis y formato (Prettier)
 npm test
+npm run test:ui   # pruebas de humo en un navegador real, en computadora y en celular
 ```
 
 - Archivos en UTF-8, finales de línea LF, formato de Prettier (`npx prettier --write <archivos>`).
-- Cada módulo, pantalla y migración llega con sus pruebas. Una pantalla se revisa además en computadora y en celular.
+- Cada módulo, pantalla y migración llega con sus pruebas. Una pantalla trae su `test/ui/<pantalla>.spec.mjs`, que la monta en los dos tamaños (proyectos `escritorio` y `celular`), comprueba que no deja errores con `watch(page)` y llama a `expectNiebla(page, nombre, testInfo)` (letra de 11 px o más, contraste, áreas táctiles de 40 px y sin desborde; una pantalla nueva no tiene línea base: su límite es cero). Ayudantes en `test/ui/helpers.mjs`.
 - No se suben secretos, datos de clientes, copias de la base ni adjuntos. El repositorio es público.
