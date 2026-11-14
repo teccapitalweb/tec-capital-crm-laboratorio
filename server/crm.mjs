@@ -2,6 +2,7 @@ import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { createFollowup } from './followup.mjs';
 import { defaultEditionId } from './catalogue-schema.mjs';
+import { phoneKey } from './lib/identity-keys.mjs';
 
 const tokenHash = value => createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -358,11 +359,12 @@ export function createCRM({ db, body, json, audit, passwordHash, checkPassword, 
       const name = text(input.name, 100);
       if (name.length < 2) throw fail(400, 'Escribe el nombre del contacto.');
       const id = randomUUID(),
-        now = Date.now();
+        now = Date.now(),
+        phone = text(input.phone, 40); // se guarda como se escribió; `phone_key` es la clave con la que se compara
       transaction(db, () => {
         db.prepare(
-          'INSERT INTO contacts(id,brand_id,name,phone,email,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',
-        ).run(id, input.brandId, name, text(input.phone, 40), text(input.email, 150), now, now);
+          'INSERT INTO contacts(id,brand_id,name,phone,phone_key,email,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
+        ).run(id, input.brandId, name, phone, phoneKey(phone) ?? '', text(input.email, 150), now, now);
         contactHook(db.prepare('SELECT * FROM contacts WHERE id=?').get(id));
       });
       audit(user, 'contact.created', id);
@@ -386,13 +388,15 @@ export function createCRM({ db, body, json, audit, passwordHash, checkPassword, 
       }
       if (req.method === 'PATCH') {
         const input = await body(req),
-          name = text(input.name, 100);
+          name = text(input.name, 100),
+          phone = text(input.phone, 40);
         requireBrand(user, c.brand_id);
         if (name.length < 2) throw fail(400, 'Escribe el nombre del contacto.');
         transaction(db, () => {
-          db.prepare('UPDATE contacts SET name=?,phone=?,email=?,updated_at=? WHERE id=?').run(
+          db.prepare('UPDATE contacts SET name=?,phone=?,phone_key=?,email=?,updated_at=? WHERE id=?').run(
             name,
-            text(input.phone, 40),
+            phone,
+            phoneKey(phone) ?? '',
             text(input.email, 150),
             Date.now(),
             c.id,
