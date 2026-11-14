@@ -185,30 +185,40 @@ test('salud del número: manda channel-health si está cargado; si no, el tope c
   assert.deepEqual(none.check('109', 'marketing', BRAND), {
     ok: true,
     reason: null,
+    detail: null,
     limit: 250,
     used: 240,
     remaining: 10,
     source: 'fallback',
   });
   const calls = [];
+  let verdict = { ok: false, reason: 'quality_low' };
   const double = {
-    canSend: (ref, category) => (
-      calls.push([ref, category]),
-      category === 'marketing' ? { ok: false, reason: 'quality_low' } : { ok: true }
-    ),
+    canSend: (ref, category) => (calls.push([ref, category]), category === 'marketing' ? verdict : { ok: true }),
     limitsOf: () => ({ limit: 1000, used: 10, remaining: 990 }),
   };
   const withHealth = createSendGate({ health: () => double, ...fallback });
   assert.deepEqual(withHealth.check('109', 'marketing', BRAND), {
     ok: false,
     reason: 'quality_low',
+    detail: 'quality_low',
     limit: 1000,
-    used: 10,
-    remaining: 990,
+    used: 240,
+    remaining: 760,
     source: 'channel-health',
   });
+  assert.deepEqual(calls[0], ['wa:109', 'marketing'], 'accountRef = wa:<número>');
   assert.equal(withHealth.check('109', 'utility', BRAND).ok, true);
-  assert.deepEqual(calls[0], ['109', 'marketing']);
+  // llegar al límite no detiene: espera (remaining 0); otro «no» sí, con su motivo
+  verdict = { ok: false, reason: 'limit_reached' };
+  assert.deepEqual(
+    [withHealth.check('109', 'marketing', BRAND).ok, withHealth.check('109', 'marketing', BRAND).remaining],
+    [true, 0],
+  );
+  verdict = { ok: false, reason: 'number_disabled' };
+  assert.equal(withHealth.check('109', 'marketing', BRAND).reason, 'number_paused');
+  verdict = { ok: false, reason: 'account_restricted' };
+  assert.equal(withHealth.check('109', 'marketing', BRAND).reason, 'number_restricted');
   // un módulo que falla no detiene el envío a ciegas: cae al tope conservador
   const broken = createSendGate({
     health: () => ({
@@ -407,7 +417,17 @@ async function setup(lab, { dailyCap = 5000 } = {}) {
     method: 'PATCH',
     body: { quietStart: '00:00', quietEnd: '00:00', dailyCap, expectedRevision: s.revision },
   });
+  // con WhatsApp real, el límite diario lo da la salud del número (channel-health): un nivel de Meta de 10,000
+  if (lab.db) setMetaLimit(lab.db, 'TIER_10K', null);
   return api;
+}
+// Nivel de mensajería de la cuenta (lo que Meta informa) y, si hace falta, un límite exacto.
+function setMetaLimit(db, tier, value) {
+  const t = Date.now();
+  db.prepare(
+    "INSERT INTO wa_account(waba_id,created_at,updated_at) VALUES('local',?,?) ON CONFLICT(waba_id) DO NOTHING",
+  ).run(t, t);
+  db.prepare('UPDATE wa_account SET messaging_limit=?,limit_value=?,limit_source=?').run(tier, value, 'meta');
 }
 const createBroadcast = (api, body) =>
   api('/api/broadcasts', {
@@ -643,7 +663,6 @@ test('detención automática, pausa, reanudación, cancelación, tope diario, pr
   const lab = await whatsappLab(t, FAST);
   const db = lab.db;
   const api = await setup(lab);
-  const settingsRev = async () => (await api('/api/broadcasts/settings?brand=' + BRAND)).settings.revision;
   const tpl = seedTemplate(db);
   const campaignWith = async (n, options, prefix) => {
     const ids = seedContacts(db, n, { prefix });
@@ -723,21 +742,15 @@ test('detención automática, pausa, reanudación, cancelación, tope diario, pr
       'SELECT count(DISTINCT r.wa_to) n FROM campaign_recipients r JOIN campaigns c ON c.id=r.campaign_id WHERE c.wa_number=? AND r.sent_at IS NOT NULL',
     )
     .get(NUMBER).n;
-  await api('/api/broadcasts/settings/' + BRAND, {
-    method: 'PATCH',
-    body: { dailyCap: used + 5, expectedRevision: await settingsRev() },
-  });
+  setMetaLimit(db, 'TIER_1K', used + 5); // la salud del número (channel-health) dice el límite de la cuenta
   const c5 = await campaignWith(20, { ratePerMinute: 600 }, 'f5');
   const { preview } = await launchNow(api, c5);
   assert.equal(preview.limits.remaining, 5);
-  assert.equal(preview.limits.source, 'fallback', 'sin el módulo de salud: el tope conservador');
+  assert.equal(preview.limits.source, 'channel-health', 'manda la salud del número');
   await until(() => stateOf(db, c5.id).status_reason === 'daily_limit', 'espera por el tope diario');
   assert.equal(counts(db, c5.id).sent, 5);
   assert.equal(stateOf(db, c5.id).status, 'sending');
-  await api('/api/broadcasts/settings/' + BRAND, {
-    method: 'PATCH',
-    body: { dailyCap: 5000, expectedRevision: await settingsRev() },
-  });
+  setMetaLimit(db, 'TIER_10K', null);
   await until(() => stateOf(db, c5.id).status === 'completed', 'termina con tope libre');
 
   // 6) programada: sale a su hora, no antes

@@ -24,7 +24,7 @@ Una fila por (campaña, contacto) y por (campaña, número). Antes de llamar a M
 
 ## Salud del número (`channel-health`, otro frente)
 
-`gate.mjs` es la única unión: si `host.module('channel-health')` existe, mandan `canSend(phone_number_id, categoría)` y `limitsOf(phone_number_id).remaining`; si no existe o falla, un tope conservador: `campaign_settings.daily_cap` (250 por omisión) o `wa_account.limit_value`, contra las personas distintas a las que el número escribió con difusiones reales en 24 h. Probado con un doble.
+`gate.mjs` es la única unión: si `host.module('channel-health')` existe, mandan `canSend('wa:'+phone_number_id, categoría)` y `limitsOf(…)`; si no existe o falla, un tope conservador: `campaign_settings.daily_cap` (250 por omisión) o `wa_account.limit_value`. En los dos casos lo usado es el mayor entre lo que dice la salud y lo que el motor contó (personas distintas a las que el número escribió con difusiones reales en 24 h), para que la caché de 5 s de la salud no deje pasar de largo el límite. `limit_reached` no detiene: la campaña espera (`daily_limit`); `number_disabled` → `number_paused`, `payment_missing` → `payment_problem`, `quality_low` → `quality_low` y lo demás → `number_restricted`. Probado con un doble y, de punta a punta, con el módulo real. Pendiente del otro frente: su conteo de lo usado (`usedSince`) incluye los destinatarios de los ensayos; debería filtrar `options.mode='rehearsal'`.
 
 ## Interruptores y valores por omisión
 
