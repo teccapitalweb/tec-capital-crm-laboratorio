@@ -23,8 +23,10 @@ const TABLE = /^[a-z][a-z0-9_]{1,62}$/;
 export const SUBJECT_COLUMNS = Object.freeze(['contact_id', 'person_id']);
 
 // Tablas con esas columnas que, con motivo, no se registran. Cada entrada lleva su porqué; la lista se mantiene corta.
-// Hoy está vacía: todas las tablas con `contact_id` o `person_id` tienen dueño.
-export const EXEMPT = Object.freeze({});
+export const EXEMPT = Object.freeze({
+  contact_search:
+    'Índice de búsqueda derivado de contacts (migración contacts/0001-search): lo mantienen disparadores, se borra con el contacto absorbido y el que queda se recalcula solo; no guarda nada que no esté en otra tabla.',
+});
 
 const isFunction = value => typeof value === 'function';
 

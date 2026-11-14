@@ -32,7 +32,7 @@ Los registros de los servicios que ya existían están en `registerExistingTable
 
 ## El candado
 
-`test/person-data.test.mjs` arma el registro como el servidor (servicios actuales, contactos y los módulos de `server/modules/`) y falla si el esquema tiene una tabla con `contact_id` o `person_id` sin dueño. Las excepciones viven en `EXEMPT` con su motivo; hoy no hay ninguna. La misma prueba siembra una fila en cada tabla registrada para los dos contactos, fusiona y comprueba que nada señala al absorbido y que las claves foráneas hacia contactos y personas siguen íntegras: una tabla nueva registrada con `contact_id` debe añadir su fila de ejemplo.
+`test/person-data.test.mjs` arma el registro como el servidor (servicios actuales, contactos y los módulos de `server/modules/`) y falla si el esquema tiene una tabla con `contact_id` o `person_id` sin dueño. Las excepciones viven en `EXEMPT` con su motivo; hoy sólo `contact_search`, el índice de búsqueda de la lista de contactos que mantienen disparadores y se borra con el contacto. La misma prueba siembra una fila en cada tabla registrada para los dos contactos, fusiona y comprueba que nada señala al absorbido y que las claves foráneas hacia contactos y personas siguen íntegras: una tabla nueva registrada con `contact_id` debe añadir su fila de ejemplo.
 
 ## Fuera de este incremento
 
