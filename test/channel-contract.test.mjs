@@ -332,14 +332,15 @@ test('contrato 1.1 de punta a punta: columnas canónicas del entrante y del esta
   assert.deepEqual(logged.data.recipient, { phone: '…5678', userId: null });
   assert.equal(JSON.stringify(logged).includes(PHONE), false);
 
-  // 4) Un aviso de plantilla todavía no lo atiende nadie: se registra una sola vez.
+  // 4) Un aviso de plantilla lo atiende el módulo de plantillas desde D-3 (docs/PLAN_PLANTILLAS_COMPLETAS.md); ésta
+  // no es una plantilla del CRM, así que sólo queda anotado. Se registra una sola vez.
   const notice = await metaNotice(lab.origin(), 'message_template_status_update', {
     event: 'APPROVED',
     message_template_id: 777,
     message_template_name: 'aviso_novedad',
     message_template_language: 'es_MX',
   });
-  assert.match(notice.body.results[0].result, /^registrado: todavía nada en el CRM atiende «template\.update»/);
+  assert.match(notice.body.results[0].result, /^aplicado: plantilla que el CRM no usa/);
 
   // 5) Sólo con identificador de usuario: cuarentena «no_phone» con su carga 1.1, sin crear cliente ni mensaje.
   const users = db.prepare('SELECT count(*) n FROM users').get().n;
