@@ -286,7 +286,7 @@ export default {
     }
 
     // ---- alta, edición y copia
-    function create(input, user) {
+    function create(input, user, { copiedFrom = null } = {}) {
       const clientRef = refOf(input);
       const before = recalled(user, clientRef);
       if (before) return { template: view(repo.byId(before)), duplicate: true };
@@ -323,7 +323,7 @@ export default {
           metaId: null,
           rejectReason: '',
           quality: null,
-          copiedFrom: input.copiedFrom ?? null,
+          copiedFrom,
           approvedAt: null,
           userId: user.id,
           at: t,
@@ -429,9 +429,9 @@ export default {
           category: row.category,
           purpose: row.purpose,
           ...editor,
-          copiedFrom: row.id,
         },
         user,
+        { copiedFrom: row.id },
       );
       remember(user, clientRef, out.template.id);
       return out;
