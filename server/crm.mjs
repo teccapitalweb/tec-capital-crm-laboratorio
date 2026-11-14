@@ -7,6 +7,8 @@ import { phoneKey } from './lib/identity-keys.mjs';
 const tokenHash = value => createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const text = (value, max = 500) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
+// La clave de teléfono es interna: el servidor compara con ella y no viaja en las respuestas.
+const publicContact = ({ phone_key, ...contact }) => contact;
 export const stages = ['nuevo', 'interesado', 'inscripcion', 'ganada', 'perdida'];
 
 export function migrateCRM(db) {
@@ -193,7 +195,8 @@ export function createCRM({ db, body, json, audit, passwordHash, checkPassword, 
       .prepare(
         `SELECT c.*,u.test_number,(SELECT count(*) FROM opportunities o WHERE o.contact_id=c.id AND o.stage NOT IN ('ganada','perdida')) active_interests FROM contacts c LEFT JOIN users u ON u.id=c.source_user_id WHERE c.brand_id IN (${placeholders}) ORDER BY c.updated_at DESC`,
       )
-      .all(...ids);
+      .all(...ids)
+      .map(publicContact);
     const opportunities = db
       .prepare(
         `SELECT o.*,c.name contact_name,k.title course_title,e.name edition_name,e.price_cents,e.currency,u.name owner_name,(SELECT MIN(due_at) FROM tasks t WHERE t.opportunity_id=o.id AND t.status='open') next_due,(SELECT group_concat(conversation_id) FROM conversation_opportunities co WHERE co.opportunity_id=o.id) conversation_ids,(SELECT co.conversation_id FROM conversation_opportunities co JOIN conversations v ON v.id=co.conversation_id WHERE co.opportunity_id=o.id ORDER BY v.updated_at DESC LIMIT 1) conversation_id FROM opportunities o JOIN contacts c ON c.id=o.contact_id JOIN courses k ON k.id=o.course_id LEFT JOIN editions e ON e.id=o.edition_id LEFT JOIN users u ON u.id=o.owner_id WHERE o.brand_id IN (${placeholders}) ORDER BY o.updated_at DESC`,
@@ -377,7 +380,7 @@ export function createCRM({ db, body, json, audit, passwordHash, checkPassword, 
       const c = scoped('contacts', contact[1], user);
       if (req.method === 'GET') {
         json(res, 200, {
-          contact: c,
+          contact: publicContact(c),
           notes: db
             .prepare(
               'SELECT n.*,u.name author_name FROM internal_notes n JOIN users u ON u.id=n.author_id WHERE n.contact_id=? ORDER BY n.created_at DESC LIMIT 100',
