@@ -276,6 +276,35 @@ export default {
               ),
             )}
           </fieldset>
+          ${when(Array.isArray(importacion.lists), () => {
+            const lista = opciones.list ?? null;
+            return html`<fieldset class="k-fieldset imp-grupo">
+              <legend class="k-label">Añadir a una lista</legend>
+              <p class="k-hint">
+                Los contactos del archivo (nuevos, actualizados o sin cambios) quedan en la lista para usarla en una
+                difusión. Repetir la importación no los duplica.
+              </p>
+              ${field(
+                {
+                  name: 'listId',
+                  label: 'Lista existente',
+                  type: 'select',
+                  options: importacion.lists.map(item => ({ value: item.id, label: item.name })),
+                  emptyLabel: 'Ninguna',
+                },
+                { id: ctx.uid('lista'), value: lista?.audienceId ?? '' },
+              )}
+              ${field(
+                {
+                  name: 'listName',
+                  label: 'O crear una lista nueva con el nombre',
+                  maxlength: 80,
+                  autocomplete: 'off',
+                },
+                { id: ctx.uid('lista-nueva'), value: lista && !lista.audienceId ? lista.name : '' },
+              )}
+            </fieldset>`;
+          })}
         </form>`,
       );
     }
@@ -295,7 +324,12 @@ export default {
         <p class="k-hint">
           Permiso: ${numero(c.optedIn)} aceptan promociones, ${numero(c.optedOut)} no desean mensajes,
           ${numero(c.keptOptOut)} conservan su baja y ${numero(c.notRecorded)} quedan sin registro.
-        </p>`;
+        </p>
+        ${when(
+          reporte?.list,
+          () =>
+            html`<p class="k-hint">La lista «${reporte.list.name}» tiene ahora ${numero(reporte.list.memberCount)} contactos.</p>`,
+        )}`;
     }
 
     function avance(texto) {
@@ -435,13 +469,20 @@ export default {
             ? { mode: 'declared', origin: valores.origin ?? opciones.consent?.origin ?? '' }
             : { mode: 'none' },
       };
+      // La lista destino: una nueva por nombre o una existente. Sin la sección (sin permiso), se conserva la que haya.
+      const nueva = String(valores.listName ?? '').trim();
+      if (Array.isArray(importacion.lists))
+        opciones.list = nueva ? { name: nueva } : valores.listId ? { audienceId: valores.listId } : null;
+      else if (importacion.options.list) opciones.list = importacion.options.list;
     }
 
     const igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const claveLista = lista => (lista ? (lista.audienceId ?? 'nueva:' + lista.name) : '');
     async function revisar() {
       leerColumnas();
       const sinCambios =
         igual(destinos, importacion.mapping?.targets) &&
+        claveLista(opciones.list) === claveLista(importacion.options.list) &&
         igual(
           { onExisting: opciones.onExisting, nameFallback: opciones.nameFallback, consent: opciones.consent },
           {

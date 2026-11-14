@@ -225,6 +225,17 @@ const SEEDS = {
         "INSERT INTO contact_attribute_requests(client_ref,brand_id,contact_id,response,created_at) VALUES(?,?,?,'{}',1)",
       )
       .run('ref-' + s, c.brand, c.id),
+  // Audiencias: los dos están en una lista compartida (queda una sola fila) y cada uno en la suya.
+  audience_members: (db, c, s) => {
+    const list = db.prepare(
+      "INSERT OR IGNORE INTO audiences(id,brand_id,kind,name,name_key,created_at,updated_at) VALUES(?,?,'list',?,?,1,1)",
+    );
+    list.run('aud-shared', c.brand, 'Compartida', 'compartida');
+    list.run('aud-' + s, c.brand, 'Lista ' + s, 'lista ' + s);
+    const add = db.prepare('INSERT INTO audience_members(audience_id,contact_id,added_at) VALUES(?,?,1)');
+    add.run('aud-shared', c.id);
+    add.run('aud-' + s, c.id);
+  },
   // Importación de contactos: el resultado de la fila que creó o actualizó a cada uno.
   contact_import_rows: (db, c, s) => {
     db.prepare(

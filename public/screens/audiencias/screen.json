@@ -1,0 +1,10 @@
+{
+  "id": "audiencias",
+  "title": "Audiencias",
+  "visibility": "preview",
+  "nav": { "group": "Gestión", "icon": "users-round", "label": "Audiencias", "order": 40 },
+  "roles": ["admin", "agent"],
+  "permission": "campaigns.view",
+  "entry": "index.js",
+  "styles": ["screen.css"]
+}

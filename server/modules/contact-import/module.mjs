@@ -57,6 +57,14 @@ export default {
     const runner = sharedJobRunner(host);
     const jobs = () => runner;
     const attributes = () => host.module('attributes');
+    // Audiencias: la lista que recibe a los contactos importados. Sin el módulo, la opción no se ofrece.
+    const audiences = () => {
+      try {
+        return host.module('audiences');
+      } catch {
+        return null;
+      }
+    };
     const writer = createRowWriter({
       db,
       contacts: host.services.contacts,
@@ -216,6 +224,9 @@ export default {
       const results = [];
       let next = cursor;
       let finished = true;
+      // Al importar, quienes quedaron creados, actualizados o sin cambios entran en la lista destino (si la hay), en la
+      // misma transacción del trozo: un trozo repetido tras un reinicio no los duplica.
+      const listed = phase === 'apply' && record.audience_id ? [] : null;
       if (phase === 'preview') db.exec('SAVEPOINT import_preview');
       try {
         for (const item of dataRows(record, cursor)) {
@@ -223,7 +234,10 @@ export default {
             finished = false;
             break;
           }
-          results.push({ row: item.row, line: item.line, ...processRow(record, item, duplicates, opts) });
+          const done = processRow(record, item, duplicates, opts);
+          results.push({ row: item.row, line: item.line, ...done });
+          if (listed && done.contactId && ['created', 'updated', 'unchanged'].includes(done.action))
+            listed.push(done.contactId);
           next = { offset: item.end, line: item.nextLine, row: item.row };
         }
       } finally {
@@ -233,10 +247,23 @@ export default {
           db.exec('RELEASE import_preview');
         }
       }
+      if (listed?.length)
+        try {
+          audiences()?.addContacts(brandId, record.audience_id, listed, {
+            source: 'import',
+            sourceRef: record.id,
+            actorId: opts.actorId,
+          });
+        } catch (error) {
+          // Si archivaron la lista a media importación, los contactos se siguen importando sin ella.
+          if (error?.code !== 'audience_archived') throw error;
+        }
       for (const r of results)
         repo.putRow(brandId, record.id, phase, phase === 'preview' ? { ...r, contactId: null } : r);
       if (!finished) return { processed: results.length, cursor: next, total: record.rows };
       const report = reportOf(brandId, record, phase);
+      if (phase === 'apply' && record.audience_id)
+        report.list = audiences()?.describe(brandId, record.audience_id) ?? null;
       const t = now();
       if (phase === 'preview')
         repo.setState(brandId, record.id, 'validated', { report, validatedRevision: record.revision }, t);
@@ -370,6 +397,7 @@ export default {
           detected: t.id === 'previous-provider' && looksLikePrevious(record.header),
         })),
         previous: repo.previous(record.brand_id, record.sha256, record.id),
+        lists: user ? (audiences()?.importTargets(user, record.brand_id) ?? null) : null,
       };
     }
 
@@ -506,6 +534,15 @@ export default {
       };
     }
 
+    // La lista destino: {audienceId} (una lista activa) o {name} (una nueva que se crea al importar); null = ninguna.
+    function readList(user, record, input) {
+      const raw = input && typeof input === 'object' && Object.hasOwn(input, 'list') ? input.list : record.options.list;
+      if (!raw) return null;
+      const api = audiences();
+      if (!api) throw fail(400, 'Las listas no están disponibles.', { code: 'mapping_invalid', field: 'options.list' });
+      return api.importList(user, record.brand_id, raw);
+    }
+
     function saveMapping(user, record, input) {
       requireRevision(record, input);
       if (['validating', 'applying', 'done', 'cancelled', 'failed'].includes(record.state))
@@ -515,6 +552,8 @@ export default {
         fail(400, message, { code: 'mapping_invalid', field: 'targets' }),
       );
       const options = readOptions(input.options, record.options);
+      const list = readList(user, record, input.options);
+      if (list) options.list = list;
       host.transaction(db, () => repo.setMapping(record.brand_id, record.id, { targets }, options, now()));
       host.audit(user, 'contact_import.mapping', record.id);
       return repo.get(record.brand_id, record.id);
@@ -526,6 +565,7 @@ export default {
       edit: 'contacts.edit',
       tags: 'contacts.tags.apply',
       consent: 'contacts.consent',
+      audiences: 'audiences.edit',
     };
     const grantsOf = (user, brandId) =>
       Object.fromEntries(
@@ -553,6 +593,12 @@ export default {
           { code: 'permission_denied', field: `targets.${index}`, details: { column, target, permission } },
         );
       });
+      if (record.options.list && !grants.audiences)
+        throw fail(400, 'Tu acceso no incluye «audiences.edit»: quita la lista destino.', {
+          code: 'permission_denied',
+          field: 'options.list',
+          details: { permission: GRANTS.audiences },
+        });
       if (record.options.onExisting !== 'skip' && !grants.edit)
         throw fail(
           400,
@@ -598,6 +644,16 @@ export default {
             { ...record.options, consent: { ...record.options.consent, confirmedBy: user.id, confirmedAt: t } },
             t,
           );
+        // La lista destino se crea (o se comprueba) al lanzar la importación, en la misma transacción.
+        if (phase === 'apply' && record.options.list) {
+          const api = audiences();
+          if (!api) throw fail(409, 'Las listas no están disponibles.', { code: 'import_state' });
+          const audienceId = api.resolveImportList(record.brand_id, record.options.list, {
+            importId: record.id,
+            actorId: user.id,
+          });
+          repo.setAudience(record.brand_id, record.id, audienceId, t);
+        }
         const job = jobs().enqueue({
           kind,
           brandId: record.brand_id,
