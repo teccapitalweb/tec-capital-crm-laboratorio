@@ -11,6 +11,7 @@ import { migrate } from './migrations/index.mjs';
 import { createStatic } from './app/static.mjs';
 import { loadScreens } from './app/screens.mjs';
 import { loadModules } from './app/modules.mjs';
+import { fail, errorBody } from './app/http.mjs';
 import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
 import { createCRM } from './crm.mjs';
 import { conversationPage } from './conversations.mjs';
@@ -88,7 +89,6 @@ const safeUser = user => ({
   role: user.role,
   testNumber: user.test_number,
 });
-const fail = (status, message) => Object.assign(new Error(message), { status });
 const clean = (v, max = 5000) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const normalized = v =>
   v
@@ -1463,11 +1463,7 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     if (res.headersSent) return res.end();
     if (!error.status) console.error('Request failed:', error.name, error.message);
-    json(res, error.status || 500, {
-      error: error.status ? error.message : 'No se pudo completar la operación. Vuelve a intentarlo.',
-      ...(error.status && error.code ? { code: error.code } : {}),
-      ...(error.status && error.activeOpportunityId ? { activeOpportunityId: error.activeOpportunityId } : {}),
-    });
+    json(res, error.status || 500, errorBody(error)); // { error, code?, field?, details? }: server/app/http.mjs
   }
 });
 
