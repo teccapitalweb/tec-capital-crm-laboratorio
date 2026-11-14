@@ -25,6 +25,9 @@ export async function startFakeMeta() {
   };
   const server = createServer((req, res) => {
     const chunks = [];
+    // quien pidió pudo morir con la petición en vuelo (es justo lo que ensayan las pruebas): no es un error del Meta de mentira
+    req.on('error', () => {});
+    res.on('error', () => {});
     req.on('data', chunk => chunks.push(chunk));
     req.on('end', () => {
       const url = new URL(req.url, 'http://x');

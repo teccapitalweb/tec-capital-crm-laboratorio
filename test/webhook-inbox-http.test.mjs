@@ -3,46 +3,15 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { laneOf, peerIdentifier, inboxWaitMs } from '../server/connectors.mjs';
-import { assertSchemaCurrent } from './helpers/schema.mjs';
 import { startServer } from './helpers/server.mjs';
-import { startFakeMeta, metaHook, metaInbound, metaText, NUMBER, SECRET } from './helpers/fake-meta.mjs';
-import { PASSWORD, assignNumber, call, crash, openDb, registerAdmin, sleep, until } from './helpers/crm.mjs';
+import { metaHook, metaInbound, metaText, NUMBER, SECRET } from './helpers/fake-meta.mjs';
+import { PASSWORD, call, crash, openDb, sleep, until, whatsappLab as lab } from './helpers/crm.mjs';
 
 const MARIA = '5215512345678';
 const LUIS = '5215500000001';
 const ANA = '5215500000002';
 const QUEUED = 'en cola: se procesa en segundo plano';
-
-// Un servidor real con WhatsApp completo contra el Meta de mentira, administración registrada y el número asignado.
-async function lab(t, env = {}) {
-  const meta = await startFakeMeta();
-  const dir = await mkdtemp(join(tmpdir(), 'crm-inbox-http-'));
-  const code = randomUUID();
-  const state = { server: null, db: null };
-  t.after(async () => {
-    try {
-      state.db?.close();
-    } catch {
-      // ya estaba cerrada
-    }
-    await state.server?.stop();
-    await meta.close();
-    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  });
-  const start = async extra => {
-    state.server = await startServer({ dir, env: { ...meta.env, ADMIN_INVITE_CODE: code, ...env, ...extra } });
-    return state.server;
-  };
-  const server = await start();
-  const admin = await registerAdmin(server.origin, code);
-  await assignNumber(server.origin, admin);
-  state.db = openDb(dir);
-  assertSchemaCurrent(state.db);
-  const inboxRow = id => state.db.prepare('SELECT * FROM webhook_inbox WHERE event_id=?').get(id);
-  return { meta, dir, state, start, admin, db: state.db, inboxRow, origin: () => state.server.origin };
-}
 
 test('carril de cada evento, identificador de quien escribe y espera de la petición', () => {
   const inbound = (from, to = '1090') => ({ id: 'w1', type: 'message.inbound', data: { from, to } });
@@ -299,14 +268,13 @@ test('un entrante sin identificador queda en cuarentena («no_identifier»); adm
     1,
     'el reproceso queda en la auditoría',
   );
-  assert.equal(
+  // cada intento queda en el registro del servidor (que llega a la prueba con un instante de retraso), sin datos de la persona
+  const logged = () =>
     state.server
       .logs()
       .split('\n')
-      .filter(line => line.includes('Webhook inbox item failed: message.inbound no_identifier')).length,
-    2,
-    'cada intento queda en el registro, sin datos de la persona',
-  );
+      .filter(line => line.includes('Webhook inbox item failed: message.inbound no_identifier')).length;
+  await until(() => logged() === 2, 'los dos intentos quedan en el registro', { logs: state.server.logs });
   assert.equal(state.server.logs().includes(secret), false);
 });
 
