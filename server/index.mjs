@@ -12,6 +12,7 @@ import { createStatic } from './app/static.mjs';
 import { loadScreens } from './app/screens.mjs';
 import { loadModules } from './app/modules.mjs';
 import { clientAddress, limitKey, proxyConfig } from './app/client-address.mjs';
+import { createRateLimiter } from './app/rate-limit.mjs';
 import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
 import { createCRM } from './crm.mjs';
 import { conversationPage } from './conversations.mjs';
@@ -78,11 +79,9 @@ const derive = promisify(scrypt);
 const production = process.env.NODE_ENV === 'production';
 const port = Number(process.env.PORT || 3100);
 const host = process.env.HOST || (production ? '0.0.0.0' : '127.0.0.1');
-const sessions = new Map(),
-  limits = new Map();
-// Proxies propios delante del servidor (TRUSTED_PROXY_HOPS; 0 = no fiarse de ninguna cabecera) y tope de claves del limitador.
+const sessions = new Map();
+// Proxies propios delante del servidor (TRUSTED_PROXY_HOPS; 0 = no fiarse de ninguna cabecera).
 const proxy = proxyConfig();
-const LIMIT_KEYS = 50000;
 const ttl = 7 * 24 * 60 * 60 * 1000;
 const staff = person => person && !person.disabled && (person.role === 'agent' || person.role === 'admin');
 const safeUser = user => ({
@@ -108,22 +107,10 @@ const secureEqual = (a, b) =>
 db.function('search_text', { deterministic: true }, value => normalized(String(value ?? '')));
 const publicCourse = c => ({ ...c, price: c.price_cents / 100, hasArtwork: Boolean(courseArtwork(c)) });
 
+// Límites de intentos (server/app/rate-limit.mjs): ventana fija por clave; un contador vivo no se borra nunca.
+const limiter = createRateLimiter({ fail });
 function rate(key, max, window = 60000) {
-  const now = Date.now();
-  let item = limits.get(key);
-  if (!item || item.end < now) {
-    if (!item && limits.size >= LIMIT_KEYS) {
-      // Nadie puede agotar la memoria generando claves: salen primero las vencidas y después las más antiguas.
-      for (const [name, value] of limits) if (value.end < now) limits.delete(name);
-      for (const name of limits.keys()) {
-        if (limits.size < LIMIT_KEYS) break;
-        limits.delete(name);
-      }
-    }
-    item = { count: 0, end: now + window };
-    limits.set(key, item);
-  }
-  if (++item.count > max) throw fail(429, 'Demasiados intentos. Espera un momento y vuelve a probar.');
+  limiter.rate(key, max, window);
 }
 function security(res) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -1613,7 +1600,7 @@ const heartbeat = setInterval(() => {
     ws.ping();
   }
   const now = Date.now();
-  for (const [key, value] of limits) if (value.end < now) limits.delete(key);
+  limiter.sweep(now);
   db.prepare('DELETE FROM sessions WHERE expires_at<?').run(now);
 }, 30000);
 modules.startTimers();
