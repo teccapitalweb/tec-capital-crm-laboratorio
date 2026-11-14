@@ -69,7 +69,8 @@ test('tipos: forma canónica y valores no válidos', () => {
 });
 
 // El módulo sobre una base temporal, con un `host` mínimo: lo justo para probar condiciones y variables.
-async function moduleWorld(t) {
+// `reveal` simula el permiso de ver teléfono y datos personales completos (contacts.phone).
+async function moduleWorld(t, { reveal = true } = {}) {
   const db = await workspace(t);
   migrate(db, { backup: false });
   const personData = createPersonData({ db });
@@ -80,12 +81,20 @@ async function moduleWorld(t) {
     fail,
     personData,
     services: { events: { registerTypes() {}, publish: event => published.push(event) } },
-    access: { require() {}, can: () => true, phone: (_user, value) => value, brandIds: () => [] },
+    access: {
+      require() {},
+      can: (_user, permission) => (permission === 'contacts.phone' ? reveal : true),
+      phone: (_user, value) => value,
+      brandIds: () => [],
+    },
     realtime: { emit() {} },
+    body: async req => req.body,
+    json: (res, status, data) => Object.assign(res, { status, data }),
+    audit() {},
   });
   const repo = createRepo(db);
   const brand = 'globalvet';
-  const define = (key, type, options = []) =>
+  const define = (key, type, options = [], personal = false) =>
     repo.insertDefinition(brand, {
       id: randomUUID(),
       key,
@@ -93,7 +102,7 @@ async function moduleWorld(t) {
       type,
       options,
       description: '',
-      personal: false,
+      personal,
       searchable: false,
       showInChat: true,
       position: 0,
@@ -110,6 +119,7 @@ async function moduleWorld(t) {
     { value: 'basico', label: 'Básico' },
     { value: 'premium', label: 'Premium' },
   ]);
+  define('curp', 'text', [], true);
   const contact = (name, values) => {
     const id = randomUUID();
     db.prepare('INSERT INTO contacts(id,brand_id,name,email,created_at,updated_at) VALUES(?,?,?,?,?,?)').run(
@@ -261,6 +271,44 @@ test('valores: escribir es componible, valida, no repite lo igual y publica un e
     () => transaction(db, () => api.set('odonteck', ids.dani, [{ key: 'ciudad', value: 'X' }])),
     error => error.status === 404,
     'un contacto de otra marca no existe para esta marca',
+  );
+});
+
+test('un dato personal no se puede adivinar sin permiso: ni «expected» ni la respuesta revelan su valor', async t => {
+  const { db, api, ids } = await moduleWorld(t, { reveal: false });
+  const user = { id: 'asesora-sin-permiso' };
+  db.prepare(
+    "INSERT INTO users(id,username,name,password_hash,role,test_number,created_at,last_seen) VALUES(?,'asesora.x','Asesora','x','agent',990002,1,1)",
+  ).run(user.id);
+  const put = async body => {
+    const res = {};
+    await api.handle({ method: 'PUT', body }, res, '/api/attributes/contacts/' + ids.ana, user, null);
+    return res;
+  };
+  // Lo escribe alguien con permiso (aquí, el propio módulo, como haría una importación).
+  await put({ changes: [{ key: 'curp', value: 'SECRETO01' }] });
+  // Probar valores con «expected»: siempre el mismo error, coincida o no, y sin el valor actual.
+  for (const guess of ['SECRETO01', 'OTRO02']) {
+    const attempt = put({ changes: [{ key: 'curp', value: 'X', expected: guess }] });
+    await assert.rejects(attempt, error => {
+      assert.equal(error.status, 400);
+      assert.equal(error.code, 'attribute_hidden');
+      assert.equal(JSON.stringify(error.details ?? {}).includes('SECRETO01'), false);
+      return true;
+    });
+  }
+  // Escribir el mismo valor también se informa como cambio: la respuesta no confirma una suposición.
+  const same = await put({ changes: [{ key: 'curp', value: 'X' }] });
+  const again = await put({ changes: [{ key: 'curp', value: 'X' }] });
+  assert.deepEqual(same.data.changed, ['curp']);
+  assert.deepEqual(again.data.changed, ['curp']);
+  assert.equal(again.data.values.curp.value, null);
+  assert.equal(again.data.values.curp.hidden, true);
+  assert.ok(again.data.history.every(item => item.key !== 'curp' || (item.from === null && item.to === null)));
+  // Un dato no personal sí admite «expected» y su conflicto dice el valor actual.
+  await assert.rejects(
+    put({ changes: [{ key: 'ciudad', value: 'X', expected: 'Cholula' }] }),
+    error => error.code === 'stale_record' && error.details.current === 'Puebla',
   );
 });
 

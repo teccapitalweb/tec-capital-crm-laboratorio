@@ -264,7 +264,9 @@ export default {
 
     // Escribe varios valores de un contacto. Componible: sin transacción propia ni red. Un valor vacío borra; un valor
     // que ya es el guardado no hace nada. Escribe valor, historial y evento de dominio por cada cambio.
-    //   changes: [{key, value, expected?}]; meta: {source, sourceId, actorId, conversationId, depth}
+    //   changes: [{key, value, expected?}]; meta: {source, sourceId, actorId, conversationId, depth, revealPersonal}
+    //   revealPersonal: false cuando quien escribe no puede ver los datos personales; entonces no se acepta
+    //   «expected» en esos datos (no debe servir para adivinar el valor oculto).
     function set(brandId, contactId, changes, meta = {}) {
       const source = SOURCES.has(meta.source) ? meta.source : 'staff';
       if (!repo.contact(brandId, contactId)) throw fail(404, 'Contacto no disponible.', { code: 'not_found' });
@@ -293,6 +295,13 @@ export default {
         }
         const before = current.get(definition.id) ?? null;
         const from = before?.value ?? null;
+        // Quien no puede ver un dato personal tampoco puede compararlo: «expected» le serviría para adivinarlo.
+        const hidden = definition.personal && meta.revealPersonal === false;
+        if (hidden && Object.hasOwn(change, 'expected'))
+          throw fail(400, `«${definition.label}» es un dato personal: no se puede comprobar su valor actual.`, {
+            code: 'attribute_hidden',
+            field: key,
+          });
         if (Object.hasOwn(change, 'expected')) {
           let expected = null;
           try {
@@ -563,8 +572,16 @@ export default {
             return { ...JSON.parse(previous.response), replayed: true };
           }
         }
-        const { changed } = set(brandId, contactId, changes, { source: 'staff', actorId: user.id });
-        const response = { changed: changed.map(change => change.key) };
+        const revealPersonal = host.access.can(user, 'contacts.phone', brandId);
+        const { changed } = set(brandId, contactId, changes, { source: 'staff', actorId: user.id, revealPersonal });
+        // Un dato personal que no puede ver quien escribe se informa siempre como cambiado: si se omitiera cuando
+        // el valor ya era ése, la respuesta diría cuál era.
+        const hiddenKeys = revealPersonal
+          ? []
+          : changes
+              .map(change => change.key)
+              .filter(key => definitions(brandId).some(d => d.key === key && d.personal));
+        const response = { changed: [...new Set([...changed.map(change => change.key), ...hiddenKeys])] };
         if (clientRef) repo.saveRequest(brandId, { clientRef, contactId, actorId: user.id, response, at: now() });
         return response;
       });
