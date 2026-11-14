@@ -13,7 +13,7 @@ El mismo número llegaba escrito de muchas formas (`5512345678` capturado a mano
 - La calcula una sola biblioteca, `server/lib/identity-keys.mjs` (`canonicalPhone`, `phoneKey`). Para la columna: `phoneKey(telefono) ?? ''`. Para lo que entregan Meta o el proveedor (dígitos que ya son el número completo): `{ international: true }`.
 - Índice `contacts_phone_key(brand_id, phone_key) WHERE phone_key != ''`. Es parcial: la consulta debe llevar también `AND phone_key != ''` para usarlo. La búsqueda es siempre por marca.
 - La identidad de teléfono de una persona (`person_identities`, `persons.phone`) es el mismo valor con «+» delante (`'+' + phone_key`).
-- La clave es un dato personal, igual que el teléfono: quien oculte el teléfono a un rol debe ocultar también la clave.
+- La clave es **interna**: ninguna respuesta del servidor la lleva (`/api/crm` y la ficha del contacto la quitan) y la prueba fija las claves con las que cada ruta sirve un contacto. Es un dato personal igual que el teléfono: quien la exponga más adelante debe aplicarle la misma máscara.
 
 ## La migración `identity/0001-phone-key`
 
@@ -37,7 +37,7 @@ Repetir el cuerpo no cambia nada y, si alguna clave dejó de corresponder a su t
 | Entrante real de WhatsApp (`whatsapp.mjs`) | El contacto guarda el teléfono canónico (`+52…`) y su clave; `wa_peer` y `wa_identities` conservan el identificador tal como llegó, que es al que se contesta |
 | Búsqueda de personas (`persons.mjs`) | Un teléfono completo se busca por su clave: `+521…` (como lo enseña la cabecera del chat) encuentra a la persona |
 
-`test/identity-phone.test.mjs` incluye un candado: falla si una sentencia del servidor escribe `contacts.phone` sin `phone_key`.
+`test/identity-phone.test.mjs` incluye dos candados: falla si una sentencia del servidor escribe `contacts.phone` sin `phone_key`, y falla si cambia la lista de campos con la que se sirve un contacto (`/api/crm`, ficha, duplicados, persona, exportación, API pública y conector de Claude).
 
 ## Qué cambió en `normalizePhone`
 
