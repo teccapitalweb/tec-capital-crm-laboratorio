@@ -11,6 +11,7 @@ import { migrate } from './migrations/index.mjs';
 import { createStatic } from './app/static.mjs';
 import { loadScreens } from './app/screens.mjs';
 import { loadModules } from './app/modules.mjs';
+import { createShutdown, shutdownGraceMs } from './app/shutdown.mjs';
 import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
 import { createCRM } from './crm.mjs';
 import { conversationPage } from './conversations.mjs';
@@ -1624,25 +1625,52 @@ const heartbeat = setInterval(() => {
 }, 30000);
 modules.startTimers();
 server.listen(port, host, () => console.log(`TEC Capital Laboratorio: http://${host}:${server.address().port}`));
-function stop() {
-  modules.stopTimers();
-  clearInterval(inboxTimer);
-  clearInterval(webhooksTimer);
-  clearInterval(scheduledTimer);
-  clearInterval(jobsTimer);
-  clearInterval(operationsTimer);
-  clearInterval(automationTimer);
-  clearInterval(simulatorTimer);
-  clearInterval(channelTimer);
-  clearInterval(paymentsTimer);
-  clearInterval(backupTimer);
-  clearInterval(heartbeat);
-  for (const ws of sessions.keys()) ws.close(1001, 'Servidor reiniciando');
-  server.close(() => {
-    db.close();
-    process.exit(0);
+// Apagado ordenado (server/app/shutdown.mjs · docs/PLAN_RECEPCION_DURADERA.md): se deja de aceptar trabajo, se espera
+// como mucho SHUTDOWN_GRACE_MS a lo que ya estaba en vuelo (eventos de la bandeja, envíos del canal y trabajos del
+// asistente) y entonces se cierran los sockets y la base.
+let connectionsClosed;
+const allClosed = new Promise(done => (connectionsClosed = done));
+const jobsIdle = () =>
+  new Promise(done => {
+    const check = () => (jobsInFlight.size ? setTimeout(check, 25) : done());
+    check();
   });
-  setTimeout(() => process.exit(0), 1500).unref();
-}
+const stop = createShutdown({
+  graceMs: shutdownGraceMs(),
+  stopIntake() {
+    modules.stopTimers();
+    clearInterval(inboxTimer);
+    clearInterval(webhooksTimer);
+    clearInterval(scheduledTimer);
+    clearInterval(jobsTimer);
+    clearInterval(operationsTimer);
+    clearInterval(automationTimer);
+    clearInterval(simulatorTimer);
+    clearInterval(channelTimer);
+    clearInterval(paymentsTimer);
+    clearInterval(pushTimer);
+    clearInterval(eventsTimer);
+    clearInterval(coordinationTimer);
+    clearInterval(backupTimer);
+    clearInterval(heartbeat);
+    connectors.inbox.stop();
+    server.close(() => connectionsClosed()); // deja de aceptar conexiones y avisa cuando ya no queda ninguna
+  },
+  inFlight: [() => connectors.inbox.idle(), () => channel.idle(), jobsIdle],
+  closeConnections() {
+    for (const ws of sessions.keys()) ws.close(1001, 'Servidor reiniciando');
+    return allClosed;
+  },
+  finish() {
+    // Lo que este proceso tenía tomado sin terminar queda disponible para el siguiente arranque, sin esperar a que
+    // venza su arrendamiento. Un envío de WhatsApp en vuelo NO se suelta: su resultado se desconoce.
+    try {
+      connectors.inbox.release();
+      db.prepare('UPDATE jobs SET lease_owner=NULL,lease_until=NULL WHERE lease_owner=?').run(JOB_WORKER);
+    } finally {
+      db.close();
+    }
+  },
+});
 process.on('SIGTERM', stop);
 process.on('SIGINT', stop);
