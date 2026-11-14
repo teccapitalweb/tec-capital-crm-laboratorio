@@ -794,6 +794,96 @@ test('alta, edición, fusión e históricos mantienen la clave; quien se captur�
     false,
   );
 
+  // ---- la clave es interna: ninguna respuesta la lleva y el contacto se sirve con las mismas claves que antes de la
+  // columna. Si otra columna nueva empieza a viajar por un «SELECT *», esta lista obliga a decidirlo.
+  const keys = value => Object.keys(value).sort();
+  const served = [];
+  const get = async (path, headers = { Cookie: admin.cookie }) => {
+    const response = await fetch(server.origin + path, { headers });
+    assert.equal(response.status, 200, path);
+    served.push(await response.text());
+    return served.at(-1);
+  };
+  const snapshot = JSON.parse(await get('/api/crm'));
+  assert.deepEqual(
+    keys(snapshot.contacts.find(c => c.id === ana)),
+    [
+      'active_interests',
+      'brand_id',
+      'created_at',
+      'email',
+      'id',
+      'name',
+      'persona_id',
+      'phone',
+      'source',
+      'source_user_id',
+      'test_number',
+      'updated_at',
+    ],
+    'contacto en /api/crm',
+  );
+  assert.deepEqual(
+    keys(JSON.parse(await get('/api/crm/contacts/' + ana)).contact),
+    ['brand_id', 'created_at', 'email', 'id', 'name', 'persona_id', 'phone', 'source', 'source_user_id', 'updated_at'],
+    'ficha del contacto',
+  );
+  assert.deepEqual(
+    keys(JSON.parse(await get('/api/crm/duplicates?brand=globalvet')).groups[0].contacts[0]),
+    ['created_at', 'email', 'id', 'linked', 'name', 'notes', 'opportunities', 'phone'],
+    'contacto en duplicados',
+  );
+  assert.deepEqual(
+    keys(JSON.parse(await get('/api/persons/' + row(ana).persona_id)).contacts[0]),
+    ['brand_id', 'brand_name', 'created_at', 'email', 'id', 'name', 'phone', 'source', 'tags'],
+    'contacto en la ficha de persona',
+  );
+  assert.ok(
+    (await get('/api/crm/export/contacts.csv?brand=globalvet')).includes(
+      'marca,nombre,telefono,correo,origen,etiquetas,intereses_activos,creado,actualizado,consentimiento,persona\r\n',
+    ),
+    'columnas de la exportación',
+  );
+  const { token } = await call(
+    '/api/integrations/keys',
+    admin.cookie,
+    { brandId: 'globalvet', name: 'Forma del contacto', scopes: ['contacts'] },
+    'POST',
+    201,
+  );
+  assert.deepEqual(
+    keys(JSON.parse(await get('/api/v1/contacts', { Authorization: 'Bearer ' + token })).contacts[0]),
+    ['createdAt', 'email', 'id', 'name', 'phone', 'source', 'updatedAt'],
+    'contacto en la API pública',
+  );
+  const answer = await fetch(server.origin + '/mcp', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+      Authorization: 'Bearer ' + token,
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'buscar_contactos', arguments: { texto: 'Ana' } },
+    }),
+  });
+  assert.equal(answer.status, 200);
+  served.push(await answer.text());
+  assert.deepEqual(
+    keys(JSON.parse(JSON.parse(served.at(-1)).result.content[0].text).contactos[0]),
+    ['actualizado', 'contactoId', 'correo', 'nombre', 'origen', 'telefono'],
+    'contacto en el conector de Claude',
+  );
+  for (const path of ['/api/bootstrap', '/api/persons?brand=all', '/api/persons/candidates']) await get(path);
+  served.push(
+    JSON.stringify(await call('/api/crm/contacts/merge-preview', admin.cookie, { keepId: ana, mergeId: mx })),
+  );
+  assert.equal(served.length, 11);
+  for (const text of served) assert.equal(text.includes('phone_key'), false, text.slice(0, 80));
+
   // ---- al final, ningún contacto tiene una clave distinta de la de su teléfono
   assert.ok(assertKeysInSync(db) >= 15);
 });
