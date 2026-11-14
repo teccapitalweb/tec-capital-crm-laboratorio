@@ -1,0 +1,139 @@
+/*
+ * Pantalla «Plantillas de WhatsApp»: sólo la composición que el kit no trae, con el prefijo pla- y variables de
+ * public/tokens.css. La vista previa es una burbuja neutra con el estilo Niebla: no imita la interfaz de ninguna
+ * aplicación.
+ */
+
+.pla-filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+  align-items: end;
+}
+
+.pla-nombre {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.pla-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* Editor: campos a la izquierda y la vista previa a la derecha; en celular, uno sobre otro. */
+.pla-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.pla-campos {
+  min-width: 0;
+}
+
+.pla-lado {
+  position: sticky;
+  top: 0;
+}
+
+.pla-pie-editor {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--space-3);
+}
+
+.pla-boton-fila {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.pla-vista {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-4);
+  background: var(--soft);
+}
+
+.pla-burbuja {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  color: var(--text-1);
+  font-size: var(--font-md);
+}
+
+.pla-encabezado {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.pla-imagen {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: var(--radius-2);
+}
+
+.pla-archivo {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-2);
+  color: var(--text-2);
+  font-size: var(--font-sm);
+}
+
+.pla-cuerpo {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.pla-pie {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--font-sm);
+}
+
+.pla-botones {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.pla-boton {
+  display: block;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .pla-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pla-lado {
+    position: static;
+  }
+}
