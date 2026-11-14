@@ -164,6 +164,10 @@ export const ENTITY_KINDS = {
   survey: 'Encuesta',
   batch: 'Importación de históricos',
 };
+// Forma de lo que un módulo puede registrar con registerTypes(): `área.hecho` en minúsculas y una entidad sencilla.
+const TYPE_NAME = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
+const ENTITY_NAME = /^[a-z][a-z0-9_]*$/;
+const isMap = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 export function createEvents({
   db,
@@ -182,6 +186,9 @@ export function createEvents({
   handlerTimeoutMs = 30_000,
 }) {
   const subscribers = new Map(); // tipo -> [{name,handler}]
+  // Catálogo de esta instancia: los tipos y entidades de arriba más los que cada módulo registra con registerTypes().
+  const catalog = Object.assign(Object.create(null), EVENT_TYPES),
+    kinds = Object.assign(Object.create(null), ENTITY_KINDS);
   // Reclamo con arrendamiento (docs/PLAN_RECEPCION_DURADERA.md): la entrega sigue «pending» mientras se trabaja, otro
   // proceso no la toma con el arrendamiento vigente y el resultado sólo lo anota quien lo conserva. Sobre una base sin
   // esas columnas (anterior a la migración queues/0001-leases) se entrega sin reclamo, como antes.
@@ -193,14 +200,58 @@ export function createEvents({
   const view = e => ({ ...e, payload: JSON.parse(e.payload) });
   const get = seq => db.prepare('SELECT * FROM domain_events WHERE seq=?').get(seq);
   const types = () =>
-    Object.entries(EVENT_TYPES).map(([type, t]) => ({
+    Object.entries(catalog).map(([type, t]) => ({
       type,
       ...t,
       subscribers: (subscribers.get(type) || []).map(s => s.name),
     }));
 
+  // Alta de tipos por función: un módulo nuevo declara aquí sus eventos, y las entidades que estrenan, en lugar de
+  // editar las listas de arriba. Es todo o nada: si algo no vale no se registra ninguno. Un tipo registrado es un
+  // evento de dominio como los demás, así que quien ya recibía TODOS los tipos (el núcleo compartido, los webhooks
+  // salientes) recibe también los nuevos; su carga sigue las mismas reglas: breve, sin secretos ni texto de mensajes.
+  //   events.registerTypes(
+  //     { 'difusion.enviada': { title: 'Difusión enviada', entity: 'campaign', payload: 'name, recipients' } },
+  //     { entities: { campaign: 'Difusión' } },
+  //   );
+  function registerTypes(definitions, { entities = {} } = {}) {
+    if (!isMap(definitions) || !isMap(entities))
+      throw fail(400, 'registerTypes espera { tipo: { title, entity, payload } } y, si hace falta, { entities }.');
+    const labels = Object.create(null),
+      added = {};
+    for (const [kind, label] of Object.entries(entities)) {
+      const name = typeof label === 'string' ? label.trim() : '';
+      if (kind.length > 30 || !ENTITY_NAME.test(kind) || !name || name.length > 60)
+        throw fail(400, 'Entidad de evento no válida: ' + kind);
+      if (kinds[kind] && kinds[kind] !== name) throw fail(409, 'Entidad de evento repetida con otro nombre: ' + kind);
+      labels[kind] = name;
+    }
+    for (const [type, definition] of Object.entries(definitions)) {
+      if (type.length > 60 || !TYPE_NAME.test(type))
+        throw fail(400, 'Tipo de evento no válido: ' + type + ' (minúsculas con un punto, como contacto.creado).');
+      if (catalog[type]) throw fail(409, 'Tipo de evento repetido: ' + type);
+      const title = typeof definition?.title === 'string' ? definition.title.trim() : '',
+        entity = definition?.entity,
+        payload = definition?.payload ?? '';
+      if (!title || title.length > 80) throw fail(400, 'El tipo de evento ' + type + ' necesita un título.');
+      if (typeof entity !== 'string' || !(kinds[entity] || labels[entity]))
+        throw fail(400, 'El tipo de evento ' + type + ' usa una entidad sin registrar: ' + entity);
+      if (typeof payload !== 'string' || payload.length > 300)
+        throw fail(400, 'La carga del tipo de evento ' + type + ' se describe con un texto breve.');
+      added[type] = { title, entity, payload };
+    }
+    const known = Object.keys(catalog),
+      everywhere = (subscribers.get(known[0]) || []).filter(s =>
+        known.every(type => (subscribers.get(type) || []).some(x => x.name === s.name && x.handler === s.handler)),
+      );
+    Object.assign(kinds, labels);
+    Object.assign(catalog, added);
+    for (const type of Object.keys(added)) if (everywhere.length) subscribers.set(type, [...everywhere]);
+    return Object.keys(added);
+  }
+
   function subscribe(type, name, handler) {
-    if (!EVENT_TYPES[type]) throw fail(400, 'Tipo de evento no registrado: ' + type);
+    if (!catalog[type]) throw fail(400, 'Tipo de evento no registrado: ' + type);
     if (!subscribers.has(type)) subscribers.set(type, []);
     if (subscribers.get(type).some(s => s.name === name)) throw fail(409, 'Suscriptor repetido: ' + name);
     subscribers.get(type).push({ name, handler });
@@ -208,7 +259,7 @@ export function createEvents({
   // Publica dentro de la transacción del llamador (o en autocommit si no hay). Idempotente por dedupe_key:
   // volver a publicar el mismo hecho devuelve el evento existente sin crear entregas nuevas.
   function publish({ type, brandId, entityKind, entityId, payload = {}, actorId = null, source, dedupeKey = null }) {
-    if (!EVENT_TYPES[type]) throw fail(400, 'Tipo de evento no registrado: ' + type);
+    if (!catalog[type]) throw fail(400, 'Tipo de evento no registrado: ' + type);
     if (!brandId || !entityId || !source) throw fail(400, 'El evento necesita marca, entidad y origen.');
     const key = String(dedupeKey || type + ':' + entityId).slice(0, 200),
       text = JSON.stringify(payload || {});
@@ -226,7 +277,7 @@ export function createEvents({
           id,
           type,
           brandId,
-          entityKind || EVENT_TYPES[type].entity,
+          entityKind || catalog[type].entity,
           String(entityId),
           text,
           actorId,
@@ -408,11 +459,11 @@ export function createEvents({
     if (!brandIds.length) return [];
     const where = [`e.brand_id IN (${brandIds.map(() => '?').join(',')})`],
       args = [...brandIds];
-    if (type && EVENT_TYPES[type]) {
+    if (type && catalog[type]) {
       where.push('e.type=?');
       args.push(type);
     }
-    if (entityKind && ENTITY_KINDS[entityKind]) {
+    if (entityKind && kinds[entityKind]) {
       where.push('e.entity_kind=?');
       args.push(entityKind);
     }
@@ -520,7 +571,7 @@ export function createEvents({
       return true;
     }
     if (path === '/api/events/types' && req.method === 'GET') {
-      json(res, 200, { types: types(), entities: ENTITY_KINDS });
+      json(res, 200, { types: types(), entities: kinds });
       return true;
     }
     if (path === '/api/events.csv' && req.method === 'GET') {
@@ -554,6 +605,8 @@ export function createEvents({
   return {
     publish,
     subscribe,
+    registerTypes,
+    hasType: type => typeof type === 'string' && Boolean(catalog[type]),
     tick,
     retry,
     replay,

@@ -2,7 +2,6 @@ import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { backoff } from './automation.mjs';
-import { EVENT_TYPES } from './events.mjs';
 
 // API pública de lectura y webhooks salientes (docs/PLAN_API_PUBLICA.md).
 //  · API v1 (sólo lectura): llaves por marca con permisos (events, orders, contacts, editions), cabecera `Authorization: Bearer tcw_…`. Sólo se guarda el
@@ -262,6 +261,25 @@ export function createIntegrations({
   };
   const newSecret = () => 'whsec_' + randomBytes(24).toString('base64url');
 
+  // Clasificación de esta instancia: la de EVENT_NEEDS más la que cada módulo registra con registerNeeds().
+  const needs = { ...EVENT_NEEDS };
+  // Clasificación por función: el módulo que registró un tipo de evento (events.registerTypes) dice aquí qué permiso
+  // de la llave, además de `events`, deja ver su contenido por la API de lectura. Mientras no lo diga, ese tipo se
+  // entrega sin datos. Es todo o nada: si algo no vale no se registra ninguno.
+  //   integrations.registerNeeds({ 'difusion.enviada': 'contacts' });
+  function registerNeeds(map) {
+    if (map === null || typeof map !== 'object' || Array.isArray(map))
+      throw fail(400, 'registerNeeds espera { tipo de evento: permiso de la llave }.');
+    for (const [type, scope] of Object.entries(map)) {
+      if (!events.hasType(type)) throw fail(400, 'Tipo de evento no registrado: ' + type);
+      if (Object.hasOwn(needs, type)) throw fail(409, 'El tipo de evento ' + type + ' ya tiene su permiso de lectura.');
+      if (typeof scope !== 'string' || scope === 'events' || !Object.hasOwn(SCOPES, scope))
+        throw fail(400, 'Permiso de la API no válido para ' + type + ': ' + scope);
+    }
+    Object.assign(needs, map);
+    return Object.keys(map);
+  }
+
   // ---- llaves de la API
   function createKey(user, input) {
     const brandId = brandOf(user, input.brandId),
@@ -293,7 +311,7 @@ export function createIntegrations({
   // ---- destinos de webhooks
   function eventsFilter(v) {
     const list = [...new Set(Array.isArray(v) && v.length ? v : ['*'])];
-    if (list.length > 80 || list.some(t => t !== '*' && !EVENT_TYPES[t]))
+    if (list.length > 80 || list.some(t => t !== '*' && !events.hasType(t)))
       throw fail(400, 'Algún tipo de evento no existe.');
     return list.includes('*') ? ['*'] : list;
   }
@@ -455,7 +473,8 @@ export function createIntegrations({
       ).run(randomUUID(), w.id, ev.seq, t, t, t);
     }
   }
-  for (const type of Object.keys(EVENT_TYPES)) events.subscribe(type, SUBSCRIBER, enqueue);
+  // Todos los tipos; los que un módulo registre después (events.registerTypes) le llegan solos.
+  for (const { type } of events.types()) events.subscribe(type, SUBSCRIBER, enqueue);
   let running = false,
     lastPurge = 0;
   async function tick() {
@@ -594,8 +613,8 @@ export function createIntegrations({
         brand: { id: brand, name: brandName(brand) },
         key: { name: key.name, prefix: key.prefix },
         scopes: parse(key.scopes, []),
-        eventTypes: Object.keys(EVENT_TYPES),
-        eventScopes: EVENT_NEEDS,
+        eventTypes: events.types().map(t => t.type),
+        eventScopes: needs,
       });
       return true;
     }
@@ -604,7 +623,7 @@ export function createIntegrations({
       const after = Number(q.get('after')) || 0,
         type = q.get('type'),
         have = parse(key.scopes, []);
-      if (type && !EVENT_TYPES[type]) throw fail(400, 'Tipo de evento no existe.');
+      if (type && !events.hasType(type)) throw fail(400, 'Tipo de evento no existe.');
       const rows = db
         .prepare(
           'SELECT * FROM domain_events WHERE brand_id=? AND seq>?' +
@@ -613,9 +632,9 @@ export function createIntegrations({
         )
         .all(...[brand, after, ...(type ? [type] : []), limit])
         .map(e => {
-          const ok = have.includes(EVENT_NEEDS[e.type]),
+          const ok = have.includes(needs[e.type]),
             env = envelope({ ...e, payload: ok ? parse(e.payload, {}) : {} });
-          return { ...env, seq: e.seq, ...(ok ? {} : { redacted: true, requires: EVENT_NEEDS[e.type] || null }) };
+          return { ...env, seq: e.seq, ...(ok ? {} : { redacted: true, requires: needs[e.type] || null }) };
         });
       json(res, 200, { events: rows, next: rows.length ? rows.at(-1).seq : after, hasMore: rows.length === limit });
       return true;
@@ -739,7 +758,7 @@ export function createIntegrations({
         keys,
         endpoints,
         scopes: SCOPES,
-        eventTypes: Object.entries(EVENT_TYPES).map(([type, t]) => ({ type, title: t.title, entity: t.entity })),
+        eventTypes: events.types().map(t => ({ type: t.type, title: t.title, entity: t.entity })),
         apiVersion: API_VERSION,
       });
       return true;
@@ -809,6 +828,7 @@ export function createIntegrations({
     tick,
     enqueue,
     createKey,
+    registerNeeds,
     test,
     authenticate,
     scopesOf: key => parse(key.scopes, []),

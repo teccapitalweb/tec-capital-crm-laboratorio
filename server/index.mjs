@@ -14,6 +14,9 @@ import { loadModules } from './app/modules.mjs';
 import { clientAddress, limitKey, proxyConfig } from './app/client-address.mjs';
 import { createRateLimiter } from './app/rate-limit.mjs';
 import { createShutdown, shutdownGraceMs } from './app/shutdown.mjs';
+import { fail, errorBody } from './app/http.mjs';
+import { createRealtime } from './app/realtime.mjs';
+import { createAccess } from './lib/access.mjs';
 import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
 import { createCRM } from './crm.mjs';
 import { conversationPage } from './conversations.mjs';
@@ -92,7 +95,6 @@ const safeUser = user => ({
   role: user.role,
   testNumber: user.test_number,
 });
-const fail = (status, message) => Object.assign(new Error(message), { status });
 const clean = (v, max = 5000) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const normalized = v =>
   v
@@ -451,6 +453,9 @@ const statics = createStatic({
   fail,
   generated: { '/screens/index.json': { bytes: screens.bytes, type: 'application/json; charset=utf-8' } },
 });
+// Primitivas de los módulos nuevos (docs/PLAN_ACCESO_TIEMPO_REAL.md): permisos con alcance por marca y tiempo real v2.
+const access = createAccess({ db, crm });
+const realtime = createRealtime({ db, crm, sessions, canSee });
 // Módulos nuevos (server/modules/<nombre>/module.mjs): se descubren y se montan solos después de los actuales.
 const modules = await loadModules({
   dir: resolve(root, 'server', 'modules'),
@@ -469,6 +474,8 @@ const modules = await loadModules({
     audit,
     rate,
     broadcast,
+    realtime,
+    access,
     online,
     staff,
     requireStaff,
@@ -1494,11 +1501,7 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     if (res.headersSent) return res.end();
     if (!error.status) console.error('Request failed:', error.name, error.message);
-    json(res, error.status || 500, {
-      error: error.status ? error.message : 'No se pudo completar la operación. Vuelve a intentarlo.',
-      ...(error.status && error.code ? { code: error.code } : {}),
-      ...(error.status && error.activeOpportunityId ? { activeOpportunityId: error.activeOpportunityId } : {}),
-    });
+    json(res, error.status || 500, errorBody(error)); // { error, code?, field?, details? }: server/app/http.mjs
   }
 });
 

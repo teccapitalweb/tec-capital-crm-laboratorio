@@ -592,17 +592,12 @@ test('eventos: un suscriptor que no termina no detiene a los demás y se reinten
 // Webhooks salientes
 // ---------------------------------------------------------------------------------------------------------------
 
+// Cada «proceso» con sus propios eventos de dominio sobre su conexión, como en el servidor.
 function webhookWorker(db, c, workerId, fetchImpl) {
   return createIntegrations({
     db,
     crm: {},
-    events: {
-      subscribe() {},
-      get(seq) {
-        const event = db.prepare('SELECT * FROM domain_events WHERE seq=?').get(seq);
-        return event ? { ...event, payload: JSON.parse(event.payload) } : null;
-      },
-    },
+    events: createEvents({ db, now: c.now, log: quiet, workerId }),
     audit() {},
     rate() {},
     now: c.now,

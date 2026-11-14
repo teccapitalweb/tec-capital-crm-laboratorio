@@ -2,7 +2,7 @@
 //
 //   { "id": "difusiones", "title": "Difusiones", "visibility": "preview",
 //     "nav": { "group": "Gestión", "icon": "megaphone", "label": "Difusiones", "order": 40 },
-//     "roles": ["admin", "agent"], "permission": "broadcasts.view", "entry": "index.js", "styles": ["screen.css"] }
+//     "roles": ["admin", "agent"], "permission": "campaigns.view", "entry": "index.js", "styles": ["screen.css"] }
 //
 // `nav`, `permission`, `styles` y `visibility` son opcionales (sin `nav` la pantalla no sale en el menú).
 //
