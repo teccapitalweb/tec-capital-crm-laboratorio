@@ -7,7 +7,12 @@
 //         attrs: {clave: valor} }. Se aceptan también ownerId, locale, externalId y bsuid, que todavía no tienen dónde
 //         guardarse en el CRM y se ignoran.
 //   opts  { onExisting: 'update'|'skip', nameFallback: 'phone'|'error', actorId, importId, label (nombre del archivo),
-//         consent: { mode: 'none'|'declared', origin } }
+//         consent: { mode: 'none'|'declared', origin },
+//         allow: { edit, tags, consent, phone } }
+//   allow   lo que puede quien importa (por omisión, todo). Sin `edit` no se tocan contactos existentes ni se escriben
+//           datos de contacto; sin `tags`, sin etiquetas; sin `consent`, sin consentimiento; sin `phone`, sin datos
+//           personales (regla del módulo de atributos). Lo que no se puede es un error de la fila, nunca un salto
+//           silencioso; quien lanza la importación lo rechaza antes (vista previa).
 //   action  created | updated | unchanged | skipped | error
 //   consent opted_in | opted_out | kept_opt_out | not_recorded | null (qué se hizo con el consentimiento)
 //
@@ -173,7 +178,17 @@ export function createRowWriter({ db, contacts, persons, attributes, now = Date.
     const ready = prepare(row ?? {}, opts);
     if (ready.problem) return ready.problem;
     const { phone, email, tags, createdAt } = ready;
+    const allow = { edit: true, tags: true, consent: true, phone: true, ...opts.allow };
+    const denied = (field, permission) =>
+      error('permission_denied', `Tu acceso no incluye «${permission}»: esta fila no se puede importar así.`, {
+        field,
+      });
+    if (tags.length && !allow.tags) return denied('tags', 'contacts.tags.apply');
+    if ((row.consent === true || row.consent === false) && !allow.consent) return denied('consent', 'contacts.consent');
+    if (Object.values(row.attrs ?? {}).some(value => String(value ?? '').trim()) && !allow.edit)
+      return denied(null, 'contacts.edit');
     const existing = findExisting(brandId, phone, email);
+    if (existing && opts.onExisting !== 'skip' && !allow.edit) return denied(null, 'contacts.edit');
     if (existing && opts.onExisting === 'skip')
       return {
         action: 'skipped',
@@ -236,6 +251,8 @@ export function createRowWriter({ db, contacts, persons, attributes, now = Date.
           sourceId: opts.importId ?? null,
           actorId: opts.actorId ?? null,
           events: false,
+          // Quien no puede ver los datos personales tampoco los escribe (regla del módulo de atributos).
+          revealPersonal: allow.phone,
         });
         if (result.changed.length) changed = true;
       }
@@ -250,7 +267,7 @@ export function createRowWriter({ db, contacts, persons, attributes, now = Date.
       if (!failure?.status) throw failure;
       const field = failure.field ?? null;
       return error(failure.code || 'invalid', failure.message, {
-        field: field ? (failure.code?.startsWith('attribute') ? 'attr:' + field : field) : null,
+        field: field ? (Object.hasOwn(row.attrs ?? {}, field) ? 'attr:' + field : field) : null,
         value: field && row.attrs?.[field] !== undefined ? String(row.attrs[field]) : undefined,
       });
     }

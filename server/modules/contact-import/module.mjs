@@ -207,7 +207,12 @@ export default {
       const cursor = job.cursor ?? { offset: record.data_offset, line: record.data_line, row: 0 };
       if (!job.cursor) repo.clearRows(brandId, record.id, phase);
       const duplicates = duplicatesOf(record);
-      const opts = rowOptions(record);
+      // Lo que puede quien lanzó este trabajo, calculado al lanzarlo (un trabajo sin ese dato no escribe nada ajeno).
+      const opts = {
+        ...rowOptions(record),
+        actorId: job.created_by ?? record.created_by ?? null,
+        allow: job.params.grants ?? { edit: false, tags: false, consent: false, phone: false },
+      };
       const results = [];
       let next = cursor;
       let finished = true;
@@ -515,6 +520,47 @@ export default {
       return repo.get(record.brand_id, record.id);
     }
 
+    // Permisos de quien lanza la vista previa o la importación en esa marca. Se guardan en el trabajo y rigen cada fila.
+    const GRANTS = {
+      phone: 'contacts.phone',
+      edit: 'contacts.edit',
+      tags: 'contacts.tags.apply',
+      consent: 'contacts.consent',
+    };
+    const grantsOf = (user, brandId) =>
+      Object.fromEntries(
+        Object.entries(GRANTS).map(([key, permission]) => [key, host.access.can(user, permission, brandId)]),
+      );
+    // Un destino para el que no hay permiso se rechaza antes de lanzar, con la columna y el motivo: nunca se salta.
+    function requireGrants(record, grants) {
+      const personal = new Set(
+        definitionsOf(record.brand_id)
+          .filter(d => d.personal)
+          .map(d => d.key),
+      );
+      record.mapping.targets.forEach((target, index) => {
+        let permission = null;
+        if (target === 'tags' && !grants.tags) permission = GRANTS.tags;
+        else if (target === 'consent' && !grants.consent) permission = GRANTS.consent;
+        else if (target.startsWith('attr:') && !grants.edit) permission = GRANTS.edit;
+        else if (target.startsWith('attr:') && personal.has(target.slice(5)) && !grants.phone)
+          permission = GRANTS.phone;
+        if (!permission) return;
+        const column = record.header[index] || `Columna ${index + 1}`;
+        throw fail(
+          400,
+          `Tu acceso no incluye «${permission}»: no puedes importar la columna «${column}». Cámbiala a «Ignorar».`,
+          { code: 'permission_denied', field: `targets.${index}`, details: { column, target, permission } },
+        );
+      });
+      if (record.options.onExisting !== 'skip' && !grants.edit)
+        throw fail(
+          400,
+          'Tu acceso no incluye «contacts.edit»: elige «Dejarla como está» para los contactos que ya existen.',
+          { code: 'permission_denied', field: 'options.onExisting', details: { permission: GRANTS.edit } },
+        );
+    }
+
     function launch(user, record, input, phase) {
       const clientRef = clientRefOf(input);
       const kind = KINDS[phase];
@@ -535,6 +581,8 @@ export default {
             field: 'confirmConsent',
           });
       }
+      const grants = grantsOf(user, record.brand_id);
+      requireGrants(record, grants);
       const busy = repo.busy(record.brand_id, record.id);
       if (busy)
         throw fail(409, 'Ya hay una importación en curso en esta marca. Espera a que termine.', {
@@ -556,7 +604,7 @@ export default {
           createdBy: user.id,
           refId: record.id,
           total: record.rows,
-          params: { revision: record.revision, clientRef },
+          params: { revision: record.revision, clientRef, grants },
           clientRef: clientRef ? `${record.id}:${phase}:${clientRef}` : null,
         });
         repo.setState(
@@ -613,6 +661,18 @@ export default {
     async function handle(req, res, path, user, url) {
       if (path === '/api/contact-import' && req.method === 'GET') {
         const brandId = url.searchParams.get('brand');
+        // Sin marca: las marcas en las que esta persona puede importar, para elegir una.
+        if (!brandId) {
+          host.requireStaff(user);
+          const ids = new Set(host.access.brandIds(user, PERMISSION));
+          host.json(res, 200, {
+            brands: host.services.crm
+              .brandsFor(user)
+              .filter(brand => ids.has(brand.id))
+              .map(brand => ({ id: brand.id, name: brand.name })),
+          });
+          return true;
+        }
         host.access.require(user, PERMISSION, brandId);
         host.json(res, 200, {
           imports: repo.list(brandId).map(record => shape(record)),

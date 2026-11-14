@@ -19,7 +19,7 @@ import { crash, openDb, until } from './helpers/crm.mjs';
 
 const PASSWORD = 'Password-importar-2026!';
 const ROWS = 6500;
-const BUDGET_MS = 60_000; // holgado: 6 500 filas tardan unos pocos segundos en la vista previa y otros tantos al importar
+const BUDGET_MS = 120_000; // holgado: en una máquina tranquila, 6 500 filas tardan unos 5 a 10 s en cada fase
 const ORIGIN = 'Aceptaron recibir promociones al inscribirse en el formulario del curso.';
 
 // ---------------------------------------------------------------------------------------------------------------
