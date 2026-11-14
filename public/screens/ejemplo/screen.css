@@ -1,0 +1,51 @@
+/*
+ * Estilos propios de la pantalla de ejemplo.
+ *
+ * Una pantalla sólo escribe aquí lo que el kit no trae (su composición), con un prefijo propio (ej-) y
+ * siempre con las variables de public/tokens.css: ningún color, sombra ni tamaño de letra a mano.
+ */
+
+.ej-busqueda {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.ej-busqueda > .k-field {
+  max-width: 440px;
+}
+
+.ej-filtros > summary {
+  width: fit-content;
+  list-style: none;
+}
+
+.ej-filtros > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ej-filtros[open] > summary {
+  margin-bottom: var(--space-5);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.ej-medidor {
+  max-width: 360px;
+}
+
+.ej-revision {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+  font-size: var(--font-md);
+  list-style: none;
+}
+
+.ej-revision > li {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: var(--space-5);
+}
