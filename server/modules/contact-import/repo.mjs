@@ -72,6 +72,15 @@ export function createRepo(db) {
         brandId,
         id,
       ),
+    // La lista de audiencias que recibe a los contactos importados (docs/PLAN_AUDIENCIAS.md).
+    setAudience: (brandId, id, audienceId, at) =>
+      run(
+        'UPDATE contact_imports SET audience_id=?,updated_at=? WHERE brand_id=? AND id=?',
+        audienceId,
+        at,
+        brandId,
+        id,
+      ),
     setOptions: (brandId, id, options, at) =>
       run(
         'UPDATE contact_imports SET options=?,updated_at=? WHERE brand_id=? AND id=?',
