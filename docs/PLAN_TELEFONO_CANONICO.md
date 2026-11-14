@@ -25,6 +25,8 @@ Sólo aditiva, dentro de la transacción del ejecutor y con el respaldo previo d
 
 Repetir el cuerpo no cambia nada y, si alguna clave dejó de corresponder a su teléfono, la corrige. Medido en local: 7 000 contactos con sus personas, 0,1 s; 50 000, 0,7 s.
 
+El índice no es único: al llenar la clave afloran los contactos repetidos que antes no se veían. Se revisan por marca en Contactos → Duplicados; para contarlos de una vez: `SELECT brand_id, phone_key, count(*) FROM contacts WHERE phone_key != '' GROUP BY brand_id, phone_key HAVING count(*) > 1`.
+
 ## Quién escribe y quién compara
 
 | Sitio | Cómo quedó |
