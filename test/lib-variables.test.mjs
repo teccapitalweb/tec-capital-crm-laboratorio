@@ -313,7 +313,8 @@ test('hasWrittenAmount: acepta y rechaza exactamente lo mismo que la expresión 
 });
 
 test('entradas desmedidas: el trabajo crece con el largo del texto, no con su cuadrado', { timeout: 120_000 }, () => {
-  // Con un algoritmo cuadrático estos casos tardan medio minuto cada uno (medido); el margen es amplio a propósito.
+  // Con un algoritmo cuadrático el primer caso y el de `render` tardan más de medio minuto cada uno (medido); aquí
+  // todo junto, menos de un segundo. El margen es amplio a propósito, para que una máquina ocupada no haga fallar.
   const started = Date.now();
   assert.equal(hasWrittenAmount('1'.repeat(200_000)), false);
   assert.equal(hasWrittenAmount('1.'.repeat(100_000) + ' pesos'), true);
@@ -328,7 +329,7 @@ test('entradas desmedidas: el trabajo crece con el largo del texto, no con su cu
   assert.equal(extract('{{'.repeat(100_000)).length, 0);
   assert.deepEqual(validate('{{' + 'a'.repeat(200_000), CATALOGUE), ['Hay llaves sin cerrar en el texto.']);
   assert.equal(cleanParam(' x '.repeat(100_000)), 'x '.repeat(100).trimEnd());
-  assert.ok(Date.now() - started < 5000, `tardó ${Date.now() - started} ms`);
+  assert.ok(Date.now() - started < 15_000, `tardó ${Date.now() - started} ms`);
 });
 
 // ---- Sustituir
