@@ -1,0 +1,1896 @@
+/*
+ * Kit de las pantallas nuevas: clases k-…
+ *
+ * Reglas de esta hoja (las vigila test/kit-static.test.mjs):
+ * - Ningún color ni sombra escritos a mano: todo sale de public/tokens.css.
+ * - Ninguna letra por debajo de 11 px (--font-min).
+ * - Lo que se toca mide al menos 40 px (--touch) en pantallas táctiles o estrechas.
+ * - Nada se anima al repintar. Sólo hay transiciones de color, borde y sombra al pasar el cursor, y la
+ *   entrada de una ventana; todo se apaga con prefers-reduced-motion.
+ *
+ * Convive con las hojas actuales, que tienen reglas por etiqueta (button, input, svg, dialog…). Por eso
+ * cada clase declara todo lo que necesita y no confía en esas reglas: el día que se retiren, esto no cambia.
+ */
+
+/* ==========================================================================================
+   Base
+   ========================================================================================== */
+
+.k-page,
+.k-page *,
+.k-page *::before,
+.k-page *::after,
+.k-dialog,
+.k-dialog *,
+.k-dialog *::before,
+.k-dialog *::after,
+.k-toast {
+  box-sizing: border-box;
+}
+
+/* La página ocupa el hueco de #page y es la que se desplaza, como .content-page en las pantallas actuales. */
+.k-page {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: calc(var(--space-7) * 2);
+  color: var(--ink);
+  font-size: var(--font-md);
+  line-height: 1.5;
+  background: radial-gradient(ellipse at 100% 0, var(--page-glow), transparent 55%), var(--bg);
+}
+
+.k-page :where(h1, h2, h3, h4, p, figure),
+.k-dialog :where(h1, h2, h3, h4, p, figure) {
+  margin: 0;
+}
+
+.k-page :focus-visible,
+.k-dialog :focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.k-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5) var(--space-8);
+  margin-bottom: var(--space-8);
+}
+
+.k-head h1 {
+  color: var(--ink);
+  font-size: var(--font-title);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.k-eyebrow {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--accent);
+  font-size: var(--font-min);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.k-lead {
+  max-width: 70ch;
+  margin-top: var(--space-3);
+  color: var(--text-3);
+  font-size: var(--font-md);
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.k-actions,
+.k-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.k-stack {
+  display: grid;
+  align-content: start;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.k-stack--tight {
+  gap: var(--space-5);
+}
+
+.k-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--space-7);
+  min-width: 0;
+}
+
+/* Para gráficas: columnas más anchas, que una gráfica estrecha obliga a recortar sus rótulos. */
+.k-grid--wide {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+}
+
+/* Lista a la izquierda y panel de detalle a la derecha; sin panel abierto, una sola columna. */
+.k-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.k-split > * {
+  min-width: 0;
+}
+
+.k-split:has(.k-side[open]:not(:modal)) {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+}
+
+.k-card {
+  min-width: 0;
+  padding: var(--space-8);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-5);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.k-card__title {
+  margin-bottom: var(--space-6);
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.k-card__title::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 12px;
+  margin-right: var(--space-3);
+  border-radius: 3px;
+  background: var(--accent);
+  vertical-align: -1px;
+}
+
+/* Sólo para lectores de pantalla. */
+.k-sr {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.k-muted {
+  color: var(--text-3);
+}
+
+.k-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Iconos propios del kit (cerrar, ordenar, marcar): no dependen de la biblioteca de iconos de la aplicación. */
+.k-glyph {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ==========================================================================================
+   Botones, enlaces y fichas
+   ========================================================================================== */
+
+.k-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.16s var(--ease),
+    border-color 0.16s var(--ease),
+    box-shadow 0.16s var(--ease),
+    color 0.16s var(--ease);
+}
+
+.k-btn:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+}
+
+.k-btn:active {
+  background: var(--accent-soft);
+  box-shadow: none;
+}
+
+.k-btn--primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.k-btn--primary:hover,
+.k-btn--primary:active {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+}
+
+.k-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.k-btn--ghost:hover {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.k-btn--danger {
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.k-btn--danger:hover,
+.k-btn--danger:active {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+
+.k-btn--icon {
+  width: 36px;
+  padding: 0;
+}
+
+.k-btn:disabled,
+.k-btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.k-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-1);
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.k-link:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.k-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: fit-content;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--text-2);
+  font-size: var(--font-min);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.k-chip--accent {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.k-chip--ok {
+  border-color: var(--ok-line);
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.k-chip--warn {
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.k-chip--bad {
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.k-chip__remove {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin: 0 calc(var(--space-1) * -1) 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.k-chip__remove:hover {
+  background: var(--accent-line);
+}
+
+.k-chip__remove .k-glyph {
+  width: 12px;
+  height: 12px;
+}
+
+.k-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-4);
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: var(--font-sm);
+  line-height: 1.6;
+}
+
+.k-notice > p {
+  flex: 1 1 220px;
+}
+
+.k-notice--ok {
+  border-color: var(--ok-line);
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.k-notice--warn {
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.k-notice--bad {
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+/* ==========================================================================================
+   Campos de formulario
+   ========================================================================================== */
+
+.k-form {
+  display: grid;
+  gap: var(--space-7);
+  min-width: 0;
+}
+
+.k-field {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.k-label {
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.k-req {
+  color: var(--bad);
+}
+
+.k-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--touch);
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--font-md);
+  line-height: 1.5;
+  transition:
+    border-color 0.16s var(--ease),
+    background-color 0.16s var(--ease);
+}
+
+.k-input::placeholder {
+  color: var(--text-3);
+}
+
+.k-input:hover {
+  border-color: var(--accent-line);
+}
+
+.k-page .k-input:focus-visible,
+.k-dialog .k-input:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-line);
+  outline-offset: 1px;
+}
+
+.k-input[aria-invalid='true'],
+.k-page .k-input[aria-invalid='true']:focus-visible,
+.k-dialog .k-input[aria-invalid='true']:focus-visible {
+  border-color: var(--bad);
+}
+
+.k-input:disabled {
+  background: var(--soft);
+  color: var(--text-3);
+  cursor: not-allowed;
+}
+
+textarea.k-input {
+  min-height: 96px;
+  resize: vertical;
+}
+
+select.k-input {
+  cursor: pointer;
+}
+
+/* Las hojas actuales esconden todo input de archivo; el del kit se ve. */
+.k-field .k-input[type='file'] {
+  display: block;
+  padding: var(--space-3);
+  border-style: dashed;
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+
+.k-hint {
+  color: var(--text-3);
+  font-size: var(--font-min);
+  line-height: 1.6;
+}
+
+.k-error {
+  color: var(--bad);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.k-fieldset {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.k-fieldset > legend {
+  margin-bottom: var(--space-1);
+  padding: 0;
+}
+
+.k-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 28px;
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.k-check input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.k-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* ==========================================================================================
+   Estados: cargando, vacío, fallo
+   ========================================================================================== */
+
+.k-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: calc(var(--space-7) * 2) var(--space-5);
+  color: var(--text-3);
+  font-size: var(--font-sm);
+  line-height: 1.7;
+  text-align: center;
+}
+
+.k-state > p {
+  max-width: 46ch;
+  text-wrap: pretty;
+}
+
+.k-state > .k-state__title {
+  color: var(--text-2);
+  font-size: var(--font-lg);
+  font-weight: 600;
+}
+
+.k-state--error > .k-state__title {
+  color: var(--bad);
+}
+
+.k-state--loading > p {
+  animation: k-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes k-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ==========================================================================================
+   Pestañas
+   ========================================================================================== */
+
+.k-tabs {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  scrollbar-width: none;
+}
+
+.k-tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--touch);
+  margin: 0 0 -1px;
+  padding: var(--space-4) var(--space-7);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--text-3);
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.16s var(--ease);
+}
+
+.k-tab:hover {
+  color: var(--accent-strong);
+}
+
+.k-tab[aria-selected='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+/* El anillo va por dentro: la fila de pestañas se desplaza y recortaría uno exterior. */
+.k-page .k-tab:focus-visible,
+.k-dialog .k-tab:focus-visible {
+  border-radius: var(--radius-1);
+  outline-offset: -2px;
+}
+
+.k-tab__count {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-1);
+  background: var(--soft);
+  color: var(--text-2);
+  font-size: var(--font-min);
+  font-variant-numeric: tabular-nums;
+}
+
+.k-tabpanel {
+  min-width: 0;
+  padding-top: var(--space-8);
+}
+
+/* ==========================================================================================
+   Tabla por páginas
+   ========================================================================================== */
+
+.k-table {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.k-table__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+}
+
+.k-table__count {
+  margin-right: auto;
+  color: var(--text-3);
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.k-table__all {
+  display: none;
+}
+
+.k-table__scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-4);
+  background: var(--surface);
+}
+
+/* Al recargar, lo anterior se queda a media luz en lugar de saltar a un esqueleto. */
+.k-table__scroll[aria-busy='true'] {
+  opacity: 0.5;
+}
+
+.k-table__grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.k-table__grid th {
+  padding: var(--space-5) var(--space-7);
+  border-bottom: 1px solid var(--line);
+  background: var(--soft);
+  color: var(--text-3);
+  font-size: var(--font-min);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* Una celda no se parte en renglones: si la tabla no cabe, se desplaza dentro de su caja. */
+.k-table__grid td {
+  padding: var(--space-4) var(--space-7);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-2);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.k-table__grid td.k-wrap {
+  min-width: 220px;
+  white-space: normal;
+}
+
+.k-table__grid td .k-row {
+  flex-wrap: nowrap;
+}
+
+.k-table__grid tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.k-table__grid tr.is-selected td {
+  background: var(--accent-soft);
+}
+
+.k-table__grid th.k-num,
+.k-table__grid td.k-num {
+  text-align: right;
+}
+
+.k-table__grid .k-table__check {
+  width: 1%;
+  padding-right: 0;
+}
+
+.k-table__main {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.k-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-1);
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.k-table__sort:hover,
+th[aria-sort] > .k-table__sort {
+  color: var(--accent-strong);
+}
+
+.k-table__sort .k-glyph {
+  width: 12px;
+  height: 12px;
+}
+
+.k-table__foot {
+  display: flex;
+  justify-content: center;
+}
+
+@media (hover: hover) {
+  .k-table__grid tbody tr:hover td {
+    background: var(--accent-tint);
+  }
+
+  .k-table__grid tbody tr.is-selected:hover td {
+    background: var(--accent-soft);
+  }
+}
+
+/* Menú desplegable (selector de columnas): un <details>, que ya se maneja con el teclado. */
+.k-menu {
+  position: relative;
+}
+
+.k-menu > summary {
+  list-style: none;
+}
+
+.k-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.k-menu__list {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  display: grid;
+  gap: 2px;
+  overflow-y: auto;
+  width: max-content;
+  min-width: 200px;
+  max-width: min(320px, 80vw);
+  max-height: 320px;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-4);
+  background: var(--surface);
+  box-shadow: var(--shadow-lift);
+}
+
+.k-menu__list .k-check {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-2);
+}
+
+.k-menu__list .k-check:hover {
+  background: var(--accent-tint);
+}
+
+/* ==========================================================================================
+   Ventana, confirmación y aviso breve
+   ========================================================================================== */
+
+.k-dialog {
+  flex-direction: column;
+  overflow: hidden;
+  width: min(94vw, 550px);
+  max-width: none;
+  max-height: 90dvh;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-dialog);
+  background: var(--surface);
+  box-shadow: var(--shadow-dialog);
+  color: var(--ink);
+  font-size: var(--font-md);
+  line-height: 1.5;
+}
+
+.k-dialog--wide {
+  width: min(94vw, 760px);
+}
+
+.k-dialog[open] {
+  display: flex;
+  animation: k-pop 0.24s var(--ease);
+}
+
+.k-dialog::backdrop,
+.k-side::backdrop {
+  background: var(--backdrop);
+  backdrop-filter: blur(5px);
+}
+
+.k-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-8) 0;
+}
+
+.k-dialog__title {
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.k-dialog__body {
+  overflow-y: auto;
+  min-height: 0;
+  padding: var(--space-6) var(--space-8) var(--space-8);
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.k-dialog__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: 0 var(--space-8) var(--space-8);
+}
+
+.k-dialog__foot:empty {
+  display: none;
+}
+
+@keyframes k-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Respaldo del aviso breve cuando la pantalla corre fuera de la aplicación (pruebas, ejemplos). */
+.k-toast {
+  position: fixed;
+  inset: auto;
+  top: var(--space-8);
+  right: var(--space-8);
+  width: max-content;
+  max-width: min(92vw, 380px);
+  margin: 0;
+  padding: var(--space-5) var(--space-7);
+  border: 0;
+  border-radius: var(--radius-4);
+  background: var(--ink);
+  box-shadow: var(--shadow-lift);
+  color: var(--surface);
+  font-size: var(--font-md);
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.k-toast:empty {
+  display: none;
+}
+
+/* ==========================================================================================
+   Panel de detalle
+   ========================================================================================== */
+
+/* Es un <dialog>: columna derecha en computadora (no modal) y hoja a pantalla completa en celular (modal). */
+.k-side {
+  position: sticky;
+  top: 0;
+  flex-direction: column;
+  overflow: hidden;
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: 80dvh;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-5);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  color: var(--ink);
+}
+
+.k-page .k-side[open] {
+  display: flex;
+  animation: none;
+}
+
+.k-page .k-side:modal {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.k-side__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-7);
+  border-bottom: 1px solid var(--line);
+}
+
+.k-side__title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.k-side__body {
+  display: grid;
+  align-content: start;
+  gap: var(--space-7);
+  overflow-y: auto;
+  min-height: 0;
+  padding: var(--space-7);
+}
+
+/* ==========================================================================================
+   Constructor de condiciones
+   ========================================================================================== */
+
+.k-cond {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.k-cond__group {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-4);
+  background: var(--soft);
+}
+
+.k-cond__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.k-cond__title {
+  margin-right: auto;
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.k-cond__rule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.k-cond__value {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.k-cond__range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.k-cond__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.k-cond__join {
+  justify-self: start;
+  color: var(--text-3);
+  font-size: var(--font-min);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.k-cond__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ==========================================================================================
+   Asistente por pasos
+   ========================================================================================== */
+
+.k-wizard {
+  display: grid;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.k-steps {
+  display: flex;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.k-step {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.k-step__btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--touch);
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--surface);
+  color: var(--text-3);
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.k-step__btn:disabled {
+  opacity: 1;
+  background: transparent;
+  cursor: default;
+}
+
+.k-step__n {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--soft);
+  color: var(--text-2);
+  font-size: var(--font-min);
+  font-variant-numeric: tabular-nums;
+}
+
+.k-step__n .k-glyph {
+  width: 12px;
+  height: 12px;
+}
+
+.k-step__t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.k-step.is-current .k-step__btn {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.k-step.is-current .k-step__n {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.k-step.is-done .k-step__btn {
+  color: var(--text-2);
+}
+
+.k-step.is-done .k-step__n {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.k-wizard__where {
+  display: none;
+  color: var(--text-3);
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.k-wizard__body {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.k-wizard__title {
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.k-wizard__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--line);
+}
+
+.k-wizard__foot > .k-wizard__extra {
+  margin-right: auto;
+}
+
+/* ==========================================================================================
+   Gráficas
+   ========================================================================================== */
+
+.k-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.k-tile {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-7) var(--space-8);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-5);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.k-tile__label {
+  color: var(--text-3);
+  font-size: var(--font-min);
+  line-height: 1.5;
+}
+
+/* Cifras proporcionales en la tarjeta; tabular-nums se reserva para tablas y ejes. */
+.k-tile__value {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--font-2xl);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.k-tile__delta {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  color: var(--text-3);
+  font-size: var(--font-min);
+  line-height: 1.5;
+}
+
+.k-tile__delta .k-glyph {
+  width: 12px;
+  height: 12px;
+  margin-top: 2px;
+}
+
+.k-tile__delta--good {
+  color: var(--ok);
+}
+
+.k-tile__delta--bad {
+  color: var(--bad);
+}
+
+.k-tile__hint {
+  color: var(--text-3);
+  font-size: var(--font-min);
+  line-height: 1.5;
+}
+
+.k-tile .k-ch {
+  margin-top: var(--space-2);
+}
+
+.k-fig {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+  margin: 0;
+}
+
+.k-fig__head {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.k-fig__title {
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.k-fig__sub {
+  color: var(--text-3);
+  font-size: var(--font-sm);
+}
+
+/* Si la gráfica no cabe se desplaza dentro de su caja: nunca se encoge (la letra bajaría de 11 px). */
+.k-fig__plot {
+  position: relative;
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.k-fig__more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-7);
+  font-size: var(--font-sm);
+}
+
+.k-fig__more > details {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.k-fig__more > details[open] {
+  flex-basis: 100%;
+}
+
+.k-fig__more summary {
+  width: fit-content;
+  border-radius: var(--radius-1);
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.k-fig__more summary:hover {
+  color: var(--accent-strong);
+}
+
+.k-fig__def {
+  max-width: 70ch;
+  padding-top: var(--space-2);
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.k-chart {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* La leyenda va encima de la gráfica; en celular pasa abajo (ver el final de la hoja). */
+.k-chart > .k-legend {
+  order: -1;
+}
+
+.k-meter {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.k-meter__text {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-5);
+  color: var(--text-2);
+  font-size: var(--font-sm);
+}
+
+/* Las hojas actuales fijan todo <svg> en 18 px: una gráfica mide lo que dicen sus atributos. */
+.k-ch {
+  display: block;
+  flex: none;
+  overflow: visible;
+  width: auto;
+  max-width: none;
+  height: auto;
+  border-radius: var(--radius-1);
+  font-variant-numeric: tabular-nums;
+  stroke-width: 0;
+}
+
+/* El texto nunca lleva el color de la serie. */
+.k-ch text {
+  fill: var(--text-3);
+  font-size: var(--font-min);
+}
+
+.k-ch .k-ch-strong {
+  fill: var(--ink);
+  font-weight: 600;
+}
+
+.k-ch .k-ch-soft {
+  fill: var(--text-2);
+}
+
+.k-ch-grid {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1px;
+  shape-rendering: crispEdges;
+}
+
+/* El color sigue a la entidad: cada serie declara su número (1 a 6), no su posición. */
+.k-ch-s0 {
+  --k-series: var(--ch-neutral);
+}
+
+.k-ch-s1 {
+  --k-series: var(--ch-1);
+}
+
+.k-ch-s2 {
+  --k-series: var(--ch-2);
+}
+
+.k-ch-s3 {
+  --k-series: var(--ch-3);
+}
+
+.k-ch-s4 {
+  --k-series: var(--ch-4);
+}
+
+.k-ch-s5 {
+  --k-series: var(--ch-5);
+}
+
+.k-ch-s6 {
+  --k-series: var(--ch-6);
+}
+
+/* Una sola serie: el acento de Niebla. */
+.k-ch-s7 {
+  --k-series: var(--accent);
+}
+
+.k-ch-fill {
+  fill: var(--k-series);
+}
+
+.k-ch-line {
+  fill: none;
+  stroke: var(--k-series);
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.k-ch-dot {
+  fill: var(--k-series);
+  stroke: var(--surface);
+  stroke-width: 2px;
+}
+
+.k-ch-track {
+  fill: var(--soft);
+}
+
+.k-ch-hit {
+  fill: transparent;
+}
+
+/* Los puntos de una línea aparecen al pasar por su franja o al recorrerla con el teclado. */
+.k-ch-pt .k-ch-dot,
+.k-ch-pt .k-ch-guide {
+  opacity: 0;
+}
+
+.k-ch-pt:hover .k-ch-dot,
+.k-ch-pt:hover .k-ch-guide,
+.k-ch-pt.is-on .k-ch-dot,
+.k-ch-pt.is-on .k-ch-guide {
+  opacity: 1;
+}
+
+.k-ch-pt.is-on .k-ch-fill,
+.k-ch-pt:hover .k-ch-fill {
+  opacity: 0.8;
+}
+
+.k-ch-guide {
+  stroke: var(--accent-line);
+  stroke-width: 1px;
+}
+
+.k-ch-q0 {
+  fill: var(--ch-seq-0);
+}
+
+.k-ch-q1 {
+  fill: var(--ch-seq-1);
+}
+
+.k-ch-q2 {
+  fill: var(--ch-seq-2);
+}
+
+.k-ch-q3 {
+  fill: var(--ch-seq-3);
+}
+
+.k-ch-q4 {
+  fill: var(--ch-seq-4);
+}
+
+.k-ch-q5 {
+  fill: var(--ch-seq-5);
+}
+
+.k-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-6);
+  margin: 0;
+  padding: 0;
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  list-style: none;
+}
+
+.k-legend > li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.k-legend__key {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--k-series);
+}
+
+.k-legend__key.k-ch-q0,
+.k-legend__key.k-ch-q1,
+.k-legend__key.k-ch-q2,
+.k-legend__key.k-ch-q3,
+.k-legend__key.k-ch-q4,
+.k-legend__key.k-ch-q5 {
+  border: 1px solid var(--line);
+}
+
+.k-legend__key.k-ch-q0 {
+  background: var(--ch-seq-0);
+}
+
+.k-legend__key.k-ch-q1 {
+  background: var(--ch-seq-1);
+}
+
+.k-legend__key.k-ch-q2 {
+  background: var(--ch-seq-2);
+}
+
+.k-legend__key.k-ch-q3 {
+  background: var(--ch-seq-3);
+}
+
+.k-legend__key.k-ch-q4 {
+  background: var(--ch-seq-4);
+}
+
+.k-legend__key.k-ch-q5 {
+  background: var(--ch-seq-5);
+}
+
+/* Globo de datos: lo coloca charts.js; nunca es la única forma de leer un valor (está la tabla). */
+.k-tip {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-2);
+  background: var(--ink);
+  box-shadow: var(--shadow-lift);
+  color: var(--surface);
+  font-size: var(--font-min);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.k-tip[hidden] {
+  display: none;
+}
+
+/* Tabla gemela de una gráfica. */
+.k-data__wrap {
+  overflow: auto;
+  max-height: 320px;
+  margin-top: var(--space-3);
+}
+
+.k-data {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.k-data caption {
+  padding-bottom: var(--space-2);
+  color: var(--text-3);
+  font-size: var(--font-min);
+  text-align: left;
+  caption-side: top;
+}
+
+.k-data th,
+.k-data td {
+  padding: var(--space-2) var(--space-7) var(--space-2) 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.k-data thead th {
+  color: var(--text-3);
+  font-size: var(--font-min);
+  font-weight: 600;
+}
+
+.k-data tbody th {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.k-data th.k-num,
+.k-data td.k-num {
+  text-align: right;
+}
+
+/* ==========================================================================================
+   Táctil y celular
+   ========================================================================================== */
+
+@media (pointer: coarse), (max-width: 680px) {
+  .k-btn,
+  .k-link,
+  .k-check,
+  .k-table__sort {
+    min-height: var(--touch);
+  }
+
+  /* Crece con relleno y no con display:flex, que le quitaría el triángulo de «desplegar». */
+  .k-fig__more summary {
+    padding-block: calc((var(--touch) - 1.5em) / 2);
+    line-height: 1.5;
+  }
+
+  .k-btn--icon {
+    width: var(--touch);
+  }
+
+  .k-check input {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Una ficha que se puede quitar crece para que su botón mida lo que un dedo necesita. */
+  .k-chip:has(> .k-chip__remove) {
+    padding: 0 0 0 var(--space-5);
+  }
+
+  .k-chip__remove {
+    width: var(--touch);
+    height: var(--touch);
+    margin: 0;
+  }
+
+  .k-menu__list .k-check {
+    min-height: var(--touch);
+  }
+
+  .k-legend > li {
+    min-height: var(--touch);
+  }
+}
+
+@media (max-width: 1100px) {
+  .k-page {
+    padding: calc(var(--space-5) * 2);
+  }
+}
+
+@media (max-width: 680px) {
+  .k-page {
+    padding: var(--space-8) var(--space-7);
+  }
+
+  .k-head h1 {
+    font-size: var(--font-2xl);
+  }
+
+  .k-lead {
+    font-size: var(--font-sm);
+  }
+
+  .k-card {
+    padding: var(--space-7);
+  }
+
+  /* Con menos de 16 px, iOS amplía la página al enfocar un campo. */
+  .k-input {
+    font-size: var(--font-xl);
+  }
+
+  .k-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .k-chart > .k-legend {
+    order: 0;
+  }
+
+  .k-tile {
+    padding: var(--space-5) var(--space-6);
+  }
+
+  .k-dialog__foot > .k-btn,
+  .k-form__actions > .k-btn {
+    flex: 1 1 auto;
+  }
+
+  /* El menú deja de flotar: se abre debajo, a lo ancho, y no puede salirse de la pantalla. */
+  .k-menu[open] {
+    flex-basis: 100%;
+  }
+
+  .k-menu__list {
+    position: static;
+    width: auto;
+    max-width: none;
+    margin-top: var(--space-2);
+    box-shadow: none;
+  }
+
+  /* Tabla como tarjetas: cada fila es una tarjeta y cada celda lleva su rótulo. */
+  .k-table__all {
+    display: inline-flex;
+  }
+
+  .k-table__grid--cards,
+  .k-table__grid--cards tbody,
+  .k-table__grid--cards td {
+    display: block;
+  }
+
+  .k-table__grid--cards thead {
+    display: none;
+  }
+
+  .k-table__grid--cards tr {
+    position: relative;
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-5) var(--space-7);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .k-table__grid--cards tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .k-table__grid--cards td,
+  .k-table__grid--cards td.k-num,
+  .k-table__grid--cards td.k-wrap {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .k-table__grid--cards td .k-row {
+    flex-wrap: wrap;
+  }
+
+  .k-table__grid--cards td[data-label]::before {
+    content: attr(data-label);
+    flex: none;
+    width: 36%;
+    color: var(--text-3);
+    font-size: var(--font-min);
+  }
+
+  .k-table__grid--cards td.k-table__main {
+    padding-right: calc(var(--touch) + var(--space-3));
+    font-size: var(--font-lg);
+  }
+
+  .k-table__grid--cards td.k-table__check {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-5);
+    width: auto;
+  }
+
+  .k-table__grid--cards .k-table__check .k-check {
+    min-width: var(--touch);
+    justify-content: center;
+  }
+
+  .k-cond__rule {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .k-cond__op,
+  .k-cond__value {
+    grid-column: 1 / -1;
+  }
+
+  .k-cond__field {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .k-cond__rm {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  /* En celular el asistente dice en qué paso se está y deja los botones siempre a mano. */
+  .k-wizard__nav {
+    display: none;
+  }
+
+  .k-wizard__where {
+    display: block;
+  }
+
+  .k-wizard__foot {
+    position: sticky;
+    bottom: 0;
+    padding: var(--space-4) 0;
+    background: var(--surface);
+  }
+
+  .k-wizard__foot > .k-btn {
+    flex: 1 1 auto;
+  }
+
+  .k-toast {
+    top: calc(var(--space-4) + env(safe-area-inset-top));
+    right: var(--space-5);
+    left: var(--space-5);
+    width: auto;
+    max-width: none;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .k-btn,
+  .k-input,
+  .k-tab {
+    transition: none;
+  }
+
+  .k-dialog[open],
+  .k-state--loading > p {
+    animation: none;
+  }
+}

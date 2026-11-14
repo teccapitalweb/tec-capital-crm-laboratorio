@@ -1,0 +1,9 @@
+{
+  "id": "ejemplo",
+  "title": "Ejemplo del kit",
+  "visibility": "preview",
+  "nav": { "group": "Gestión", "icon": "blocks", "label": "Ejemplo", "order": 900 },
+  "roles": ["admin", "agent"],
+  "entry": "index.js",
+  "styles": ["screen.css"]
+}
