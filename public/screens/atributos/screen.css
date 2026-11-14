@@ -1,0 +1,30 @@
+/*
+ * Pantalla «Datos de contacto»: sólo la composición que el kit no trae, con el prefijo atr- y variables de
+ * public/tokens.css.
+ */
+
+.atr-marca {
+  max-width: 320px;
+}
+
+.atr-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.atr-titulo {
+  margin: 0 0 var(--space-2);
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: 600;
+}
+
+.atr-sistema {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

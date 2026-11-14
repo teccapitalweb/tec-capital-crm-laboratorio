@@ -1,0 +1,10 @@
+{
+  "id": "atributos",
+  "title": "Datos de contacto",
+  "visibility": "preview",
+  "nav": { "group": "Gestión", "icon": "list-plus", "label": "Datos de contacto", "order": 60 },
+  "roles": ["admin"],
+  "permission": "contacts.attributes.manage",
+  "entry": "index.js",
+  "styles": ["screen.css"]
+}
