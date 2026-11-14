@@ -193,24 +193,31 @@ export function createWebhookInbox({
         .finally(() => {
           flying.delete(row.seq);
           notify(row.seq);
-          safePump();
-          if (!flying.size) for (const resolve of idleWaiters.splice(0)) resolve();
+          schedule();
         })
         .catch(error => log.error('Webhook inbox pump failed:', safeError(error))); // nunca una promesa sin atender
     }
     return rows.length;
   }
-  function safePump() {
-    try {
-      return pump();
-    } catch (error) {
-      log.error('Webhook inbox pump failed:', safeError(error));
-      return 0;
-    }
+  // La pasada siguiente va en otra vuelta del bucle de eventos, nunca encadenada a la anterior: con muchos eventos en
+  // cola el servidor sigue atendiendo peticiones y relojes entre tanda y tanda. Varias llamadas seguidas son una sola.
+  let scheduled = false;
+  function schedule() {
+    if (scheduled) return;
+    scheduled = true;
+    setImmediate(() => {
+      scheduled = false;
+      try {
+        pump();
+      } catch (error) {
+        log.error('Webhook inbox pump failed:', safeError(error));
+      }
+      if (!flying.size && !scheduled) for (const resolve of idleWaiters.splice(0)) resolve();
+    });
   }
   // Arranca el procesamiento en cuanto termine lo que se está ejecutando ahora (nunca dentro de una transacción ajena).
   const wake = () => {
-    if (!paused && !stopped) setImmediate(safePump);
+    if (!paused && !stopped) schedule();
   };
 
   // 4) Esperar, como mucho `ms`, a que estas filas terminen (done o failed). Devuelve un Map seq → {seq,state,result,error}
@@ -258,8 +265,9 @@ export function createWebhookInbox({
     });
   }
 
-  // Promesa que se cumple cuando este proceso no tiene ninguna fila en vuelo (para el apagado ordenado y las pruebas).
-  const idle = () => (flying.size ? new Promise(resolve => idleWaiters.push(resolve)) : Promise.resolve());
+  // Promesa que se cumple cuando este proceso no tiene ninguna fila en vuelo ni una pasada por empezar (para el apagado
+  // ordenado y las pruebas).
+  const idle = () => (flying.size || scheduled ? new Promise(resolve => idleWaiters.push(resolve)) : Promise.resolve());
   // Apagado: no se toma nada nuevo; lo que está en vuelo termina.
   const stop = () => {
     stopped = true;

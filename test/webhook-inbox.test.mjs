@@ -206,13 +206,30 @@ test('eventos de carriles distintos se procesan en orden de llegada y como mucho
   assert.deepEqual(calls, ['w1', 'w2', 'w3']);
   assert.equal(inbox.tick(), 0, 'sin huecos libres no se reclama nada');
   gates.w2.resolve('ok');
-  await flush();
+  await flush(); // termina w2…
+  await flush(); // …y la pasada siguiente, en otra vuelta del bucle, toma el hueco
   assert.deepEqual(calls, ['w1', 'w2', 'w3', 'w4'], 'al liberarse un hueco entra el siguiente');
   assert.equal(state('w5'), 'pending');
   for (const gate of Object.values(gates)) gate.resolve('ok');
   await inbox.idle();
   assert.equal(calls.length, 6);
   assert.equal(inbox.stats().inFlight, 0);
+});
+
+test('con muchos eventos en cola la bandeja cede el hilo entre tanda y tanda', async t => {
+  const { calls, inbox, add } = setup(t);
+  for (let i = 0; i < 40; i++) add('e' + i, 'carril-' + i);
+  assert.equal(inbox.tick(), 8, 'una pasada toma como mucho los huecos libres');
+  // otra tarea del servidor (una petición, un reloj) corre antes de que la bandeja vacíe su cola
+  const seen = await new Promise(done => setImmediate(() => done(calls.length)));
+  assert.ok(seen < 40, 'procesados cuando le tocó el turno a la otra tarea: ' + seen + ' de 40');
+  await inbox.idle();
+  assert.equal(calls.length, 40);
+  assert.deepEqual(
+    calls,
+    Array.from({ length: 40 }, (_, i) => 'e' + i),
+    'y siguen saliendo en orden de llegada',
+  );
 });
 
 test('reintento con espera creciente; al agotar los intentos queda fallido y deja de bloquear su carril', async t => {
