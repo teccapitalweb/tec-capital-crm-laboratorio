@@ -34,7 +34,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Segunda tanda de la construcción (rama `chore/f0-01-codificacion`, 14 nov 2026; sin publicar)
+## Segunda tanda de la construcción (publicada en `main`, 14 nov 2026)
 
 Lo construido después de los cimientos, integrado y probado en la rama de integración. Cada pieza tiene su página.
 
@@ -46,6 +46,7 @@ Lo construido después de los cimientos, integrado y probado en la rama de integ
 - **Seguridad:** la revisión automática encontró tres huecos de privacidad antes de integrarlos y se cerraron con pruebas: buscar o filtrar en la lista de contactos por el correo o el teléfono completo, y escribir un dato personal oculto, permitían adivinar el valor a quien no tiene permiso de verlo. Hoy los dos roles fijos tienen ese permiso; se cerró pensando en los roles finos. Además, el limitador ya no desaloja contadores vivos.
 - **Base de datos:** cinco migraciones con nombre (`attributes/0001`, `identity/0001`, `contacts/0001`, `inbox/0001`, `queues/0001`), todas aditivas; identidad `41+5.2bea4d8c`. Al publicar, el servidor guarda una copia completa de la base antes de aplicarlas. Ensayadas sobre una copia de la base de demostración.
 - **Evidencia:** 581 pruebas (dos corridas) y 17 de navegador; revisión en navegador de las tres pantallas en computadora y celular; `npm run check` limpio.
+- **Publicado y comprobado en producción (14 nov 2026, commit `8bd17ef`):** despliegue de Railway correcto; `/api/health` devuelve `"schema":"41+5.2bea4d8c"` (las cinco migraciones aplicadas al arrancar) y no informa módulos fallidos; `/screens/index.json` devuelve una lista vacía (las tres pantallas siguen ocultas); se sirven el kit y la portada con el puente; `crm.js` trae «Cerrar sesión»; sin sesión, `/api/bootstrap`, `/api/contacts` y `/api/attributes` responden 401; el webhook de Meta sin firma responde 401 y su verificación sin token 403; `GET //` responde 400. CI con sus dos trabajos en verde (581 pruebas y 17 de navegador). No se entró con ninguna cuenta ni se envió ningún mensaje real: falta comprobar con sesión el botón «Cerrar sesión» y, si WhatsApp real está encendido, que un mensaje entrante llegue.
 - **Falta:** guardar recorridos de verdad (API de automatización), importar contactos por CSV, columnas de datos propios en la lista, roles finos, observabilidad, respaldos fuera del volumen, banco de carga y búsqueda de mensajes. Los respaldos `before-*` siguen sin rotarse.
 
 ## Cimientos para construir en paralelo (publicado en `main`, 13 nov 2026)

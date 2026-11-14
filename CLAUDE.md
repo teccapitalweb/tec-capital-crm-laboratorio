@@ -97,11 +97,11 @@ npm start
 
 `npm run check` comprueba codificación (UTF-8, LF), sintaxis y formato (Prettier); antes de entregar, `npx prettier --write` sobre lo que tocaste.
 
-La referencia vigente es **279 pruebas aprobadas** más 9 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **581 pruebas aprobadas** más 17 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 
-**14 nov 2026:** la segunda tanda (teléfono canónico, fusión con registro de datos de persona, recepción duradera de webhooks, permisos y tiempo real, ESLint, kit de pantallas y tres pantallas en vista previa) está integrada en la rama `chore/f0-01-codificacion` y **sin publicar**: ver [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md).
+**14 nov 2026:** la segunda tanda (teléfono canónico, fusión con registro de datos de persona, recepción duradera de webhooks, permisos y tiempo real, ESLint, kit de pantallas y tres pantallas en vista previa) se **publicó** en `main` (commit `8bd17ef`); las tres pantallas siguen ocultas en producción: ver [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md).
 
 **13 nov 2026:** se publicaron los cimientos para construir módulos y pantallas en paralelo (migraciones con nombre, `server/modules/`, `public/screens/`, `server/lib/`, formato automático y pruebas de humo en navegador), sin cambios visibles: ver [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md) y [docs/GUIA_MODULOS.md](docs/GUIA_MODULOS.md). Lo que sigue de este apartado es anterior a esa fecha.
 
