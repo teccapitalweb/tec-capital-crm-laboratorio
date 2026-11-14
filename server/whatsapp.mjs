@@ -162,6 +162,18 @@ export function createWhatsApp({
     return n.length >= 2 ? n : 'WhatsApp ··' + waId.slice(-4);
   };
 
+  // Paso con nombre del entrante (fila 33): la difusión a la que responde, o null. Síncrono, dentro de la transacción.
+  function attributionOf(d, waId, number, at) {
+    if (!broadcasts) return null;
+    return broadcasts.attribute({
+      waId,
+      numberId: number.phone_number_id,
+      contextRef: d.replyTo?.providerRef ? String(d.replyTo.providerRef) : null,
+      payload: d.interaction?.payload ?? d.interaction?.id ?? null,
+      at,
+    });
+  }
+
   // ---- Entrante: devuelve un texto legible para la bitácora de conectores. Lanza sólo ante un fallo inesperado (Meta lo reintentará).
   async function inbound(d, adapter) {
     const waId = digits(d?.from),
@@ -233,6 +245,11 @@ export function createWhatsApp({
             "UPDATE wa_identities SET last_seen=?,profile_name=CASE WHEN ?!='' THEN ? ELSE profile_name END WHERE wa_id=?",
           ).run(t, text(d.name, 60), text(d.name, 60), waId);
         db.prepare('UPDATE users SET last_seen=? WHERE id=?').run(t, userId);
+        // 2b) ¿responde a una difusión? (botón, mensaje citado o la última recibida en los días de atribución). El
+        // contacto de la lista pasa a ser el de esta persona, y con atribución exacta la conversación va a su curso.
+        const hit = attributionOf(d, waId, number, t);
+        if (hit) broadcasts.adopt(hit, userId);
+        const fromCampaign = hit ? broadcasts.courseOf(hit) : null;
         // 3) conversación abierta con ese número; si no hay, una nueva en el curso que toca
         let c = db
             .prepare(
@@ -254,25 +271,29 @@ export function createWhatsApp({
                   at: t,
                 })
               : null;
-        // Ya tenía una conversación abierta y ahora llega por el anuncio de OTRO curso: la conversación pasa a ese curso (salvo que tenga un pedido vigente).
+        // El curso al que llega: el del anuncio y, si no hay anuncio, el de la difusión a la que responde.
+        const target = fromAd || fromCampaign;
+        // Ya tenía una conversación abierta y ahora llega por el anuncio (o la difusión) de OTRO curso: la conversación pasa a ese curso (salvo que tenga un pedido vigente).
         if (
           c &&
-          fromAd &&
-          (fromAd.id !== c.course_id || c.course_pending) &&
+          target &&
+          (target.id !== c.course_id || c.course_pending) &&
           !payments.openOrder(c.id) &&
-          crm.moveConversation(c, fromAd.id, fromAd.editionId, { placeholder: Boolean(c.course_pending) })
+          crm.moveConversation(c, target.id, target.editionId, { placeholder: Boolean(c.course_pending) })
         ) {
-          db.prepare('UPDATE conversations SET referral=? WHERE id=?').run(refJson, c.id);
-          c.referral = refJson;
-          audit(null, 'conversation.course.ad', c.id);
+          if (fromAd) {
+            db.prepare('UPDATE conversations SET referral=? WHERE id=?').run(refJson, c.id);
+            c.referral = refJson;
+          }
+          audit(null, fromAd ? 'conversation.course.ad' : 'conversation.course.broadcast', c.id);
         }
         if (!c) {
           // Número que atiende toda la marca: el curso es el del anuncio; sin anuncio (o sin curso reconocible) queda «por elegir» y el asistente lo pregunta.
           const several = number.multi ? brandCourses(db, catalogue, number.brand_id) : [],
-            p = fromAd ? { courseId: fromAd.id, editionId: fromAd.editionId } : pick(number);
+            p = target ? { courseId: target.id, editionId: target.editionId } : pick(number);
           if (!p)
             return { skip: 'ignorado: la marca no tiene un curso activo con edición para recibir conversaciones' };
-          const pending = !fromAd && several.length > 1 ? 1 : 0;
+          const pending = !target && several.length > 1 ? 1 : 0;
           let id =
             db
               .prepare(
@@ -324,6 +345,8 @@ export function createWhatsApp({
             crm.contactChanged(contact.id);
           } // identidad única de persona por teléfono
         }
+        // 3b) la difusión a la que responde queda escrita en la conversación antes de su mensaje (y la marca como respondida)
+        if (hit) broadcasts.onReply(hit, c, { at: t });
         // 4) mensaje, igual que el de un perfil de prueba: comprobante si hay pedido vigente, y si no, el asistente responde
         let attachmentId = null;
         if (file) {
@@ -512,6 +535,12 @@ export function createWhatsApp({
   let templates = null;
   const useTemplates = api => {
     templates = api;
+  };
+  // ---- Difusiones con plantilla (server/modules/broadcasts, D-5; conciliación, fila 25): el entrante pregunta si
+  // responde a una difusión antes de buscar o crear la conversación. Sin el módulo, el entrante sigue igual.
+  let broadcasts = null;
+  const useBroadcasts = api => {
+    broadcasts = api;
   };
   const needTemplates = () => {
     if (!templates) throw fail(503, 'Las plantillas de WhatsApp no están disponibles en este momento.');
@@ -722,5 +751,5 @@ export function createWhatsApp({
     }
     throw fail(404, 'Ruta de WhatsApp no encontrada.');
   }
-  return { handle, inbound, outbound, status, pick, useTemplates };
+  return { handle, inbound, outbound, status, pick, useTemplates, useBroadcasts };
 }

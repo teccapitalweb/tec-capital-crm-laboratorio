@@ -1,0 +1,10 @@
+{
+  "id": "difusiones",
+  "title": "Difusiones",
+  "visibility": "preview",
+  "nav": { "group": "Gestión", "icon": "megaphone", "label": "Difusiones", "order": 50 },
+  "roles": ["admin", "agent"],
+  "permission": "campaigns.view",
+  "entry": "index.js",
+  "styles": ["screen.css"]
+}

@@ -632,14 +632,13 @@ export function metaChannel({
         signal: AbortSignal.timeout(timeout),
       });
     } catch (e) {
+      // Para quien no debe reenviar a ciegas (difusiones): `timeout` = Meta pudo recibirlo; `beforeSend` = la conexión
+      // ni siquiera se abrió (nombre no resuelto, conexión rechazada), así que con seguridad no salió nada.
+      const timeout = e?.name === 'TimeoutError' || e?.name === 'AbortError';
+      const code = e?.cause?.code || e?.code || '';
       throw Object.assign(
-        fail(
-          502,
-          'No se pudo conectar con Meta (' +
-            (e?.name === 'TimeoutError' ? 'tiempo de espera agotado' : 'error de red') +
-            ').',
-        ),
-        { network: true },
+        fail(502, 'No se pudo conectar con Meta (' + (timeout ? 'tiempo de espera agotado' : 'error de red') + ').'),
+        { network: true, timeout, beforeSend: !timeout && ['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN'].includes(code) },
       );
     }
     const data = await r.json().catch(() => ({}));
@@ -833,10 +832,12 @@ export function metaChannel({
         const params = (Array.isArray(m.template.params) ? m.template.params : []).map(param);
         const components = [],
           head = m.template.header;
+        let mediaId = null; // el archivo del encabezado ya subido: quien envía muchos lo reutiliza (difusiones)
         if (head?.type === 'text' && Array.isArray(head.params) && head.params.length)
           components.push({ type: 'header', parameters: head.params.map(t => ({ type: 'text', text: param(t) })) });
         else if (head?.type === 'image' || head?.type === 'document') {
           const id = head.mediaId || (head.media ? await uploadMedia(from, head.media) : null);
+          mediaId = id;
           if (!id) throw fail(422, 'La plantilla lleva un archivo en el encabezado y no se encontró ese archivo.');
           const filename = String(head.media?.filename || head.filename || 'archivo').slice(0, 120);
           components.push({
@@ -869,6 +870,9 @@ export function metaChannel({
               parameters: [{ type: 'coupon_code', coupon_code: param(b.code).slice(0, 15) }],
             });
         }
+        // `callback` (difusiones): viaja como biz_opaque_callback_data y vuelve en cada estado, así un envío cuya
+        // respuesta se perdió se reconoce por su aviso de Meta y nunca se reenvía a ciegas.
+        const callback = typeof m.callback === 'string' ? m.callback.slice(0, 512) : '';
         const r = await post(from, to, {
           type: 'template',
           template: {
@@ -876,10 +880,18 @@ export function metaChannel({
             language: { code: String(m.template.language || 'es_MX') },
             ...(components.length ? { components } : {}),
           },
+          ...(callback ? { biz_opaque_callback_data: callback } : {}),
         });
         const ref = r.messages?.[0]?.id;
         if (!ref) throw fail(502, 'Meta aceptó la petición pero no devolvió la referencia del mensaje.');
-        return { providerRef: ref, state: 'sent', reason: null };
+        const waId = typeof r.contacts?.[0]?.wa_id === 'string' ? r.contacts[0].wa_id.slice(0, 40) : null;
+        return {
+          providerRef: ref,
+          state: 'sent',
+          reason: null,
+          ...(waId ? { waId } : {}),
+          ...(mediaId ? { mediaId } : {}),
+        };
       }
       const text = String(m.text || '')
           .trim()
