@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { cancelSteps } from './automation.mjs';
 import { parseRates } from './presentation.mjs';
+import { createAccess } from './lib/access.mjs';
 
 // Campañas y envíos segmentados (Fase 5, bloque 1; docs/PLAN_CAMPANAS.md). Una campaña es una plantilla aprobada, un
 // segmento y una fecha. Cada destinatario es un paso durable del motor 4A (`campaign.send`) con clave de idempotencia
@@ -48,7 +49,14 @@ export function createCampaigns({
   now = Date.now,
   env = process.env,
 }) {
-  const get = id => (typeof id === 'string' ? db.prepare('SELECT * FROM campaigns WHERE id=?').get(id) : null);
+  // Este módulo atiende las campañas de catálogo (kind 'catalogue', las de siempre). Las difusiones con plantilla
+  // (kind 'template', docs/PLAN_CIMIENTOS_DIFUSIONES.md) no pasan por aquí: no tienen conversación ni paso por
+  // destinatario, y su motor es otro. Para estas rutas, una difusión con plantilla no existe.
+  const get = id =>
+    typeof id === 'string' ? db.prepare("SELECT * FROM campaigns WHERE id=? AND kind='catalogue'").get(id) : null;
+  // Permisos del catálogo (server/lib/permissions.mjs): campaigns.view, campaigns.edit y campaigns.send. Hoy sólo
+  // administración los tiene, como antes; cuando haya roles, este módulo no cambia.
+  const access = createAccess({ db, crm });
   const conv = id => db.prepare('SELECT * FROM conversations WHERE id=?').get(id);
   const defaults = b => ({
     brand_id: b,
@@ -61,10 +69,6 @@ export function createCampaigns({
     updated_at: null,
   });
   const settings = b => db.prepare('SELECT * FROM campaign_settings WHERE brand_id=?').get(b) || defaults(b);
-  const requireAdmin = user => {
-    const u = db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);
-    if (!u || u.disabled || u.role !== 'admin') throw fail(403, 'Las campañas las administra un administrador.');
-  };
   const event = (id, kind, details = {}, actor = null) =>
     db
       .prepare('INSERT INTO campaign_events(campaign_id,kind,details,actor_id,created_at) VALUES(?,?,?,?,?)')
@@ -510,7 +514,7 @@ export function createCampaigns({
     let launched = 0;
     for (const c of db
       .prepare(
-        "SELECT * FROM campaigns WHERE (status='scheduled' AND scheduled_at<=?) OR (status='sending' AND launched_at IS NULL) ORDER BY scheduled_at LIMIT 5",
+        "SELECT * FROM campaigns WHERE kind='catalogue' AND ((status='scheduled' AND scheduled_at<=?) OR (status='sending' AND launched_at IS NULL)) ORDER BY scheduled_at LIMIT 5",
       )
       .all(t)) {
       try {
@@ -519,7 +523,9 @@ export function createCampaigns({
         console.error('Campaign launch failed:', e.name, e.message);
       }
     }
-    for (const c of db.prepare("SELECT * FROM campaigns WHERE status='sending' AND launched_at IS NOT NULL").all()) {
+    for (const c of db
+      .prepare("SELECT * FROM campaigns WHERE kind='catalogue' AND status='sending' AND launched_at IS NOT NULL")
+      .all()) {
       const open = db
         .prepare(
           "SELECT count(*) n FROM campaign_recipients r JOIN automation_steps s ON s.id=r.step_id WHERE r.campaign_id=? AND s.state IN ('pending','reserved')",
@@ -633,7 +639,7 @@ export function createCampaigns({
 
   async function handle(req, res, path, user) {
     if (!(path === '/api/campaigns' || path.startsWith('/api/campaigns/'))) return false;
-    requireAdmin(user);
+    access.require(user, 'campaigns.view');
     const url = new URL(req.url, 'http://localhost');
     let x;
     if (path === '/api/campaigns/settings' && req.method === 'GET') {
@@ -646,6 +652,7 @@ export function createCampaigns({
       return true;
     }
     if ((x = path.match(/^\/api\/campaigns\/settings\/([\w-]{1,64})$/)) && req.method === 'PATCH') {
+      access.require(user, 'campaigns.send', x[1]);
       json(res, 200, { settings: setSettings(x[1], await body(req), user) });
       return true;
     }
@@ -660,7 +667,7 @@ export function createCampaigns({
         const rows = ids.length
           ? db
               .prepare(
-                `SELECT * FROM campaigns WHERE brand_id IN (${ids.map(() => '?').join(',')}) ORDER BY updated_at DESC LIMIT 100`,
+                `SELECT * FROM campaigns WHERE kind='catalogue' AND brand_id IN (${ids.map(() => '?').join(',')}) ORDER BY updated_at DESC LIMIT 100`,
               )
               .all(...ids)
           : [];
@@ -668,6 +675,7 @@ export function createCampaigns({
         return true;
       }
       if (req.method === 'POST') {
+        access.require(user, 'campaigns.edit');
         const c = create(await body(req), user);
         audit(user, 'campaign.create', c.id);
         changed(c.brandId);
@@ -681,6 +689,9 @@ export function createCampaigns({
     const c = get(x[1]);
     if (!c) throw fail(404, 'Campaña no encontrada.');
     crm.requireBrand(user, c.brand_id);
+    access.require(user, 'campaigns.view', c.brand_id);
+    if (req.method !== 'GET')
+      access.require(user, x[2] === 'schedule' || x[2] === 'cancel' ? 'campaigns.send' : 'campaigns.edit', c.brand_id);
     if (!x[2] && req.method === 'GET') {
       json(res, 200, { campaign: view(c) });
       return true;

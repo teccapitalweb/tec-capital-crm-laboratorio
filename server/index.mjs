@@ -331,6 +331,7 @@ const presentation = createPresentation({ db, crm, json });
 // Contrato de conectores (server/connectors.mjs): proveedor de canal y de pago por entorno, simulados por omisión; webhooks firmados.
 const connectors = createConnectors({
   db,
+  dataDir,
   channel,
   payments,
   body,
