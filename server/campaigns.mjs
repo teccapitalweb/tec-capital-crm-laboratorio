@@ -173,10 +173,14 @@ export function createCampaigns({
       where.push('v.channel=?');
       args.push(seg.channel);
     }
-    if (seg.audienceId && audiences) {
-      const member = audiences.memberSql(camp.brand_id, seg.audienceId, { alias: 'c' });
-      where.push(member.sql);
-      args.push(...member.args);
+    if (seg.audienceId) {
+      // Sin el módulo de audiencias el público no se amplía: no entra nadie.
+      if (!audiences) where.push('0');
+      else {
+        const member = audiences.memberSql(camp.brand_id, seg.audienceId, { alias: 'c' });
+        where.push(member.sql);
+        args.push(...member.args);
+      }
     }
     if (seg.tagIds) {
       where.push(`c.id IN (SELECT contact_id FROM contact_tag_links WHERE tag_id IN (${ph(seg.tagIds)}))`);
