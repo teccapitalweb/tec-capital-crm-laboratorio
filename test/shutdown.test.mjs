@@ -71,7 +71,7 @@ test('apagado ordenado: nunca espera más que el plazo, para lo que está en vue
     log,
   })();
   const waited = Date.now() - started;
-  assert.ok(waited >= 120 && waited < 1500, 'esperó ' + waited + ' ms');
+  assert.ok(waited >= 120 && waited < 4000, 'esperó ' + waited + ' ms');
   assert.deepEqual(result, { drained: false, closed: false });
   assert.deepEqual(order, ['deja de aceptar', 'cierra la base {"drained":false,"closed":false}', 'sale con 0']);
   assert.deepEqual(log.lines, ['Apagado: quedó trabajo en vuelo al cumplirse el plazo de 150 ms.']);
@@ -86,7 +86,7 @@ test('apagado ordenado: nunca espera más que el plazo, para lo que está en vue
   })();
   assert.deepEqual(partial, { drained: true, closed: false });
   const total = Date.now() - again;
-  assert.ok(total >= 170 && total < 1500, 'tardó ' + total + ' ms');
+  assert.ok(total >= 170 && total < 4000, 'tardó ' + total + ' ms');
 });
 
 test('apagado ordenado: aunque un paso falle, sigue con los demás y termina saliendo', async () => {

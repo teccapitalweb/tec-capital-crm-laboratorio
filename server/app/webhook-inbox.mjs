@@ -189,12 +189,14 @@ export function createWebhookInbox({
     const rows = claim(free);
     for (const row of rows) {
       flying.add(row.seq);
-      run(row).finally(() => {
-        flying.delete(row.seq);
-        notify(row.seq);
-        safePump();
-        if (!flying.size) for (const resolve of idleWaiters.splice(0)) resolve();
-      });
+      run(row)
+        .finally(() => {
+          flying.delete(row.seq);
+          notify(row.seq);
+          safePump();
+          if (!flying.size) for (const resolve of idleWaiters.splice(0)) resolve();
+        })
+        .catch(error => log.error('Webhook inbox pump failed:', safeError(error))); // nunca una promesa sin atender
     }
     return rows.length;
   }

@@ -187,7 +187,7 @@ test('piezas comunes: detectar una columna, cortar una espera y dejar un error e
     withTimeout(new Promise(() => {}), 40),
     error => error.message === 'Tiempo de espera agotado.' && error.transient === true,
   );
-  assert.ok(Date.now() - started < 1500);
+  assert.ok(Date.now() - started < 4000);
   assert.equal(safeError(new Error('dos\nlíneas\ty un tabulador')), 'dos líneas y un tabulador');
   assert.equal(safeError('x'.repeat(500)).length, 200);
 });

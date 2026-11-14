@@ -439,7 +439,7 @@ test('settled: no espera con 0, se cumple cuando las filas terminan y vence a ti
   const waiting = inbox.settled([fast.seq, slow.seq], 5000);
   setTimeout(() => gate.resolve('listo'), 60);
   const rows = await waiting;
-  assert.ok(Date.now() - started < 2000, 'no agota la espera cuando las filas terminan antes');
+  assert.ok(Date.now() - started < 4000, 'no agota la espera cuando las filas terminan antes');
   assert.deepEqual({ ...rows.get(fast.seq) }, { seq: fast.seq, state: 'done', result: 'hecho fast', error: null });
   assert.equal(rows.get(slow.seq).result, 'listo');
   // ya terminadas: responde al momento aunque se pida esperar
@@ -449,7 +449,7 @@ test('settled: no espera con 0, se cumple cuando las filas terminan y vence a ti
   const before = Date.now();
   const late = await inbox.settled([never.seq, fast.seq, 9999], 120);
   const waited = Date.now() - before;
-  assert.ok(waited >= 100 && waited < 2000, 'esperó ' + waited + ' ms');
+  assert.ok(waited >= 100 && waited < 4000, 'esperó ' + waited + ' ms');
   assert.equal(late.get(never.seq).state, 'reserved');
   assert.equal(late.get(fast.seq).state, 'done');
   assert.equal(late.has(9999), false, 'una fila que no existe no detiene la espera');

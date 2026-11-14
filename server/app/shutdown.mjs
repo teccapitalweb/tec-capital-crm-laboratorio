@@ -47,16 +47,20 @@ export function createShutdown({
         return undefined;
       }
     };
-    guarded('dejar de aceptar trabajo', stopIntake);
-    const drained = await within(
-      guarded('esperar lo que estaba en vuelo', () => Promise.all(inFlight.map(wait => wait()))),
-      left(),
-    );
-    if (!drained) log.warn('Apagado: quedó trabajo en vuelo al cumplirse el plazo de ' + graceMs + ' ms.');
-    const closed = await within(guarded('cerrar las conexiones', closeConnections), left());
-    guarded('cerrar', () => finish({ drained, closed }));
-    exit(0);
-    return { drained, closed };
+    const result = { drained: false, closed: false };
+    try {
+      guarded('dejar de aceptar trabajo', stopIntake);
+      result.drained = await within(
+        guarded('esperar lo que estaba en vuelo', () => Promise.all(inFlight.map(wait => wait()))),
+        left(),
+      );
+      if (!result.drained) log.warn('Apagado: quedó trabajo en vuelo al cumplirse el plazo de ' + graceMs + ' ms.');
+      result.closed = await within(guarded('cerrar las conexiones', closeConnections), left());
+      guarded('cerrar', () => finish({ ...result }));
+    } finally {
+      exit(0); // pase lo que pase: un proceso a medio apagar no debe quedarse vivo
+    }
+    return result;
   }
   // La segunda señal no empieza otro apagado: devuelve el que ya está en curso.
   return function shutdown() {
