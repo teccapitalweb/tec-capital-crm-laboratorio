@@ -101,6 +101,8 @@ La referencia vigente es **605 pruebas aprobadas** más 19 de navegador con `npm
 
 ## Lo siguiente
 
+**14 nov 2026 (noche):** la cuarta tanda (plantillas completas de WhatsApp con encabezado y botones y su adopción por lote, subida única de archivos, y audiencias: listas, segmentos y listas de exclusión) está en la rama `chore/f0-01-codificacion`, **sin publicar**; esquema `41+10.f226e990`. Planes: [PLAN_PLANTILLAS_COMPLETAS.md](docs/PLAN_PLANTILLAS_COMPLETAS.md) y [PLAN_AUDIENCIAS.md](docs/PLAN_AUDIENCIAS.md).
+
 **14 nov 2026 (tarde):** la tercera tanda (contrato del canal 1.1, cimientos de difusiones con motor de costos, importación de contactos por CSV y cola de trabajos) se **publicó** en `main` (commit `2383fcc`; esquema `41+9.f15ae3d9`).
 
 **14 nov 2026:** la segunda tanda (teléfono canónico, fusión con registro de datos de persona, recepción duradera de webhooks, permisos y tiempo real, ESLint, kit de pantallas y tres pantallas en vista previa) se **publicó** en `main` (commit `8bd17ef`); las tres pantallas siguen ocultas en producción: ver [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md).
