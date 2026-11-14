@@ -1,6 +1,7 @@
-import { createHash, createHmac, timingSafeEqual, randomBytes, randomUUID } from 'node:crypto';
+import { createHmac, timingSafeEqual, randomBytes, randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { createWebhookInbox } from './app/webhook-inbox.mjs';
+import { createPeerHash, loadPeerKey } from './lib/peer-key.mjs';
 
 // Contrato de conectores (Fase 1 · bloque 6). Define la interfaz que tendrán los proveedores reales de canal (Meta:
 // WhatsApp Cloud API, Instagram, Messenger) y de pago (Stripe, Conekta), y la cumple hoy con adaptadores simulados.
@@ -60,20 +61,14 @@ export function peerIdentifier(data) {
 //   estado de mensaje   st:<proveedor>:<referencia del mensaje>
 //   pago                pay:<proveedor>:<pedido, referencia o id del evento>
 //   cualquier otro      ev:<proveedor>:<id del evento>
-// El identificador de la persona va como huella: el carril sólo se compara y no debe guardar otro teléfono en claro.
-export function laneOf(kind, provider, ev) {
+// El identificador de la persona va como huella CON LLAVE (`peerHash`, de server/lib/peer-key.mjs): el carril sólo se
+// compara, se queda en la fila después de vaciar la carga y no debe permitir recuperar el teléfono.
+export function laneOf(kind, provider, ev, peerHash) {
+  if (typeof peerHash !== 'function') throw new TypeError('laneOf necesita la huella con llave (peerHash).');
   const d = ev?.data || {};
   if (kind === 'channel' && ev.type === 'message.inbound') {
     const who = peerIdentifier(d);
-    if (who)
-      return (
-        'in:' +
-        provider +
-        ':' +
-        String(d.account?.externalId ?? d.to ?? '') +
-        ':' +
-        createHash('sha256').update(who).digest('hex').slice(0, 16)
-      );
+    if (who) return 'in:' + provider + ':' + String(d.account?.externalId ?? d.to ?? '') + ':' + peerHash(who);
   }
   if (kind === 'channel' && ev.type === 'message.status' && d.providerRef)
     return 'st:' + provider + ':' + d.providerRef;
@@ -361,11 +356,6 @@ export function explainMeta(error, status = 0) {
 const clip = (v, max) => (v === undefined || v === null || v === '' ? null : String(v).slice(0, max));
 const lower = (v, max = 60) => clip(v, max)?.toLowerCase() ?? null;
 const onlyDigits = v => String(v ?? '').replace(/\D/g, '');
-const fingerprint = v =>
-  createHash('sha256')
-    .update(String(v ?? ''))
-    .digest('hex')
-    .slice(0, 16);
 // La cuenta de WhatsApp Business (entry.id) y el número que recibe o envía. Sin la cuenta no se añade nada: el
 // número solo ya viaja en `to` desde 1.0.
 function metaAccount(entry, v) {
@@ -501,10 +491,10 @@ function compact(obj) {
     if (value !== null && value !== undefined && value !== '') out[key] = value;
   return out;
 }
-function metaNoticeEvents(entry, field, v, account) {
+function metaNoticeEvents(entry, field, v, account, peerHash) {
   const scopeId = clip(entry?.id, 40),
     when = Number(entry?.time) || null,
-    stamp = when ? String(when) : fingerprint(JSON.stringify(v));
+    stamp = when ? String(when) : peerHash(JSON.stringify(v)); // sin instante: huella con llave del contenido
   if (TEMPLATE_FIELDS[field]) {
     const kind = TEMPLATE_FIELDS[field];
     const value =
@@ -563,8 +553,8 @@ function metaNoticeEvents(entry, field, v, account) {
       if (userId) ids.push({ kind: 'wa_bsuid', value: userId });
       const at = Number(p?.timestamp) ? Number(p.timestamp) * 1000 : when ? when * 1000 : null;
       return {
-        // la persona va como huella: el id se guarda en claro en la bitácora
-        id: ['user_preferences', fingerprint(phone || userId), lower(p?.value), at || stamp].join(':'),
+        // la persona va como huella con llave: el id se guarda en claro en la bitácora y en la bandeja
+        id: ['user_preferences', peerHash(phone || userId), lower(p?.value), at || stamp].join(':'),
         type: 'user.preference',
         data: { account, scopeId, peer: { ids }, category: lower(p?.category), value: lower(p?.value), at },
       };
@@ -573,7 +563,13 @@ function metaNoticeEvents(entry, field, v, account) {
 }
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png']),
   MEDIA_HOSTS = ['fbsbx.com', 'facebook.com', 'fbcdn.net', 'whatsapp.net', 'whatsapp.com'];
-export function metaChannel({ env, fetchImpl = (...a) => fetch(...a) }) {
+// peerHash: huella con llave de la instalación (server/lib/peer-key.mjs) para los ids que dependen de una persona. Sin
+// ella (un adaptador suelto en una prueba), la de PEER_HASH_KEY o una llave al azar de este proceso.
+export function metaChannel({
+  env,
+  fetchImpl = (...a) => fetch(...a),
+  peerHash = createPeerHash(loadPeerKey({ env })),
+}) {
   const missing = missingOf(env, ['META_ACCESS_TOKEN', 'META_APP_SECRET', 'META_VERIFY_TOKEN', 'META_PHONE_NUMBER_ID']);
   const STATE = { sent: 'sent', delivered: 'delivered', read: 'read', failed: 'failed' };
   const production = env.NODE_ENV === 'production';
@@ -894,7 +890,7 @@ export function metaChannel({ env, fetchImpl = (...a) => fetch(...a) }) {
         for (const change of entry.changes || []) {
           const v = change.value || {},
             account = metaAccount(entry, v);
-          out.push(...metaNoticeEvents(entry, change.field, v, account));
+          out.push(...metaNoticeEvents(entry, change.field, v, account, peerHash));
           for (const s of v.statuses || [])
             out.push({
               id: s.id + ':' + s.status,
@@ -1136,15 +1132,18 @@ export function createConnectors({
   audit,
   rate,
   selfOrigin,
+  dataDir = null,
   now = Date.now,
   log = console,
 }) {
+  // Huella con llave de quien escribe (server/lib/peer-key.mjs): carril de la bandeja e ids que dependen de una persona.
+  const peerHash = createPeerHash(loadPeerKey({ env, dataDir }));
   const channelProvider = ['simulated', 'meta'].includes(env.CHANNEL_CONNECTOR) ? env.CHANNEL_CONNECTOR : 'simulated';
   const paymentProvider = ['simulated', 'stripe', 'conekta'].includes(env.PAYMENT_CONNECTOR)
     ? env.PAYMENT_CONNECTOR
     : 'simulated';
   const adapters = {
-    channel: { simulated: simulatedChannel({ env }), meta: metaChannel({ env }) },
+    channel: { simulated: simulatedChannel({ env }), meta: metaChannel({ env, peerHash }) },
     payment: {
       simulated: simulatedPayment({ env }),
       stripe: stripePayment({ env, now }),
@@ -1201,6 +1200,35 @@ export function createConnectors({
     now,
     log,
   });
+  // Al arrancar: ningún carril guarda una huella que no sea la de la llave vigente. Un evento terminado (o una
+  // cuarentena ya vaciada) no vuelve a usar su carril: pierde la huella de la persona. Uno pendiente, reservado o en
+  // cuarentena con carga recalcula la suya con la llave: así un carril guardado antes con SHA-256 sin llave, o con
+  // otra llave, queda igual que el de los eventos nuevos de esa persona. Idempotente y acotado a la bandeja.
+  function rekeyLanes() {
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='webhook_inbox'").get()) return;
+    transaction(db, () => {
+      db.prepare(
+        "UPDATE webhook_inbox SET lane='ev:'||provider||':'||event_id WHERE lane LIKE 'in:%' AND (state='done' OR payload IS NULL)",
+      ).run();
+      const set = db.prepare('UPDATE webhook_inbox SET lane=? WHERE seq=?');
+      for (const row of db
+        .prepare("SELECT seq,kind,provider,payload FROM webhook_inbox WHERE lane LIKE 'in:%' AND payload IS NOT NULL")
+        .all()) {
+        try {
+          const lane = laneOf(
+            row.kind,
+            row.provider,
+            readStoredEvent(JSON.parse(row.payload), row.provider).event,
+            peerHash,
+          );
+          set.run(lane.slice(0, 200), row.seq);
+        } catch {
+          // una carga ilegible no tiene a quién ordenar: conserva su carril y la bandeja la deja en cuarentena
+        }
+      }
+    });
+  }
+  rekeyLanes();
   const requireAdmin = user => {
     const u = db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);
     if (!u || u.disabled || u.role !== 'admin') throw fail(403, 'Los conectores los administra un administrador.');
@@ -1460,7 +1488,7 @@ export function createConnectors({
             provider: x[2],
             id: ev.id,
             type: ev.type,
-            lane: laneOf(kind, x[2], ev),
+            lane: laneOf(kind, x[2], ev, peerHash),
             payload: { v: CONTRACT_VERSION, event: ev },
           });
           accepted.push({ ev, row });

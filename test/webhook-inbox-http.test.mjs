@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { laneOf, peerIdentifier, inboxWaitMs } from '../server/connectors.mjs';
+import { laneOf as keyedLaneOf, peerIdentifier, inboxWaitMs } from '../server/connectors.mjs';
+import { createPeerHash } from '../server/lib/peer-key.mjs';
 import { startServer } from './helpers/server.mjs';
 import { metaHook, metaInbound, metaText, NUMBER, SECRET } from './helpers/fake-meta.mjs';
 import { PASSWORD, call, crash, openDb, sleep, until, whatsappLab as lab } from './helpers/crm.mjs';
 
+// el carril lleva la huella con llave de quien escribe (server/lib/peer-key.mjs); aquí, una llave fija de prueba
+const laneOf = (kind, provider, ev) => keyedLaneOf(kind, provider, ev, createPeerHash(Buffer.alloc(32, 7)));
 const MARIA = '5215512345678';
 const LUIS = '5215500000001';
 const ANA = '5215500000002';

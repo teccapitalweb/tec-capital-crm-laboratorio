@@ -49,6 +49,16 @@ user.preference  {account, scopeId, peer:{ids}, category:'marketing_messages', v
 
 **Convivencia en la bandeja.** Lo que ya estaba guardado como 1.0 se procesa igual: `readStoredEvent` lo completa (`peer.ids` con el teléfono de `from`, `account` con el número que recibe). Un despliegue anterior que lea una carga 1.1 también la entiende, porque 1.1 sólo añade claves. Aun así, como dice [PLAN_RECEPCION_DURADERA.md](PLAN_RECEPCION_DURADERA.md), conviene vaciar la bandeja antes de desplegar.
 
+## 2.1 Huella con llave de quien escribe
+
+El carril de la bandeja (`webhook_inbox.lane`, que se queda en la fila aunque la carga se vacíe) y los ids de eventos que dependen de una persona (avisos de preferencias) llevaban o habrían llevado el SHA-256 **sin llave** del teléfono, que se revierte probando todos los números posibles. Ahora usan `server/lib/peer-key.mjs`: HMAC-SHA256 recortado a 16 caracteres con una llave de la instalación.
+
+- **Llave**: `PEER_HASH_KEY` en el entorno (cualquier texto) o, si no existe, `DATA_DIR/peer.key`, creada la primera vez con permisos sólo para su dueño (como `mfa.key`). Nunca va al repositorio (`data/` está ignorado). Un adaptador suelto en una prueba, sin ninguna de las dos, usa una llave al azar de ese proceso.
+- `laneOf(kind, provider, ev, peerHash)` exige la huella; `createConnectors` la arma con `dataDir` y se la pasa también al adaptador de Meta.
+- **Al arrancar** (`rekeyLanes`, idempotente): un evento terminado, o una cuarentena ya vaciada, pierde la huella (`ev:<proveedor>:<id>`); uno pendiente, reservado o en cuarentena con carga recalcula su carril con la llave vigente.
+- **Pendientes al desplegar**: los eventos guardados por la versión anterior quedan, tras el arranque, en el mismo carril que los nuevos de esa persona, así que el orden se conserva. El único hueco es el solape entre el proceso viejo y el nuevo durante el despliegue: lo que el viejo guarde en esos segundos lleva el carril sin llave y puede procesarse a la vez que un evento nuevo de la misma persona, hasta el siguiente arranque. Por eso se mantiene la recomendación de [PLAN_RECEPCION_DURADERA.md](PLAN_RECEPCION_DURADERA.md): vaciar la bandeja antes de desplegar.
+- **Si se pierde o cambia la llave** (por ejemplo, otro `DATA_DIR`): el siguiente arranque recalcula los carriles pendientes con la nueva; sólo los ids de avisos de preferencias ya anotados dejarían de reconocerse como duplicados si Meta los reenviara. Restaurar un respaldo no exige restaurar `peer.key`.
+
 ## 3. Columnas canónicas de `messages`
 
 Migración `messages/0001-channel-contract` (aditiva, `addColumn`):

@@ -10,6 +10,7 @@ import {
   readStoredEvent,
   withContract,
 } from '../server/connectors.mjs';
+import { createPeerHash } from '../server/lib/peer-key.mjs';
 import {
   NUMBER,
   WABA,
@@ -74,8 +75,11 @@ test('contrato 1.1: el entrante trae cuenta, identificador de usuario, mensaje c
   const [onlyUser] = parse(metaInboundValue('', 'wamid.b', { type: 'text', text: { body: 'Hola' } }, { bsuid: BSUID }));
   assert.equal(onlyUser.data.from, undefined);
   assert.deepEqual(onlyUser.data.peer.ids, [{ kind: 'wa_bsuid', value: BSUID }]);
-  assert.match(laneOf('channel', 'meta', onlyUser), new RegExp('^in:meta:' + NUMBER + ':[0-9a-f]{16}$'));
-  assert.equal(laneOf('channel', 'meta', onlyUser).includes(BSUID), false);
+  assert.match(
+    laneOf('channel', 'meta', onlyUser, createPeerHash(Buffer.alloc(32, 1))),
+    new RegExp('^in:meta:' + NUMBER + ':[0-9a-f]{16}$'),
+  );
+  assert.equal(laneOf('channel', 'meta', onlyUser, createPeerHash(Buffer.alloc(32, 1))).includes(BSUID), false);
 
   const [button] = parse(
     metaInboundValue(
