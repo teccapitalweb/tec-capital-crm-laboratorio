@@ -71,15 +71,13 @@ export async function login(page, user, path = '/crm') {
   await page.locator('#auth-form button[type="submit"]').click();
 }
 
-// Cierra la sesión desde el menú. En celular ese botón se oculta y, para el equipo, «Mi perfil» abre la
-// configuración: hoy el único camino es pasar a la vista de cliente y salir desde el perfil.
+// Cierra la sesión desde el menú. En celular ese botón se oculta: «Mi perfil» lleva al equipo a Mi configuración
+// (donde está «Cerrar sesión») y al cliente a su perfil, que también lo tiene.
 export async function logout(page) {
   const direct = page.locator('.sidebar [data-action="logout"]');
   if (await direct.isVisible()) return direct.click();
-  const asCustomer = page.locator('[data-mode="customer"]:visible');
-  if (await asCustomer.count()) await asCustomer.first().click();
   await page.locator('[data-action="profile"]:visible').first().click();
-  await page.locator('#modal [data-action="logout"]').click();
+  await page.locator('#page [data-action="logout"], #modal [data-action="logout"]').first().click();
 }
 
 // Reglas medibles de Niebla (docs/DISENO_Y_AUDITORIA.md) sobre la vista que esté en pantalla:
