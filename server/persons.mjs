@@ -14,7 +14,17 @@ const text = (v, max) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').
 const RANK = { unknown: 0, opted_in: 1, opted_out: 2 },
   STATUS = ['unknown', 'opted_in', 'opted_out'];
 
-export function createPersons({ db, crm, events = null, body, json, audit, broadcast, now = Date.now }) {
+export function createPersons({
+  db,
+  crm,
+  events = null,
+  body,
+  json,
+  audit,
+  broadcast,
+  personData = null,
+  now = Date.now,
+}) {
   const get = id => db.prepare('SELECT * FROM persons WHERE id=?').get(id);
   const roleOf = user => db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);
   const requireStaff = user => {
@@ -566,6 +576,7 @@ export function createPersons({ db, crm, events = null, body, json, audit, broad
       db.prepare(
         'INSERT INTO person_merges(id,kept_id,merged_id,merged_snapshot,moved,actor_id,created_at) VALUES(?,?,?,?,?,?,?)',
       ).run(randomUUID(), keep.id, merge.id, JSON.stringify(merge), JSON.stringify(p.moves), user.id, t);
+      personData?.mergePersons(keep.id, merge.id, { user }); // certificados e históricos que guardan la persona
       db.prepare('DELETE FROM persons WHERE id=?').run(merge.id);
       for (const b of new Set(contactsOf(keep.id).map(c => c.brand_id)))
         events?.publish({
@@ -619,6 +630,7 @@ export function createPersons({ db, crm, events = null, body, json, audit, broad
       user?.id || null,
       t,
     );
+    personData?.mergePersons(keepPid, mergedPersonId, { user });
     db.prepare('DELETE FROM persons WHERE id=?').run(mergedPersonId);
     project(keepPid);
   }

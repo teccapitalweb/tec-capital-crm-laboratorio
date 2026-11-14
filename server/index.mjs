@@ -17,6 +17,7 @@ import { createShutdown, shutdownGraceMs } from './app/shutdown.mjs';
 import { fail, errorBody } from './app/http.mjs';
 import { createRealtime } from './app/realtime.mjs';
 import { createAccess } from './lib/access.mjs';
+import { createPersonData, registerExistingTables } from './lib/person-data.mjs';
 import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
 import { createCRM } from './crm.mjs';
 import { conversationPage } from './conversations.mjs';
@@ -181,7 +182,10 @@ const crm = createCRM({ db, body, json, audit, passwordHash, checkPassword, rate
 // Eventos de dominio (server/events.mjs): índice común de hechos, publicado dentro de cada transacción; suscriptores con reintento.
 const events = createEvents({ db, crm, body, json, audit });
 // Identidad única de persona (server/persons.mjs): cada contacto por marca cuelga de una persona; consentimiento a nivel persona.
-const persons = createPersons({ db, crm, events, body, json, audit, broadcast });
+// Registro de tablas ligadas a la persona (server/lib/person-data.mjs): la fusión de contactos mueve todo lo registrado.
+const personData = createPersonData({ db });
+registerExistingTables(personData, db);
+const persons = createPersons({ db, crm, events, body, json, audit, broadcast, personData });
 crm.setContactHook(c => persons.attach(c));
 crm.setStageHook(({ id, eventId, actor, from, to, reason, source }) => {
   const o = db.prepare('SELECT brand_id,contact_id,course_id,edition_id FROM opportunities WHERE id=?').get(id);
@@ -253,7 +257,7 @@ if (process.env.MFA_RESET_USER) {
   );
 }
 const analytics = createAnalytics({ db, crm, json });
-const contacts = createContacts({ db, crm, body, json, audit, broadcast, events, persons });
+const contacts = createContacts({ db, crm, body, json, audit, broadcast, events, persons, personData });
 const catalogueImport = createCatalogueImport({ db, catalogue, crm, body, json, audit });
 const operations = createOperations({ db, crm, catalogue, body, json, audit, broadcast, online, insertMessage });
 // Venta con pago simulado (server/payments.mjs): pedidos, enlace de prueba, comprobantes en cola, inscripción; apagada por marca por omisión.
@@ -476,6 +480,7 @@ const modules = await loadModules({
     broadcast,
     realtime,
     access,
+    personData,
     online,
     staff,
     requireStaff,
