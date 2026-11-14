@@ -91,6 +91,9 @@ test('registro: valida nombre, tablas, dueño único y funciones', t => {
   assert.throws(() => registry.register({ name: 'tres', tables: ['otra'] }), /falta merge/);
   assert.throws(() => registry.register({ name: 'tres', tables: ['otra'], merge, erase: 'no' }), /función/);
   assert.equal(registry.owner('a_contacts'), 'uno');
+  // El candado ve una tabla con columna de persona que nadie registró, y no ve las demás.
+  db.exec('CREATE TABLE a_contacts(contact_id TEXT); CREATE TABLE b_rows(person_id TEXT); CREATE TABLE c_rows(x TEXT)');
+  assert.deepEqual(registry.unregistered(), [{ table: 'b_rows', columns: ['person_id'] }]);
   assert.throws(() => moveRows(db, 'x; DROP', 'contact_id', 'a', 'b'), /no válida/);
   assert.throws(() => moveRows(db, 'x', 'name', 'a', 'b'), /no válida/);
 });
@@ -200,6 +203,28 @@ const SEEDS = {
     add.run('campaign-shared', c.id, 'step-shared-' + s);
     add.run('campaign-' + s, c.id, 'step-' + s);
   },
+  // Atributos: los dos tienen «ciudad» (gana la del que queda) y sólo el absorbido tiene «curso_wati» (se hereda).
+  contact_attribute_values: (db, c, s) => {
+    const attribute = key =>
+      db.prepare('SELECT id FROM contact_attributes WHERE brand_id=? AND key=?').get(c.brand, key).id;
+    const set = db.prepare(
+      "INSERT INTO contact_attribute_values(contact_id,attribute_id,brand_id,value,source,updated_at) VALUES(?,?,?,?,'staff',1)",
+    );
+    set.run(c.id, attribute('ciudad'), c.brand, s === 'keep' ? 'Puebla' : 'Toluca');
+    if (s === 'merged') set.run(c.id, attribute('curso_wati'), c.brand, 'Aves');
+  },
+  contact_attribute_events: (db, c, s) =>
+    db
+      .prepare(
+        "INSERT INTO contact_attribute_events(brand_id,contact_id,key,new_value,source,created_at) VALUES(?,?,'ciudad',?,'staff',1)",
+      )
+      .run(c.brand, c.id, s),
+  contact_attribute_requests: (db, c, s) =>
+    db
+      .prepare(
+        "INSERT INTO contact_attribute_requests(client_ref,brand_id,contact_id,response,created_at) VALUES(?,?,?,'{}',1)",
+      )
+      .run('ref-' + s, c.brand, c.id),
 };
 
 function seedWorld(db, personData) {
@@ -222,6 +247,10 @@ function seedWorld(db, personData) {
       tag,
       tag,
     );
+  for (const key of ['ciudad', 'curso_wati'])
+    db.prepare(
+      "INSERT INTO contact_attributes(id,brand_id,key,label,type,created_at,updated_at) VALUES(?,?,?,?,'text',1,1)",
+    ).run(randomUUID(), brand, key, key);
   db.exec('PRAGMA foreign_keys=OFF');
   const keep = contact('Principal', 'person-keep');
   const merged = contact('Absorbido', 'person-merged');
@@ -265,7 +294,7 @@ test('fusión interna: mueve las filas de TODAS las tablas registradas, sin hué
   assert.equal(db.prepare('SELECT 1 FROM contacts WHERE id=?').get(merged.id), undefined);
   assert.deepEqual(brokenLinks(db), []);
   for (const table of seeded)
-    if (table !== 'contact_consent')
+    if (table !== 'contact_consent' && table !== 'contact_attribute_values')
       assert.ok(personData.count(keep.id)[table] >= 2, `${table} quedó con las filas de los dos`);
   // Reglas propias: etiquetas sin repetir, consentimiento más restrictivo, una fila por campaña, teléfono heredado.
   assert.equal(db.prepare('SELECT count(*) n FROM contact_tag_links WHERE contact_id=?').get(keep.id).n, 3);
@@ -276,6 +305,16 @@ test('fusión interna: mueve las filas de TODAS las tablas registradas, sin hué
       .all(keep.id)
       .map(r => r.campaign_id),
     ['campaign-keep', 'campaign-merged', 'campaign-shared'],
+  );
+  // Atributos: gana el valor del que queda y lo que le faltaba llega del absorbido.
+  assert.deepEqual(
+    db
+      .prepare(
+        'SELECT a.key,v.value FROM contact_attribute_values v JOIN contact_attributes a ON a.id=v.attribute_id WHERE v.contact_id=? ORDER BY a.key',
+      )
+      .all(keep.id)
+      .map(row => `${row.key}=${row.value}`),
+    ['ciudad=Puebla', 'curso_wati=Aves'],
   );
   assert.equal(db.prepare('SELECT phone FROM contacts WHERE id=?').get(keep.id).phone, '+525512345678');
   const snapshot = db
