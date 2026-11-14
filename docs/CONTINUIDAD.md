@@ -34,7 +34,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Tercera tanda de la construcción (rama `chore/f0-01-codificacion`, 14 nov 2026; sin publicar)
+## Tercera tanda de la construcción (publicada en `main`, 14 nov 2026)
 
 Sin cambios visibles en producción. Cada pieza tiene su página.
 
@@ -45,6 +45,7 @@ Sin cambios visibles en producción. Cada pieza tiene su página.
 - **Base de datos:** cuatro migraciones con nombre más (`messages/0001`, `broadcasts/0001` con reconstrucción, `jobs/0001`, `contact-import/0001`); identidad `41+9.f15ae3d9`. La reconstrucción se probó sobre una base poblada en las pruebas y se ensayó con el servidor real sobre una copia de la base de demostración (sin campañas). Antes de aplicarla, el servidor guarda una copia completa de la base.
 - **Ensayo de la importación** con el servidor real y un archivo inventado de 12 filas: 11 creados, la fila rota rechazada con su motivo, consentimientos según cada fila, sin confirmar la declaración no deja importar y la segunda corrida da cero cambios.
 - **Evidencia:** 605 pruebas (dos corridas) y 19 de navegador; `npm run check` limpio.
+- **Publicado y comprobado en producción (14 nov 2026, commit `2383fcc`):** despliegue de Railway correcto en unos 20 s; `/api/health` devuelve `"schema":"41+9.f15ae3d9"` (las cuatro migraciones nuevas aplicadas, incluida la reconstrucción) y no informa módulos fallidos; `/screens/index.json` sigue vacío (pantallas ocultas); sin sesión, `/api/contact-import`, `/api/wa-costs/meter`, `/api/jobs` y `/api/campaigns` responden 401; el webhook de Meta sin firma responde 401. No se entró con ninguna cuenta: falta comprobar con sesión que Operación → Campañas y las plantillas de Conectores se ven igual que antes.
 - **Falta:** plantillas completas con encabezado y botones (D-3), audiencias (D-2), salud del número (X3), el motor y asistente de difusiones (D-5), identidad sin teléfono (I-2) y la API de escritura. Los respaldos `before-*` siguen sin rotarse.
 
 ## Segunda tanda de la construcción (publicada en `main`, 14 nov 2026)

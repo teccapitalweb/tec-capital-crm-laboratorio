@@ -97,11 +97,11 @@ npm start
 
 `npm run check` comprueba codificación (UTF-8, LF), sintaxis y formato (Prettier); antes de entregar, `npx prettier --write` sobre lo que tocaste.
 
-La referencia vigente es **581 pruebas aprobadas** más 17 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **605 pruebas aprobadas** más 19 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 
-**14 nov 2026 (tarde):** la tercera tanda (contrato del canal 1.1, cimientos de difusiones con motor de costos, importación de contactos por CSV y cola de trabajos) está en la rama `chore/f0-01-codificacion`, **sin publicar**.
+**14 nov 2026 (tarde):** la tercera tanda (contrato del canal 1.1, cimientos de difusiones con motor de costos, importación de contactos por CSV y cola de trabajos) se **publicó** en `main` (commit `2383fcc`; esquema `41+9.f15ae3d9`).
 
 **14 nov 2026:** la segunda tanda (teléfono canónico, fusión con registro de datos de persona, recepción duradera de webhooks, permisos y tiempo real, ESLint, kit de pantallas y tres pantallas en vista previa) se **publicó** en `main` (commit `8bd17ef`); las tres pantallas siguen ocultas en producción: ver [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md).
 
