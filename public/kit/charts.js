@@ -52,23 +52,34 @@ function px(value) {
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 const sum = values => values.reduce((total, value) => total + value, 0);
 
-const NARROW = new Set("iljtfrI.,:;|!'·()[] ");
-const WIDE = new Set('mwMW@%—');
 const FONT = 11;
 
+// Ancho de cada carácter como fracción del tamaño de letra. Son COTAS SUPERIORES: se midieron en un
+// navegador con la tipografía de la aplicación (Manrope, pesos 400 y 600, cifras tabulares) el 13 nov 2026,
+// carácter por carácter, y cada grupo lleva el ancho del más ancho de los suyos. Si cambia la tipografía
+// hay que volver a medir.
+const SLIM = new Set("iljfI.,:;|!'· "); // hasta 0.36
+const HALF = new Set('rt()[]'); // hasta 0.46
+const BROAD = new Set('=&_…'); // hasta 0.76, como las mayúsculas
+const WIDE = new Set('mwMW@%#—'); // hasta 0.98
+
+function charWidth(ch) {
+  if (SLIM.has(ch)) return 0.36;
+  if (HALF.has(ch)) return 0.46;
+  if (WIDE.has(ch)) return 0.98;
+  if (BROAD.has(ch)) return 0.76;
+  if (ch.codePointAt(0) >= 0x2e80) return 1.1; // ideogramas y emojis ocupan un cuadro entero
+  if (ch !== ch.toLowerCase() && ch === ch.toUpperCase()) return 0.76; // mayúsculas
+  return 0.64; // minúsculas, cifras y el resto de los signos
+}
+
 /**
- * Ancho aproximado, en píxeles, de un texto a 11 px. Sin DOM no se puede medir, así que se calcula por
- * exceso: es preferible recortar un rótulo de más que dejar que se salga.
+ * Ancho, en píxeles, que como mucho ocupa un texto a 11 px. Sin DOM no se puede medir, así que se calcula
+ * por exceso: es preferible recortar un rótulo de más que dejar que se salga.
  */
 export function textWidth(text) {
   let units = 0;
-  for (const ch of String(text)) {
-    if (NARROW.has(ch)) units += 0.36;
-    else if (WIDE.has(ch)) units += 0.98;
-    else if (ch >= '0' && ch <= '9') units += 0.64;
-    else if (ch === ch.toUpperCase() && ch !== ch.toLowerCase()) units += 0.74;
-    else units += 0.6;
-  }
+  for (const ch of String(text)) units += charWidth(ch);
   return units * FONT;
 }
 
@@ -648,7 +659,7 @@ export function bars({
       { class: 'k-ch-pt', 'data-tip': tip },
       title(tip) +
         element('rect', { class: 'k-ch-hit', x: 0, y: yTop, width: W, height: rowHeight }) +
-        text({ class: 'k-ch-soft', x: 0, y: yTop + 18 }, fitText(row.label, gutter - 8)) +
+        text({ class: 'k-ch-soft', x: 1, y: yTop + 18 }, fitText(row.label, gutter - 8)) +
         element('rect', { class: 'k-ch-track', x: gutter, y: yTop + 8, width: plot, height: 12, rx: 3 }) +
         (long ? bar(gutter, yTop + 8, long, 12, 'right', { class: `k-ch-fill ${key}` }) : '') +
         text({ class: 'k-ch-strong', x: gutter + long + 6, y: yTop + 18 }, format(row.value)),
@@ -820,8 +831,8 @@ export function funnel({ steps = [], label = 'Embudo', summary, format = formatN
       { class: 'k-ch-pt', 'data-tip': tip },
       title(tip) +
         element('rect', { class: 'k-ch-hit', x: 0, y: yTop, width: W, height: rowHeight }) +
-        text({ class: 'k-ch-strong', x: 0, y: yTop + 18 }, fitText(step.label, gutter - 8)) +
-        (passes[index] ? text({ x: 0, y: yTop + 33 }, fitText(passes[index], gutter - 8)) : '') +
+        text({ class: 'k-ch-strong', x: 1, y: yTop + 18 }, fitText(step.label, gutter - 8)) +
+        (passes[index] ? text({ x: 1, y: yTop + 33 }, fitText(passes[index], gutter - 8)) : '') +
         element('rect', { class: 'k-ch-track', x: gutter, y: yTop + 8, width: plot, height: 24, rx: 4 }) +
         (long ? bar(gutter, yTop + 8, long, 24, 'right', { class: `k-ch-q${Math.min(2 + index, 5)}` }) : '') +
         text({ class: 'k-ch-strong', x: gutter + long + 6, y: yTop + 24 }, format(step.value)),
@@ -892,7 +903,7 @@ export function heat({
   const gutter = Math.min(Math.max(...rowNames.map(textWidth)) + 10, W * 0.3);
   const cellWidth = clamp((W - gutter) / colNames.length, 4, 44);
   const cellHeight = clamp(cellWidth, 16, 28);
-  const top = 18;
+  const top = 20;
   const H = top + rowNames.length * cellHeight + 2;
 
   // Cinco clases por cuantiles sobre las celdas con valor; el cero tiene su propio tono.
@@ -908,12 +919,12 @@ export function heat({
     colNames.map((_, c) => gutter + cellWidth * c + cellWidth / 2),
     { left: gutter, right: gutter + cellWidth * colNames.length, narrow: false },
   )
-    .map(item => text({ x: item.x, y: 11 }, item.content))
+    .map(item => text({ x: item.x, y: 13 }, item.content))
     .join('');
   rowNames.forEach((name, r) => {
     content += text(
-      { class: 'k-ch-soft', x: 0, y: top + r * cellHeight + cellHeight / 2 + 4 },
-      fitText(name, gutter - 6),
+      { class: 'k-ch-soft', x: 1, y: top + r * cellHeight + cellHeight / 2 + 4 },
+      fitText(name, gutter - 7),
     );
     colNames.forEach((column, c) => {
       const value = grid[r][c];
