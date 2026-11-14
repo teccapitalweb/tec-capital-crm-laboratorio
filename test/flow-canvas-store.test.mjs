@@ -807,6 +807,11 @@ test('vista: desplazar, acercar entre 50 % y 150 % dejando quieto el punto bajo 
   store.fit({ width: 4000, height: 3000 });
   assert.equal(store.viewport.zoom, 1, 'con sitio de sobra no agranda');
   createStore().fit({ width: 0, height: 0 });
+  // Si ni al 50 % cabe, no se centra: se muestra desde el principio, con el Inicio a la vista.
+  store.fit({ width: 300, height: 200 });
+  assert.equal(store.viewport.zoom, 0.5);
+  const first = store.toScreen({ x: store.node('n1').x, y: store.node('n1').y });
+  assert.deepEqual([first.x, first.y], [40, 40]);
 
   // Mostrar un paso: la vista se mueve lo justo; si ya se ve, no se mueve.
   store.setViewport({ x: 0, y: 0, zoom: 1 });

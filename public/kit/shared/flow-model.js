@@ -2455,10 +2455,15 @@ export function portPoint(node, portId) {
 export const inputPoint = node => ({ x: node.x, y: node.y + GEOMETRY.head / 2 });
 
 // Curva de una conexión entre dos puntos, con tangentes horizontales: sale hacia la derecha y llega por la izquierda.
+// Una conexión que regresa (hacia la izquierda) se abre más, para que se vea que rodea a las tarjetas.
 export function edgePath(a, b) {
   const reach = Math.max(40, Math.min(240, Math.abs(b.x - a.x) / 2 + (b.x < a.x ? 60 : 0)));
   return `M ${a.x} ${a.y} C ${a.x + reach} ${a.y}, ${b.x - reach} ${b.y}, ${b.x} ${b.y}`;
 }
+
+// Punto medio de esa curva (ahí va el botón para quitar una conexión seleccionada). Como sus dos puntos de control
+// están a la misma distancia de cada extremo, el centro de la curva es el centro del segmento que los une.
+export const edgeMiddle = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 
 export function boundsOf(nodes) {
   if (!nodes.length) return { x: 0, y: 0, w: 0, h: 0 };

@@ -550,11 +550,11 @@ export function createStore(options = {}) {
     const box = boundsOf(graph.nodes);
     if (!box.w || !box.h || !width || !height) return setViewport({ x: padding, y: padding, zoom: 1 });
     const zoom = clampZoom(Math.min(1, (width - padding * 2) / box.w, (height - padding * 2) / box.h));
-    return setViewport({
-      zoom,
-      x: (width - box.w * zoom) / 2 - box.x * zoom,
-      y: (height - box.h * zoom) / 2 - box.y * zoom,
-    });
+    // Si cabe, queda centrado. Si ni al mínimo cabe (un recorrido largo en una ventana estrecha), se muestra desde
+    // su principio: lo que debe verse es el Inicio, no la mitad del recorrido.
+    const place = (space, size, start) =>
+      (size * zoom <= space - padding * 2 ? (space - size * zoom) / 2 : padding) - start * zoom;
+    return setViewport({ zoom, x: place(width, box.w, box.x), y: place(height, box.h, box.y) });
   }
 
   // Mueve la vista lo justo para que un paso quede a la vista (al llegar a él con el teclado o con «Ir al paso»).
