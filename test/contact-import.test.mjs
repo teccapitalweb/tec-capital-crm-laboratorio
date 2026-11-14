@@ -91,7 +91,7 @@ test('mapeo: la exportación del proveedor anterior se reconoce y cada columna v
   const header = ['Name', 'CountryCode', 'Phone', 'Allow Campaign', 'Allow SMS', 'Ciudad', 'curso', 'Tags', 'otra'];
   const suggestion = suggestMapping(header, [
     { key: 'ciudad', label: 'Ciudad' },
-    { key: 'curso_wati', label: 'Curso' },
+    { key: 'curso_origen', label: 'Curso' },
   ]);
   assert.equal(suggestion.template, 'previous-provider');
   assert.deepEqual(suggestion.targets, [
@@ -101,7 +101,7 @@ test('mapeo: la exportación del proveedor anterior se reconoce y cada columna v
     'consent',
     'ignore',
     'attr:ciudad',
-    'attr:curso_wati',
+    'attr:curso_origen',
     'ignore', // desde la sexta columna sólo datos de contacto, como exporta esa herramienta
     'ignore',
   ]);

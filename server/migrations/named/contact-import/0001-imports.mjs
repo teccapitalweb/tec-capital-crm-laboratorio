@@ -5,7 +5,7 @@
 //                        los 7 días de terminar), cómo se leyó (codificación, separador, encabezados y dónde empiezan
 //                        los datos), el mapeo de columnas y las opciones (consentimiento declarado incluido), el
 //                        estado y el informe. `revision` cambia con cada mapeo: la vista previa y la importación se
-//                        atan a una revisión. `source` (csv|wati|sheet) y `audience_id` quedan para las otras puertas.
+//                        atan a una revisión. `source` (csv|api|sheet) y `audience_id` quedan para las otras puertas.
 //   contact_import_rows  el resultado de cada fila en la vista previa (`preview`) y al importar (`apply`): acción,
 //                        contacto y, si hubo problema, su código, el mensaje y el detalle (que se vacía con el archivo).
 //

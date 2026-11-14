@@ -2,6 +2,7 @@ import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { backoff } from './automation.mjs';
+import { transaction } from './database.mjs';
 
 // API pública de lectura y webhooks salientes (docs/PLAN_API_PUBLICA.md).
 //  · API v1 (sólo lectura): llaves por marca con permisos (events, orders, contacts, editions), cabecera `Authorization: Bearer tcw_…`. Sólo se guarda el
@@ -535,25 +536,31 @@ export function createIntegrations({
         } catch (e) {
           error = safeError(e);
         }
+        // El resultado de la entrega y el contador del destino se anotan juntos, y sólo si esta entrega seguía
+        // siendo nuestra (si el arrendamiento venció y otro proceso la tomó, no se cuenta dos veces).
         if (!error) {
-          finish('done', { attempts: attempt, status });
-          db.prepare('UPDATE webhook_endpoints SET failure_count=0 WHERE id=?').run(d.endpoint_id);
+          transaction(db, () => {
+            if (finish('done', { attempts: attempt, status }).changes)
+              db.prepare('UPDATE webhook_endpoints SET failure_count=0 WHERE id=?').run(d.endpoint_id);
+          });
           sent++;
         } else if (attempt >= LIMITS.maxAttempts) {
-          finish('failed', { attempts: attempt, status, error });
+          transaction(db, () => {
+            if (!finish('failed', { attempts: attempt, status, error }).changes) return;
+            const w = db.prepare('SELECT failure_count FROM webhook_endpoints WHERE id=?').get(d.endpoint_id);
+            if (w && w.failure_count + 1 >= LIMITS.disableAfter)
+              db.prepare(
+                "UPDATE webhook_endpoints SET status='disabled',failure_count=failure_count+1,disabled_reason=?,revision=revision+1,updated_at=? WHERE id=?",
+              ).run(
+                'Se desactivó tras ' +
+                  LIMITS.disableAfter +
+                  ' entregas fallidas seguidas. Revisa el destino y reactívalo.',
+                now(),
+                d.endpoint_id,
+              );
+            else db.prepare('UPDATE webhook_endpoints SET failure_count=failure_count+1 WHERE id=?').run(d.endpoint_id);
+          });
           log.error('Webhook failed:', ev.type, error.slice(0, 80));
-          const w = db.prepare('SELECT failure_count FROM webhook_endpoints WHERE id=?').get(d.endpoint_id);
-          if (w && w.failure_count + 1 >= LIMITS.disableAfter)
-            db.prepare(
-              "UPDATE webhook_endpoints SET status='disabled',failure_count=failure_count+1,disabled_reason=?,revision=revision+1,updated_at=? WHERE id=?",
-            ).run(
-              'Se desactivó tras ' +
-                LIMITS.disableAfter +
-                ' entregas fallidas seguidas. Revisa el destino y reactívalo.',
-              now(),
-              d.endpoint_id,
-            );
-          else db.prepare('UPDATE webhook_endpoints SET failure_count=failure_count+1 WHERE id=?').run(d.endpoint_id);
         } else
           finish('pending', {
             attempts: attempt,
