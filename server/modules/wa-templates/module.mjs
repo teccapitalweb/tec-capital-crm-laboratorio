@@ -771,20 +771,28 @@ export default {
 
     // ---- valores de cada dato (con la biblioteca común de variables) y lo que viaja a Meta
     // Contexto: la conversación (nombre, curso, edición, marca), `fixed` (fijo.<n>), `overrides` (llamada.<n>) y `coupon`.
-    function resolve(row, { conversation = null, fixed = {}, overrides = {}, coupon = null } = {}) {
+    // `values` da los datos del chat sin conversación (una difusión los toma del contacto y del curso de la campaña) y
+    // `strict` hace que un dato del chat vacío cuente como faltante en lugar de salir como «—».
+    function resolve(
+      row,
+      { conversation = null, fixed = {}, overrides = {}, coupon = null, values = null, strict = false } = {},
+    ) {
       const def = definitionOf(row);
       const c = conversation;
       const person = c ? repo.person(c.customer_id)?.name || '' : '';
       const course = c ? repo.course(c.course_id)?.title || '' : '';
       const edition = c?.edition_id ? repo.edition(c.edition_id)?.name || '' : '';
-      const base = c
-        ? {
-            nombre: copy.firstName(person) || text(person, 40) || 'hola',
-            curso: course,
-            edicion: edition || course,
-            marca: brandName(c.brand_id),
-          }
-        : {};
+      const base = {
+        ...(c
+          ? {
+              nombre: copy.firstName(person) || text(person, 40) || 'hola',
+              curso: course,
+              edicion: edition || course,
+              marca: brandName(c.brand_id),
+            }
+          : {}),
+        ...(values && typeof values === 'object' ? values : {}),
+      };
       const value = key => {
         if (Object.hasOwn(base, key)) return base[key];
         if (key === 'cupon') return coupon;
@@ -801,7 +809,7 @@ export default {
           key => (key ? value(key) : undefined),
           {
             fallbacks: Object.fromEntries(list.filter(v => v.key && v.fallback).map(v => [v.key, v.fallback])),
-            onMissing: key => (Object.hasOwn(CHAT_KEYS, key) ? '—' : null),
+            onMissing: key => (!strict && Object.hasOwn(CHAT_KEYS, key) ? '—' : null),
           },
         );
         list.forEach((v, i) => {
