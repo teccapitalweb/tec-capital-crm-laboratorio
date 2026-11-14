@@ -1,0 +1,42 @@
+/*
+ * Pantalla «Audiencias»: sólo la composición que el kit no trae, con el prefijo aud- y variables de
+ * public/tokens.css.
+ */
+
+.aud-marca {
+  max-width: 320px;
+}
+
+.aud-nombre {
+  margin-right: var(--space-2);
+  font-weight: 600;
+}
+
+.aud-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.aud-resumen {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aud-cifra {
+  margin: 0;
+  color: var(--ink);
+}
+
+.aud-motivos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aud-vista {
+  min-height: 72px;
+}
