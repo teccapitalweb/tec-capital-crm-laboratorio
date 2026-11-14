@@ -10,6 +10,7 @@ import { defineRegistry } from './named.mjs';
 import attributes from './named/attributes/index.mjs';
 import audiences from './named/audiences/index.mjs';
 import broadcasts from './named/broadcasts/index.mjs';
+import channelHealth from './named/channel-health/index.mjs';
 import contactImport from './named/contact-import/index.mjs';
 import contacts from './named/contacts/index.mjs';
 import identity from './named/identity/index.mjs';
@@ -23,6 +24,7 @@ import queues from './named/queues/index.mjs';
 // de columnas que una ya publicada (queues/0001 se publicó antes).
 // «jobs» y «contact-import» van al final: la importación usa la clave de teléfono (identity) y la cola de trabajos.
 // «audiences» va después de todas: usa la búsqueda de contactos y la importación la llena.
+// «channel-health» va al final: añade columnas a wa_account (broadcasts) y llegó después de todas las publicadas.
 export const NAMED = defineRegistry([
   ...attributes,
   ...broadcasts,
@@ -34,4 +36,5 @@ export const NAMED = defineRegistry([
   ...jobs,
   ...contactImport,
   ...audiences,
+  ...channelHealth,
 ]);
