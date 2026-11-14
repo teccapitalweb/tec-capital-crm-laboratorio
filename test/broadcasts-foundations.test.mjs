@@ -14,7 +14,8 @@ import { assertSchemaCurrent, schemaShape } from './helpers/schema.mjs';
 import { call, sleep, until, whatsappLab } from './helpers/crm.mjs';
 import { NUMBER, metaPricing, metaStatus, metaText } from './helpers/fake-meta.mjs';
 
-const NEW = /^(broadcasts|messages)\//; // lo que este encargo añade sobre lo publicado en main
+// lo que este encargo añade sobre lo publicado en main (y lo que depende de ello, como channel-health)
+const NEW = /^(broadcasts|messages|channel-health)\//;
 
 async function workspace(t) {
   const dir = await mkdtemp(join(tmpdir(), 'crm-difusiones-'));

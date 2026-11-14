@@ -91,7 +91,7 @@ function tarjetaNumero(numero, { puede }) {
   </article>`;
 }
 
-function tarjetaCuenta(cuenta) {
+function tarjetaCuenta(cuenta, uid) {
   const limite = cuenta.limit;
   const medidor =
     limite.limit && !limite.unlimited
@@ -102,8 +102,8 @@ function tarjetaCuenta(cuenta) {
           width: 280,
         })
       : null;
-  return html`<section class="k-card k-stack" aria-labelledby="sal-cuenta">
-    <h2 class="k-card__title" id="sal-cuenta">Cuenta de WhatsApp Business</h2>
+  return html`<section class="k-card k-stack" aria-labelledby="${uid('cuenta')}">
+    <h2 class="k-card__title" id="${uid('cuenta')}">Cuenta de WhatsApp Business</h2>
     ${when(
       cuenta.restriction,
       () =>
@@ -130,9 +130,9 @@ function tarjetaCuenta(cuenta) {
   </section>`;
 }
 
-function historial(lista) {
-  return html`<section class="k-card k-stack" aria-labelledby="sal-historial">
-    <h2 class="k-card__title" id="sal-historial">Historial de avisos</h2>
+function historial(lista, uid) {
+  return html`<section class="k-card k-stack" aria-labelledby="${uid('historial')}">
+    <h2 class="k-card__title" id="${uid('historial')}">Historial de avisos</h2>
     ${when(
       lista.length,
       () =>
@@ -194,7 +194,7 @@ export default {
                 avisos de Meta que mostrar. Cuando se active la conexión con Meta, aquí se verá el estado de cada número.
               </p>`,
           )}
-          ${when(datos.account, () => tarjetaCuenta(datos.account))}
+          ${when(datos.account, () => tarjetaCuenta(datos.account, ctx.uid))}
           ${when(
             datos.numbers.length,
             () => html`<div class="sal-numeros">${datos.numbers.map(numero => tarjetaNumero(numero, { puede }))}</div>`,
@@ -206,7 +206,7 @@ export default {
                 })}
               </div>`,
           )}
-          ${historial(datos.history)}
+          ${historial(datos.history, ctx.uid)}
         </div>`,
       );
     }
