@@ -11,6 +11,7 @@
     "start": "node --env-file-if-exists=.env server/index.mjs",
     "dev": "node --env-file-if-exists=.env --watch server/index.mjs",
     "test": "node --test test/*.test.mjs",
+    "test:ui": "playwright test",
     "demo": "node scripts/demo-local.mjs",
     "demo:reset": "node scripts/demo-local.mjs --reset",
     "check": "node scripts/check.mjs",
@@ -23,6 +24,7 @@
     "ws": "8.22.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "espree": "11.2.0",
     "prettier": "3.10.1"
   }

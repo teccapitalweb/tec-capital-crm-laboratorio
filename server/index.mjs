@@ -11,6 +11,8 @@ import { migrate } from './migrations/index.mjs';
 import { createStatic } from './app/static.mjs';
 import { loadScreens } from './app/screens.mjs';
 import { loadModules } from './app/modules.mjs';
+import { clientAddress, limitKey, proxyConfig } from './app/client-address.mjs';
+import { createRateLimiter } from './app/rate-limit.mjs';
 import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
 import { createCRM } from './crm.mjs';
 import { conversationPage } from './conversations.mjs';
@@ -77,8 +79,9 @@ const derive = promisify(scrypt);
 const production = process.env.NODE_ENV === 'production';
 const port = Number(process.env.PORT || 3100);
 const host = process.env.HOST || (production ? '0.0.0.0' : '127.0.0.1');
-const sessions = new Map(),
-  limits = new Map();
+const sessions = new Map();
+// Proxies propios delante del servidor (TRUSTED_PROXY_HOPS; 0 = no fiarse de ninguna cabecera).
+const proxy = proxyConfig();
 const ttl = 7 * 24 * 60 * 60 * 1000;
 const staff = person => person && !person.disabled && (person.role === 'agent' || person.role === 'admin');
 const safeUser = user => ({
@@ -104,14 +107,10 @@ const secureEqual = (a, b) =>
 db.function('search_text', { deterministic: true }, value => normalized(String(value ?? '')));
 const publicCourse = c => ({ ...c, price: c.price_cents / 100, hasArtwork: Boolean(courseArtwork(c)) });
 
+// Límites de intentos (server/app/rate-limit.mjs): ventana fija por clave; un contador vivo no se borra nunca.
+const limiter = createRateLimiter({ fail });
 function rate(key, max, window = 60000) {
-  const now = Date.now();
-  let item = limits.get(key);
-  if (!item || item.end < now) {
-    item = { count: 0, end: now + window };
-    limits.set(key, item);
-  }
-  if (++item.count > max) throw fail(429, 'Demasiados intentos. Espera un momento y vuelve a probar.');
+  limiter.rate(key, max, window);
 }
 function security(res) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -869,8 +868,19 @@ const server = http.createServer(async (req, res) => {
       throw fail(400, 'Solicitud no v\u00e1lida.');
     } // un destino ilegible responde 400 en lugar de detener el proceso
     const path = url.pathname;
+    const ip = limitKey(clientAddress(req, proxy.hops, proxy.trusted));
     if (req.method === 'GET' && path === '/api/health') {
       db.prepare('SELECT 1').get();
+      // Comprobación temporal antes de fijar TRUSTED_PROXY_HOPS en producción: qué llega y qué se resuelve.
+      if (process.env.LOG_CLIENT_ADDRESS === '1')
+        console.log(
+          'client-address',
+          JSON.stringify({
+            remote: req.socket.remoteAddress,
+            forwarded: req.headers['x-forwarded-for'] ?? null,
+            resolved: ip,
+          }),
+        );
       return json(res, 200, {
         ok: true,
         version,
@@ -880,18 +890,17 @@ const server = http.createServer(async (req, res) => {
         ...(modules.failed.length ? { modulesFailed: modules.failed.map(m => m.name) } : {}),
       });
     }
-    if (await connectors.handlePublic(req, res, path, url, req.socket.remoteAddress || 'unknown')) return; // webhooks de proveedores: firma propia, sin sesión ni Origin
+    if (await connectors.handlePublic(req, res, path, url, ip)) return; // webhooks de proveedores: firma propia, sin sesión ni Origin
     if (await privacy.handlePublic(req, res, path)) return;
-    if (await payments.handlePublic(req, res, path, req.socket.remoteAddress || 'unknown')) return; // pago sin sesion de un pedido de WhatsApp real (/api/pay/<pedido>)
-    if (await certificates.handlePublic(req, res, path, req.socket.remoteAddress || 'unknown')) return; // verificación pública de certificados por folio, con límite por IP
-    if (await mcp.handle(req, res, path, req.socket.remoteAddress || 'unknown')) return; // conector de Claude (MCP): llave propia, sin sesion
-    if (await integrations.handlePublic(req, res, path, url, req.socket.remoteAddress || 'unknown')) return; // API v1 de lectura: llave propia, sin sesión ni Origin
-    if (await allies.handlePublic(req, res, path, req.socket.remoteAddress || 'unknown')) return; // postulación pública de aliados (/aliados), apagada por omisión, con límite por IP
-    if (await surveys.handlePublic(req, res, path, req.socket.remoteAddress || 'unknown')) return; // encuestas por token (/encuesta/<token>, /api/survey/<token>), sin sesión, con límite por IP
-    if (await modules.handlePublic(req, res, path, url, req.socket.remoteAddress || 'unknown')) return; // rutas sin sesión de los módulos nuevos (llave o firma propia)
+    if (await payments.handlePublic(req, res, path, ip)) return; // pago sin sesion de un pedido de WhatsApp real (/api/pay/<pedido>)
+    if (await certificates.handlePublic(req, res, path, ip)) return; // verificación pública de certificados por folio, con límite por IP
+    if (await mcp.handle(req, res, path, ip)) return; // conector de Claude (MCP): llave propia, sin sesion
+    if (await integrations.handlePublic(req, res, path, url, ip)) return; // API v1 de lectura: llave propia, sin sesión ni Origin
+    if (await allies.handlePublic(req, res, path, ip)) return; // postulación pública de aliados (/aliados), apagada por omisión, con límite por IP
+    if (await surveys.handlePublic(req, res, path, ip)) return; // encuestas por token (/encuesta/<token>, /api/survey/<token>), sin sesión, con límite por IP
+    if (await modules.handlePublic(req, res, path, url, ip)) return; // rutas sin sesión de los módulos nuevos (llave o firma propia)
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && !originAllowed(req))
       throw fail(403, 'Origen no permitido.');
-    const ip = req.socket.remoteAddress || 'unknown';
     if (req.method === 'POST' && path === '/api/auth/recover') {
       rate('recovery:' + ip, 12, 900000);
       await crm.recover(await body(req));
@@ -1591,7 +1600,7 @@ const heartbeat = setInterval(() => {
     ws.ping();
   }
   const now = Date.now();
-  for (const [key, value] of limits) if (value.end < now) limits.delete(key);
+  limiter.sweep(now);
   db.prepare('DELETE FROM sessions WHERE expires_at<?').run(now);
 }, 30000);
 modules.startTimers();

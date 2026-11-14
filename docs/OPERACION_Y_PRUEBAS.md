@@ -63,8 +63,13 @@ Para una prueba nueva usa un directorio de datos vacío e independiente. No cone
 | `SIMULATOR_DISABLED` | vacío | `1` oculta el simulador de clientes: `/api/simulator` responde 404 y el barrido no corre. Úsalo en un entorno con clientes reales |
 | `MFA_KEY` | Opcional | Clave para cifrar los secretos de la verificación en dos pasos; si falta se usa `DATA_DIR/mfa.key`. Guárdala aparte; sin ella, los 2FA no se pueden verificar tras una restauración |
 | `MFA_RESET_USER` | Sólo emergencia | Usuario cuya verificación en dos pasos se restablece al arrancar; retirarla después |
+| `TRUSTED_PROXY_HOPS` | vacío (`0`: no se confía en ninguna cabecera) | Número de proxies **propios** delante del servidor. Con `1` (Railway) la dirección de quien visita se lee de la última posición de `X-Forwarded-For`, la que añade el proxy; lo que el cliente escriba a la izquierda se ignora. Sin definir, todos los visitantes comparten los límites por dirección (240 accesos por hora, 12 recuperaciones cada 15 minutos, 60 verificaciones por minuto…), porque todos llegan con la dirección del proxy. **Antes de activarla hay que comprobarla** (ver abajo): un número mayor que el real permitiría falsificar la dirección |
+| `TRUSTED_PROXY_CIDRS` | vacío | Opcional: rangos desde los que se acepta la cabecera; si la conexión no viene de ahí, se usa la dirección del socket |
+| `LOG_CLIENT_ADDRESS` | vacío | `1` anota en el registro, por cada petición a `/api/health`, la dirección del socket, la cabecera recibida y la dirección resuelta. Sólo para la comprobación; se retira después |
 | `ADMIN_INVITE_CODE` | Secreto aleatorio privado para inicializar una instalación vacía | Sólo permite crear el primer administrador |
 | `STAFF_INVITE_CODE` | No usar | Variable heredada, sin efecto desde v0.2 |
+
+**Cómo activar `TRUSTED_PROXY_HOPS` en producción** (lo hace quien administra Railway): (1) poner `LOG_CLIENT_ADDRESS=1` y `TRUSTED_PROXY_HOPS=1`; (2) hacer **una** petición a `/api/health` desde fuera con una cabecera inventada, por ejemplo `curl -H "X-Forwarded-For: 203.0.113.99" https://…/api/health`; (3) leer en el registro de Railway la línea `client-address`: `resolved` debe ser la dirección pública real de quien hizo la petición y **no** `203.0.113.99`; (4) si es así, dejar `TRUSTED_PROXY_HOPS=1` y quitar `LOG_CLIENT_ADDRESS`; si `resolved` es la inventada o la del proxy, quitar las dos y revisar cuántos proxies hay delante.
 
 No hay claves de IA/Meta necesarias para esta versión. Generar un código inicial no crea automáticamente un usuario: en una base vacía se registra la primera cuenta con ese código. Una base que ya tiene administrador no concede más administradores por repetirlo.
 
@@ -72,7 +77,7 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 
 ## Pruebas reproducibles en el repositorio
 
-`npm run check` comprueba sintaxis; no es un linter ni una compilación. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta las etiquetas de la bandeja son **159** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
+`npm run check` descubre los archivos de `server/`, `public/`, `test/` y `scripts/` y comprueba, en orden, codificación (UTF-8, finales LF, sin caracteres invisibles), sintaxis y formato (Prettier; `npx prettier --write <archivo>` lo corrige); no es un linter ni una compilación. Un paso suelto: `npm run check -- syntax`. `npm test` usa `node --test test/*.test.mjs`, servidores/base temporales y datos ficticios. La referencia funcional v0.5 aprobó **57 pruebas, cero fallos**; con los bloques locales hasta las etiquetas de la bandeja son **159** (ver nota de intermitencia en CONTINUIDAD). Tras un cambio hay que comprobar el nuevo resultado, no citar automáticamente el anterior.
 
 | Archivo | Qué protege |
 | --- | --- |
@@ -113,13 +118,19 @@ Los clientes se registran sin código. Los asesores aceptan invitación individu
 | `test/backup.test.mjs` | Respaldo con manifiesto, rotación, programación, detección de adjuntos perdidos/base dañada, ensayo de restauración y rutas |
 | `test/catalogue-import.test.mjs` | CSV (comillas, saltos, BOM), fechas por zona IANA, vista previa sin escritura, aplicación idempotente y errores por fila |
 | `test/recipes.test.mjs`, `test/recipes-http.test.mjs` | Recetas 4B: validación, simulación sin efectos, no retroactividad, cancelaciones, versiones, ejecución real por API |
+| `test/migrations.test.mjs` | Migraciones con nombre: ejecutor (orden, una sola vez, fallo sin restos), registro, identidad del esquema, reconstrucción de tablas, respaldo previo, la escalera publicada peldaño a peldaño, candado de «escalera cerrada» y actualización de una base en la 41 con el servidor real |
+| `test/static.test.mjs`, `test/screens.test.mjs`, `test/modules.test.mjs` | Estáticos por carpeta (lista de tipos, exclusiones, enlaces simbólicos, `ETag` y 304), registro de pantallas (validación, vista previa) y cargador de módulos (prefijos, rutas sin sesión, relojes, módulos rotos, rutas reservadas al día) |
+| `test/lib-identity-keys.test.mjs`, `test/lib-csv.test.mjs` | Bibliotecas comunes: clave canónica de teléfono y CSV con límites y protección contra fórmulas |
+| `test/malformed-url.test.mjs` | Un destino de petición ilegible responde 400 y el servidor sigue en pie |
 | `test/operations.test.mjs` | Minutos hábiles/DST, reparto, presencia, carga, transferencia conjunta, menciones, SLA, macros atómicas, paginación, revocación y reinicio |
 
 Para iterar en un módulo puede ejecutarse, por ejemplo, `node --test test/operations.test.mjs`. Antes de una entrega funcional, ejecutar la suite pertinente y la regresión completa; no ampliar repetidamente las pruebas sin cambios o dudas nuevas.
 
 Cuando una prueba abre su propia conexión `DatabaseSync` sobre la base del servidor temporal para sembrar o inspeccionar filas, debe abrirla con `{timeout:5000}`: el servidor escribe cada segundo desde el tick de eventos y una conexión sin espera falla con `database is locked` (ocurrió una vez en CI, 3 nov 2026). Las conexiones de sólo lectura (`readOnly:true`) no lo necesitan.
 
-Las pruebas automatizadas del repositorio no ejecutan navegador ni demuestran que Railway tenga ese código. La revisión local y la publicada son evidencias diferentes.
+**Pruebas de humo en navegador** (`npm run test:ui`, Playwright con el Chrome instalado; no descarga navegadores): arrancan su propio servidor sobre una carpeta temporal, con los proveedores apagados, y recorren en computadora (1366×800) y celular (375×812) el acceso del equipo, un mensaje de cliente que llega en vivo a la bandeja con su respuesta, y la auditoría de Niebla de Mi día, Conversaciones, Contactos y Catálogo contra una línea base (`test/ui/niebla-baseline.json`) que sólo puede bajar. En las tres: ningún error de consola, ningún error de página y ninguna respuesta 5xx. CI las ejecuta en un trabajo aparte (`ui`).
+
+Las pruebas automatizadas no demuestran que Railway tenga ese código. La revisión local y la publicada son evidencias diferentes.
 
 ## Recorrido de aceptación en navegador
 
@@ -204,7 +215,7 @@ Publicar sólo dentro del alcance autorizado por el usuario. Para el traspaso do
 El health esperado de referencia:
 
 ```json
-{"ok":true,"version":"0.34.0","transport":"websocket","mode":"laboratorio"}
+{"ok":true,"version":"0.34.0","transport":"websocket","mode":"laboratorio","schema":"41"}
 ```
 
 ## Respaldos y recuperación
@@ -232,6 +243,10 @@ Procedimiento a diseñar y ensayar en entorno aislado:
 5. Restaurar primero en otro directorio/entorno, ejecutar `PRAGMA integrity_check` y comprobar `user_version`, claves foráneas y conteos de referencia.
 6. Arrancar con el código compatible y origen/puerto de prueba. Verificar login, historial, descarga de adjuntos/flyers y ausencia de ejecución accidental de campañas/trabajos futuros.
 7. Documentar resultado y tiempos. Sólo después preparar la recuperación real y su manejo de datos posteriores.
+
+`schema` es la identidad del esquema: `41` mientras no haya migraciones con nombre y `41+N.<huella>` con N (la que debe tener una base al día con el código la imprime `npm run schema:id`). Si un módulo nuevo no cargó, health añade `modulesFailed` con su nombre.
+
+**Migraciones con nombre (desde los cimientos de noviembre de 2026).** La escalera `PRAGMA user_version` está cerrada en la 41: el arranque sube primero cualquier base antigua por la escalera y después aplica las migraciones con nombre pendientes (`server/migrations/named/<área>/`), cada una en su transacción y anotada en la tabla `schema_migrations`. Antes de aplicar algo pendiente a una base con usuarios guarda **una** copia `backups/before-<nombre>-<ms>.sqlite` (`before-crm-v41-…` si la base venía de una versión anterior a la 41). Esas copias no se rotan todavía: vigila el espacio del volumen. Una base con migraciones que el código no conoce (por ejemplo tras revertir un despliegue) arranca y lo avisa en el registro; como todo cambio es aditivo, el código anterior sigue funcionando. Cómo se escribe una: [GUIA_MODULOS.md](GUIA_MODULOS.md).
 
 Con v7 el arranque guarda `backups/before-crm-v7-<timestamp>.sqlite` antes de migrar una base con usuarios y esquema < 8 (el v7 no llegó a publicarse por separado). Revertir código no revierte esquema. No ejecutar una versión antigua contra v6 o posteriores sin comprobar compatibilidad. No borrar WAL/SHM manualmente para intentar arreglar una base.
 

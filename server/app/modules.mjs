@@ -8,7 +8,7 @@
 //       return { handle, tick };          // handle(req, res, path, user, url) → true si atendió la petición
 //     },
 //     public: {                           // opcional: rutas SIN sesión ni comprobación de Origin
-//       prefixes: ['/api/compat/wati'],   // el módulo responde de su propia llave o firma y de su límite por IP
+//       prefixes: ['/api/compat/v1'],     // el módulo responde de su propia llave o firma y de su límite por IP
 //       handle: (api, req, res, path, url, ip) => api.handlePublic(req, res, path, url, ip),
 //     },
 //     timers: [{ name: 'envio', everyMs: 1000, testEveryMs: 200, run: api => api.tick() }],   // opcional
