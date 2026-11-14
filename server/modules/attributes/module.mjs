@@ -267,6 +267,8 @@ export default {
     //   changes: [{key, value, expected?}]; meta: {source, sourceId, actorId, conversationId, depth, revealPersonal}
     //   revealPersonal: false cuando quien escribe no puede ver los datos personales; entonces no se acepta
     //   «expected» en esos datos (no debe servir para adivinar el valor oculto).
+    //   events: false (importación en lote) escribe valor e historial pero no publica un evento de dominio por cambio:
+    //   la importación publica uno solo al terminar (conciliación técnica, fila 17).
     function set(brandId, contactId, changes, meta = {}) {
       const source = SOURCES.has(meta.source) ? meta.source : 'staff';
       if (!repo.contact(brandId, contactId)) throw fail(404, 'Contacto no disponible.', { code: 'not_found' });
@@ -353,16 +355,17 @@ export default {
           depth: Number.isInteger(meta.depth) ? meta.depth : 0,
           ...(definition.personal ? { redacted: true } : { from, to }),
         };
-        host.services.events.publish({
-          type: EVENT,
-          brandId,
-          entityKind: 'contact',
-          entityId: contactId,
-          payload,
-          actorId: meta.actorId ?? null,
-          source: 'attributes',
-          dedupeKey: `${EVENT}:${seq}`,
-        });
+        if (meta.events !== false)
+          host.services.events.publish({
+            type: EVENT,
+            brandId,
+            entityKind: 'contact',
+            entityId: contactId,
+            payload,
+            actorId: meta.actorId ?? null,
+            source: 'attributes',
+            dedupeKey: `${EVENT}:${seq}`,
+          });
         current.set(definition.id, next ? { value: next.value, value_num: next.valueNum } : null);
         changed.push({ key, from, to });
       }

@@ -3,6 +3,7 @@ import { transaction } from './database.mjs';
 import { backoff } from './automation.mjs';
 import { csvCell } from './contacts.mjs';
 import { hasColumn, withTimeout } from './app/leases.mjs';
+import { withStatementCache } from './lib/statement-cache.mjs';
 
 // Eventos de dominio (Fase 2 · bloque 2.1). Cada hecho relevante del negocio queda registrado UNA sola vez en
 // domain_events (tipo, marca, entidad, carga breve, actor, origen, clave de idempotencia). Los módulos lo publican dentro
@@ -185,6 +186,8 @@ export function createEvents({
   leaseMs = 60_000,
   handlerTimeoutMs = 30_000,
 }) {
+  // Cada sentencia se prepara una vez (server/lib/statement-cache.mjs): una importación llama aquí miles de veces.
+  db = withStatementCache(db);
   const subscribers = new Map(); // tipo -> [{name,handler}]
   // Catálogo de esta instancia: los tipos y entidades de arriba más los que cada módulo registra con registerTypes().
   const catalog = Object.assign(Object.create(null), EVENT_TYPES),

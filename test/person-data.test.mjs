@@ -225,6 +225,15 @@ const SEEDS = {
         "INSERT INTO contact_attribute_requests(client_ref,brand_id,contact_id,response,created_at) VALUES(?,?,?,'{}',1)",
       )
       .run('ref-' + s, c.brand, c.id),
+  // Importación de contactos: el resultado de la fila que creó o actualizó a cada uno.
+  contact_import_rows: (db, c, s) => {
+    db.prepare(
+      "INSERT OR IGNORE INTO contact_imports(id,brand_id,filename,sha256,storage_name,size,encoding,delimiter,created_at,updated_at) VALUES('import-1',?,'contactos.csv','x','import-1.csv',1,'utf-8',',',1,1)",
+    ).run(c.brand);
+    db.prepare(
+      "INSERT INTO contact_import_rows(import_id,phase,row,line,action,contact_id) VALUES('import-1','apply',?,?,'created',?)",
+    ).run(s === 'keep' ? 1 : 2, s === 'keep' ? 2 : 3, c.id);
+  },
 };
 
 function seedWorld(db, personData) {

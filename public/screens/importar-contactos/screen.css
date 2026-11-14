@@ -1,0 +1,56 @@
+/*
+ * Pantalla «Importar contactos»: sólo la composición que el kit no trae, con el prefijo imp- y variables de
+ * public/tokens.css.
+ */
+
+.imp-campo {
+  max-width: 440px;
+}
+
+.imp-sub {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: 600;
+}
+
+.imp-lista {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.imp-reciente {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+}
+
+.imp-reciente__nombre {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.imp-plantilla,
+.imp-filtro {
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.imp-columnas {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.imp-grupo {
+  display: grid;
+  gap: var(--space-3);
+}

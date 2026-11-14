@@ -9,15 +9,18 @@
 import { defineRegistry } from './named.mjs';
 import attributes from './named/attributes/index.mjs';
 import broadcasts from './named/broadcasts/index.mjs';
+import contactImport from './named/contact-import/index.mjs';
 import contacts from './named/contacts/index.mjs';
 import identity from './named/identity/index.mjs';
 import inbox from './named/inbox/index.mjs';
+import jobs from './named/jobs/index.mjs';
 import messages from './named/messages/index.mjs';
 import queues from './named/queues/index.mjs';
 
 // «contacts» va después de «identity» aunque el alfabeto diga otra cosa: su búsqueda usa la clave de teléfono.
 // «messages» va después de «queues»: las dos añaden columnas a messages y una base nueva debe quedar con el mismo orden
 // de columnas que una ya publicada (queues/0001 se publicó antes).
+// «jobs» y «contact-import» van al final: la importación usa la clave de teléfono (identity) y la cola de trabajos.
 export const NAMED = defineRegistry([
   ...attributes,
   ...broadcasts,
@@ -26,4 +29,6 @@ export const NAMED = defineRegistry([
   ...inbox,
   ...queues,
   ...messages,
+  ...jobs,
+  ...contactImport,
 ]);
