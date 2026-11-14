@@ -58,6 +58,6 @@ Un teléfono bien escrito da lo mismo que antes. Cambia esto (la prueba compara 
 - Lo que no es un teléfono queda sin clave: no cuenta para duplicados ni une personas. Antes bastaban siete dígitos iguales para aparecer en Duplicados.
 - No se recalcula la identidad de persona de contactos antiguos cuyo teléfono antes no se reconocía (extranjero sin «+»): se reclama cuando el contacto se vuelve a guardar.
 - Diez dígitos sin «+» se leen como un número de México.
-- Si se revierte el despliegue, el código anterior sigue funcionando (la columna tiene valor por omisión), pero lo que cree o edite queda sin clave hasta que otra migración repita el relleno.
+- Si se revierte el despliegue, el código anterior sigue funcionando (la columna tiene valor por omisión), pero el contacto que cree queda sin clave y el que edite, con la de antes, hasta que otra migración repita el relleno.
 - Históricos: un alumno sin `id` se identifica por nombre, teléfono normalizado y correo; un archivo con `+521…` importado antes de este cambio se duplicaría al reimportarlo. No hay históricos importados en producción.
 - No se tocaron: `phone10` de Aliados (valida diez dígitos de una academia, no de un cliente), la búsqueda por texto del conector de Claude y la de Contactos en el navegador.
