@@ -35,6 +35,13 @@ const QUICK = {
 };
 export const QUICK_FILTERS = Object.freeze(Object.keys(QUICK));
 
+// ¿El filtro pregunta por lo que contiene el correo? («tiene correo» o «no tiene» no revela nada que no se vea.)
+function usesEmailContent(definition) {
+  return (definition?.groups ?? []).some(group =>
+    (group?.rules ?? []).some(rule => rule?.field === 'email' && rule.op !== 'empty' && rule.op !== 'not_empty'),
+  );
+}
+
 // Correo enmascarado para quien no puede ver datos completos: la primera letra y el dominio («a•••@correo.mx»).
 function maskEmail(value) {
   const text = String(value ?? '');
@@ -94,17 +101,19 @@ export default {
     }
 
     // ---- Búsqueda: un teléfono (sólo dígitos y signos de teléfono, al menos cuatro dígitos) se busca por su clave;
-    // lo demás, por palabras en el nombre y el correo, sin acentos. Quien no ve teléfonos completos en una marca sólo
-    // busca por los cuatro últimos dígitos, que son los que ya ve.
+    // lo demás, por palabras en el nombre y el correo, sin acentos. Quien no ve datos completos en una marca sólo
+    // busca por lo que ya ve: los cuatro últimos dígitos del teléfono y el nombre. Si buscara en el correo o en el
+    // teléfono completo, ver qué contactos aparecen le dejaría adivinar lo que se le oculta.
     function searchFor(user, brandId, q) {
       if (!q) return null;
+      const full = access.can(user, 'contacts.phone', brandId);
       const digits = q.replace(/\D/g, '');
       if (/^[\d\s+()./-]+$/.test(q) && digits.length >= 4) {
-        if (!access.can(user, 'contacts.phone', brandId)) return { last4: digits.slice(-4) };
+        if (!full) return { last4: digits.slice(-4) };
         return { phone: { key: phoneKey(q) ?? '', digits } };
       }
       const words = searchKey(q).split(/\s+/).filter(Boolean).slice(0, 8);
-      return words.length ? { words } : null;
+      return words.length ? { words, nameOnly: !full } : null;
     }
 
     // ---- Filtros: la definición del constructor (JSON) y los rápidos, todo validado con la gramática común.
@@ -149,6 +158,16 @@ export default {
       const dir = url.searchParams.get('dir') ?? (sort === 'name' ? 'asc' : 'desc');
       if (dir !== 'asc' && dir !== 'desc') throw bad('El sentido del orden es asc o desc.', 'dir');
       const { conditions, definition, quick } = conditionsFor(user, url);
+      // Por la misma razón, filtrar por el contenido del correo exige poder verlo en todas las marcas pedidas.
+      if (usesEmailContent(definition) && !brandIds.every(id => access.can(user, 'contacts.phone', id)))
+        throw host.fail(
+          403,
+          'Filtrar por el contenido del correo requiere poder ver los datos completos del contacto.',
+          {
+            code: 'permission_denied',
+            field: 'filter',
+          },
+        );
       // La búsqueda se arma por marca: el permiso de teléfono puede ser distinto en cada una.
       const filters = new Map(brandIds.map(id => [id, { search: searchFor(user, id, q), conditions }]));
       return { brand, brandIds, q, sort, dir, filters, identity: { brand, q, sort, dir, definition, quick } };

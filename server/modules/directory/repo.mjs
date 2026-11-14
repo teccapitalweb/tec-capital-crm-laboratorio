@@ -108,14 +108,15 @@ export function createRepo(db) {
   registerSqlFunctions(db);
 
   // Lo que la búsqueda y los filtros añaden al WHERE, ya armado por `where()`.
-  //   search: {words: ['jose']} | {phone: {key, digits}} | {last4: '5678'} | null
+  //   search: {words: ['jose'], nameOnly?} | {phone: {key, digits}} | {last4: '5678'} | null
   //   conditions: lista de {sql, params} de compile()
   function where({ search = null, conditions = [] } = {}) {
     const parts = [];
     const params = [];
     if (search?.words?.length) {
       for (const word of search.words) {
-        parts.push("instr(s.name_key || ' ' || s.email_key, ?) > 0");
+        // Sin permiso para ver el correo completo, se busca sólo en el nombre.
+        parts.push(search.nameOnly ? 'instr(s.name_key, ?) > 0' : "instr(s.name_key || ' ' || s.email_key, ?) > 0");
         params.push(word);
       }
     } else if (search?.phone) {
