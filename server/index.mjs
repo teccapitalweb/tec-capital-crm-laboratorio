@@ -12,6 +12,8 @@ import { createStatic } from './app/static.mjs';
 import { loadScreens } from './app/screens.mjs';
 import { loadModules } from './app/modules.mjs';
 import { fail, errorBody } from './app/http.mjs';
+import { createRealtime } from './app/realtime.mjs';
+import { createAccess } from './lib/access.mjs';
 import { courseArtwork, artworkAsset } from './demo-catalog.mjs';
 import { createCRM } from './crm.mjs';
 import { conversationPage } from './conversations.mjs';
@@ -451,6 +453,9 @@ const statics = createStatic({
   fail,
   generated: { '/screens/index.json': { bytes: screens.bytes, type: 'application/json; charset=utf-8' } },
 });
+// Primitivas de los módulos nuevos (docs/PLAN_ACCESO_TIEMPO_REAL.md): permisos con alcance por marca y tiempo real v2.
+const access = createAccess({ db, crm });
+const realtime = createRealtime({ db, crm, sessions, canSee });
 // Módulos nuevos (server/modules/<nombre>/module.mjs): se descubren y se montan solos después de los actuales.
 const modules = await loadModules({
   dir: resolve(root, 'server', 'modules'),
@@ -469,6 +474,8 @@ const modules = await loadModules({
     audit,
     rate,
     broadcast,
+    realtime,
+    access,
     online,
     staff,
     requireStaff,
