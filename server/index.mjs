@@ -754,7 +754,8 @@ async function processJob(job) {
         return;
       }
       replies.commit(c, planned.trigger, planned.plan, draft);
-      db.prepare("UPDATE jobs SET state='done' WHERE id=?").run(job.id);
+      // Hecho y sin dueño en el mismo paso: un trabajo terminado nunca se ve con un arrendamiento vivo.
+      db.prepare("UPDATE jobs SET state='done',lease_owner=NULL,lease_until=NULL WHERE id=?").run(job.id);
     });
     broadcast('conversation', job.conversation_id);
     if (!db.prepare('SELECT bot_enabled FROM conversations WHERE id=?').get(job.conversation_id)?.bot_enabled)
