@@ -173,10 +173,10 @@ export function createBucket(ratePerMinute, at) {
     available(now) {
       tokens = Math.min(capacity, tokens + ((now - last) * rate) / MINUTE);
       last = now;
-      return Math.floor(tokens);
+      return Math.floor(tokens + 0.05); // tolera el desfase del reloj: un tic de 990 ms no pierde su envío
     },
     take(n) {
-      tokens = Math.max(0, tokens - n);
+      tokens -= n; // la deuda se paga en la siguiente recarga: el ritmo medio es exacto
     },
     rate,
   };

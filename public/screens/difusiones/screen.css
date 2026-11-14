@@ -1,0 +1,139 @@
+/*
+ * Pantalla «Difusiones»: sólo la composición que el kit no trae, con el prefijo dif- y variables de
+ * public/tokens.css. La vista de teléfono es neutra: no imita la interfaz de ninguna aplicación de mensajería.
+ */
+
+.dif-marca {
+  max-width: 320px;
+}
+
+.dif-nombre {
+  margin-right: var(--space-2);
+  font-weight: 600;
+}
+
+.dif-chips,
+.dif-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dif-paso {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 900px) {
+  .dif-paso {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    align-items: start;
+  }
+}
+
+.dif-telefono {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-4);
+  background: var(--soft);
+}
+
+.dif-telefono__barra {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-1);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.dif-telefono__fondo {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.dif-burbuja {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--surface);
+  color: var(--text-1);
+  font-size: var(--font-md);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dif-burbuja__pie {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--text-2);
+  font-size: var(--font-sm);
+}
+
+.dif-boton {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-size: var(--font-sm);
+  text-align: center;
+}
+
+.dif-telefono__nota {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-4);
+  color: var(--text-2);
+  font-size: var(--font-sm);
+}
+
+.dif-cifras {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  margin: 0;
+}
+
+.dif-cifras div {
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--surface);
+}
+
+.dif-cifras dt {
+  color: var(--text-2);
+  font-size: var(--font-sm);
+}
+
+.dif-cifras dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: 600;
+}
+
+.dif-avance {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--accent);
+}
+
+.dif-aviso {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--warn-line);
+  border-radius: var(--radius-3);
+  background: var(--warn-soft);
+  color: var(--text-1);
+}
+
+.dif-bloqueos {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--text-1);
+}
