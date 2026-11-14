@@ -7,5 +7,7 @@
 //   import contacts from './named/contacts/index.mjs';
 //   export const NAMED = defineRegistry([...contacts, ...perf]);
 import { defineRegistry } from './named.mjs';
+import inbox from './named/inbox/index.mjs';
+import queues from './named/queues/index.mjs';
 
-export const NAMED = defineRegistry([]);
+export const NAMED = defineRegistry([...inbox, ...queues]);
