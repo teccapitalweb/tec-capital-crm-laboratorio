@@ -101,6 +101,8 @@ La referencia vigente es **581 pruebas aprobadas** más 17 de navegador con `npm
 
 ## Lo siguiente
 
+**14 nov 2026 (tarde):** la tercera tanda (contrato del canal 1.1, cimientos de difusiones con motor de costos, importación de contactos por CSV y cola de trabajos) está en la rama `chore/f0-01-codificacion`, **sin publicar**.
+
 **14 nov 2026:** la segunda tanda (teléfono canónico, fusión con registro de datos de persona, recepción duradera de webhooks, permisos y tiempo real, ESLint, kit de pantallas y tres pantallas en vista previa) se **publicó** en `main` (commit `8bd17ef`); las tres pantallas siguen ocultas en producción: ver [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md).
 
 **13 nov 2026:** se publicaron los cimientos para construir módulos y pantallas en paralelo (migraciones con nombre, `server/modules/`, `public/screens/`, `server/lib/`, formato automático y pruebas de humo en navegador), sin cambios visibles: ver [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md) y [docs/GUIA_MODULOS.md](docs/GUIA_MODULOS.md). Lo que sigue de este apartado es anterior a esa fecha.
