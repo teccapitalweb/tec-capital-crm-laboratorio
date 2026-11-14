@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// npm run check: descubre los archivos y ejecuta, en orden, codificación → sintaxis → formato.
-// Un paso suelto: `npm run check -- syntax` (o encoding, format).
+// npm run check: descubre los archivos y ejecuta, en orden, codificación → sintaxis → revisión (ESLint) → formato.
+// Un paso suelto: `npm run check -- syntax` (o encoding, lint, format).
 import { readdirSync, existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -76,6 +76,11 @@ if (import.meta.main) {
     const failed = await syntax(files);
     if (failed.length) console.error(failed.join('\n'));
     report('syntax', !failed.length, started, `: ${files.length} archivos`);
+  }
+  // El tope de avisos del código heredado vive en el guion «lint» de package.json y sólo puede bajar.
+  if (wanted('lint') && existsSync('node_modules/eslint')) {
+    const started = Date.now();
+    report('lint', run('npm', ['run', '-s', 'lint'], process.platform === 'win32'), started);
   }
   if (wanted('format') && existsSync('node_modules/prettier')) {
     const started = Date.now();

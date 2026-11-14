@@ -5,6 +5,7 @@ import { transaction } from './database.mjs';
 import { artworkAsset } from './demo-catalog.mjs';
 import * as copy from './reply-copy.mjs';
 import { brandCourses, matchCourse } from './course-match.mjs';
+import { canonicalPhone } from './lib/identity-keys.mjs';
 
 // WhatsApp real (Meta · Cloud API). docs/PLAN_WHATSAPP_REAL.md
 // Convierte un mensaje que llega a un número real en cliente, conversación y mensaje del CRM —el mismo camino que sigue un
@@ -271,8 +272,13 @@ export function createWhatsApp({
             .prepare("SELECT id FROM contacts WHERE source_user_id=? AND brand_id=? AND phone=''")
             .get(userId, c.brand_id);
           if (contact) {
-            db.prepare("UPDATE contacts SET phone=?,source='whatsapp',updated_at=? WHERE id=?").run(
-              '+' + waId,
+            // El contacto guarda el teléfono canónico («+52» más diez dígitos, sin el 1 que Meta pone en «521…») y su
+            // clave: así es el mismo número que el capturado a mano o importado. `wa_peer` conserva el identificador
+            // tal como llegó, que es al que se le contesta. Si no se reconoce como teléfono, se guarda tal cual.
+            const phone = canonicalPhone(waId, { international: true });
+            db.prepare("UPDATE contacts SET phone=?,phone_key=?,source='whatsapp',updated_at=? WHERE id=?").run(
+              phone.e164 ?? '+' + waId,
+              phone.key ?? '',
               t,
               contact.id,
             );

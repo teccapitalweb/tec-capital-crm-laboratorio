@@ -2,10 +2,15 @@ import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { createFollowup } from './followup.mjs';
 import { defaultEditionId } from './catalogue-schema.mjs';
+import { phoneKey } from './lib/identity-keys.mjs';
 
 const tokenHash = value => createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const text = (value, max = 500) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
+// La clave de teléfono es interna: el servidor compara con ella y no viaja en las respuestas.
+const publicContact = ({ phone_key, ...contact }) => contact;
+// Las partes de GET /api/crm, en el orden de siempre.
+const SNAPSHOT_PARTS = Object.freeze(['contacts', 'opportunities', 'tasks', 'members', 'preferences']);
 export const stages = ['nuevo', 'interesado', 'inscripcion', 'ganada', 'perdida'];
 
 export function migrateCRM(db) {
@@ -185,34 +190,53 @@ export function createCRM({ db, body, json, audit, passwordHash, checkPassword, 
       }))
       .filter(u => user.role === 'admin' || (!u.disabled && u.brandIds.length));
   }
-  function snapshot(user) {
+  // `parts` (GET /api/crm?parts=opportunities,tasks): sólo esas partes. Sin él, todas, como siempre. La pantalla nueva
+  // de contactos pagina por su cuenta (módulo `directory`); así quien sólo necesita intereses y tareas no recibe
+  // todos los contactos.
+  function snapshot(user, parts = SNAPSHOT_PARTS) {
     const ids = brandsFor(user).map(b => b.id),
       placeholders = ids.map(() => '?').join(',') || 'NULL';
-    const contacts = db
-      .prepare(
-        `SELECT c.*,u.test_number,(SELECT count(*) FROM opportunities o WHERE o.contact_id=c.id AND o.stage NOT IN ('ganada','perdida')) active_interests FROM contacts c LEFT JOIN users u ON u.id=c.source_user_id WHERE c.brand_id IN (${placeholders}) ORDER BY c.updated_at DESC`,
-      )
-      .all(...ids);
-    const opportunities = db
-      .prepare(
-        `SELECT o.*,c.name contact_name,k.title course_title,e.name edition_name,e.price_cents,e.currency,u.name owner_name,(SELECT MIN(due_at) FROM tasks t WHERE t.opportunity_id=o.id AND t.status='open') next_due,(SELECT group_concat(conversation_id) FROM conversation_opportunities co WHERE co.opportunity_id=o.id) conversation_ids,(SELECT co.conversation_id FROM conversation_opportunities co JOIN conversations v ON v.id=co.conversation_id WHERE co.opportunity_id=o.id ORDER BY v.updated_at DESC LIMIT 1) conversation_id FROM opportunities o JOIN contacts c ON c.id=o.contact_id JOIN courses k ON k.id=o.course_id LEFT JOIN editions e ON e.id=o.edition_id LEFT JOIN users u ON u.id=o.owner_id WHERE o.brand_id IN (${placeholders}) ORDER BY o.updated_at DESC`,
-      )
-      .all(...ids);
-    const tasks = db
-      .prepare(
-        `SELECT t.*,c.name contact_name,k.title course_title,u.name owner_name FROM tasks t JOIN opportunities o ON o.id=t.opportunity_id JOIN contacts c ON c.id=o.contact_id JOIN courses k ON k.id=o.course_id LEFT JOIN users u ON u.id=t.owner_id WHERE t.brand_id IN (${placeholders}) ORDER BY t.status,t.due_at`,
-      )
-      .all(...ids);
-    return {
-      contacts,
-      opportunities,
-      tasks,
-      members: staffList(user),
-      preferences: db.prepare('SELECT signature,availability FROM preferences WHERE user_id=?').get(user.id) || {
-        signature: '',
-        availability: 'available',
-      },
+    const build = {
+      contacts: () =>
+        db
+          .prepare(
+            `SELECT c.*,u.test_number,(SELECT count(*) FROM opportunities o WHERE o.contact_id=c.id AND o.stage NOT IN ('ganada','perdida')) active_interests FROM contacts c LEFT JOIN users u ON u.id=c.source_user_id WHERE c.brand_id IN (${placeholders}) ORDER BY c.updated_at DESC`,
+          )
+          .all(...ids)
+          .map(publicContact),
+      opportunities: () =>
+        db
+          .prepare(
+            `SELECT o.*,c.name contact_name,k.title course_title,e.name edition_name,e.price_cents,e.currency,u.name owner_name,(SELECT MIN(due_at) FROM tasks t WHERE t.opportunity_id=o.id AND t.status='open') next_due,(SELECT group_concat(conversation_id) FROM conversation_opportunities co WHERE co.opportunity_id=o.id) conversation_ids,(SELECT co.conversation_id FROM conversation_opportunities co JOIN conversations v ON v.id=co.conversation_id WHERE co.opportunity_id=o.id ORDER BY v.updated_at DESC LIMIT 1) conversation_id FROM opportunities o JOIN contacts c ON c.id=o.contact_id JOIN courses k ON k.id=o.course_id LEFT JOIN editions e ON e.id=o.edition_id LEFT JOIN users u ON u.id=o.owner_id WHERE o.brand_id IN (${placeholders}) ORDER BY o.updated_at DESC`,
+          )
+          .all(...ids),
+      tasks: () =>
+        db
+          .prepare(
+            `SELECT t.*,c.name contact_name,k.title course_title,u.name owner_name FROM tasks t JOIN opportunities o ON o.id=t.opportunity_id JOIN contacts c ON c.id=o.contact_id JOIN courses k ON k.id=o.course_id LEFT JOIN users u ON u.id=t.owner_id WHERE t.brand_id IN (${placeholders}) ORDER BY t.status,t.due_at`,
+          )
+          .all(...ids),
+      members: () => staffList(user),
+      preferences: () =>
+        db.prepare('SELECT signature,availability FROM preferences WHERE user_id=?').get(user.id) || {
+          signature: '',
+          availability: 'available',
+        },
     };
+    return Object.fromEntries(parts.map(part => [part, build[part]()]));
+  }
+  // Lee `parts` de la dirección: null si no viene; una lista sin repetir si todas las partes existen; 400 si no.
+  function snapshotParts(req) {
+    const raw = new URL(req.url, 'http://localhost').searchParams.get('parts');
+    if (raw === null) return null;
+    const list = [...new Set(raw.split(',').map(part => part.trim()))];
+    const unknown = list.find(part => !SNAPSHOT_PARTS.includes(part));
+    if (unknown !== undefined)
+      throw Object.assign(
+        fail(400, `Parte desconocida: «${unknown.slice(0, 30)}». Usa ${SNAPSHOT_PARTS.join(', ')}.`),
+        { code: 'invalid_input', field: 'parts' },
+      );
+    return list;
   }
   async function handle(req, res, path, user) {
     if (path === '/api/team/accept' && req.method === 'POST') {
@@ -256,7 +280,8 @@ export function createCRM({ db, body, json, audit, passwordHash, checkPassword, 
     if (!isStaff(user)) throw fail(403, 'Este espacio es para el equipo autorizado.');
     if (await followup.handle(req, res, path, user)) return true;
     if (path === '/api/crm' && req.method === 'GET') {
-      json(res, 200, snapshot(user));
+      const parts = snapshotParts(req);
+      json(res, 200, parts ? snapshot(user, parts) : snapshot(user));
       return true;
     }
     if (path === '/api/team' && req.method === 'GET') {
@@ -358,11 +383,12 @@ export function createCRM({ db, body, json, audit, passwordHash, checkPassword, 
       const name = text(input.name, 100);
       if (name.length < 2) throw fail(400, 'Escribe el nombre del contacto.');
       const id = randomUUID(),
-        now = Date.now();
+        now = Date.now(),
+        phone = text(input.phone, 40); // se guarda como se escribió; `phone_key` es la clave con la que se compara
       transaction(db, () => {
         db.prepare(
-          'INSERT INTO contacts(id,brand_id,name,phone,email,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',
-        ).run(id, input.brandId, name, text(input.phone, 40), text(input.email, 150), now, now);
+          'INSERT INTO contacts(id,brand_id,name,phone,phone_key,email,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
+        ).run(id, input.brandId, name, phone, phoneKey(phone) ?? '', text(input.email, 150), now, now);
         contactHook(db.prepare('SELECT * FROM contacts WHERE id=?').get(id));
       });
       audit(user, 'contact.created', id);
@@ -375,7 +401,7 @@ export function createCRM({ db, body, json, audit, passwordHash, checkPassword, 
       const c = scoped('contacts', contact[1], user);
       if (req.method === 'GET') {
         json(res, 200, {
-          contact: c,
+          contact: publicContact(c),
           notes: db
             .prepare(
               'SELECT n.*,u.name author_name FROM internal_notes n JOIN users u ON u.id=n.author_id WHERE n.contact_id=? ORDER BY n.created_at DESC LIMIT 100',
@@ -386,13 +412,15 @@ export function createCRM({ db, body, json, audit, passwordHash, checkPassword, 
       }
       if (req.method === 'PATCH') {
         const input = await body(req),
-          name = text(input.name, 100);
+          name = text(input.name, 100),
+          phone = text(input.phone, 40);
         requireBrand(user, c.brand_id);
         if (name.length < 2) throw fail(400, 'Escribe el nombre del contacto.');
         transaction(db, () => {
-          db.prepare('UPDATE contacts SET name=?,phone=?,email=?,updated_at=? WHERE id=?').run(
+          db.prepare('UPDATE contacts SET name=?,phone=?,phone_key=?,email=?,updated_at=? WHERE id=?').run(
             name,
-            text(input.phone, 40),
+            phone,
+            phoneKey(phone) ?? '',
             text(input.email, 150),
             Date.now(),
             c.id,

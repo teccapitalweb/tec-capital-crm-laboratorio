@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { cancelConversationSteps } from './automation.mjs';
+import { phoneKey } from './lib/identity-keys.mjs';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const norm = v =>
@@ -15,11 +16,6 @@ export const COLORS = ['neutral', 'blue', 'green', 'amber', 'red', 'violet'];
 const MAX_TAGS_PER_BRAND = 100,
   MAX_TAGS_PER_CONTACT = 12,
   MAX_EXPORT = 20000;
-const digits = v => String(v ?? '').replace(/\D/g, '');
-const phoneKey = v => {
-  const d = digits(v);
-  return d.length >= 7 ? d.slice(-10) : '';
-};
 const closed = s => ['ganada', 'perdida'].includes(s);
 
 // Neutraliza fórmulas de hoja de cálculo (=, +, -, @) y escapa comillas, comas y saltos de línea.
@@ -274,7 +270,7 @@ export function createContacts({
       }
       for (const list of map.values()) if (list.length > 1) groups.push({ reason, contacts: list.map(summary) });
     };
-    by('phone', c => phoneKey(c.phone));
+    by('phone', c => c.phone_key); // la clave canónica: el mismo número escrito de cualquier forma, y sólo ese número
     by('email', c => norm(c.email));
     by('name', c => {
       const n = norm(c.name);
@@ -355,9 +351,10 @@ export function createContacts({
         'INSERT OR IGNORE INTO contact_tag_links(contact_id,tag_id,created_by,created_at) SELECT ?,tag_id,created_by,created_at FROM contact_tag_links WHERE contact_id=?',
       ).run(p.keep.id, p.merge.id);
       db.prepare('DELETE FROM contact_tag_links WHERE contact_id=?').run(p.merge.id);
+      // El teléfono que se hereda llega con su clave (las dos condiciones miran el teléfono de antes de la sentencia).
       db.prepare(
-        "UPDATE contacts SET phone=CASE WHEN phone='' THEN ? ELSE phone END,email=CASE WHEN email='' THEN ? ELSE email END,updated_at=? WHERE id=?",
-      ).run(p.merge.phone, p.merge.email, t, p.keep.id);
+        "UPDATE contacts SET phone=CASE WHEN phone='' THEN ? ELSE phone END,phone_key=CASE WHEN phone='' THEN ? ELSE phone_key END,email=CASE WHEN email='' THEN ? ELSE email END,updated_at=? WHERE id=?",
+      ).run(p.merge.phone, phoneKey(p.merge.phone) ?? '', p.merge.email, t, p.keep.id);
       db.prepare(
         'INSERT INTO contact_merges(id,brand_id,kept_id,merged_id,merged_snapshot,moved,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?)',
       ).run(

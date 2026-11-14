@@ -16,6 +16,7 @@
     "demo:reset": "node scripts/demo-local.mjs --reset",
     "check": "node scripts/check.mjs",
     "check:syntax": "node scripts/check.mjs syntax",
+    "lint": "eslint . --max-warnings 48",
     "schema:id": "node -e \"import('./server/migrations/index.mjs').then(m=>console.log(m.expectedSchemaId()))\""
   },
   "dependencies": {
@@ -24,8 +25,11 @@
     "ws": "8.22.0"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@playwright/test": "1.65.1",
+    "eslint": "10.14.0",
     "espree": "11.2.0",
+    "globals": "17.14.0",
     "prettier": "3.10.1"
   }
 }

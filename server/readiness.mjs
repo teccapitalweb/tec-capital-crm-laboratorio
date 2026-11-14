@@ -4,9 +4,88 @@
 // dice dónde se arregla (vista y pestaña del CRM). Sólo administración; respeta el alcance por marca de crm.brandsFor.
 const fail = (status, message) => Object.assign(new Error(message), { status });
 
-export function createReadiness({ db, crm, json, now = Date.now }) {
+// Los pasos que trae esta lista, en su orden. Un módulo no puede registrar otro con el mismo id.
+export const BUILT_IN_STEPS = Object.freeze([
+  'course',
+  'edition',
+  'flyer',
+  'knowledge',
+  'team',
+  'routing',
+  'away',
+  'automation',
+  'replies',
+  'channel',
+  'payments',
+  'coordination',
+  'certificates',
+  'campaigns',
+]);
+const STEP_ID = /^[a-z][a-z0-9-]{1,40}$/;
+const PLACE = /^[a-z][a-z0-9-]{1,30}$/;
+const words = (value, max) => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
+
+export function createReadiness({ db, crm, json, now = Date.now, log = console }) {
   const one = (sql, ...args) => db.prepare(sql).get(...args);
   const count = (sql, ...args) => Number(one(sql, ...args)?.n || 0);
+
+  // Pasos por función: un módulo nuevo añade aquí el suyo en lugar de editar la lista de forBrand(). Se muestran
+  // después de los de siempre, en el grupo que digan. `check` recibe la marca ({ id, name }), es síncrona y sólo lee.
+  //   readiness.register({
+  //     id: 'audiencia', group: 'Extras', title: 'Tiene una audiencia lista', required: false,
+  //     view: 'difusiones', label: 'Ir a Difusiones',
+  //     check: brand => ({ done: total(brand.id) > 0, detail: 'Sin audiencias no hay a quién enviar una difusión.' }),
+  //   });
+  const registered = [];
+  function register(step) {
+    if (step === null || typeof step !== 'object' || Array.isArray(step))
+      throw fail(400, 'readiness.register espera un paso { id, group, title, view, label, check }.');
+    const { id, group, title, required = false, view, tab, label, check } = step;
+    if (typeof id !== 'string' || !STEP_ID.test(id))
+      throw fail(400, 'Paso de preparación no válido: el id va en minúsculas, con números y guiones.');
+    if (BUILT_IN_STEPS.includes(id) || registered.some(s => s.id === id))
+      throw fail(409, 'Paso de preparación repetido: ' + id);
+    if (!words(group, 30) || !words(title, 120) || !words(label, 40))
+      throw fail(400, 'El paso ' + id + ' necesita grupo, título y el texto de su botón.');
+    if (
+      typeof view !== 'string' ||
+      !PLACE.test(view) ||
+      (tab !== undefined && (typeof tab !== 'string' || !PLACE.test(tab)))
+    )
+      throw fail(400, 'El paso ' + id + ' necesita la vista (y, si aplica, la pestaña) donde se arregla.');
+    if (typeof required !== 'boolean')
+      throw fail(400, 'El paso ' + id + ' dice si es esencial con required: true o false.');
+    if (typeof check !== 'function') throw fail(400, 'El paso ' + id + ' necesita check(marca).');
+    registered.push({ id, group: group.trim(), title: title.trim(), required, view, tab, label: label.trim(), check });
+    return id;
+  }
+  // Si la función de un paso registrado falla, ese paso queda pendiente y los demás se siguen viendo.
+  function evaluate(step, b) {
+    let result = null;
+    try {
+      result = step.check(Object.freeze({ id: b.id, name: b.name }));
+      if (typeof result?.then === 'function') {
+        result.then(null, () => {});
+        throw new Error('check debe ser síncrona');
+      }
+    } catch (e) {
+      log.error('Readiness step failed:', step.id, e?.name, String(e?.message || '').slice(0, 200));
+      result = null;
+    }
+    const done = result?.done === true,
+      detail = typeof result?.detail === 'string' ? result.detail.trim().slice(0, 300) : '';
+    return {
+      id: step.id,
+      group: step.group,
+      title: step.title,
+      done,
+      required: step.required,
+      detail: detail || (!result ? 'No se pudo revisar este paso.' : done ? 'Listo.' : 'Pendiente.'),
+      view: step.view,
+      ...(step.tab ? { tab: step.tab } : {}),
+      label: step.label,
+    };
+  }
 
   function forBrand(b) {
     const t = now();
@@ -231,6 +310,7 @@ export function createReadiness({ db, crm, json, now = Date.now }) {
         label: 'Ir a Campañas',
       },
     ];
+    for (const extra of registered) steps.push(evaluate(extra, b));
     const must = steps.filter(s => s.required);
     const next = must.find(s => !s.done) || steps.find(s => !s.done) || null;
     return {
@@ -252,5 +332,5 @@ export function createReadiness({ db, crm, json, now = Date.now }) {
     json(res, 200, { brands: crm.brandsFor(user).map(forBrand), checkedAt: now() });
     return true;
   }
-  return { handle, forBrand };
+  return { handle, forBrand, register };
 }

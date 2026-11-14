@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
+import { canonicalPhone, DEFAULT_COUNTRY } from './lib/identity-keys.mjs';
 
 // Esquema v21 (Fase 2 · bloque 2.2 Identidad única de persona). Una persona (nombre, teléfono E.164, correo,
 // consentimiento con historial) a la que cuelgan los contactos por marca que ya existen (`contacts.persona_id`). Las
@@ -7,25 +8,16 @@ import { transaction } from './database.mjs';
 // automáticamente; cuando sólo coincide el nombre, o hay conflicto entre identidades, queda una candidatura para revisión
 // humana. El consentimiento vive en la persona y se proyecta a `contact_consent` de cada contacto (lo que las recetas y
 // la exportación ya leen). El alcance por marca no cambia: la ficha de persona muestra sólo las marcas autorizadas.
-export const DEFAULT_COUNTRY = '52';
-// Teléfono a E.164 con México por omisión; devuelve '' si no parece un número utilizable.
+export { DEFAULT_COUNTRY };
+// Teléfono a E.164 con México por omisión; devuelve '' si no es un número utilizable. Delega en la única regla de
+// teléfono del CRM (server/lib/identity-keys.mjs): el resultado es «+» más la clave canónica, la misma que guarda
+// `contacts.phone_key`. Lo que cambió al delegar (docs/PLAN_TELEFONO_CANONICO.md):
+//   - «+521…» (el identificador de WhatsApp con «+») ya no conserva el 1: da «+52» más diez dígitos, igual que «521…».
+//   - Un número de otro país se reconoce aunque venga sin «+» («14155552671»), y también «01» más diez dígitos.
+//   - Deja de aceptarse lo que no es un teléfono: texto con letras, un código de país que no existe y un número de
+//     México, Estados Unidos o Canadá que no tenga diez dígitos válidos después del código de país.
 export function normalizePhone(raw, country = DEFAULT_COUNTRY) {
-  const s = String(raw ?? '').trim();
-  if (!s) return '';
-  const plus = s.startsWith('+') || s.startsWith('00');
-  let d = s.replace(/\D/g, '');
-  if (s.startsWith('00')) d = d.slice(2);
-  if (plus) {
-    return d.length >= 8 && d.length <= 15 ? '+' + d : '';
-  }
-  if (d.length === 10) return '+' + country + d;
-  if (country === '52') {
-    if (d.length === 12 && d.startsWith('52')) return '+' + d;
-    if (d.length === 13 && d.startsWith('521')) return '+52' + d.slice(3);
-    if (d.length === 13 && (d.startsWith('044') || d.startsWith('045'))) return '+52' + d.slice(3);
-  }
-  if (d.length >= 11 && d.length <= 15 && d.startsWith(country)) return '+' + d;
-  return '';
+  return canonicalPhone(raw, { defaultCountry: country }).e164 ?? '';
 }
 export const normalizeEmail = raw => {
   const s = String(raw ?? '')

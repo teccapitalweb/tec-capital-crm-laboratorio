@@ -97,11 +97,13 @@ El servidor descubre cada carpeta al arrancar, crea el módulo **después** de l
 - **Rutas.** Todas viven bajo los prefijos del módulo. Un prefijo no puede pisar una ruta del servidor actual (lista `RESERVED` de `server/app/modules.mjs`), ni la de otro módulo, y el módulo no puede llamarse como un servicio actual (`crm`, `contacts`, `campaigns`, `flows`…). `handle` devuelve `true` si atendió y `false` si la ruta no es suya.
 - **Sesión.** `handle` sólo se llama con sesión válida y, en escrituras, con el `Origin` ya comprobado. Las rutas de `public` se atienden **sin** sesión ni `Origin`: el módulo responde de su propia llave o firma y de su límite por IP (`host.rate`).
 - **Alcance por marca.** Lo impone el módulo en cada consulta (`host.services.crm.requireBrand(user, brandId)`, `canBrand`). Las funciones de `repo.mjs` reciben `brandId` como primer parámetro. Una marca autorizada no equivale a acceso a toda la empresa.
-- **`host`** presta: `db`, `transaction`, `fail(status, mensaje)`, `clean`, `json`, `body`, `audit`, `rate`, `broadcast`, `online`, `staff`, `requireStaff`, `requireAdmin`, `accessConversation`, `canSee`, `insertMessage`, `takeOver`, `root`, `dataDir`, `version`, `production`, `selfOrigin()`, los servicios actuales en `host.services` (`crm`, `events`, `persons`, `catalogue`, `contacts`, `channel`, `payments`, `replies`, `automation`, `campaigns`, `whatsapp`…) y `host.module('otro')` para hablar con otro módulo nuevo (se resuelve al usarlo, no al crear).
+- **`host`** presta: `db`, `transaction`, `fail(status, mensaje, { code, field, details })`, `access` (permisos: `host.access.require(user, 'contacts.view', brandId)`, `can`, `brandIds`, `scopeSql`, `phone`), `realtime` (`host.realtime.emit('tipo.propio', { brandId, data })`: aviso en vivo sólo a quien puede ver esa marca o conversación), `clean`, `json`, `body`, `audit`, `rate`, `broadcast`, `online`, `staff`, `requireStaff`, `requireAdmin`, `accessConversation`, `canSee`, `insertMessage`, `takeOver`, `root`, `dataDir`, `version`, `production`, `selfOrigin()`, los servicios actuales en `host.services` (`crm`, `events`, `persons`, `catalogue`, `contacts`, `channel`, `payments`, `replies`, `automation`, `campaigns`, `whatsapp`…) y `host.module('otro')` para hablar con otro módulo nuevo (se resuelve al usarlo, no al crear).
 - **Transacciones.** `transaction(db, fn)` es síncrona y no se anida; nada de red dentro. Varias funciones de los servicios actuales abren la suya (`setContactTags`, `setConsent`, `automation.enqueue`): no se llaman desde dentro de otra transacción.
 - **Idempotencia.** Toda escritura acepta `clientRef` y, si edita algo con revisión, `expectedRevision`. Un reintento no duplica mensajes, tareas ni cambios de negocio.
 - **Relojes.** Se declaran en `timers`. Un reloj no se pisa a sí mismo, trabaja por trozos (con tope de filas por pasada) y corre como mucho una vez por segundo, salvo que declare `fast: true` (mínimo 250 ms) y lo justifique.
-- **Errores.** `throw host.fail(409, 'Mensaje claro en español.')`. Lo que no lleva `status` responde 500 con un texto fijo y se registra.
+- **Permisos.** Las claves están en `server/lib/permissions.mjs` (en inglés: `contacts.view`, `campaigns.send`…). `host.access.require` responde 403 si falta el permiso y 404 si la marca no es de esa persona. Hoy hay dos conjuntos fijos: administración lo tiene todo y asesor conserva lo de siempre. Detalle en [PLAN_ACCESO_TIEMPO_REAL.md](PLAN_ACCESO_TIEMPO_REAL.md).
+- **Registros.** Un módulo declara sus tipos de evento con `host.services.events.registerTypes(…)`, lo que necesita un webhook con `host.services.integrations.registerNeeds(…)` y sus pasos de «Preparar marca» con `host.services.readiness.register(…)`, sin editar esos archivos.
+- **Errores.** `throw host.fail(409, 'Mensaje claro en español.', { code: 'stale_record' })`; `code` va en minúsculas con guion bajo. Lo que no lleva `status` responde 500 con un texto fijo y se registra.
 - **Apagado por omisión.** Lo que envía mensajes, cobra o cambia datos de clientes nace apagado o acotado por marca hasta que administración lo active.
 
 Un módulo que no carga no detiene al servidor: se omite, se registra y `/api/health` lo lista en `modulesFailed`. En las pruebas, en cambio, es un error.
@@ -140,7 +142,7 @@ Los archivos estáticos se sirven por carpeta: cualquier archivo de `public/` co
 ## 4. Antes de entregar
 
 ```sh
-npm run check     # codificación, sintaxis y formato (Prettier)
+npm run check     # codificación, sintaxis, reglas (ESLint) y formato (Prettier)
 npm test
 npm run test:ui   # pruebas de humo en un navegador real, en computadora y en celular
 ```
