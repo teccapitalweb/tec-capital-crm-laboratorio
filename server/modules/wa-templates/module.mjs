@@ -54,6 +54,13 @@ import {
 } from './definition.mjs';
 
 const PERM = 'templates.manage';
+
+// La cuenta de WhatsApp es de toda la instalación, no de una marca: lo que la lee o la cambia entera (sincronizar, ver
+// y adoptar lo que hay en Meta) pide el permiso en TODAS las marcas. Tenerlo en una sola no alcanza.
+export function requireAccountWide(access, user, perm, brandIds) {
+  access.require(user, perm);
+  for (const id of brandIds) access.require(user, perm, id);
+}
 const NAME = /^[a-z0-9_]{1,128}$/;
 const UUID = /^[a-f0-9-]{36}$/;
 const REF = /^[a-zA-Z0-9-]{16,100}$/;
@@ -983,6 +990,13 @@ export default {
     }
 
     // ---- rutas
+    const requireAccount = user =>
+      requireAccountWide(
+        host.access,
+        user,
+        PERM,
+        repo.brandIds().map(b => b.id),
+      );
     async function handle(req, res, path, user, url = new URL(req.url, 'http://local')) {
       let x;
       if ((x = path.match(/^\/api\/conversations\/([a-f0-9-]+)\/wa-templates$/))) {
@@ -1034,17 +1048,18 @@ export default {
         return true;
       }
       if (path === '/api/whatsapp/templates/sync' && req.method === 'POST') {
-        host.access.require(user, PERM);
+        requireAccount(user);
         rate('wa-sync:' + user.id, 12);
         json(res, 200, await sync(user));
         return true;
       }
       if (path === '/api/whatsapp/templates/remote' && req.method === 'GET') {
-        host.access.require(user, PERM);
+        requireAccount(user);
         json(res, 200, remotePage(url));
         return true;
       }
       if (path === '/api/whatsapp/templates/adopt' && req.method === 'POST') {
+        requireAccount(user);
         const input = await body(req);
         json(res, 201, Array.isArray(input.items) ? adoptBatch(input, user) : adoptOne(input, user));
         return true;

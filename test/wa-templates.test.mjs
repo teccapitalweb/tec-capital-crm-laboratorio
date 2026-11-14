@@ -15,6 +15,7 @@ import {
   submitProblems,
   toMetaArgs,
 } from '../server/modules/wa-templates/definition.mjs';
+import { requireAccountWide } from '../server/modules/wa-templates/module.mjs';
 
 const PDF = Buffer.from('%PDF-1.4\n% prueba\n');
 const b64 = buffer => buffer.toString('base64');
@@ -133,6 +134,23 @@ test('definición canónica: del editor a la forma de Meta y de vuelta, con las 
   );
   assert.equal(remote.buttons[0].var.sample, 'x');
   assert.equal(remote.buttons[1].code.sample, 'CUPON10');
+});
+
+test('lo que toca la cuenta entera (sincronizar, ver y adoptar lo de Meta) pide el permiso en todas las marcas', () => {
+  const denied = Object.assign(new Error('sin permiso'), { status: 403 });
+  // Acceso simulado: la persona administra plantillas sólo en las marcas de `mine`.
+  const access = mine => ({
+    require(user, perm, brandId) {
+      assert.equal(perm, 'templates.manage');
+      if (brandId === undefined ? !mine.length : !mine.includes(brandId)) throw denied;
+    },
+  });
+  const brands = ['uno', 'dos', 'tres'];
+  assert.doesNotThrow(() => requireAccountWide(access(brands), {}, 'templates.manage', brands));
+  assert.throws(() => requireAccountWide(access(['uno']), {}, 'templates.manage', brands), denied);
+  assert.throws(() => requireAccountWide(access([]), {}, 'templates.manage', brands), denied);
+  // Sin marcas todavía, basta con tener el permiso.
+  assert.doesNotThrow(() => requireAccountWide(access(['uno']), {}, 'templates.manage', []));
 });
 
 test('plantillas completas de punta a punta con el Meta de mentira', async t => {

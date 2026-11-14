@@ -81,6 +81,7 @@ export function createRepo(db) {
     ),
     brandName: one('SELECT name FROM brands WHERE id=?'),
     brandExists: one('SELECT 1 FROM brands WHERE id=?'),
+    brandIds: all('SELECT id FROM brands ORDER BY created_at,id'),
     lastWebhook: one("SELECT MAX(created_at) t FROM connector_events WHERE type='template.update'"),
 
     // ---- escritura
