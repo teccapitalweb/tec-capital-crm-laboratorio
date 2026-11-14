@@ -475,9 +475,9 @@ export function createIntegrations({
         if (
           !db
             .prepare(
-              "UPDATE webhook_deliveries SET lease_owner=?,lease_until=? WHERE id=? AND state='pending' AND (lease_until IS NULL OR lease_until<=?)",
+              "UPDATE webhook_deliveries SET lease_owner=?,lease_until=? WHERE id=? AND state='pending' AND attempts=? AND (lease_until IS NULL OR lease_until<=?)",
             )
-            .run(workerId, now() + leaseMs, d.id, now()).changes
+            .run(workerId, now() + leaseMs, d.id, d.attempts, now()).changes
         )
           continue;
         const finish = (state, fields) =>

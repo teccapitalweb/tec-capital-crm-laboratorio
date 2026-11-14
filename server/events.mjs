@@ -263,11 +263,11 @@ export function createEvents({
           leased &&
           !db
             .prepare(
-              "UPDATE domain_deliveries SET lease_owner=?,lease_until=? WHERE event_seq=? AND subscriber=? AND state='pending' AND (lease_until IS NULL OR lease_until<=?)",
+              "UPDATE domain_deliveries SET lease_owner=?,lease_until=? WHERE event_seq=? AND subscriber=? AND state='pending' AND attempts=? AND (lease_until IS NULL OR lease_until<=?)",
             )
-            .run(workerId, now() + leaseMs, d.event_seq, d.subscriber, now()).changes
+            .run(workerId, now() + leaseMs, d.event_seq, d.subscriber, d.attempts, now()).changes
         )
-          continue; // otro proceso tomó esta entrega
+          continue; // otro proceso tomó esta entrega (o ya la intentó y la dejó para después)
         const handler = (subscribers.get(d.type) || []).find(s => s.name === d.subscriber)?.handler;
         const attempt = d.attempts + 1,
           t0 = now();

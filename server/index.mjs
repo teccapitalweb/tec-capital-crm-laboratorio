@@ -804,10 +804,10 @@ function processJobs() {
     if (jobsInFlight.has(job.id)) continue;
     const claimed = db
       .prepare(
-        "UPDATE jobs SET lease_owner=?,lease_until=? WHERE id=? AND state='pending' AND (lease_until IS NULL OR lease_until<=?)",
+        "UPDATE jobs SET lease_owner=?,lease_until=? WHERE id=? AND state='pending' AND attempts=? AND (lease_until IS NULL OR lease_until<=?)",
       )
-      .run(JOB_WORKER, t + JOB_LEASE_MS, job.id, t).changes;
-    if (!claimed) continue; // otro proceso lo tomó
+      .run(JOB_WORKER, t + JOB_LEASE_MS, job.id, job.attempts, t).changes;
+    if (!claimed) continue; // otro proceso lo tomó (o ya lo intentó y lo dejó para después)
     processJob(job);
   }
 }
