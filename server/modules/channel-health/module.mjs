@@ -62,7 +62,7 @@ const REASONS = {
   number_disabled: 'El número está apagado en el CRM.',
   number_pending: 'El número todavía no está registrado en Meta.',
   number_offline: 'El número está desconectado en Meta.',
-  number_restricted: 'Meta restringió el número: no puede iniciar conversaciones por ahora.',
+  number_restricted: 'Meta restringió el número: mientras dure, el CRM no envía nada por él.',
   number_banned: 'Meta bloqueó el número.',
   account_banned: 'Meta bloqueó la cuenta de WhatsApp Business.',
   account_restricted:
@@ -85,6 +85,20 @@ const FIELD_LABEL = {
   restriction: 'Restricción de la cuenta',
   payment: 'Método de pago',
   alert: 'Aviso de Meta',
+};
+// Cómo se lee cada valor en el historial.
+const VALUE_LABEL = {
+  quality: QUALITY_LABEL,
+  status: STATUS_LABEL,
+  name_status: { approved: 'aprobado', pending_review: 'en revisión', declined: 'rechazado', rejected: 'rechazado' },
+  review: { approved: 'aprobada', pending: 'en revisión', deferred: 'en revisión', rejected: 'rechazada' },
+  business_verification: {
+    verified: 'verificado',
+    pending: 'en revisión',
+    rejected: 'rechazada',
+    not_verified: 'sin verificar',
+  },
+  payment: { ok: 'correcto', missing: 'falta', problem: 'con problema', unknown: 'sin dato' },
 };
 const EVENT_TYPES = {
   'canal.calidad': {
@@ -651,18 +665,16 @@ export default {
     }
 
     // ---- vistas (sin tokens ni el identificador de la cuenta)
-    const label = (field, v) =>
-      v === null || v === undefined || v === ''
-        ? 'sin dato'
-        : field === 'quality'
-          ? QUALITY_LABEL[v] || v
-          : field === 'status'
-            ? STATUS_LABEL[v] || v
-            : field === 'official'
-              ? v === '1'
-                ? 'sí'
-                : 'no'
-              : v;
+    function label(field, v) {
+      if (v === null || v === undefined || v === '') return field === 'restriction' ? 'sin restricción' : 'sin dato';
+      if (field === 'limit') {
+        const tier = tierOf(v);
+        return !tier ? v : tier.unlimited ? 'sin límite' : tier.value.toLocaleString('es-MX') + ' personas';
+      }
+      if (field === 'official') return v === '1' ? 'sí' : 'no';
+      if (field === 'restriction') return v === 'banned' ? 'bloqueada' : 'restringida';
+      return VALUE_LABEL[field]?.[v] ?? v;
+    }
     function numberView(n, { detail }) {
       const ref = refOf(n.phone_number_id);
       const h = repo.health(ref) || {};

@@ -356,7 +356,9 @@ test('salud de punta a punta: consulta inicial, calidad, nivel, número restring
   );
 
   // 4) cambio de nivel: el límite diario sube a 10,000 y se avisa
-  meta.health.numbers.get(NUMBER).whatsapp_business_manager_messaging_limit = 'TIER_10K';
+  // el límite es de la cuenta: Meta lo informa igual en todos sus números
+  for (const id of [NUMBER, NUMBER_2])
+    meta.health.numbers.get(id).whatsapp_business_manager_messaging_limit = 'TIER_10K';
   await metaNotice(origin(), 'phone_number_quality_update', {
     display_phone_number: DISPLAY,
     event: 'UPGRADE',
