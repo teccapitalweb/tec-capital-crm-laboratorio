@@ -21,6 +21,18 @@ export const WABA_ID = '209000000000001';
 export const WABA_ID_2 = '209000000000002';
 export const APP_ID = '309000000000001';
 
+// Datos de salud de un número como los da Meta (campos de ?fields=…), con valores de un número sano.
+export const numberHealth = (over = {}) => ({
+  display_phone_number: '+1 555 010 0000',
+  verified_name: 'Número de prueba',
+  quality_rating: 'GREEN',
+  status: 'CONNECTED',
+  name_status: 'APPROVED',
+  is_official_business_account: false,
+  whatsapp_business_manager_messaging_limit: 'TIER_1K',
+  ...over,
+});
+
 export async function startFakeMeta() {
   const sent = [];
   const downloads = [];
@@ -36,6 +48,23 @@ export async function startFakeMeta() {
   const uploads = []; // {kind:'session'|'sample'|'media', …}
   const listCalls = []; // {waba, after, limit}
   let tid = 0;
+  // Salud del número y de la cuenta (X3): lo que Meta contesta a ?fields=…, editable por la prueba. `reject` son
+  // campos que este Meta no conoce (responde el error 100), `failing` hace fallar toda consulta de salud y `calls`
+  // anota cada consulta {id, fields, at}.
+  const health = {
+    numbers: new Map([
+      [NUMBER, numberHealth({ display_phone_number: '+1 555 010 0000', verified_name: 'Test Number' })],
+    ]),
+    accounts: new Map([
+      [
+        WABA_ID,
+        { name: 'Cuenta de prueba', account_review_status: 'APPROVED', business_verification_status: 'verified' },
+      ],
+    ]),
+    reject: new Set(),
+    failing: false,
+    calls: [],
+  };
   const accountOf = waba => {
     if (!templates.has(waba)) templates.set(waba, []);
     return templates.get(waba);
@@ -150,6 +179,20 @@ export async function startFakeMeta() {
         );
       }
       if ((match = url.pathname.match(/^\/v25\.0\/(\d+)$/)) && req.method === 'GET') {
+        // salud (X3): campos del número o de la cuenta, con los que la prueba haya puesto en health
+        const fields = url.searchParams.get('fields');
+        const state = health.numbers.get(match[1]) || health.accounts.get(match[1]);
+        if (fields && state) {
+          const asked = fields.split(',');
+          health.calls.push({ id: match[1], fields: asked, at: Date.now() });
+          if (health.failing) return send(500, { error: { code: 2, message: 'Service temporarily unavailable' } });
+          if (asked.some(f => health.reject.has(f)))
+            return send(400, { error: { code: 100, message: 'Tried accessing nonexisting field' } });
+          return send(200, {
+            id: match[1],
+            ...Object.fromEntries(asked.filter(f => f in state).map(f => [f, state[f]])),
+          });
+        }
         if (match[1] === NUMBER)
           return send(200, { display_phone_number: '+1 555 010 0000', verified_name: 'Test Number', id: NUMBER });
         // cualquier otro identificador numérico es un archivo que la persona envió
@@ -185,6 +228,7 @@ export async function startFakeMeta() {
     deleted,
     uploads,
     listCalls,
+    health,
     // Variables de entorno de un servidor con WhatsApp real completo, apuntando a este Meta de mentira.
     env: {
       CHANNEL_CONNECTOR: 'meta',

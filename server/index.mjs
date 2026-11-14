@@ -1003,6 +1003,12 @@ const server = http.createServer(async (req, res) => {
     if (path.startsWith('/api/')) {
       const user = requireUser(req);
       if (await connectors.handle(req, res, path, user)) return;
+      // salud del canal (módulo channel-health): /api/whatsapp/health* es del módulo, no de server/whatsapp.mjs
+      if (
+        /^\/api\/whatsapp\/health(\/|$)/.test(path) &&
+        (await modules.get('channel-health')?.handle(req, res, path, user))
+      )
+        return;
       if (await whatsapp.handle(req, res, path, user)) return;
       if (await flows.handle(req, res, path, user)) return;
       if (await coordination.handle(req, res, path, user)) return;
