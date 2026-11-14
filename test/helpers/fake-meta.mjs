@@ -16,6 +16,11 @@ export const TOKEN = 'EAAprueba0000000000000000000000token';
 export const SECRET = 'app-secret-prueba';
 export const NUMBER = '109000000000001';
 
+// Cuentas de WhatsApp Business de mentira (sólo dígitos, como META_WABA_ID) y la app (META_APP_ID).
+export const WABA_ID = '209000000000001';
+export const WABA_ID_2 = '209000000000002';
+export const APP_ID = '309000000000001';
+
 export async function startFakeMeta() {
   const sent = [];
   const downloads = [];
@@ -23,6 +28,18 @@ export async function startFakeMeta() {
   const held = { send: [], download: [] };
   const holding = { send: false, download: false };
   let n = 0;
+  // Plantillas por cuenta (D-3): listar por páginas, crear, corregir, borrar, y la subida por sesión de la muestra.
+  const templates = new Map(); // waba → [plantilla como la devuelve Meta]
+  const created = []; // cuerpos de las altas, en orden
+  const edited = []; // {id, body}
+  const deleted = []; // {waba, name, hsmId}
+  const uploads = []; // {kind:'session'|'sample'|'media', …}
+  const listCalls = []; // {waba, after, limit}
+  let tid = 0;
+  const accountOf = waba => {
+    if (!templates.has(waba)) templates.set(waba, []);
+    return templates.get(waba);
+  };
   const gate = (kind, respond) => {
     if (holding[kind]) held[kind].push(respond);
     else respond();
@@ -40,9 +57,79 @@ export async function startFakeMeta() {
         res.writeHead(status, { 'content-type': 'application/json' });
         res.end(JSON.stringify(data));
       };
+      let match;
+      // segundo paso de la subida por sesión: los bytes, con «OAuth <token>» y file_offset
+      if ((match = url.pathname.match(/^\/v25\.0\/(upload:[A-Za-z0-9]+)$/)) && req.method === 'POST') {
+        if (req.headers.authorization !== 'OAuth ' + TOKEN || req.headers.file_offset !== '0')
+          return send(401, { error: { code: 190, message: 'Invalid OAuth access token' } });
+        const raw = Buffer.concat(chunks);
+        uploads.push({ kind: 'sample', session: match[1], bytes: raw.length, type: req.headers['content-type'] });
+        return send(200, { h: '4::handle-' + uploads.length });
+      }
       if (req.headers.authorization !== 'Bearer ' + TOKEN)
         return send(401, { error: { code: 190, message: 'Invalid OAuth access token' } });
-      let match;
+      if ((match = url.pathname.match(/^\/v25\.0\/(\d+)\/message_templates$/))) {
+        const list = accountOf(match[1]);
+        if (req.method === 'GET') {
+          const limit = Math.min(100, Number(url.searchParams.get('limit')) || 25);
+          const after = Number(url.searchParams.get('after') || 0);
+          listCalls.push({ waba: match[1], after, limit });
+          const page = list.slice(after, after + limit);
+          const more = after + limit < list.length;
+          return send(200, {
+            data: page,
+            paging: {
+              cursors: { before: String(after), after: String(after + limit) },
+              ...(more ? { next: 'x' } : {}),
+            },
+          });
+        }
+        if (req.method === 'POST') {
+          const body = JSON.parse(Buffer.concat(chunks).toString());
+          created.push(body);
+          const id = String(900000 + ++tid);
+          list.push({
+            id,
+            name: body.name,
+            language: body.language,
+            status: 'PENDING',
+            category: body.category,
+            components: body.components,
+          });
+          return send(200, { id, status: 'PENDING', category: body.category });
+        }
+        if (req.method === 'DELETE') {
+          const name = url.searchParams.get('name');
+          const hsmId = url.searchParams.get('hsm_id');
+          deleted.push({ waba: match[1], name, hsmId });
+          templates.set(
+            match[1],
+            list.filter(t => !(t.name === name && (!hsmId || t.id === hsmId))),
+          );
+          return send(200, { success: true });
+        }
+      }
+      if ((match = url.pathname.match(/^\/v25\.0\/(\d+)\/uploads$/)) && req.method === 'POST') {
+        uploads.push({
+          kind: 'session',
+          app: match[1],
+          length: Number(url.searchParams.get('file_length')),
+          type: url.searchParams.get('file_type'),
+        });
+        return send(200, { id: 'upload:sesion' + uploads.length });
+      }
+      if ((match = url.pathname.match(/^\/v25\.0\/(\d+)\/media$/)) && req.method === 'POST') {
+        uploads.push({ kind: 'media', from: match[1], bytes: Buffer.concat(chunks).length });
+        return send(200, { id: 'media-' + uploads.length });
+      }
+      if ((match = url.pathname.match(/^\/v25\.0\/(\d+)$/)) && req.method === 'POST') {
+        const body = JSON.parse(Buffer.concat(chunks).toString() || '{}');
+        edited.push({ id: match[1], body });
+        for (const list of templates.values())
+          for (const t of list)
+            if (t.id === match[1]) Object.assign(t, { status: 'PENDING', components: body.components ?? t.components });
+        return send(200, { success: true });
+      }
       if ((match = url.pathname.match(/^\/download\/(\d+)$/))) {
         downloads.push(match[1]);
         return gate('download', () => {
@@ -91,6 +178,13 @@ export async function startFakeMeta() {
       for (const respond of held[kind].splice(0)) respond();
     },
     waiting: kind => held[kind].length,
+    // plantillas de cada cuenta (como las devuelve Meta) y lo que el CRM les hizo
+    templates: accountOf,
+    created,
+    edited,
+    deleted,
+    uploads,
+    listCalls,
     // Variables de entorno de un servidor con WhatsApp real completo, apuntando a este Meta de mentira.
     env: {
       CHANNEL_CONNECTOR: 'meta',

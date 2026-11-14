@@ -68,8 +68,6 @@ export function createWhatsApp({
   defaultEditionId,
   dataDir,
   root,
-  takeOver,
-  accessConversation,
   now = Date.now,
 }) {
   const requireAdmin = user => {
@@ -425,14 +423,17 @@ export function createWhatsApp({
         to: m.wa_peer,
         from: m.wa_number,
         text: m.text || '',
-        template: { name: tpl.name, language: tpl.language, params: Array.isArray(tpl.params) ? tpl.params : [] },
+        // con encabezado y botones si la plantilla los lleva: el módulo de plantillas lee el archivo del encabezado
+        template: templates
+          ? await templates.forSend(tpl)
+          : { name: tpl.name, language: tpl.language, params: Array.isArray(tpl.params) ? tpl.params : [] },
       };
     }
     if (closed) {
       // un aviso del negocio con la ventana cerrada: plantilla de aviso de la marca y el mensaje queda en espera; sin plantilla, no sale
-      const notice = noticeFor(m.brand_id, m.category === 'marketing' ? 'marketing' : 'utility');
+      const notice = templates?.noticeFor(m.brand_id, m.category === 'marketing' ? 'marketing' : 'utility');
       if (!notice) throw fail(409, WA_UNSENT);
-      ensureNotice(db.prepare('SELECT * FROM conversations WHERE id=?').get(m.conversation_id), notice);
+      templates.ensureNotice(db.prepare('SELECT * FROM conversations WHERE id=?').get(m.conversation_id), notice);
       return { hold: true };
     }
     let body = m.text || '',
@@ -502,319 +503,20 @@ export function createWhatsApp({
   channel.useOutbound(outbound);
   connectors.useInbound(inbound);
 
-  // ---- Plantillas aprobadas por Meta (docs/PLAN_PLANTILLAS_WHATSAPP.md). Con la ventana de 24 h cerrada, Meta sólo deja salir una plantilla.
-  //  · «manual»: la envía una persona del equipo desde el chat para retomar la conversación.
-  //  · «aviso» (notice): la manda el CRM cuando un aviso del negocio no puede salir; el aviso queda en espera y sale cuando la persona responde.
-  // El texto se escribe con {{nombre}}, {{curso}}, {{edicion}} y {{marca}}; a Meta viaja con {{1}}…{{n}} y aquí se guarda qué dato llena cada posición.
-  const KEYS = { nombre: 'Nombre de la persona', curso: 'Curso', edicion: 'Edición', marca: 'Marca' },
-    SAMPLE = { nombre: 'María', curso: 'Plan sanitario para aves', edicion: 'Edición general', marca: 'GlobalVet' };
-  const LANGS = ['es_MX', 'es', 'en_US', 'en'],
-    WA_UNSENT =
-      'No se entregó: pasaron más de 24 horas desde el último mensaje de la persona y la marca no tiene una plantilla de aviso aprobada por Meta. Crea una en Operación → Sistema → Conectores → Plantillas de WhatsApp.';
-  const tplRow = id => db.prepare('SELECT * FROM wa_templates WHERE id=?').get(String(id || ''));
-  const varsOf = t => {
-    try {
-      const v = JSON.parse(t.variables);
-      return Array.isArray(v) ? v.filter(k => KEYS[k]) : [];
-    } catch {
-      return [];
-    }
+  // ---- Plantillas aprobadas por Meta: las lleva el módulo server/modules/wa-templates (D-3,
+  // docs/PLAN_PLANTILLAS_COMPLETAS.md). Este archivo sólo le delega las rutas publicadas (/api/whatsapp/templates*,
+  // /api/conversations/:id/wa-templates), el armado de lo que sale a Meta y el aviso del negocio con la ventana cerrada.
+  // El módulo se crea después de este servicio y se registra con useTemplates().
+  const WA_UNSENT =
+    'No se entregó: pasaron más de 24 horas desde el último mensaje de la persona y la marca no tiene una plantilla de aviso aprobada por Meta. Crea una en Operación → Sistema → Conectores → Plantillas de WhatsApp.';
+  let templates = null;
+  const useTemplates = api => {
+    templates = api;
   };
-  const slots = body =>
-    [...new Set([...String(body).matchAll(/\{\{(\d+)\}\}/g)].map(x => Number(x[1])))].sort((a, b) => a - b);
-  const tplView = t => ({
-    id: t.id,
-    brandId: t.brand_id,
-    brandName: db.prepare('SELECT name FROM brands WHERE id=?').get(t.brand_id)?.name || t.brand_id,
-    name: t.name,
-    language: t.language,
-    category: t.category,
-    purpose: t.purpose,
-    body: t.body,
-    variables: varsOf(t),
-    status: t.status,
-    rejectReason: t.reject_reason,
-    revision: t.revision,
-    syncedAt: t.synced_at,
-    updatedAt: t.updated_at,
-    preview: String(t.body).replace(/\{\{(\d+)\}\}/g, (_, n) => SAMPLE[varsOf(t)[Number(n) - 1]] || '…'),
-  });
-  // Valores de una conversación para llenar la plantilla. Sin datos de contacto: sólo nombre, curso, edición y marca.
-  function render(t, c) {
-    const person = db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id)?.name || '',
-      course = db.prepare('SELECT title FROM courses WHERE id=?').get(c.course_id)?.title || '',
-      edition = c.edition_id ? db.prepare('SELECT name FROM editions WHERE id=?').get(c.edition_id)?.name || '' : '',
-      brand = db.prepare('SELECT name FROM brands WHERE id=?').get(c.brand_id)?.name || '';
-    const values = {
-        nombre: copy.firstName(person) || text(person, 40) || 'hola',
-        curso: course,
-        edicion: edition || course,
-        marca: brand,
-      },
-      clean = v =>
-        String(v ?? '')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 200) || '—';
-    const params = varsOf(t).map(k => clean(values[k]));
-    return { params, text: String(t.body).replace(/\{\{(\d+)\}\}/g, (_, n) => params[Number(n) - 1] ?? '') };
-  }
-  const noticeFor = (brandId, category) =>
-    db
-      .prepare(
-        "SELECT * FROM wa_templates WHERE brand_id=? AND purpose='notice' AND status='approved' AND category=? ORDER BY created_at DESC,id LIMIT 1",
-      )
-      .get(brandId, category);
-  // Un solo aviso por periodo cerrado (desde el último mensaje de la persona), aunque haya varios mensajes en espera.
-  function ensureNotice(c, t) {
-    const last =
-        db
-          .prepare("SELECT MAX(created_at) t FROM messages WHERE conversation_id=? AND sender_kind='customer'")
-          .get(c.id).t || 0,
-      ref = 'wa-notice:' + c.id + ':' + last;
-    const prev = db.prepare('SELECT id,delivery_state FROM messages WHERE client_ref=?').get(ref);
-    if (prev) {
-      if (
-        prev.delivery_state === 'failed' &&
-        db
-          .prepare(
-            "UPDATE messages SET delivery_state='sent',failed_reason=NULL,provider_ref=NULL WHERE id=? AND delivery_state='failed'",
-          )
-          .run(prev.id).changes
-      )
-        broadcast('conversation', c.id);
-      return false;
-    } // el aviso anterior falló: vuelve a salir
-    const made = transaction(db, () => {
-      if (db.prepare('SELECT 1 FROM messages WHERE client_ref=?').get(ref)) return false;
-      const r = render(t, c);
-      insertMessage(c, null, r.text, 'automation', ref, null, null, null, {
-        category: t.category,
-        template: { name: t.name, language: t.language, params: r.params, templateId: t.id, notice: true },
-      });
-      return true;
-    });
-    if (made) broadcast('conversation', c.id);
-    return made;
-  }
-  function saveTemplate(input, user) {
-    const brandId = String(input.brandId || ''),
-      name = String(input.name || '')
-        .trim()
-        .toLowerCase(),
-      language = LANGS.includes(input.language) ? input.language : 'es_MX',
-      category = input.category === 'marketing' ? 'marketing' : 'utility',
-      purpose = input.purpose === 'notice' ? 'notice' : 'manual',
-      raw = text(input.body, 1024);
-    if (!db.prepare('SELECT 1 FROM brands WHERE id=?').get(brandId)) throw fail(400, 'Elige la marca de la plantilla.');
-    if (!/^[a-z0-9_]{3,60}$/.test(name))
-      throw fail(
-        400,
-        'El nombre de la plantilla va en minúsculas, sin espacios ni acentos: letras, números y guion bajo (por ejemplo aviso_novedad).',
-      );
-    if (raw.length < 10) throw fail(400, 'Escribe el texto de la plantilla (al menos 10 caracteres).');
-    if (/\{\{\s*\d+\s*\}\}/.test(raw))
-      throw fail(400, 'Usa los datos por su nombre: {{nombre}}, {{curso}}, {{edicion}} o {{marca}}.');
-    const order = [],
-      body = raw.replace(/\{\{\s*([a-zñ]+)\s*\}\}/gi, (m, k) => {
-        const key = k.toLowerCase().replace('edición', 'edicion');
-        if (!KEYS[key])
-          throw fail(400, '«' + m + '» no es un dato disponible. Usa {{nombre}}, {{curso}}, {{edicion}} o {{marca}}.');
-        if (!order.includes(key)) order.push(key);
-        return '{{' + (order.indexOf(key) + 1) + '}}';
-      });
-    if (/\{\{|\}\}/.test(body.replace(/\{\{\d+\}\}/g, ''))) throw fail(400, 'Hay llaves sin cerrar en el texto.');
-    if (/^\{\{\d+\}\}/.test(body) || /\{\{\d+\}\}$/.test(body))
-      throw fail(
-        400,
-        'Meta no acepta que el texto empiece o termine con un dato: agrega una palabra antes y un punto después.',
-      );
-    if (order.length > 4 || body.replace(/\{\{\d+\}\}/g, '').trim().length < order.length * 8)
-      throw fail(400, 'La plantilla tiene demasiados datos para tan poco texto: Meta la rechazaría.');
-    if (db.prepare('SELECT 1 FROM wa_templates WHERE name=? AND language=?').get(name, language))
-      throw fail(409, 'Ya existe una plantilla con ese nombre e idioma.');
-    if (db.prepare('SELECT count(*) n FROM wa_templates').get().n >= 200)
-      throw fail(409, 'Se alcanzó el máximo de 200 plantillas.');
-    const id = randomUUID(),
-      t = now();
-    db.prepare(
-      "INSERT INTO wa_templates(id,brand_id,name,language,category,purpose,body,variables,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,'draft',?,?,?)",
-    ).run(id, brandId, name, language, category, purpose, body, JSON.stringify(order), user.id, t, t);
-    audit(user, 'whatsapp.template.created', id);
-    return tplView(tplRow(id));
-  }
-  // Las plantillas que Meta devolvió en la última sincronización y que el CRM todavía no tiene (para «usar una que ya existe»). Sólo en memoria.
-  let remote = [],
-    syncedAt = null;
-  async function syncTemplates(user) {
-    const list = await connectors.adapters.channel.meta.listTemplates(),
-      t = now(),
-      known = db.prepare('SELECT * FROM wa_templates').all();
-    let updated = 0;
-    for (const k of known) {
-      if (k.status === 'draft') continue;
-      const r = list.find(x => x.name === k.name && x.language === k.language); // un borrador aún no existe en Meta: aunque coincida el nombre, no es la misma plantilla
-      if (r) {
-        db.prepare(
-          "UPDATE wa_templates SET status=?,meta_id=?,reject_reason=?,category=CASE WHEN ? IN ('utility','marketing') THEN ? ELSE category END,synced_at=?,updated_at=? WHERE id=?",
-        ).run(r.status, r.metaId || k.meta_id, r.reason, r.category, r.category, t, t, k.id);
-        updated++;
-      } else if (k.status !== 'draft')
-        db.prepare("UPDATE wa_templates SET status='missing',synced_at=?,updated_at=? WHERE id=?").run(t, t, k.id);
-    }
-    remote = list.filter(r => !known.some(k => k.status !== 'draft' && k.name === r.name && k.language === r.language));
-    syncedAt = t;
-    audit(user, 'whatsapp.template.sync', String(list.length));
-    return { found: list.length, updated };
-  }
-  async function submitTemplate(id, user) {
-    const k = tplRow(id);
-    if (!k) throw fail(404, 'Plantilla no encontrada.');
-    if (!['draft', 'rejected'].includes(k.status)) throw fail(409, 'Esta plantilla ya se envió a Meta.');
-    const r = await connectors.adapters.channel.meta.createTemplate({
-        name: k.name,
-        language: k.language,
-        category: k.category,
-        body: k.body,
-        examples: varsOf(k).map(v => SAMPLE[v]),
-      }),
-      t = now();
-    db.prepare(
-      "UPDATE wa_templates SET status=?,meta_id=?,reject_reason='',category=CASE WHEN ? IN ('utility','marketing') THEN ? ELSE category END,revision=revision+1,synced_at=?,updated_at=? WHERE id=?",
-    ).run(r.status || 'pending', r.metaId || null, r.category, r.category, t, t, id);
-    audit(user, 'whatsapp.template.submitted', id);
-    return tplView(tplRow(id));
-  }
-  // Usar una plantilla que ya existe en Meta (por ejemplo la de ejemplo del número de prueba): se indica la marca y qué dato llena cada variable.
-  function adoptTemplate(input, user) {
-    const r = remote.find(x => x.name === String(input.name || '') && x.language === String(input.language || ''));
-    if (!r)
-      throw fail(
-        404,
-        'Esa plantilla no está en la última sincronización. Pulsa «Sincronizar con Meta» y vuelve a intentar.',
-      );
-    if (r.complex)
-      throw fail(
-        400,
-        'Esa plantilla lleva un archivo o datos fuera del texto principal; este CRM sólo llena el texto.',
-      );
-    if (!['utility', 'marketing'].includes(r.category))
-      throw fail(400, 'Sólo se usan plantillas de utilidad o de marketing.');
-    const brandId = String(input.brandId || '');
-    if (!db.prepare('SELECT 1 FROM brands WHERE id=?').get(brandId)) throw fail(400, 'Elige la marca de la plantilla.');
-    const need = slots(r.body),
-      vars = (Array.isArray(input.variables) ? input.variables : []).map(String);
-    if (need.some((n, i) => n !== i + 1))
-      throw fail(400, 'Las variables de esa plantilla no están numeradas de corrido.');
-    if (vars.length !== need.length || vars.some(k => !KEYS[k]))
-      throw fail(400, 'Indica qué dato llena cada una de las ' + need.length + ' variables de la plantilla.');
-    if (db.prepare('SELECT 1 FROM wa_templates WHERE name=? AND language=?').get(r.name, r.language))
-      throw fail(409, 'Esa plantilla ya está en el CRM.');
-    const id = randomUUID(),
-      t = now();
-    db.prepare(
-      'INSERT INTO wa_templates(id,brand_id,name,language,category,purpose,body,variables,status,meta_id,reject_reason,created_by,created_at,updated_at,synced_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    ).run(
-      id,
-      brandId,
-      r.name,
-      r.language,
-      r.category,
-      input.purpose === 'notice' ? 'notice' : 'manual',
-      text(r.body, 1024),
-      JSON.stringify(vars),
-      r.status,
-      r.metaId || null,
-      r.reason || '',
-      user.id,
-      t,
-      t,
-      t,
-    );
-    remote = remote.filter(x => x !== r);
-    audit(user, 'whatsapp.template.adopted', id);
-    return tplView(tplRow(id));
-  }
-  function patchTemplate(id, input, user) {
-    const k = tplRow(id);
-    if (!k) throw fail(404, 'Plantilla no encontrada.');
-    if (!Number.isInteger(input.expectedRevision) || input.expectedRevision !== k.revision)
-      throw fail(409, 'La plantilla cambió. Recarga la pantalla.');
-    const purpose = input.purpose === undefined ? k.purpose : input.purpose === 'notice' ? 'notice' : 'manual';
-    db.prepare('UPDATE wa_templates SET purpose=?,revision=revision+1,updated_at=? WHERE id=?').run(purpose, now(), id);
-    audit(user, 'whatsapp.template.updated', id);
-    return tplView(tplRow(id));
-  }
-  function removeTemplate(id, user) {
-    if (!tplRow(id)) throw fail(404, 'Plantilla no encontrada.');
-    db.prepare('DELETE FROM wa_templates WHERE id=?').run(id);
-    audit(user, 'whatsapp.template.removed', id);
-    return { ok: true };
-  } // sólo la quita del CRM; en Meta sigue existiendo
-  const templatesStatus = () => ({
-    wabaSet: /^\d{5,25}$/.test(String(env.META_WABA_ID || '').trim()),
-    live: connectors.metaLive(),
-    syncedAt,
-    keys: KEYS,
-    languages: LANGS,
-    templates: db.prepare('SELECT * FROM wa_templates ORDER BY brand_id,name').all().map(tplView),
-    remote: remote.map(r => ({
-      name: r.name,
-      language: r.language,
-      status: r.status,
-      category: r.category,
-      body: r.body,
-      complex: r.complex,
-      variables: slots(r.body).length,
-    })),
-  });
-  // El equipo, desde el chat: plantillas aprobadas de la marca de esa conversación, ya con los datos de esa persona.
-  function chatTemplates(c, user) {
-    crm.requireBrand(user, c.brand_id);
-    if (!c.wa_number) return { templates: [] };
-    return {
-      templates: db
-        .prepare("SELECT * FROM wa_templates WHERE brand_id=? AND status='approved' ORDER BY purpose,name")
-        .all(c.brand_id)
-        .map(t => ({ id: t.id, name: t.name, category: t.category, purpose: t.purpose, text: render(t, c).text })),
-    };
-  }
-  function sendTemplate(c, input, user) {
-    crm.requireBrand(user, c.brand_id);
-    if (!c.wa_number) throw fail(409, 'Las plantillas de WhatsApp son para conversaciones de un número real.');
-    const clientRef = String(input.clientRef || '');
-    if (!/^[a-zA-Z0-9-]{16,100}$/.test(clientRef)) throw fail(400, 'Referencia no válida.');
-    const t = tplRow(input.templateId);
-    if (!t || t.brand_id !== c.brand_id || t.status !== 'approved')
-      throw fail(404, 'Esa plantilla no está aprobada para esta marca.');
-    const ref = user.id + ':' + clientRef,
-      existing = db.prepare('SELECT id,conversation_id FROM messages WHERE client_ref=?').get(ref);
-    if (existing) {
-      if (existing.conversation_id !== c.id) throw fail(409, 'Referencia ya utilizada.');
-      return { id: existing.id, duplicate: true };
-    }
-    const out = transaction(db, () => {
-      const saved = db.prepare('SELECT id FROM messages WHERE client_ref=?').get(ref);
-      if (saved) return { id: saved.id, duplicate: true };
-      const current = accessConversation(c.id, user);
-      if (current.status === 'resolved') throw fail(409, 'La conversación está cerrada.');
-      if (current.assigned_to && current.assigned_to !== user.id && user.role !== 'admin')
-        throw fail(409, 'Otro asesor está atendiendo esta conversación.');
-      const r = render(t, current);
-      takeOver(current, user.id);
-      return {
-        id: insertMessage(current, user, r.text, 'agent', ref, null, null, null, {
-          category: t.category,
-          template: { name: t.name, language: t.language, params: r.params, templateId: t.id },
-        }),
-        duplicate: false,
-      };
-    });
-    if (!out.duplicate) audit(user, 'whatsapp.template.sent', out.id);
-    broadcast('conversation', c.id);
-    return out;
-  }
-
+  const needTemplates = () => {
+    if (!templates) throw fail(503, 'Las plantillas de WhatsApp no están disponibles en este momento.');
+    return templates;
+  };
   // ---- Administración: números ↔ marcas, estado y prueba de conexión. Nunca devuelve el token ni el secreto.
   const numberView = n => ({
     phoneNumberId: n.phone_number_id,
@@ -981,56 +683,15 @@ export function createWhatsApp({
   }
   async function handle(req, res, path, user) {
     let x;
-    if ((x = path.match(/^\/api\/conversations\/([a-f0-9-]+)\/wa-templates$/))) {
-      // equipo de la marca, desde el chat
-      if (user.role === 'customer') throw fail(403, 'Esta acción es para el equipo de atención.');
-      const c = accessConversation(x[1], user);
-      if (req.method === 'GET') {
-        json(res, 200, chatTemplates(c, user));
-        return true;
-      }
-      if (req.method === 'POST') {
-        rate('send:' + user.id, 45);
-        const out = sendTemplate(c, await body(req), user);
-        json(res, out.duplicate ? 200 : 201, out);
-        return true;
-      }
-      throw fail(405, 'Método no permitido.');
-    }
+    // plantillas (las de administración y «Enviar plantilla» del chat): el módulo de plantillas decide el permiso
+    if (
+      /^\/api\/conversations\/[a-f0-9-]+\/wa-templates$/.test(path) ||
+      path === '/api/whatsapp/templates' ||
+      path.startsWith('/api/whatsapp/templates/')
+    )
+      return needTemplates().handle(req, res, path, user);
     if (!path.startsWith('/api/whatsapp')) return false;
     requireAdmin(user);
-    if (path === '/api/whatsapp/templates' && req.method === 'GET') {
-      json(res, 200, templatesStatus());
-      return true;
-    }
-    if (path === '/api/whatsapp/templates' && req.method === 'POST') {
-      json(res, 201, { template: saveTemplate(await body(req), user) });
-      return true;
-    }
-    if (path === '/api/whatsapp/templates/sync' && req.method === 'POST') {
-      rate('wa-sync:' + user.id, 12);
-      json(res, 200, await syncTemplates(user));
-      return true;
-    }
-    if (path === '/api/whatsapp/templates/adopt' && req.method === 'POST') {
-      json(res, 201, { template: adoptTemplate(await body(req), user) });
-      return true;
-    }
-    if ((x = path.match(/^\/api\/whatsapp\/templates\/([a-f0-9-]{36})(\/submit)?$/))) {
-      if (x[2] && req.method === 'POST') {
-        rate('wa-submit:' + user.id, 12);
-        json(res, 200, { template: await submitTemplate(x[1], user) });
-        return true;
-      }
-      if (!x[2] && req.method === 'PATCH') {
-        json(res, 200, { template: patchTemplate(x[1], await body(req), user) });
-        return true;
-      }
-      if (!x[2] && req.method === 'DELETE') {
-        json(res, 200, removeTemplate(x[1], user));
-        return true;
-      }
-    }
     if (path === '/api/whatsapp' && req.method === 'GET') {
       json(res, 200, status());
       return true;
@@ -1061,5 +722,5 @@ export function createWhatsApp({
     }
     throw fail(404, 'Ruta de WhatsApp no encontrada.');
   }
-  return { handle, inbound, outbound, status, pick };
+  return { handle, inbound, outbound, status, pick, useTemplates };
 }

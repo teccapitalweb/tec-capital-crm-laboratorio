@@ -658,6 +658,104 @@ export function metaChannel({
       }
     }
   }
+  // Sube un archivo al número que envía y devuelve su identificador de Meta (sirve para mensajes y encabezados).
+  async function uploadMedia(from, media) {
+    const form = new FormData();
+    form.set('messaging_product', 'whatsapp');
+    form.set('type', media.mime);
+    form.set('file', new Blob([media.buffer], { type: media.mime }), media.filename || 'archivo');
+    const id = (await graph('/' + from + '/media', { method: 'POST', form, timeout: 30000 })).id;
+    if (!id) throw fail(502, 'Meta no devolvió el identificador del archivo.');
+    return String(id);
+  }
+  // Una plantilla de Meta tal como la lista la API → lo que el CRM necesita. «complex» conserva su significado de
+  // siempre (lleva algo fuera del texto principal); «supported» dice si el CRM puede usarla (D-3: encabezado ninguno,
+  // texto, imagen, video o documento; botones de respuesta, enlace, teléfono, copiar código o flujo) y, si no, por qué.
+  function remoteTemplate(t) {
+    const comps = Array.isArray(t.components) ? t.components : [],
+      body = comps.find(c => c?.type === 'BODY'),
+      header = comps.find(c => c?.type === 'HEADER'),
+      btns = comps.find(c => c?.type === 'BUTTONS'),
+      kinds = (btns?.buttons || []).map(b => String(b?.type || ''));
+    const category = String(t.category || '').toLowerCase(),
+      format = String(header?.format || 'TEXT').toUpperCase();
+    let unsupported = '';
+    if (category === 'authentication') unsupported = 'Es de autenticación.';
+    else if (comps.some(c => ['CAROUSEL', 'LIMITED_TIME_OFFER'].includes(String(c?.type || '').toUpperCase())))
+      unsupported = 'Es un carrusel o una oferta por tiempo limitado.';
+    else if (header && !['TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'].includes(format))
+      unsupported = 'Su encabezado es una ubicación o un producto.';
+    else if (kinds.some(k => !['QUICK_REPLY', 'URL', 'PHONE_NUMBER', 'COPY_CODE', 'FLOW'].includes(k)))
+      unsupported = 'Lleva un botón de catálogo, de código de acceso o de otro tipo que el CRM no envía.';
+    return {
+      metaId: String(t.id || ''),
+      name: String(t.name || ''),
+      language: String(t.language || ''),
+      status: String(t.status || '').toLowerCase(),
+      category,
+      body: String(body?.text || ''),
+      reason: t.rejected_reason && t.rejected_reason !== 'NONE' ? String(t.rejected_reason).slice(0, 120) : '',
+      quality: t.quality_score?.score ? String(t.quality_score.score).toLowerCase().slice(0, 20) : null,
+      components: comps,
+      supported: !unsupported,
+      unsupported,
+      complex: Boolean(
+        (header && (format !== 'TEXT' || /\{\{/.test(String(header.text || '')))) ||
+        (btns?.buttons || []).some(
+          b => /\{\{/.test(String(b?.url || '')) || b?.type === 'COPY_CODE' || b?.type === 'OTP',
+        ),
+      ),
+    };
+  }
+  async function listPage({ after = '', limit = 100 } = {}) {
+    const d = await graph(
+      '/' +
+        wabaId() +
+        '/message_templates?fields=name,language,status,category,components,rejected_reason,quality_score&limit=' +
+        Math.max(1, Math.min(100, Number(limit) || 100)) +
+        (after ? '&after=' + encodeURIComponent(after) : ''),
+    );
+    return {
+      templates: (d.data || []).map(remoteTemplate),
+      after: d.paging?.next ? String(d.paging?.cursors?.after || '') || null : null,
+    };
+  }
+  // Componentes de Meta de una plantilla nueva o corregida. Una de sólo cuerpo produce exactamente lo de siempre.
+  //   header: {format:'TEXT', text, example?} · {format:'IMAGE'|'DOCUMENT'|'VIDEO', handle}
+  //   buttons: [{type:'quick_reply', text} · {type:'url', text, url, example?} · {type:'phone', text, phone}
+  //             · {type:'copy_code', example}]
+  function templateComponents({ body, examples = [], header, footer, buttons }) {
+    const out = [];
+    if (header?.format === 'TEXT')
+      out.push({
+        type: 'HEADER',
+        format: 'TEXT',
+        text: String(header.text || ''),
+        ...(header.example ? { example: { header_text: [param(header.example)] } } : {}),
+      });
+    else if (header?.format)
+      out.push({ type: 'HEADER', format: header.format, example: { header_handle: [String(header.handle || '')] } });
+    out.push({
+      type: 'BODY',
+      text: body,
+      ...(examples.length ? { example: { body_text: [examples.map(param)] } } : {}),
+    });
+    if (footer) out.push({ type: 'FOOTER', text: String(footer) });
+    if (Array.isArray(buttons) && buttons.length)
+      out.push({
+        type: 'BUTTONS',
+        buttons: buttons.map(b =>
+          b.type === 'url'
+            ? { type: 'URL', text: b.text, url: b.url, ...(b.example ? { example: [param(b.example)] } : {}) }
+            : b.type === 'phone'
+              ? { type: 'PHONE_NUMBER', text: b.text, phone_number: digits(b.phone) }
+              : b.type === 'copy_code'
+                ? { type: 'COPY_CODE', example: param(b.example).slice(0, 15) }
+                : { type: 'QUICK_REPLY', text: b.text },
+        ),
+      });
+    return out;
+  }
   return {
     provider: 'meta',
     kind: 'channel',
@@ -680,16 +778,53 @@ export function metaChannel({
         from = numberId(m.from);
       if (!/^\d{7,20}$/.test(to)) throw fail(400, 'La conversación no tiene un número de WhatsApp de destino.');
       if (m.template) {
-        // plantilla aprobada: lo único que Meta deja salir con la ventana de 24 h cerrada
+        // plantilla aprobada: lo único que Meta deja salir con la ventana de 24 h cerrada. Con encabezado (texto o
+        // archivo) y botones (enlace con dato, respuesta rápida con carga) si la plantilla los lleva (D-3).
         const params = (Array.isArray(m.template.params) ? m.template.params : []).map(param);
+        const components = [],
+          head = m.template.header;
+        if (head?.type === 'text' && Array.isArray(head.params) && head.params.length)
+          components.push({ type: 'header', parameters: head.params.map(t => ({ type: 'text', text: param(t) })) });
+        else if (head?.type === 'image' || head?.type === 'document') {
+          const id = head.mediaId || (head.media ? await uploadMedia(from, head.media) : null);
+          if (!id) throw fail(422, 'La plantilla lleva un archivo en el encabezado y no se encontró ese archivo.');
+          const filename = String(head.media?.filename || head.filename || 'archivo').slice(0, 120);
+          components.push({
+            type: 'header',
+            parameters: [{ type: head.type, [head.type]: head.type === 'document' ? { id, filename } : { id } }],
+          });
+        }
+        if (params.length) components.push({ type: 'body', parameters: params.map(t => ({ type: 'text', text: t })) });
+        for (const b of Array.isArray(m.template.buttons) ? m.template.buttons : []) {
+          const index = String(Math.max(0, Math.min(9, Number(b?.index) || 0)));
+          if (b?.subType === 'url' && b.param !== undefined)
+            components.push({
+              type: 'button',
+              sub_type: 'url',
+              index,
+              parameters: [{ type: 'text', text: param(b.param) }],
+            });
+          else if (b?.subType === 'quick_reply' && b.payload)
+            components.push({
+              type: 'button',
+              sub_type: 'quick_reply',
+              index,
+              parameters: [{ type: 'payload', payload: String(b.payload).slice(0, 128) }],
+            });
+          else if (b?.subType === 'copy_code' && b.code)
+            components.push({
+              type: 'button',
+              sub_type: 'copy_code',
+              index,
+              parameters: [{ type: 'coupon_code', coupon_code: param(b.code).slice(0, 15) }],
+            });
+        }
         const r = await post(from, to, {
           type: 'template',
           template: {
             name: String(m.template.name || ''),
             language: { code: String(m.template.language || 'es_MX') },
-            ...(params.length
-              ? { components: [{ type: 'body', parameters: params.map(t => ({ type: 'text', text: t })) }] }
-              : {}),
+            ...(components.length ? { components } : {}),
           },
         });
         const ref = r.messages?.[0]?.id;
@@ -709,12 +844,7 @@ export function metaChannel({
           .slice(0, 3),
         parts = [];
       if (m.media) {
-        const form = new FormData();
-        form.set('messaging_product', 'whatsapp');
-        form.set('type', m.media.mime);
-        form.set('file', new Blob([m.media.buffer], { type: m.media.mime }), m.media.filename || 'archivo');
-        const id = (await graph('/' + from + '/media', { method: 'POST', form, timeout: 30000 })).id;
-        if (!id) throw fail(502, 'Meta no devolvió el identificador del archivo.');
+        const id = await uploadMedia(from, m.media);
         const kind = IMAGE_MIME.has(m.media.mime) ? 'image' : 'document',
           withButtons = Boolean(buttons.length && text && text.length <= 1024),
           caption = !withButtons && text.length <= 1024 ? text : '';
@@ -798,55 +928,31 @@ export function metaChannel({
           .trim(),
       };
     },
-    // Plantillas de la cuenta de WhatsApp Business. «complex» = lleva encabezado con archivo o variables fuera del cuerpo: este CRM sólo llena el cuerpo.
-    async listTemplates() {
-      const waba = wabaId(),
-        out = [];
+    // Una página de plantillas de la cuenta de WhatsApp Business (hasta `limit`, 100 como mucho) y el cursor de la
+    // siguiente (null si no hay más). Así una cuenta con cientos de plantillas se recorre sin tope fijo.
+    listTemplatesPage: listPage,
+    // Todas las plantillas de la cuenta, página por página (`maxPages` sólo protege de un cursor que no termina).
+    async listTemplates({ maxPages = 100 } = {}) {
+      const out = [];
       let after = '';
-      for (let page = 0; page < 5; page++) {
-        const d = await graph(
-          '/' +
-            waba +
-            '/message_templates?fields=name,language,status,category,components,rejected_reason&limit=100' +
-            (after ? '&after=' + encodeURIComponent(after) : ''),
-        );
-        for (const t of d.data || []) {
-          const comps = Array.isArray(t.components) ? t.components : [],
-            body = comps.find(c => c?.type === 'BODY'),
-            header = comps.find(c => c?.type === 'HEADER'),
-            btns = comps.find(c => c?.type === 'BUTTONS');
-          out.push({
-            metaId: String(t.id || ''),
-            name: String(t.name || ''),
-            language: String(t.language || ''),
-            status: String(t.status || '').toLowerCase(),
-            category: String(t.category || '').toLowerCase(),
-            body: String(body?.text || ''),
-            reason: t.rejected_reason && t.rejected_reason !== 'NONE' ? String(t.rejected_reason).slice(0, 120) : '',
-            complex: Boolean(
-              (header && (String(header.format || 'TEXT') !== 'TEXT' || /\{\{/.test(String(header.text || '')))) ||
-              (btns?.buttons || []).some(
-                b => /\{\{/.test(String(b?.url || '')) || b?.type === 'COPY_CODE' || b?.type === 'OTP',
-              ),
-            ),
-          });
-        }
-        after = d.paging?.next ? String(d.paging?.cursors?.after || '') : '';
+      for (let page = 0; page < maxPages; page++) {
+        const r = await listPage({ after });
+        out.push(...r.templates);
+        after = r.after || '';
         if (!after) break;
       }
       return out;
     },
-    // Manda una plantilla a revisión de Meta. body lleva {{1}}…{{n}}; examples, un valor de ejemplo por variable (Meta lo exige).
-    async createTemplate({ name, language, category, body, examples = [] }) {
+    // Manda una plantilla a revisión de Meta. body lleva {{1}}…{{n}}; examples, un valor de ejemplo por variable (Meta
+    // lo exige). header, footer y buttons son opcionales (formato de templateComponents); sin ellos viaja lo de siempre.
+    async createTemplate({ name, language, category, body, examples = [], header, footer, buttons }) {
       const d = await graph('/' + wabaId() + '/message_templates', {
         method: 'POST',
         payload: {
           name,
           language,
           category: String(category).toUpperCase(),
-          components: [
-            { type: 'BODY', text: body, ...(examples.length ? { example: { body_text: [examples.map(param)] } } : {}) },
-          ],
+          components: templateComponents({ body, examples, header, footer, buttons }),
         },
       });
       return {
@@ -854,6 +960,67 @@ export function metaChannel({
         status: String(d.status || 'PENDING').toLowerCase(),
         category: String(d.category || category).toLowerCase(),
       };
+    },
+    // Corrige una plantilla rechazada (o en pausa) que ya existe en Meta: se manda de nuevo con sus componentes.
+    // [por comprobar con Meta real: POST /{id-de-la-plantilla}]
+    async editTemplate(metaId, { category, body, examples = [], header, footer, buttons }) {
+      if (!/^\d{1,30}$/.test(String(metaId || ''))) throw fail(400, 'La plantilla no tiene identificador de Meta.');
+      const d = await graph('/' + metaId, {
+        method: 'POST',
+        payload: {
+          ...(category ? { category: String(category).toUpperCase() } : {}),
+          components: templateComponents({ body, examples, header, footer, buttons }),
+        },
+      });
+      if (d?.success === false) throw fail(502, 'Meta no confirmó la corrección de la plantilla.');
+      return { ok: true };
+    },
+    // Borra una plantilla en Meta (por nombre y, si se conoce, por su identificador: así sólo se borra ese idioma).
+    // [por comprobar con Meta real: DELETE /{WABA}/message_templates?name=&hsm_id=]
+    async deleteTemplate({ name, metaId }) {
+      const d = await graph(
+        '/' +
+          wabaId() +
+          '/message_templates?name=' +
+          encodeURIComponent(String(name || '')) +
+          (metaId ? '&hsm_id=' + encodeURIComponent(String(metaId)) : ''),
+        { method: 'DELETE' },
+      );
+      if (d?.success === false) throw fail(502, 'Meta no confirmó el borrado de la plantilla.');
+      return { ok: true };
+    },
+    // Sube la muestra de un encabezado con archivo para mandar la plantilla a revisión y devuelve su identificador
+    // («handle»). Es la subida por sesión de Meta: abrir la sesión con la app (META_APP_ID, no es secreto) y mandar los
+    // bytes. [por comprobar con Meta real]
+    async uploadSample({ buffer, mime }) {
+      const app = String(env.META_APP_ID || '').trim();
+      if (!/^\d{5,25}$/.test(app))
+        throw fail(
+          503,
+          'Para mandar a revisión una plantilla con archivo en el encabezado falta META_APP_ID en el entorno (el identificador de la app de Meta, sólo dígitos).',
+        );
+      const session = await graph(
+        '/' + app + '/uploads?file_length=' + buffer.length + '&file_type=' + encodeURIComponent(mime),
+        { method: 'POST' },
+      );
+      const id = String(session?.id || '');
+      if (!/^upload:[A-Za-z0-9_=:.\-]{1,400}$/.test(id)) throw fail(502, 'Meta no abrió la sesión de subida.');
+      let r;
+      try {
+        r = await fetchImpl(base() + '/' + id, {
+          method: 'POST',
+          headers: { Authorization: 'OAuth ' + token(), file_offset: '0', 'Content-Type': mime },
+          body: buffer,
+          signal: AbortSignal.timeout(30000),
+        });
+      } catch {
+        throw Object.assign(fail(502, 'No se pudo conectar con Meta (subida del archivo de muestra).'), {
+          network: true,
+        });
+      }
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || data?.error || !data?.h) throw fail(502, explainMeta(data?.error, r.status));
+      return { handle: String(data.h) };
     },
     // ¿Qué apps reciben los avisos de la cuenta de WhatsApp Business? Si la lista está vacía, Meta no entrega los mensajes reales a nadie.
     async subscription() {
