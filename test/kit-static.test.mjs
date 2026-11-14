@@ -24,10 +24,9 @@ function archivos(carpeta, extension) {
   return encontrados.sort();
 }
 
-// EXCEPCIÓN TEMPORAL: el lienzo de automatización se construyó en paralelo al kit, con sus propios ayudantes
-// (dom.js) y una página de demostración. Mientras se pasa al kit, estas reglas no lo revisan. Al terminar esa
-// migración esta lista debe quedar vacía; no se añade nada más aquí.
-const PENDIENTE_DE_MIGRAR = ['public/screens/automatizacion/lienzo/'];
+// Lista de excepciones, vacía a propósito. Existió mientras el lienzo de automatización, construido en paralelo al
+// kit, se pasaba a él; ya no hay nada pendiente. No se añade nada aquí: una pantalla nueva nace cumpliendo las reglas.
+const PENDIENTE_DE_MIGRAR = [];
 const yaMigrado = ruta => !PENDIENTE_DE_MIGRAR.some(prefijo => ruta.startsWith(prefijo));
 
 const JS = [...archivos('public/kit', '.js'), ...archivos('public/screens', '.js')].filter(yaMigrado);

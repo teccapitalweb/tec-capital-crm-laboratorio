@@ -1,5 +1,6 @@
-// Datos inventados para la página de demostración del lienzo (demo.html) y para las pruebas del simulador.
-// La pantalla real nunca usa este archivo: recibe el catálogo, los materiales y las listas de la marca desde la API.
+// Datos inventados para la vista previa de la pantalla «Automatización» y para las pruebas del simulador.
+// Cuando exista la API de recorridos, la pantalla dejará de usarlo: recibirá el catálogo, los materiales y las listas
+// de la marca desde ctx.api.
 // Los nombres, precios y fechas son de ejemplo y no corresponden a ningún curso real.
 
 export const DEMO_CATALOGUE = Object.freeze({

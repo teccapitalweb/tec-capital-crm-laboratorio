@@ -1,0 +1,9 @@
+{
+  "id": "automatizacion",
+  "title": "Automatización",
+  "visibility": "preview",
+  "nav": { "group": "Gestión", "icon": "workflow", "label": "Automatización", "order": 50 },
+  "roles": ["admin", "agent"],
+  "entry": "index.js",
+  "styles": ["lienzo.css", "screen.css"]
+}

@@ -1,12 +1,12 @@
 // Partes sin DOM del lienzo que no son el store: el recorrido de prueba del simulador (sim.js), los renglones del
-// esquema (outline.js) y las reglas que los archivos del lienzo deben cumplir para convivir con la aplicación.
+// esquema (outline.js), los iconos y la pantalla que lo aloja. Las reglas de convivencia con la aplicación (sin HTML
+// crudo, sólo variables de diseño, eventos por data-do) las vigila test/kit-static.test.mjs para todas las pantallas.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
-import { checkStructure, normalizeGraph, validateGraph } from '../public/kit/shared/flow-model.js';
+import { readFileSync } from 'node:fs';
+import { NODE_TYPES, normalizeGraph, validateGraph } from '../public/kit/shared/flow-model.js';
 import { instantiateTemplate, templateByKey } from '../public/kit/shared/flow-templates.js';
 import { DEMO_CATALOGUE, DEMO_STATS } from '../public/screens/automatizacion/lienzo/demo-data.js';
-import { esc, flag, html } from '../public/screens/automatizacion/lienzo/dom.js';
 import { hasIcon, icon } from '../public/screens/automatizacion/lienzo/icons.js';
 import { buildOutline, statsText } from '../public/screens/automatizacion/lienzo/outline.js';
 import {
@@ -19,7 +19,6 @@ import {
   simTrail,
   simulationEnv,
 } from '../public/screens/automatizacion/lienzo/sim.js';
-import { NODE_TYPES } from '../public/kit/shared/flow-model.js';
 
 const N = (id, type, data = {}) => ({ id, type, x: 0, y: 0, data });
 const E = (from, port, to) => ({ from, port, to });
@@ -449,101 +448,35 @@ test('cifras por paso, en palabras', () => {
   for (const id of Object.keys(DEMO_STATS.nodes)) assert.ok(ids.has(id), id);
 });
 
-// ---- Convivencia con la aplicación -----------------------------------------------------------------------------------
+// ---- Iconos y pantalla ------------------------------------------------------------------------------------------------
 
-test('plantillas del lienzo: toda interpolación se escapa', () => {
-  assert.equal(esc('<img src=x onerror="alert(1)">&\''), '&lt;img src=x onerror=&quot;alert(1)&quot;&gt;&amp;&#39;');
-  const evil = '"><script>alert(1)</script>';
-  const out = html`<p title="${evil}">${evil}${[html`<b>${evil}</b>`, null, undefined, false, 0]}</p>`;
-  assert.equal(out.text.includes('<script>'), false);
-  assert.equal(
-    out.text,
-    '<p title="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;">&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;<b>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;</b>0</p>',
-  );
-  assert.equal(html`<button ${flag('disabled', true)}>x</button>`.text, '<button disabled>x</button>');
-  assert.equal(html`<button ${flag('disabled', false)}>x</button>`.text, '<button >x</button>');
-  assert.throws(() => flag('onclick=alert(1)', true), /no admitido/);
+test('iconos del lienzo: cada tipo de paso tiene el suyo, pintado con la plantilla del kit', () => {
   assert.match(
-    icon('message').text,
+    String(icon('message')),
     /^<svg class="lz-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="[^"<>]+"><\/path><\/svg>$/,
   );
+  assert.equal(String(icon('no-existe')), String(icon('unknown')), 'un nombre desconocido no rompe: pinta el genérico');
   for (const def of Object.values(NODE_TYPES)) assert.ok(hasIcon(def.icon), `${def.type}: su icono existe`);
 });
 
-test('archivos del lienzo: sin HTML crudo, sin globales, sin oyentes en document y sin los atributos de la aplicación', () => {
-  const dir = new URL('../public/screens/automatizacion/lienzo/', import.meta.url);
-  const shared = new URL('../public/kit/shared/', import.meta.url);
-  const read = (base, name) => readFileSync(new URL(name, base), 'utf8');
-  const scripts = [
-    ...readdirSync(dir)
-      .filter(f => f.endsWith('.js'))
-      .map(f => [f, read(dir, f)]),
-    ...readdirSync(shared).map(f => [f, read(shared, f)]),
-  ];
-  assert.ok(scripts.length >= 14);
-  // Los catorce atributos por los que app.js reparte los clics: una pantalla nueva no puede usarlos.
-  const taken = [
-    'action',
-    'view',
-    'mode',
-    'source',
-    'filter',
-    'conversation',
-    'new-channel',
-    'quick',
-    'chat-action',
-    'template',
-    'start-course',
-    'course-detail',
-    'edit-course',
-    'course-flyer',
-  ];
-  const invisible = new RegExp(
-    '[' + [0xfeff, 0x200b, 0x200c, 0x200d, 0x2060, 0x00a0, 0x00ad].map(c => String.fromCharCode(c)).join('') + ']',
-  );
-  for (const [name, source] of [
-    ...scripts,
-    ['lienzo.css', read(dir, 'lienzo.css')],
-    ['demo.html', read(dir, 'demo.html')],
-    ['demo.css', read(dir, 'demo.css')],
-  ]) {
-    assert.doesNotMatch(
-      source,
-      /\.(innerHTML|outerHTML)\s*=|insertAdjacentHTML|document\.write/,
-      `${name}: HTML sin escapar`,
-    );
-    assert.doesNotMatch(
-      source,
-      /\bwindow\.[A-Za-z_$]+\s*=[^=]|globalThis\.[A-Za-z_$]+\s*=[^=]/,
-      `${name}: global nuevo`,
-    );
-    assert.doesNotMatch(
-      source,
-      /document\.addEventListener|window\.addEventListener/,
-      `${name}: oyente fuera de la raíz`,
-    );
-    assert.doesNotMatch(source, /\beval\(|new Function\(|localStorage|sessionStorage/, name);
-    for (const attr of taken)
-      assert.equal(
-        new RegExp(`data-${attr}(=|\\b(?!-))`).test(source),
-        false,
-        `${name}: usa data-${attr}, que es de la aplicación`,
-      );
-    assert.equal(invisible.test(source), false, `${name}: carácter invisible escrito en el archivo`);
-    assert.equal(source.includes('\r'), false, `${name}: finales de línea LF`);
-    assert.ok(source.endsWith('\n'), `${name}: termina con salto de línea`);
-  }
-  // La hoja del lienzo sólo usa las variables de Niebla: ningún color escrito, nada bajo 11 px, sin !important.
-  for (const name of ['lienzo.css', 'demo.css']) {
-    const css = read(dir, name).replace(/\/\*[\s\S]*?\*\//g, '');
-    assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/, `${name}: color literal`);
-    assert.doesNotMatch(css, /!important/, name);
-    for (const m of css.matchAll(/font-size:\s*(?:max\()?(\d+(?:\.\d+)?)px/g))
-      assert.ok(Number(m[1]) >= 11, `${name}: letra de ${m[1]} px`);
-  }
-  // La demostración no lleva guiones ni estilos en línea: la política de contenido de la aplicación los bloquearía.
-  const page = read(dir, 'demo.html');
-  assert.doesNotMatch(page, /<script(?![^>]*\bsrc=)[^>]*>|\son[a-z]+=|<style|\sstyle=/i);
-  assert.match(page, /<script type="module" src="\.\/demo\.js"><\/script>/);
-  assert.deepEqual(checkStructure(templateByKey('venta_de_curso').graph), []);
+test('pantalla «Automatización»: vista previa en el menú, con el lienzo y sus estilos', async () => {
+  const base = new URL('../public/screens/automatizacion/', import.meta.url);
+  const screen = JSON.parse(readFileSync(new URL('screen.json', base), 'utf8'));
+  assert.deepEqual(screen, {
+    id: 'automatizacion',
+    title: 'Automatización',
+    visibility: 'preview',
+    nav: { group: 'Gestión', icon: 'workflow', label: 'Automatización', order: 50 },
+    roles: ['admin', 'agent'],
+    entry: 'index.js',
+    styles: ['lienzo.css', 'screen.css'],
+  });
+  const module = await import(new URL(screen.entry, base).href);
+  assert.equal(typeof module.default.mount, 'function');
+  assert.equal(typeof module.default.onEvent, 'function');
+  // Mientras no exista la API de recorridos, la pantalla trabaja con datos de ejemplo y lo dice a la vista.
+  const source = readFileSync(new URL(screen.entry, base), 'utf8');
+  assert.match(source, /Datos de ejemplo/);
+  assert.match(source, /ctx\.keep\.set\('store'/, 'el editor sin guardar sobrevive a un remontaje');
+  assert.doesNotMatch(source, /onSave:/, 'sin API no se ofrece guardar');
 });

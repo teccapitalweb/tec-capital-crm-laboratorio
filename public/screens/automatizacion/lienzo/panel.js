@@ -19,7 +19,7 @@ import {
   portsOf,
   typeOf,
 } from '../../../kit/shared/flow-model.js';
-import { flag, html, render } from './dom.js';
+import { attrs, html, render } from '../../../kit/html.js';
 import { icon } from './icons.js';
 import { targetOptions } from './outline.js';
 
@@ -117,9 +117,10 @@ export function createPanel(container, store, options) {
 
   function optionsOf(items, value, empty) {
     const groups = [...new Set(items.map(item => item.group))];
-    const one = item => html`<option value="${item.id}" ${flag('selected', item.id === value)}>${item.name}</option>`;
+    const one = item =>
+      html`<option value="${item.id}" ${attrs({ selected: item.id === value })}>${item.name}</option>`;
     const missing = value && !items.some(item => item.id === value);
-    return html`<option value="" ${flag('selected', !value)}>${empty || 'Elige…'}</option>
+    return html`<option value="" ${attrs({ selected: !value })}>${empty || 'Elige…'}</option>
       ${missing ? html`<option value="${value}" selected>(ya no existe en esta marca)</option>` : ''}
       ${groups.length > 1 || groups[0] ? groups.map(group => html`<optgroup label="${group}">${items.filter(item => item.group === group).map(one)}</optgroup>`) : items.map(one)}`;
   }
@@ -136,7 +137,7 @@ export function createPanel(container, store, options) {
 
   // ---- Campos ----------------------------------------------------------------------------------------------------------
 
-  const errorSlot = path => html`<p class="lz-err" data-e="${path}" hidden></p>`;
+  const errorSlot = path => html`<p class="lz-err" id="${uid('aviso-' + path)}" data-e="${path}" hidden></p>`;
   const helpOf = field => (field.help ? html`<p class="lz-hint">${field.help}</p>` : '');
 
   function checks(field, path, value, items) {
@@ -145,8 +146,8 @@ export function createPanel(container, store, options) {
     return html`<fieldset class="lz-group">
       <legend>${field.label}</legend>
       ${items.length || gone.length ? '' : html`<p class="lz-hint">No hay nada que elegir todavía.</p>`}
-      ${items.map(item => html`<label class="lz-check"><input type="checkbox" data-k="varios" data-f="${path}" value="${item.id}" ${flag('checked', picked.includes(item.id))} /><span>${item.name}</span></label>`)}
-      ${gone.map(id => html`<label class="lz-check"><input type="checkbox" data-k="varios" data-f="${path}" value="${id}" checked /><span>(ya no existe en esta marca)</span></label>`)}
+      ${items.map(item => html`<label class="lz-check"><input type="checkbox" data-do="varios" data-f="${path}" value="${item.id}" ${attrs({ checked: picked.includes(item.id) })} /><span>${item.name}</span></label>`)}
+      ${gone.map(id => html`<label class="lz-check"><input type="checkbox" data-do="varios" data-f="${path}" value="${id}" checked /><span>(ya no existe en esta marca)</span></label>`)}
       ${helpOf(field)}${errorSlot(path)}
     </fieldset>`;
   }
@@ -168,10 +169,10 @@ export function createPanel(container, store, options) {
         // sin él se perdería un texto que empiece con una línea en blanco.
         return html`<div class="lz-field">
           ${label}
-          <textarea id="${id}" class="${field.mono ? 'lz-mono' : ''}" rows="${field.rows || 3}" maxlength="${field.max}" data-k="campo" data-f="${path}">
+          <textarea id="${id}" class="${field.mono ? 'lz-mono' : ''}" rows="${field.rows || 3}" maxlength="${field.max}" data-do="campo" data-f="${path}">
 ${value ?? ''}</textarea>
           <div class="lz-under">
-            ${field.tokens ? html`<select class="lz-token" data-k="dato" data-for="${id}" aria-label="Insertar un dato en ${field.label}">${tokenOptions()}</select>` : html`<span></span>`}
+            ${field.tokens ? html`<select class="lz-token" data-do="dato" data-for="${id}" aria-label="Insertar un dato en ${field.label}">${tokenOptions()}</select>` : html`<span></span>`}
             ${count}
           </div>
           ${helpOf(field)}${errorSlot(path)}
@@ -179,20 +180,20 @@ ${value ?? ''}</textarea>
       case 'number':
         return html`<div class="lz-field">
           ${label}
-          <input id="${id}" type="number" inputmode="numeric" step="1" ${field.min !== undefined ? html`min="${field.min}"` : ''} ${field.max !== undefined ? html`max="${field.max}"` : ''} data-k="campo" data-f="${path}" value="${value ?? ''}" />
+          <input id="${id}" type="number" inputmode="numeric" step="1" ${attrs({ min: field.min, max: field.max })} data-do="campo" data-f="${path}" value="${value ?? ''}" />
           ${helpOf(field)}${errorSlot(path)}
         </div>`;
       case 'choice':
         return html`<div class="lz-field">
           ${label}
-          <select id="${id}" data-k="opcion" data-f="${path}">
-            ${field.options.map(([optionValue, text]) => html`<option value="${optionValue}" ${flag('selected', optionValue === (value ?? ''))}>${text}</option>`)}
+          <select id="${id}" data-do="opcion" data-f="${path}">
+            ${field.options.map(([optionValue, text]) => html`<option value="${optionValue}" ${attrs({ selected: optionValue === (value ?? '') })}>${text}</option>`)}
           </select>
           ${helpOf(field)}${errorSlot(path)}
         </div>`;
       case 'check':
         return html`<div class="lz-field">
-          <label class="lz-check"><input id="${id}" type="checkbox" data-k="casilla" data-f="${path}" ${flag('checked', value === true)} /><span>${field.label}</span></label>
+          <label class="lz-check"><input id="${id}" type="checkbox" data-do="casilla" data-f="${path}" ${attrs({ checked: value === true })} /><span>${field.label}</span></label>
           ${helpOf(field)}${errorSlot(path)}
         </div>`;
       case 'multi':
@@ -210,13 +211,13 @@ ${value ?? ''}</textarea>
         if (!items) {
           return html`<div class="lz-field">
             ${label}
-            <input id="${id}" type="text" class="lz-mono" data-k="campo" data-f="${path}" value="${value ?? ''}" maxlength="${LIMITS.title}" autocomplete="off" />
+            <input id="${id}" type="text" class="lz-mono" data-do="campo" data-f="${path}" value="${value ?? ''}" maxlength="${LIMITS.title}" autocomplete="off" />
             ${helpOf(field)}${errorSlot(path)}
           </div>`;
         }
         return html`<div class="lz-field">
           ${label}
-          <select id="${id}" data-k="ref" data-f="${path}">
+          <select id="${id}" data-do="ref" data-f="${path}">
             ${optionsOf(items, value, field.empty)}
           </select>
           ${helpOf(field)}${errorSlot(path)}
@@ -228,7 +229,7 @@ ${value ?? ''}</textarea>
         return html`<div class="lz-field">
           ${label}
           <div class="lz-control">
-            <input id="${id}" type="${field.kind === 'time' ? 'time' : 'text'}" class="${field.mono ? 'lz-mono' : ''}" data-k="campo" data-f="${path}" value="${value ?? ''}" ${field.max ? html`maxlength="${field.max}"` : ''} ${field.suggest ? html`list="${lists[field.suggest]}"` : ''} autocomplete="off" />
+            <input id="${id}" type="${field.kind === 'time' ? 'time' : 'text'}" class="${field.mono ? 'lz-mono' : ''}" data-do="campo" data-f="${path}" value="${value ?? ''}" ${attrs({ maxlength: field.max || null, list: field.suggest ? lists[field.suggest] : null })} autocomplete="off" />
             ${count}
           </div>
           ${helpOf(field)}${errorSlot(path)}
@@ -249,16 +250,16 @@ ${value ?? ''}</textarea>
           <div class="lz-item-head">
             <strong>${field.item} ${i + 1}</strong>
             <span class="lz-item-tools">
-              <button type="button" class="lz-icon-btn" data-k="lista-subir" data-f="${path}" data-i="${i}" aria-label="Subir ${field.item} ${i + 1}" title="Subir" ${flag('disabled', i === 0)}>${icon('up')}</button>
-              <button type="button" class="lz-icon-btn" data-k="lista-bajar" data-f="${path}" data-i="${i}" aria-label="Bajar ${field.item} ${i + 1}" title="Bajar" ${flag('disabled', i === items.length - 1)}>${icon('down')}</button>
-              <button type="button" class="lz-icon-btn" data-k="lista-quitar" data-f="${path}" data-i="${i}" aria-label="Quitar ${field.item} ${i + 1}" title="Quitar" ${flag('disabled', items.length <= min)}>${icon('trash')}</button>
+              <button type="button" class="lz-icon-btn" data-do="lista-subir" data-f="${path}" data-i="${i}" aria-label="Subir ${field.item} ${i + 1}" title="Subir" ${attrs({ disabled: i === 0 })}>${icon('up')}</button>
+              <button type="button" class="lz-icon-btn" data-do="lista-bajar" data-f="${path}" data-i="${i}" aria-label="Bajar ${field.item} ${i + 1}" title="Bajar" ${attrs({ disabled: i === items.length - 1 })}>${icon('down')}</button>
+              <button type="button" class="lz-icon-btn" data-do="lista-quitar" data-f="${path}" data-i="${i}" aria-label="Quitar ${field.item} ${i + 1}" title="Quitar" ${attrs({ disabled: items.length <= min })}>${icon('trash')}</button>
             </span>
           </div>
           ${fieldsHtml(field.fields, item, `${path}.${i}`)}${errorSlot(`${path}.${i}`)}
         </div>`,
       )}
       ${errorSlot(path)}
-      <button type="button" class="lz-btn lz-add" data-k="lista-agregar" data-f="${path}" ${flag('disabled', items.length >= field.max)}>${icon('plus')} ${field.add}</button>
+      <button type="button" class="lz-btn lz-add" data-do="lista-agregar" data-f="${path}" ${attrs({ disabled: items.length >= field.max })}>${icon('plus')} ${field.add}</button>
       ${items.length >= field.max ? html`<p class="lz-hint">Máximo ${field.max}.</p>` : ''}
     </fieldset>`;
   }
@@ -266,7 +267,7 @@ ${value ?? ''}</textarea>
   // ---- Vistas del panel ------------------------------------------------------------------------------------------------
 
   const closeButton = () =>
-    html`<button type="button" class="lz-icon-btn lz-narrow-only" data-k="panel-cerrar" aria-label="Cerrar el panel">${icon('close')}</button>`;
+    html`<button type="button" class="lz-icon-btn lz-narrow-only" data-do="panel-cerrar" aria-label="Cerrar el panel">${icon('close')}</button>`;
 
   function issuesHtml(issues, withLinks) {
     const item = (issue, level, word) => html`<li data-level="${level}">
@@ -275,7 +276,7 @@ ${value ?? ''}</textarea>
         <span class="lz-sr">${word}: </span>${issue.message}
         ${
           withLinks && issue.nodeId && store.node(issue.nodeId)
-            ? html`<button type="button" class="lz-link" data-k="panel-ir" data-node="${issue.nodeId}">Ir al paso «${nodeName(store.node(issue.nodeId), store.context)}»</button>`
+            ? html`<button type="button" class="lz-link" data-do="panel-ir" data-node="${issue.nodeId}">Ir al paso «${nodeName(store.node(issue.nodeId), store.context)}»</button>`
             : ''
         }
       </span>
@@ -297,7 +298,7 @@ ${value ?? ''}</textarea>
         const to = store.edgeFrom(node.id, port.id);
         return html`<div class="lz-field">
           <label for="${id}">${port.label}</label>
-          <select id="${id}" data-k="salida" data-port="${port.id}">
+          <select id="${id}" data-do="salida" data-port="${port.id}">
             ${targetOptions(store.graph, store.context, to)}
           </select>
           ${!to && UNLINKED[port.id] ? html`<p class="lz-hint">${UNLINKED[port.id]}</p>` : ''}
@@ -317,8 +318,8 @@ ${value ?? ''}</textarea>
           </div>
           ${closeButton()}
         </div>
-        <fieldset class="lz-fs" ${flag('disabled', store.readOnly)}>
-          <div class="lz-actions"><button type="button" class="lz-btn lz-danger" data-k="panel-eliminar">${icon('trash')} Eliminar</button></div>
+        <fieldset class="lz-fs" ${attrs({ disabled: store.readOnly })}>
+          <div class="lz-actions"><button type="button" class="lz-btn lz-danger" data-do="panel-eliminar">${icon('trash')} Eliminar</button></div>
         </fieldset>`;
     }
     const titleId = uid('titulo');
@@ -333,14 +334,14 @@ ${value ?? ''}</textarea>
         ${closeButton()}
       </div>
       <ul class="lz-issues" data-slot="problemas" aria-label="Problemas de este paso"></ul>
-      <fieldset class="lz-fs" ${flag('disabled', store.readOnly)}>
+      <fieldset class="lz-fs" ${attrs({ disabled: store.readOnly })}>
         ${
           node.type === 'start'
             ? ''
             : html`<div class="lz-field">
               <label for="${titleId}">Nombre del paso (opcional)</label>
               <div class="lz-control">
-                <input id="${titleId}" type="text" data-k="titulo" value="${node.title || ''}" maxlength="${LIMITS.title}" placeholder="${def.label}" autocomplete="off" />
+                <input id="${titleId}" type="text" data-do="titulo" value="${node.title || ''}" maxlength="${LIMITS.title}" placeholder="${def.label}" autocomplete="off" />
                 <span class="lz-count" data-c="title">${(node.title || '').length}/${LIMITS.title}</span>
               </div>
               ${errorSlot('title')}
@@ -353,13 +354,13 @@ ${value ?? ''}</textarea>
         <datalist id="${lists.slots}">
           ${slots.map(slot => html`<option value="${slot}"></option>`)}
         </datalist>
-        <div data-slot="salidas">${portsHtml(node)}</div>
+        <div data-slot="salidas"></div>
         ${
           node.type === 'start'
             ? ''
             : html`<div class="lz-actions">
-              <button type="button" class="lz-btn" data-k="panel-duplicar">${icon('copy')} Duplicar</button>
-              <button type="button" class="lz-btn lz-danger" data-k="panel-eliminar">${icon('trash')} Eliminar</button>
+              <button type="button" class="lz-btn" data-do="panel-duplicar">${icon('copy')} Duplicar</button>
+              <button type="button" class="lz-btn lz-danger" data-do="panel-eliminar">${icon('trash')} Eliminar</button>
             </div>`
         }
       </fieldset>`;
@@ -374,11 +375,11 @@ ${value ?? ''}</textarea>
         </div>
         ${closeButton()}
       </div>
-      <fieldset class="lz-fs" ${flag('disabled', store.readOnly)}>
+      <fieldset class="lz-fs" ${attrs({ disabled: store.readOnly })}>
         <div class="lz-actions">
-          <button type="button" class="lz-btn" data-k="panel-duplicar">${icon('copy')} Duplicar</button>
-          <button type="button" class="lz-btn" data-k="panel-copiar">${icon('copy')} Copiar</button>
-          <button type="button" class="lz-btn lz-danger" data-k="panel-eliminar">${icon('trash')} Eliminar</button>
+          <button type="button" class="lz-btn" data-do="panel-duplicar">${icon('copy')} Duplicar</button>
+          <button type="button" class="lz-btn" data-do="panel-copiar">${icon('copy')} Copiar</button>
+          <button type="button" class="lz-btn lz-danger" data-do="panel-eliminar">${icon('trash')} Eliminar</button>
         </div>
       </fieldset>`;
   }
@@ -395,8 +396,8 @@ ${value ?? ''}</textarea>
         </div>
         ${closeButton()}
       </div>
-      <fieldset class="lz-fs" ${flag('disabled', store.readOnly)}>
-        <div class="lz-actions"><button type="button" class="lz-btn lz-danger" data-k="panel-desconectar">${icon('trash')} Quitar la conexión</button></div>
+      <fieldset class="lz-fs" ${attrs({ disabled: store.readOnly })}>
+        <div class="lz-actions"><button type="button" class="lz-btn lz-danger" data-do="panel-desconectar">${icon('trash')} Quitar la conexión</button></div>
       </fieldset>`;
   }
 
@@ -437,14 +438,14 @@ ${value ?? ''}</textarea>
                 v => html`<li>
                   <code class="lz-mono">${v.name}</code>
                   <span class="lz-hint">${v.declared ? 'Declarada aquí' : 'La guarda el paso ' + v.writers.map(id => order.indexOf(id) + 1).join(', ')}</span>
-                  ${v.declared && !store.readOnly ? html`<button type="button" class="lz-icon-btn" data-k="variable-quitar" data-name="${v.name}" aria-label="Quitar la variable ${v.name}" title="Quitar">${icon('trash')}</button>` : ''}
+                  ${v.declared && !store.readOnly ? html`<button type="button" class="lz-icon-btn" data-do="variable-quitar" data-name="${v.name}" aria-label="Quitar la variable ${v.name}" title="Quitar">${icon('trash')}</button>` : ''}
                 </li>`,
               )}
             </ul>`
             : ''
         }
-        <form class="lz-var-form" data-k="variable-form">
-          <fieldset class="lz-fs" ${flag('disabled', store.readOnly)}>
+        <form class="lz-var-form" data-do="variable-form">
+          <fieldset class="lz-fs" ${attrs({ disabled: store.readOnly })}>
             <div class="lz-field">
               <label for="${nameId}">Nueva variable</label>
               <input id="${nameId}" name="nombre" type="text" class="lz-mono" maxlength="30" placeholder="por_ejemplo" autocomplete="off" />
@@ -484,12 +485,11 @@ ${value ?? ''}</textarea>
       const found = messages.get(path);
       slot.hidden = !found;
       slot.textContent = found ? found.join(' ') : '';
-      if (found && !slot.id) slot.id = uid('error');
     }
     for (const control of container.querySelectorAll(
-      'input[data-f], textarea[data-f], select[data-f], [data-k="titulo"]',
+      'input[data-f], textarea[data-f], select[data-f], [data-do="titulo"]',
     )) {
-      const path = control.dataset.k === 'titulo' ? 'title' : control.dataset.f;
+      const path = control.dataset.do === 'titulo' ? 'title' : control.dataset.f;
       const slot = slots.get(path);
       if (slot && !slot.hidden) {
         control.setAttribute('aria-invalid', 'true');
@@ -516,11 +516,14 @@ ${value ?? ''}</textarea>
     else if (nodes.length > 1) render(container, manyHtml(nodes));
     else if (edge) render(container, edgeHtml(edge));
     else render(container, flowHtml());
+    // Lo que hay dentro de una ranura es de quien la pinta: las salidas del paso se pintan aquí, no desde el esqueleto.
+    const ports = container.querySelector('[data-slot="salidas"]');
+    if (ports && node) render(ports, portsHtml(node));
     paintErrors();
   }
 
   const sameControl = (el, memo) =>
-    el.dataset.k === memo.k &&
+    el.dataset.do === memo.k &&
     el.dataset.f === memo.f &&
     el.dataset.port === memo.port &&
     el.dataset.i === memo.i &&
@@ -531,9 +534,9 @@ ${value ?? ''}</textarea>
     const active = doc.activeElement;
     const inside = active && container.contains(active) ? active : null;
     let memo = null;
-    if (inside && inside.dataset.k) {
+    if (inside && inside.dataset.do) {
       memo = {
-        k: inside.dataset.k,
+        k: inside.dataset.do,
         f: inside.dataset.f,
         port: inside.dataset.port,
         i: inside.dataset.i,
@@ -552,7 +555,7 @@ ${value ?? ''}</textarea>
     draw();
     container.scrollTop = scroll;
     if (!memo) return;
-    const again = [...container.querySelectorAll('[data-k]')].find(el => sameControl(el, memo));
+    const again = [...container.querySelectorAll('[data-do]')].find(el => sameControl(el, memo));
     if (!again) return;
     again.focus({ preventScroll: true });
     if (memo.start !== null && typeof again.setSelectionRange === 'function') {
@@ -584,9 +587,17 @@ ${value ?? ''}</textarea>
   const nodeId = () => (current() ? current().id : null);
   const coalesce = path => ({ coalesce: `campo:${nodeId()}:${path}` });
 
+  // render() sólo reescribe un campo si su marcado cambió respecto del pintado anterior. Como al teclear no se vuelve
+  // a pintar, se deja anotado en el propio campo lo que ya se guardó: así, al deshacer, el valor anterior sí se escribe.
+  function remember(el) {
+    if (el.nodeName === 'TEXTAREA') el.textContent = el.value;
+    else el.setAttribute('value', el.value);
+  }
+
   function typed(el) {
     const id = nodeId();
     if (!id) return;
+    remember(el);
     const path = el.dataset.f;
     const value = el.type === 'number' ? (el.value === '' ? '' : Number(el.value)) : el.value;
     quiet(() => store.setData(id, path, value, coalesce(path)));
@@ -606,7 +617,7 @@ ${value ?? ''}</textarea>
     [next[index], next[to]] = [next[to], next[index]];
     options.report(store.setData(id, path, next));
     // El foco sigue al elemento que se movió.
-    const moved = [...container.querySelectorAll(`[data-k="${el.dataset.k}"]`)].find(
+    const moved = [...container.querySelectorAll(`[data-do="${el.dataset.do}"]`)].find(
       b => b.dataset.f === path && Number(b.dataset.i) === to,
     );
     if (moved && !moved.disabled) moved.focus();
@@ -618,6 +629,7 @@ ${value ?? ''}</textarea>
       titulo(event, el) {
         const id = nodeId();
         if (!id) return;
+        remember(el);
         quiet(() => store.setTitle(id, el.value, coalesce('title')));
         const counter = container.querySelector('[data-c="title"]');
         if (counter) counter.textContent = `${el.value.length}/${LIMITS.title}`;
@@ -655,7 +667,7 @@ ${value ?? ''}</textarea>
         } else options.report(store.setData(id, el.dataset.f, el.value));
       },
       dato(event, el) {
-        const target = doc.getElementById(el.dataset.for);
+        const target = container.querySelector('[id="' + el.dataset.for + '"]');
         const token = el.value;
         el.value = '';
         if (!target || !token) return;
@@ -691,7 +703,7 @@ ${value ?? ''}</textarea>
         );
         options.report(removed, removed.pruned ? 'Quitado, junto con la conexión de su salida.' : 'Quitado.');
         // Si el foco no encontró un botón equivalente (se quitó el último), pasa al de agregar.
-        const add = [...container.querySelectorAll('[data-k="lista-agregar"]')].find(b => b.dataset.f === path);
+        const add = [...container.querySelectorAll('[data-do="lista-agregar"]')].find(b => b.dataset.f === path);
         if (add && !container.contains(doc.activeElement)) add.focus();
       },
       'lista-subir': (event, el) => moveItem(el, -1),
@@ -714,7 +726,9 @@ ${value ?? ''}</textarea>
         const name = el.elements.nombre.value.trim();
         const added = store.setVariables([...store.graph.variables, { name, label: '', type: el.elements.tipo.value }]);
         options.report(added, `Variable ${name} agregada.`);
-        // Al agregarla el panel se vuelve a pintar: el foco regresa al campo, listo para la siguiente.
+        // El repintado conserva lo tecleado (no es parte del marcado): al agregarla, el campo se vacía a mano y
+        // el foco vuelve a él, listo para la siguiente.
+        if (added.ok) el.elements.nombre.value = '';
         focusIn('.lz-var-form input');
       },
     },
@@ -730,8 +744,8 @@ ${value ?? ''}</textarea>
       return undefined;
     },
     // Lleva el foco al primer ajuste del paso (doble clic o Entrar sobre la tarjeta) o a sus salidas (tecla C).
-    focusFirst: () => focusIn('.lz-fs [data-f]') || focusIn('[data-k="titulo"]') || focusIn('[data-k="salida"]'),
-    focusPorts: () => focusIn('[data-k="salida"]') || focusIn('.lz-fs [data-f]'),
+    focusFirst: () => focusIn('.lz-fs [data-f]') || focusIn('[data-do="titulo"]') || focusIn('[data-do="salida"]'),
+    focusPorts: () => focusIn('[data-do="salida"]') || focusIn('.lz-fs [data-f]'),
     destroy() {
       container.replaceChildren();
     },

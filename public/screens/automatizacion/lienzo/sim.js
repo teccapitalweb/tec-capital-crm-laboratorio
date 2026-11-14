@@ -20,7 +20,7 @@ import {
   refName,
   tokensIn,
 } from '../../../kit/shared/flow-model.js';
-import { html, render } from './dom.js';
+import { attrs, html, render } from '../../../kit/html.js';
 import { icon } from './icons.js';
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -949,23 +949,23 @@ export function createSimulator(container, store, options) {
             <h2 class="lz-panel-title">Probar el recorrido</h2>
             <p class="lz-hint">Vista previa con datos de ejemplo: no se envía ni se guarda nada.</p>
           </div>
-          <button type="button" class="lz-icon-btn" data-k="prueba-cerrar" aria-label="Cerrar la prueba">${icon('close')}</button>
+          <button type="button" class="lz-icon-btn" data-do="prueba-cerrar" aria-label="Cerrar la prueba">${icon('close')}</button>
         </div>
         <div class="lz-sim-setup">
           <div class="lz-field">
             <label for="${fieldIds.course}">Curso de la conversación</label>
-            <select id="${fieldIds.course}" data-k="prueba-curso">
+            <select id="${fieldIds.course}" data-do="prueba-curso">
               <option value="">Sin curso (como un chat nuevo)</option>
-              ${courses.map(c => html`<option value="${c.id}" ${c.id === courseId ? html`selected` : ''}>${c.title}</option>`)}
+              ${courses.map(c => html`<option value="${c.id}" ${attrs({ selected: c.id === courseId })}>${c.title}</option>`)}
             </select>
           </div>
           <div class="lz-field">
             <label for="${fieldIds.channel}">Canal</label>
-            <select id="${fieldIds.channel}" data-k="prueba-canal">
-              ${CHANNELS.map(([id, label]) => html`<option value="${id}" ${id === channel ? html`selected` : ''}>${label}</option>`)}
+            <select id="${fieldIds.channel}" data-do="prueba-canal">
+              ${CHANNELS.map(([id, label]) => html`<option value="${id}" ${attrs({ selected: id === channel })}>${label}</option>`)}
             </select>
           </div>
-          <button type="button" class="lz-btn" data-k="prueba-reiniciar">${icon('restart')} Empezar de nuevo</button>
+          <button type="button" class="lz-btn" data-do="prueba-reiniciar">${icon('restart')} Empezar de nuevo</button>
         </div>
         <div data-slot="aviso"></div>
         <div class="lz-chat" role="log" aria-label="Conversación de prueba" tabindex="0" data-slot="chat"></div>
@@ -986,24 +986,24 @@ export function createSimulator(container, store, options) {
     return html`${
       w.kind === 'options'
         ? html`<div class="lz-sim-options" role="group" aria-label="Opciones que ve la persona">
-            ${w.options.map(o => html`<button type="button" class="lz-sim-option" data-k="prueba-opcion" data-id="${o.id}">${o.title || '(sin texto)'}</button>`)}
+            ${w.options.map(o => html`<button type="button" class="lz-sim-option" data-do="prueba-opcion" data-id="${o.id}">${o.title || '(sin texto)'}</button>`)}
           </div>`
         : ''
     }
       ${
         kinds.length
           ? html`<div class="lz-sim-options">
-            ${kinds.map(k => html`<button type="button" class="lz-sim-option" data-k="prueba-archivo" data-kind="${k}">Enviar ${MEDIA_LABELS[k]} de ejemplo</button>`)}
+            ${kinds.map(k => html`<button type="button" class="lz-sim-option" data-do="prueba-archivo" data-kind="${k}">Enviar ${MEDIA_LABELS[k]} de ejemplo</button>`)}
           </div>`
           : ''
       }
-      ${answer?.type === 'location' ? html`<div class="lz-sim-options"><button type="button" class="lz-sim-option" data-k="prueba-ubicacion">Enviar una ubicación de ejemplo</button></div>` : ''}
-      <form class="lz-sim-form" data-k="prueba-form">
+      ${answer?.type === 'location' ? html`<div class="lz-sim-options"><button type="button" class="lz-sim-option" data-do="prueba-ubicacion">Enviar una ubicación de ejemplo</button></div>` : ''}
+      <form class="lz-sim-form" data-do="prueba-form">
         <label class="lz-sr" for="${fieldIds.text}">Escribe como si fueras la persona</label>
         <input id="${fieldIds.text}" type="text" name="texto" autocomplete="off" placeholder="Escribe como la persona…" />
         <button type="submit" class="lz-btn" aria-label="Enviar el mensaje de prueba">${icon('send')}</button>
       </form>
-      <button type="button" class="lz-link" data-k="prueba-silencio">Simular que no responde</button>`;
+      <button type="button" class="lz-link" data-do="prueba-silencio">Simular que no responde</button>`;
   }
 
   // Sólo se agregan los mensajes nuevos: un lector de pantalla anuncia lo que llega, no toda la conversación otra vez.
@@ -1021,7 +1021,7 @@ export function createSimulator(container, store, options) {
     render(
       slot('aviso'),
       stale
-        ? html`<p class="lz-banner" role="status">El recorrido cambió desde que empezó esta prueba. <button type="button" class="lz-link" data-k="prueba-reiniciar">Probar la versión actual</button></p>`
+        ? html`<p class="lz-banner" role="status">El recorrido cambió desde que empezó esta prueba. <button type="button" class="lz-link" data-do="prueba-reiniciar">Probar la versión actual</button></p>`
         : html``,
     );
     render(slot('controles'), controls());

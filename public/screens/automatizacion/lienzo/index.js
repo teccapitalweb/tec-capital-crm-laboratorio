@@ -10,13 +10,19 @@
 // `onChange(grafo, {dirty, errors, warnings})` se llama en cada edición con el grafo congelado (no se debe alterar).
 // `onSave(grafo)` puede devolver una promesa; al cumplirse, el lienzo da el grafo por guardado.
 //
-// Es una isla: no usa nada de la aplicación salvo las variables de color de Niebla, no deja oyentes en `document` ni
-// globales en `window`, y todos sus eventos se quedan dentro de su raíz. La pantalla que lo aloja se desmonta y se
-// vuelve a montar a menudo: para no perder el historial ni lo que no se ha guardado, guarda `lienzo.store` (por ejemplo
-// en `ctx.keep`) y vuelve a pasarlo en `store` al montar de nuevo.
+// Se pinta con el kit de pantallas (html, render y listen): no deja oyentes en `document` ni globales en `window`, y
+// todos sus eventos se quedan dentro de su raíz. Lo que la pantalla anfitriona debe poner:
+//  - la hoja `lienzo.css` (está en la carpeta de la pantalla, para listarla en su screen.json);
+//  - una raíz vacía y con alto (el lienzo ocupa todo el alto de su raíz);
+//  - `uid` (el `ctx.uid` de la pantalla), para que los ids de los campos lleven su prefijo.
+// La pantalla se desmonta y se vuelve a montar a menudo: para no perder el historial ni lo que no se ha guardado,
+// guarda `lienzo.store` en `ctx.keep` y vuelve a pasarlo en `store` al montar de nuevo.
 
 import { GEOMETRY, PALETTE, nodeName, portsOf, typeOf } from '../../../kit/shared/flow-model.js';
-import { html, ids, listen, on, render } from './dom.js';
+import { listen } from '../../../kit/events.js';
+import { html, render } from '../../../kit/html.js';
+import { ids } from '../../../kit/ids.js';
+import { on } from './dom.js';
 import { icon } from './icons.js';
 import { attachInteractions } from './interact.js';
 import { createMinimap } from './minimap.js';
@@ -33,45 +39,35 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const closest = (target, selector) =>
   target && typeof target.closest === 'function' ? target.closest(selector) : null;
 
-// La hoja de estilos vive junto al módulo. Si la pantalla anfitriona ya la cargó (por su screen.json), no se repite.
-function ensureStyles(doc) {
-  const href = new URL('./lienzo.css', import.meta.url).href;
-  if ([...doc.querySelectorAll('link[rel="stylesheet"]')].some(link => link.href === href)) return;
-  const link = doc.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = href;
-  doc.head.append(link);
-}
-
 const shell = hasSave => html`<div class="lz-bar" role="toolbar" aria-label="Herramientas del recorrido">
     <div class="lz-seg" role="group" aria-label="Cómo ver el recorrido">
-      <button type="button" class="lz-tool" data-k="ver" data-pane="outline" aria-pressed="false">${icon('list')}<span>Esquema</span></button>
-      <button type="button" class="lz-tool" data-k="ver" data-pane="canvas" aria-pressed="true">${icon('canvas')}<span>Lienzo</span></button>
+      <button type="button" class="lz-tool" data-do="ver" data-pane="outline" aria-pressed="false">${icon('list')}<span>Esquema</span></button>
+      <button type="button" class="lz-tool" data-do="ver" data-pane="canvas" aria-pressed="true">${icon('canvas')}<span>Lienzo</span></button>
     </div>
-    <button type="button" class="lz-tool lz-narrow-only" data-k="paleta" aria-expanded="false" aria-label="Agregar paso">${icon('plus')}<span>Agregar</span></button>
+    <button type="button" class="lz-tool lz-narrow-only" data-do="paleta" aria-expanded="false" aria-label="Agregar paso">${icon('plus')}<span>Agregar</span></button>
     <span class="lz-sep" aria-hidden="true"></span>
-    <button type="button" class="lz-tool lz-tool-icon" data-k="deshacer" aria-label="Deshacer" title="Deshacer (Ctrl+Z)">${icon('undo')}</button>
-    <button type="button" class="lz-tool lz-tool-icon" data-k="rehacer" aria-label="Rehacer" title="Rehacer (Ctrl+Mayús+Z)">${icon('redo')}</button>
-    <button type="button" class="lz-tool" data-k="acomodar" title="Acomoda los pasos por capas desde el Inicio">${icon('tidy')}<span>Acomodar</span></button>
+    <button type="button" class="lz-tool lz-tool-icon" data-do="deshacer" aria-label="Deshacer" title="Deshacer (Ctrl+Z)">${icon('undo')}</button>
+    <button type="button" class="lz-tool lz-tool-icon" data-do="rehacer" aria-label="Rehacer" title="Rehacer (Ctrl+Mayús+Z)">${icon('redo')}</button>
+    <button type="button" class="lz-tool" data-do="acomodar" title="Acomoda los pasos por capas desde el Inicio">${icon('tidy')}<span>Acomodar</span></button>
     <div class="lz-zoom lz-canvas-only" role="group" aria-label="Acercamiento">
       <span class="lz-sep" aria-hidden="true"></span>
-      <button type="button" class="lz-tool lz-tool-icon" data-k="alejar" aria-label="Alejar" title="Alejar (−)">${icon('minus')}</button>
+      <button type="button" class="lz-tool lz-tool-icon" data-do="alejar" aria-label="Alejar" title="Alejar (−)">${icon('minus')}</button>
       <output class="lz-zoom-n" data-slot="zoom" aria-label="Acercamiento">100 %</output>
-      <button type="button" class="lz-tool lz-tool-icon" data-k="acercar" aria-label="Acercar" title="Acercar (+)">${icon('plus')}</button>
-      <button type="button" class="lz-tool" data-k="ajustar" title="Ajustar a la vista (0)">${icon('fit')}<span>Ajustar</span></button>
+      <button type="button" class="lz-tool lz-tool-icon" data-do="acercar" aria-label="Acercar" title="Acercar (+)">${icon('plus')}</button>
+      <button type="button" class="lz-tool" data-do="ajustar" title="Ajustar a la vista (0)">${icon('fit')}<span>Ajustar</span></button>
     </div>
     <span class="lz-grow"></span>
-    <button type="button" class="lz-tool lz-chip" data-k="problemas" data-slot="problemas" data-level=""></button>
-    <button type="button" class="lz-tool" data-k="rendimiento" aria-pressed="false" title="Cifras por paso: cuántas personas entraron, completaron y se quedaron">${icon('chart')}<span>Rendimiento</span></button>
-    <button type="button" class="lz-tool" data-k="probar" aria-pressed="false" title="Probar el recorrido sin enviar nada">${icon('test')}<span>Probar</span></button>
+    <button type="button" class="lz-tool lz-chip" data-do="problemas" data-slot="problemas" data-level=""></button>
+    <button type="button" class="lz-tool" data-do="rendimiento" aria-pressed="false" title="Cifras por paso: cuántas personas entraron, completaron y se quedaron">${icon('chart')}<span>Rendimiento</span></button>
+    <button type="button" class="lz-tool" data-do="probar" aria-pressed="false" title="Probar el recorrido sin enviar nada">${icon('test')}<span>Probar</span></button>
     <span class="lz-state" data-slot="estado" role="status"></span>
-    ${hasSave ? html`<button type="button" class="lz-tool lz-primary" data-k="guardar">${icon('save')}<span>Guardar</span></button>` : ''}
+    ${hasSave ? html`<button type="button" class="lz-tool lz-primary" data-do="guardar">${icon('save')}<span>Guardar</span></button>` : ''}
   </div>
   <div class="lz-body">
     <nav class="lz-palette" data-slot="paleta" aria-label="Pasos que se pueden agregar">
       <div class="lz-palette-head">
         <h2 class="lz-palette-title">Agregar paso</h2>
-        <button type="button" class="lz-icon-btn lz-narrow-only" data-k="paleta" aria-label="Cerrar la lista de pasos">${icon('close')}</button>
+        <button type="button" class="lz-icon-btn lz-narrow-only" data-do="paleta" aria-label="Cerrar la lista de pasos">${icon('close')}</button>
       </div>
       <p class="lz-hint lz-wide-only">Clic: lo agrega después del paso seleccionado. También se puede arrastrar al lienzo.</p>
       ${PALETTE.map(
@@ -81,7 +77,7 @@ const shell = hasSave => html`<div class="lz-bar" role="toolbar" aria-label="Her
             ${group.types.map(type => {
               const def = typeOf(type);
               return html`<li>
-                <button type="button" class="lz-pal" data-k="paleta-tipo" data-type="${type}" title="${def.hint}">
+                <button type="button" class="lz-pal" data-do="paleta-tipo" data-type="${type}" title="${def.hint}">
                   <span class="lz-pill">${icon(def.icon)}</span><span>${def.label}</span>
                 </button>
               </li>`;
@@ -108,9 +104,12 @@ const shell = hasSave => html`<div class="lz-bar" role="toolbar" aria-label="Her
 export function mountCanvas(root, options = {}) {
   const doc = root.ownerDocument;
   const win = doc.defaultView;
-  ensureStyles(doc);
-  const uid = ids();
+  // Ids para unir cada etiqueta con su campo. Son estables (los mismos en cada repintado): es lo que permite a
+  // render() reconocer un campo y no pisar lo que la persona está tecleando.
+  const uid = typeof options.uid === 'function' ? options.uid : ids('lienzo');
   const pinned = Boolean(options.readOnly);
+  // Sin `onSave` no hay dónde guardar (una vista previa): la barra no habla de cambios pendientes.
+  const canSave = typeof options.onSave === 'function';
   let catalogue = options.catalogue || {};
   let settings = options.settings || {};
   const context = () => ({ ...catalogue, settings });
@@ -134,7 +133,7 @@ export function mountCanvas(root, options = {}) {
   };
 
   root.classList.add('lz');
-  render(root, shell(typeof options.onSave === 'function'));
+  render(root, shell(canSave));
   const slot = name => root.querySelector(`[data-slot="${name}"]`);
   const canvas = slot('lienzo');
   const outlineEl = slot('esquema');
@@ -144,7 +143,7 @@ export function mountCanvas(root, options = {}) {
   const ghost = slot('fantasma');
   const flashEl = slot('aviso');
   const voice = slot('voz');
-  const tool = name => root.querySelector(`.lz-bar [data-k="${name}"]`);
+  const tool = name => root.querySelector(`.lz-bar [data-do="${name}"]`);
 
   // ---- Avisos -----------------------------------------------------------------------------------------------------------
 
@@ -294,7 +293,7 @@ export function mountCanvas(root, options = {}) {
     canvas.hidden = pane !== 'canvas';
     slot('minimapa').hidden = pane !== 'canvas';
     outlineEl.hidden = pane !== 'outline';
-    for (const button of root.querySelectorAll('.lz-bar [data-k="ver"]'))
+    for (const button of root.querySelectorAll('.lz-bar [data-do="ver"]'))
       button.setAttribute('aria-pressed', button.dataset.pane === pane ? 'true' : 'false');
     if (pane === 'outline') outline.refresh();
     else fitOnce();
@@ -347,13 +346,13 @@ export function mountCanvas(root, options = {}) {
           ? 'Guardando…'
           : ui.saving === 'error'
             ? 'No se guardó'
-            : store.isDirty()
+            : canSave && store.isDirty()
               ? 'Sin guardar'
               : ui.saving === 'saved'
                 ? 'Guardado'
                 : '';
     if (state.textContent !== text) state.textContent = text;
-    state.dataset.level = ui.saving === 'error' ? 'error' : store.isDirty() && !pinned ? 'warn' : '';
+    state.dataset.level = ui.saving === 'error' ? 'error' : canSave && store.isDirty() && !pinned ? 'warn' : '';
     const saveButton = tool('guardar');
     if (saveButton)
       saveButton.setAttribute('aria-disabled', pinned || ui.saving === 'saving' || !store.isDirty() ? 'true' : 'false');
@@ -361,7 +360,7 @@ export function mountCanvas(root, options = {}) {
   }
 
   function save() {
-    if (typeof options.onSave !== 'function' || pinned || ui.saving === 'saving' || !store.isDirty()) return;
+    if (!canSave || pinned || ui.saving === 'saving' || !store.isDirty()) return;
     const sent = store.graph;
     ui.saving = 'saving';
     syncBar();
@@ -418,7 +417,7 @@ export function mountCanvas(root, options = {}) {
   let carry = null;
   const paletteDrag = [
     on(paletteEl, 'pointerdown', event => {
-      const button = closest(event.target, '[data-k="paleta-tipo"]');
+      const button = closest(event.target, '[data-do="paleta-tipo"]');
       if (!button || store.readOnly || (event.pointerType === 'mouse' && event.button !== 0)) return;
       carry = {
         id: event.pointerId,
