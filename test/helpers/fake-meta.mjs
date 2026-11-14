@@ -25,6 +25,7 @@ export async function startFakeMeta() {
   const sent = [];
   const downloads = [];
   const delays = { send: 0 };
+  const refuse = new Map(); // destinatario (o '*') → {code, message, status}: Meta rechaza sus envíos
   const held = { send: [], download: [] };
   const holding = { send: false, download: false };
   let n = 0;
@@ -140,6 +141,14 @@ export async function startFakeMeta() {
       }
       if ((match = url.pathname.match(/^\/v25\.0\/(\d+)\/messages$/)) && req.method === 'POST') {
         const body = JSON.parse(Buffer.concat(chunks).toString());
+        // rechazo de Meta para un destinatario (difusiones): {code, message, status?}; se anota igual que un envío
+        const refusal = refuse.get(body.to) ?? refuse.get('*');
+        if (refusal) {
+          sent.push({ from: match[1], refused: refusal.code, ...body });
+          return send(refusal.status ?? 400, {
+            error: { code: refusal.code, message: refusal.message ?? 'rechazado' },
+          });
+        }
         sent.push({ from: match[1], ...body });
         const id = 'wamid.out' + ++n;
         return gate('send', () =>
@@ -170,6 +179,7 @@ export async function startFakeMeta() {
     sent,
     downloads,
     delays,
+    refuse,
     hold(kind) {
       holding[kind] = true;
     },
