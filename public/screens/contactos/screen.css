@@ -1,0 +1,134 @@
+/*
+ * Estilos propios de la pantalla «Contactos» (lista a escala). Sólo la composición que el kit no trae, con
+ * el prefijo ct- y siempre con variables de public/tokens.css.
+ */
+
+.ct-herramientas {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.ct-buscar {
+  max-width: 440px;
+}
+
+.ct-rapidos {
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.ct-rapido {
+  border-radius: var(--radius-pill);
+  box-shadow: none;
+}
+
+.ct-rapido[aria-pressed='true'] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.ct-filtros > summary {
+  width: fit-content;
+  list-style: none;
+}
+
+.ct-filtros > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ct-filtros[open] > summary {
+  margin-bottom: var(--space-5);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* El resumen del filtro sólo ocupa sitio cuando dice algo. */
+.ct-herramientas > .k-hint:empty {
+  display: none;
+}
+
+.ct-aviso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.ct-chips {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ct-ficha {
+  gap: var(--space-8);
+}
+
+.ct-seccion {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.ct-seccion p {
+  margin: 0;
+}
+
+.ct-subtitulo {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.ct-datos {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.ct-dato {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: var(--space-5);
+  font-size: var(--font-md);
+}
+
+.ct-dato dt {
+  color: var(--text-3);
+}
+
+.ct-dato dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.ct-lista {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  font-size: var(--font-md);
+  list-style: none;
+}
+
+.ct-lista > li {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 680px) {
+  .ct-buscar {
+    max-width: none;
+  }
+
+  .ct-dato {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+}
