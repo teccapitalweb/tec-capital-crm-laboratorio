@@ -686,6 +686,10 @@ function insertMessage(c, user, text, kind, ref, attachmentId = null, flyer = nu
 // Respuestas automáticas v2 (server/replies.mjs): plan síncrono, proveedor de IA fuera de la transacción y confirmación
 // con revalidación. Un trabajo en vuelo no se vuelve a tomar; el resultado se descarta si el trabajo o el chat cambiaron.
 const jobsInFlight = new Set();
+// Arrendamiento del trabajo (docs/PLAN_RECEPCION_DURADERA.md): sigue «pending» mientras se atiende, y otro proceso no lo
+// toma hasta que el arrendamiento se suelta (al terminar) o vence (si el proceso murió a la mitad).
+const JOB_WORKER = randomUUID(),
+  JOB_LEASE_MS = 5 * 60_000;
 async function processJob(job) {
   jobsInFlight.add(job.id);
   try {
@@ -745,6 +749,14 @@ async function processJob(job) {
     jobFailed(job, error);
   } finally {
     jobsInFlight.delete(job.id);
+    try {
+      db.prepare('UPDATE jobs SET lease_owner=NULL,lease_until=NULL WHERE id=? AND lease_owner=?').run(
+        job.id,
+        JOB_WORKER,
+      );
+    } catch (e) {
+      console.error('Automation job release failed', e.name); // el arrendamiento vencerá por su cuenta
+    }
   }
 }
 const JOB_MAX_ATTEMPTS = 5,
@@ -782,13 +794,20 @@ function jobFailed(job, error) {
   }
 }
 function processJobs() {
+  const t = Date.now();
   const jobs = db
     .prepare(
-      "SELECT * FROM jobs WHERE state='pending' AND due_at<=? AND (next_attempt_at IS NULL OR next_attempt_at<=?) LIMIT 15",
+      "SELECT * FROM jobs WHERE state='pending' AND due_at<=? AND (next_attempt_at IS NULL OR next_attempt_at<=?) AND (lease_until IS NULL OR lease_until<=?) ORDER BY rowid LIMIT 15",
     )
-    .all(Date.now(), Date.now());
+    .all(t, t, t);
   for (const job of jobs) {
     if (jobsInFlight.has(job.id)) continue;
+    const claimed = db
+      .prepare(
+        "UPDATE jobs SET lease_owner=?,lease_until=? WHERE id=? AND state='pending' AND (lease_until IS NULL OR lease_until<=?)",
+      )
+      .run(JOB_WORKER, t + JOB_LEASE_MS, job.id, t).changes;
+    if (!claimed) continue; // otro proceso lo tomó
     processJob(job);
   }
 }
