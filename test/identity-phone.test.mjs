@@ -49,6 +49,10 @@ const dataOf = db => ({
   identities: rows(db, 'SELECT * FROM person_identities ORDER BY kind,value'),
   candidates: rows(db, 'SELECT * FROM person_candidates ORDER BY person_a,person_b'),
 });
+// Las filas de después, sólo con las columnas que ya existían antes: así la comparación no depende de las columnas
+// que añada otra migración (la primera, `phone_key`).
+const original = (after, before) =>
+  after.map(row => Object.fromEntries(Object.keys(before[0]).map(column => [column, row[column]])));
 const keyOf = (db, id) => db.prepare('SELECT phone_key FROM contacts WHERE id=?').get(id).phone_key;
 // La regla que debe cumplir cualquier base: la clave guardada es la del teléfono guardado.
 function assertKeysInSync(db) {
@@ -181,14 +185,17 @@ function assertPersonsFixed(db, before) {
   assert.equal(ownerOf('+5215588889999'), 'p-vista-b');
   assert.equal(phoneOf('p-vista-b'), '+525588889999');
   assert.deepEqual(
-    after.candidates.filter(c => c.person_a === 'p-vista-a'),
+    original(
+      after.candidates.filter(c => c.person_a === 'p-vista-a'),
+      before.candidates,
+    ),
     before.candidates.filter(c => c.person_a === 'p-vista-a'),
   );
   assert.equal(after.candidates.length, before.candidates.length + 1, 'una sola candidatura nueva');
   assert.equal(after.identities.length, before.identities.length, 'ninguna identidad se crea ni se borra');
   // de la persona sólo cambia el teléfono: ni la revisión ni las fechas
   const rest = list => list.map(({ phone, ...other }) => other);
-  assert.deepEqual(rest(after.persons), rest(before.persons));
+  assert.deepEqual(rest(original(after.persons, before.persons)), rest(before.persons));
   assert.deepEqual(
     after.persons.filter((p, i) => p.phone !== before.persons[i].phone).map(p => p.id),
     ['p-ambas', 'p-vista-b', 'p-wa', 'p-wa2'],
@@ -347,10 +354,7 @@ test('migración identity/0001: una base poblada en la 41 gana la clave de cada 
 
   // los datos originales, intactos: del contacto sólo cambia la columna nueva (ni el teléfono ni las fechas)
   const after = dataOf(db);
-  assert.deepEqual(
-    after.contacts.map(({ phone_key, ...original }) => original),
-    before.contacts,
-  );
+  assert.deepEqual(original(after.contacts, before.contacts), before.contacts);
   assertPersonsFixed(db, before);
 
   // el índice sirve para «contacto de esta marca con esta clave» (parcial: la consulta excluye la clave vacía)
@@ -471,10 +475,7 @@ test('arranque real: el servidor migra una base poblada en la 41 con un respaldo
 
   // la base viva: claves, datos originales y personas
   for (const [id, phone, key, why] of FORMATS) assert.equal(keyOf(db, id), key, `${why}: «${phone}»`);
-  assert.deepEqual(
-    dataOf(db).contacts.map(({ phone_key, ...original }) => original),
-    before.contacts,
-  );
+  assert.deepEqual(original(dataOf(db).contacts, before.contacts), before.contacts);
   assertPersonsFixed(db, before);
   assertKeysInSync(db);
 
@@ -778,6 +779,20 @@ test('alta, edición, fusión e históricos mantienen la clave; quien se captur�
   const foreign = await create('Captura Extranjera', '1 (415) 555-0109', 'dermalysse');
   assert.equal(row(foreign).phone_key, '14155550109');
   assert.equal(row(foreign).persona_id, waContact('14155550109').persona_id);
+  // y el duplicado reconocido se resuelve con la fusión de siempre: queda un contacto, una persona y un solo dueño
+  // del teléfono, sin candidatura pendiente
+  await merge(wa.id, manual);
+  assert.deepEqual([row(wa.id).phone, row(wa.id).phone_key], ['+525512345678', '525512345678']);
+  assert.deepEqual(rows(db, "SELECT person_id FROM person_identities WHERE kind='phone' AND value='+525512345678'"), [
+    { person_id: wa.persona_id },
+  ]);
+  assert.equal(db.prepare('SELECT count(*) n FROM persons WHERE id=?').get(pair.find(id => id !== wa.persona_id)).n, 0);
+  assert.equal(
+    (await call('/api/persons/candidates', admin.cookie)).candidates.some(
+      c => pair.includes(c.person_a) || pair.includes(c.person_b),
+    ),
+    false,
+  );
 
   // ---- al final, ningún contacto tiene una clave distinta de la de su teléfono
   assert.ok(assertKeysInSync(db) >= 15);
