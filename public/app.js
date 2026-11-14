@@ -778,6 +778,10 @@
       if (socket !== thisSocket) return;
       try {
         const event = JSON.parse(e.data);
+        if (event.v === 2) {
+          window.TC?.screens?.notify?.(event); // sobres v2: son de las pantallas nuevas y aquí no recargan nada
+          return;
+        }
         if (event.type === 'typing') {
           if (event.userId !== state.user.id) {
             state.typing[event.conversationId] = { name: event.name, until: event.expiresAt };
