@@ -55,7 +55,7 @@ Un teléfono bien escrito da lo mismo que antes. Cambia esto (la prueba compara 
 - `521…` y `52…` del mismo número siguen siendo dos clientes de WhatsApp si Meta entregara los dos identificadores (también I-2).
 - Los contactos de WhatsApp anteriores conservan `+521…` en `phone` (su clave ya es la canónica); los nuevos guardan `+52…`. La cabecera del chat sigue mostrando el identificador de WhatsApp.
 - Una identidad `+521…` que no se pudo mover (conflicto, o la persona ya tenía la canónica) se queda guardada; sólo la ve administración y ninguna búsqueda vuelve a producirla.
-- Lo que no es un teléfono queda sin clave: no cuenta para duplicados ni une personas. Antes bastaban siete dígitos iguales para aparecer en Duplicados.
+- Lo que no es un teléfono queda sin clave: no cuenta para duplicados ni une personas. Antes bastaban siete dígitos iguales para aparecer en Duplicados. Una persona cuyo teléfono guardado ya no pasa la regla (por ejemplo `1234567890`) pide corregirlo o vaciarlo la próxima vez que se edite en Personas.
 - No se recalcula la identidad de persona de contactos antiguos cuyo teléfono antes no se reconocía (extranjero sin «+»): se reclama cuando el contacto se vuelve a guardar.
 - Diez dígitos sin «+» se leen como un número de México.
 - Si se revierte el despliegue, el código anterior sigue funcionando (la columna tiene valor por omisión), pero el contacto que cree queda sin clave y el que edite, con la de antes, hasta que otra migración repita el relleno.
