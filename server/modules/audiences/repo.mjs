@@ -298,7 +298,6 @@ export function createRepo(db) {
       typeof id === 'string' ? (one('SELECT brand_id FROM audiences WHERE id = ?', id)?.brand_id ?? null) : null,
     tags: brandId => all('SELECT id, name FROM contact_tags WHERE brand_id = ? ORDER BY name_key, id', brandId),
     courses: brandId => all('SELECT id, title FROM courses WHERE brand_id = ? ORDER BY title, id', brandId),
-    stages: () => all("SELECT DISTINCT stage FROM opportunities WHERE stage <> '' ORDER BY stage"),
 
     list(brandId, { archived = false } = {}) {
       return all(
@@ -404,7 +403,7 @@ export function createRepo(db) {
     // ---- miembros de una lista (componibles: sin transacción propia)
 
     // Añade los contactos de la marca que no estaban; los de otra marca o inexistentes se ignoran. Devuelve cuántos
-    // entraron. `max` corta lo que pase del tope de la lista.
+    // entraron. `room` corta lo que pase del tope de la lista.
     addMembers(
       brandId,
       audienceId,
@@ -482,8 +481,6 @@ export function createRepo(db) {
       );
       return added;
     },
-    isMember: (audienceId, contactId) =>
-      Boolean(one('SELECT 1 FROM audience_members WHERE audience_id = ? AND contact_id = ?', audienceId, contactId)),
     memberInfo: (audienceId, ids) =>
       ids.length
         ? all(
