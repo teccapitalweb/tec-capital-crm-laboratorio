@@ -299,7 +299,7 @@
       ['Cuenta', ['settings']],
     ];
     for (const screen of window.TC?.screens.menu(state.user.role) ?? []) {
-      by[screen.id] = btn(screen.id, esc(screen.nav.icon), esc(screen.title), esc(screen.nav.label));
+      by[screen.id] = btn(screen.id, esc(screen.nav.icon), esc(screen.nav.label)); // el nombre del menú es el que se lee y se ve
       const group = groups.find(([title]) => title === screen.nav.group);
       if (group) group[1].push(screen.id);
       else groups.splice(groups.length - 1, 0, [esc(screen.nav.group), [screen.id]]); // un grupo nuevo va antes de Cuenta
