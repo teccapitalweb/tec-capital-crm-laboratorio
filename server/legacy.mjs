@@ -2,6 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { parseCsv } from './catalogue-import.mjs';
 import { normalizePhone } from './persons-schema.mjs';
+import { phoneKey } from './lib/identity-keys.mjs';
 
 // Puente con IPCIL (Fase 2 · bloque 2.8). Mientras no exista el IPCIL nuevo, los históricos del panel actual (Firebase)
 // entran por archivo JSON o CSV con los nombres de campo del propio panel (alumnos, cursos, aperturas, certificados,
@@ -374,8 +375,8 @@ export function createLegacy({ db, crm, persons, events, body, json, audit, broa
     const id = randomUUID(),
       t = now();
     db.prepare(
-      "INSERT INTO contacts(id,brand_id,name,phone,email,source,created_at,updated_at) VALUES(?,?,?,?,?,'ipcil',?,?)",
-    ).run(id, brandId, name, phone || '', email || '', t, t);
+      "INSERT INTO contacts(id,brand_id,name,phone,phone_key,email,source,created_at,updated_at) VALUES(?,?,?,?,?,?,'ipcil',?,?)",
+    ).run(id, brandId, name, phone || '', phoneKey(phone) ?? '', email || '', t, t);
     const c = db.prepare('SELECT * FROM contacts WHERE id=?').get(id),
       attached = persons.attach(c, 'ipcil');
     return {

@@ -439,7 +439,8 @@ test('WhatsApp real de punta a punta con un Meta de mentira: entra un mensaje, s
   const waContact = db
     .prepare('SELECT * FROM contacts WHERE source_user_id=? AND brand_id=?')
     .get(person.id, 'globalvet');
-  assert.equal(waContact.phone, '+5215512345678');
+  assert.equal(waContact.phone, '+525512345678', 'el contacto guarda el teléfono canónico, sin el 1 de «521…»');
+  assert.equal(waContact.phone_key, '525512345678');
   assert.ok(
     db.prepare("SELECT 1 FROM persons WHERE id=? AND phone!=''").get(waContact.persona_id),
     'la persona del contacto conoce su teléfono',
