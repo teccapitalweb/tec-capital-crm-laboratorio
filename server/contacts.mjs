@@ -3,6 +3,7 @@ import { transaction } from './database.mjs';
 import { cancelConversationSteps } from './automation.mjs';
 import { phoneKey } from './lib/identity-keys.mjs';
 import { createPersonData, moveRows } from './lib/person-data.mjs';
+import { withStatementCache } from './lib/statement-cache.mjs';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const norm = v =>
@@ -39,6 +40,8 @@ export function createContacts({
   personData = null,
   now = Date.now,
 }) {
+  // Cada sentencia se prepara una vez (server/lib/statement-cache.mjs): una importación llama aquí miles de veces.
+  db = withStatementCache(db);
   // Registro de tablas ligadas a la persona (server/lib/person-data.mjs). Sin él (pruebas con esquema parcial) se usa
   // uno propio con sólo las tablas de este módulo.
   const registry = personData ?? createPersonData({ db });
@@ -151,6 +154,49 @@ export function createContacts({
       return ids;
     });
   }
+  // Etiquetas componibles (conciliación técnica, fila 17): para la importación y, después, la API y las difusiones.
+  // Sin transacción propia, sin permisos (los comprueba quien llama) y sin avisos: una importación no publica un
+  // evento por contacto. `ensureTag` devuelve la etiqueta de ese nombre en la marca, creándola si falta.
+  function ensureTag(brandId, name, actorId = null) {
+    const clean = text(name, 30);
+    if (!clean) throw Object.assign(fail(400, 'La etiqueta no tiene nombre.'), { code: 'tag_invalid' });
+    const key = norm(clean);
+    const found = db.prepare('SELECT id,name FROM contact_tags WHERE brand_id=? AND name_key=?').get(brandId, key);
+    if (found) return { id: found.id, name: found.name, created: false };
+    if (db.prepare('SELECT count(*) n FROM contact_tags WHERE brand_id=?').get(brandId).n >= MAX_TAGS_PER_BRAND)
+      throw Object.assign(fail(409, 'Esta marca ya tiene el máximo de etiquetas (' + MAX_TAGS_PER_BRAND + ').'), {
+        code: 'tag_limit',
+      });
+    const id = randomUUID();
+    db.prepare(
+      "INSERT INTO contact_tags(id,brand_id,name,name_key,color,created_by,created_at) VALUES(?,?,?,?,'neutral',?,?)",
+    ).run(id, brandId, clean, key, actorId, now());
+    return { id, name: clean, created: true };
+  }
+  // Devuelven true si cambiaron algo. La etiqueta debe ser de la marca del contacto.
+  function addTag(contactId, tagId, actorId = null) {
+    const ok = db
+      .prepare('SELECT 1 FROM contacts c JOIN contact_tags t ON t.brand_id=c.brand_id WHERE c.id=? AND t.id=?')
+      .get(contactId, tagId);
+    if (!ok) throw Object.assign(fail(400, 'Etiqueta no válida para la marca del contacto.'), { code: 'tag_invalid' });
+    if (db.prepare('SELECT 1 FROM contact_tag_links WHERE contact_id=? AND tag_id=?').get(contactId, tagId))
+      return false;
+    if (
+      db.prepare('SELECT count(*) n FROM contact_tag_links WHERE contact_id=?').get(contactId).n >= MAX_TAGS_PER_CONTACT
+    )
+      throw Object.assign(fail(400, 'Máximo ' + MAX_TAGS_PER_CONTACT + ' etiquetas por contacto.'), {
+        code: 'tag_limit',
+      });
+    db.prepare('INSERT INTO contact_tag_links(contact_id,tag_id,created_by,created_at) VALUES(?,?,?,?)').run(
+      contactId,
+      tagId,
+      actorId,
+      now(),
+    );
+    return true;
+  }
+  const removeTag = (contactId, tagId) =>
+    db.prepare('DELETE FROM contact_tag_links WHERE contact_id=? AND tag_id=?').run(contactId, tagId).changes > 0;
 
   // ---- consentimiento y baja
   const STATUS = ['unknown', 'opted_in', 'opted_out'];
@@ -653,6 +699,11 @@ export function createContacts({
     recordInbound,
     consentOf,
     setConsent,
+    // Componibles (sin transacción ni permisos): importación de contactos y, después, la API de escritura.
+    writeConsent,
+    ensureTag,
+    addTag,
+    removeTag,
     listTags,
     createTag,
     updateTag,

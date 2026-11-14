@@ -3,6 +3,7 @@ import { transaction } from './database.mjs';
 import { cancelConversationSteps } from './automation.mjs';
 import { normalizePhone, normalizeEmail, normalizeName } from './persons-schema.mjs';
 import { phoneKey } from './lib/identity-keys.mjs';
+import { withStatementCache } from './lib/statement-cache.mjs';
 
 // Identidad única de persona (Fase 2 · bloque 2.2). Cada contacto por marca cuelga de una persona; las identidades
 // (perfil del laboratorio, teléfono E.164, correo) unen automáticamente entre marcas; cuando sólo coincide el nombre o
@@ -25,6 +26,8 @@ export function createPersons({
   personData = null,
   now = Date.now,
 }) {
+  // Cada función de aquí prepara su SQL al llamarse; con miles de filas (importación) se preparan una sola vez.
+  db = withStatementCache(db);
   const get = id => db.prepare('SELECT * FROM persons WHERE id=?').get(id);
   const roleOf = user => db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);
   const requireStaff = user => {
@@ -119,7 +122,9 @@ export function createPersons({
       );
   }
   // Resuelve (o crea) la persona de un contacto a partir de sus identidades. Dentro de la transacción del llamador.
-  function attach(contact, source = 'contact') {
+  // `candidates: false` (importación en lote): no busca personas con el mismo nombre completo. Esa consulta recorre
+  // la tabla de personas y, con miles de filas, haría lenta la importación; la revisión por nombre sigue al editar.
+  function attach(contact, source = 'contact', { candidates = true } = {}) {
     const c = typeof contact === 'string' ? db.prepare('SELECT * FROM contacts WHERE id=?').get(contact) : contact;
     if (!c) return null;
     const phone = normalizePhone(c.phone),
@@ -154,7 +159,7 @@ export function createPersons({
     if (c.persona_id !== pid) db.prepare('UPDATE contacts SET persona_id=? WHERE id=?').run(pid, c.id);
     // Mismo nombre completo en otra persona: candidatura para revisar (nunca une sola).
     const n = normalizeName(c.name);
-    if (n.includes(' '))
+    if (candidates && n.includes(' '))
       for (const o of db
         .prepare('SELECT id FROM persons WHERE id!=? AND lower(name)=?')
         .all(pid, c.name.trim().toLowerCase()))
