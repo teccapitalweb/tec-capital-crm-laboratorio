@@ -133,7 +133,7 @@ public/screens/<id>/screen.css        opcional
 - **`visibility`**: `"preview"` (por omisión) sólo aparece con `SCREENS_PREVIEW=1`, que se usa al desarrollar y en las pruebas; `"live"` aparece siempre. Una pantalla puede estar en `main` sin verse en producción hasta que se decide publicarla.
 - `nav` es opcional (sin él la pantalla no sale en el menú); `permission` es opcional (clave del catálogo de permisos, además de `roles`). La lista no es un secreto: el permiso real lo impone cada API.
 - Una carpeta sin `screen.json` todavía no es una pantalla y se ignora.
-- El contrato de `index.js` (`mount(root, ctx)`, `onEvent`), el kit (`public/kit/`) y las variables de diseño (`public/tokens.css`) llegan con la entrega del kit, que traerá su propia guía de pantallas (`docs/GUIA_PANTALLAS.md`; todavía sin publicar). Las reglas de Niebla que toda pantalla debe cumplir están en [DISENO_Y_AUDITORIA.md](DISENO_Y_AUDITORIA.md).
+- El contrato de `index.js` (`mount(root, ctx)`, `onEvent`), el kit (`public/kit/`), las variables de diseño (`public/tokens.css`) y cómo empezar una pantalla copiando `public/screens/ejemplo/` están en [GUIA_PANTALLAS.md](GUIA_PANTALLAS.md). Las reglas de Niebla que toda pantalla debe cumplir, en [DISENO_Y_AUDITORIA.md](DISENO_Y_AUDITORIA.md).
 
 Los archivos estáticos se sirven por carpeta: cualquier archivo de `public/` con ruta en minúsculas y extensión `.js`, `.css`, `.svg`, `.png`, `.webmanifest`, `.json` o `.woff2`, salvo `flyers/` (se sirven con sesión) y la portada por su nombre. Llevan `Cache-Control: no-cache` y `ETag`: el navegador pregunta siempre y, tras un despliegue, la primera carga ya trae el código nuevo.
 
