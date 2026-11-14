@@ -142,7 +142,7 @@ Los archivos estáticos se sirven por carpeta: cualquier archivo de `public/` co
 ## 4. Antes de entregar
 
 ```sh
-npm run check     # codificación, sintaxis y formato (Prettier)
+npm run check     # codificación, sintaxis, reglas (ESLint) y formato (Prettier)
 npm test
 npm run test:ui   # pruebas de humo en un navegador real, en computadora y en celular
 ```
