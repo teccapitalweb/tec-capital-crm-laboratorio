@@ -101,7 +101,8 @@ test('con espera 0 el webhook responde «en cola» y el mensaje entra después; 
   assert.notEqual(inboxRow('wamid.maria-1').lane, inboxRow('wamid.luis-1').lane);
   assert.equal(inboxRow('wamid.maria-1').lane.includes('5512345678'), false);
   assert.ok(JSON.parse(inboxRow('wamid.maria-2').payload).event.data.text, 'mientras espera conserva su carga');
-  assert.equal(JSON.parse(inboxRow('wamid.maria-2').payload).v, '1.0', 'con la versión del contrato con la que llegó');
+  // contrato de canal 1.1 (docs/PLAN_CONTRATO_CANAL.md): la versión cambió a propósito; el lector acepta también 1.0
+  assert.equal(JSON.parse(inboxRow('wamid.maria-2').payload).v, '1.1', 'con la versión del contrato con la que llegó');
 
   meta.release('download');
   await until(() => mine('maria').length === 2, 'entran los dos mensajes de María', { logs: state.server.logs });
