@@ -16,8 +16,9 @@ const KEY = /^[a-zñ_][a-z0-9ñ_]*(?:\.[a-z0-9ñ_]+){0,2}$/;
 const NUMBER = /^\d{1,3}$/;
 // La virgulilla de la ñ es parte de la letra; los demás acentos de un nombre de dato se ignoran.
 const TILDE = String.fromCharCode(0x303);
-// La misma expresión con la que Contenido rechaza un importe escrito a mano.
-const AMOUNT = /\$\s?\d|\d[\d.,]*\s?(?:pesos|mxn|usd)\b/i;
+// Un importe escrito a mano: «$379», «379 pesos», «1,500.00 MXN». Acepta lo mismo que la expresión de Contenido, pero
+// cada cifra se lee una sola vez desde su inicio: un texto con miles de dígitos no cuesta más que uno corto.
+const AMOUNT = /\$\s?\d|(?<![\d.,])[.,]*\d[\d.,]*\s?(?:pesos|mxn|usd)\b/i;
 
 export const PARAM_MAX_LENGTH = 200;
 
@@ -216,19 +217,27 @@ function resolve(token, { values, fallbacks, known, shape }) {
 const shaper = (forTemplate, maxLength) =>
   forTemplate ? value => (value === null ? null : cleanParam(value, { maxLength }) || null) : value => value;
 
+const isGap = char => char === ' ' || char === '\t';
+
 // Escribe el texto pieza a pieza. Al quitar un dato vacío se lleva la coma que lo precedía y no deja espacios dobles
-// ni un espacio antes del signo de cierre: «¡Hola, {{nombre}}!» queda «¡Hola!».
+// ni un espacio antes del signo de cierre: «¡Hola, {{nombre}}!» queda «¡Hola!». Sólo mira el final de lo ya escrito,
+// para que un texto con muchos datos vacíos no se recorra entero cada vez.
 function writer() {
-  let out = '';
+  const parts = [];
   let removed = false;
   let space = false;
+  const lastChar = () => {
+    for (let at = parts.length - 1; at >= 0; at--) if (parts[at] !== '') return parts[at].at(-1);
+    return '';
+  };
   return {
     write(piece) {
       if (!removed) {
-        out += piece;
+        parts.push(piece);
         return;
       }
-      const atStart = out === '' || /[\n¡¿(«]$/.test(out);
+      const last = lastChar();
+      const atStart = last === '' || '\n¡¿(«'.includes(last);
       const body = atStart ? piece.replace(/^[ \t]*[,;:]?[ \t]*/, '') : piece;
       const lead = /^[ \t]*/.exec(body)[0];
       const rest = body.slice(lead.length);
@@ -237,16 +246,26 @@ function writer() {
         return;
       }
       const glued = atStart || /^[,.;:!?)»\r\n]/.test(rest);
-      out += (glued || !(lead || space) ? '' : ' ') + rest;
+      parts.push((glued || !(lead || space) ? '' : ' ') + rest);
       removed = false;
       space = false;
     },
     remove() {
-      space ||= /[ \t]$/.test(out);
-      out = out.replace(/,?[ \t]*$/, '');
       removed = true;
+      while (parts.length) {
+        const piece = parts.at(-1);
+        let end = piece.length;
+        while (end > 0 && isGap(piece[end - 1])) end--;
+        space ||= end < piece.length;
+        if (end === 0) {
+          parts.pop();
+          continue;
+        }
+        parts[parts.length - 1] = piece.slice(0, piece[end - 1] === ',' ? end - 1 : end);
+        return;
+      }
     },
-    text: () => out,
+    text: () => parts.join(''),
   };
 }
 

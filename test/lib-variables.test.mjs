@@ -285,6 +285,52 @@ test('validate y hasWrittenAmount: un importe escrito a mano se rechaza cuando s
     assert.equal(hasWrittenAmount(text), false, String(text));
 });
 
+test('hasWrittenAmount: acepta y rechaza exactamente lo mismo que la expresión de Contenido', () => {
+  // La expresión de `server/content.mjs`, copiada: es la regla que este módulo debe conservar.
+  const original = /(\$\s?\d|\d[\d.,]*\s?(pesos|mxn|usd)\b)/i;
+  for (const text of [
+    '.5 pesos',
+    ',5 mxn',
+    '5,, pesos',
+    '1.2.3 usd',
+    '5pesos',
+    '5  pesos',
+    '5\npesos',
+    '5 pesosx',
+    'x5 usd',
+    '$,5',
+    '..',
+    '5.',
+  ])
+    assert.equal(hasWrittenAmount(text), original.test(text), text);
+  const next = random(21);
+  const pieces = ['1', '5', '0', '.', ',', ' ', ' ', '$', 'pesos', 'PESOS', 'mxn', 'usd', 'x', '\n', 'peso', 'a'];
+  for (let round = 0; round < 5000; round++) {
+    let text = '';
+    for (let i = 0; i < Math.floor(next() * 10); i++) text += pick(next, pieces);
+    assert.equal(hasWrittenAmount(text), original.test(text), JSON.stringify(text));
+  }
+});
+
+test('entradas desmedidas: el trabajo crece con el largo del texto, no con su cuadrado', { timeout: 120_000 }, () => {
+  // Con un algoritmo cuadrático estos casos tardan medio minuto cada uno (medido); el margen es amplio a propósito.
+  const started = Date.now();
+  assert.equal(hasWrittenAmount('1'.repeat(200_000)), false);
+  assert.equal(hasWrittenAmount('1.'.repeat(100_000) + ' pesos'), true);
+  assert.equal(hasWrittenAmount(','.repeat(200_000)), false);
+  const many = 'Hola, {{nombre}} y {{curso}}. '.repeat(20_000);
+  const removed = render(many, {}, { onMissing: 'remove' });
+  assert.deepEqual(removed.missing, ['nombre', 'curso']);
+  // Se compara con `===` para que un fallo no imprima medio millón de caracteres.
+  assert.ok(removed.text === 'Hola y. '.repeat(20_000), removed.text.slice(0, 40));
+  assert.ok(render(many, { nombre: 'Ana', curso: 'Aves' }).text === 'Hola, Ana y Aves. '.repeat(20_000));
+  assert.equal(extract(many).length, 40_000);
+  assert.equal(extract('{{'.repeat(100_000)).length, 0);
+  assert.deepEqual(validate('{{' + 'a'.repeat(200_000), CATALOGUE), ['Hay llaves sin cerrar en el texto.']);
+  assert.equal(cleanParam(' x '.repeat(100_000)), 'x '.repeat(100).trimEnd());
+  assert.ok(Date.now() - started < 5000, `tardó ${Date.now() - started} ms`);
+});
+
 // ---- Sustituir
 
 test('render: sustituye por nombre, con valores planos, anidados, en un Map o por función', () => {
@@ -481,6 +527,12 @@ test("render con onMissing 'remove': el dato vacío se va con su coma y sin deja
     ['{{curso}}, {{nombre}}.', 'Aves.'],
     ['Tu curso: {{curso}}. Inicio: {{fecha}}', 'Tu curso: Aves. Inicio:'],
     ['{{a b}} y {{1}}', 'y'],
+    // Los tabuladores cuentan como espacio; lo que ya se escribió con valor no se vuelve a tocar.
+    ['Hola,\t{{nombre}}!', 'Hola!'],
+    ['Hola\t{{nombre}}\tbienvenido', 'Hola bienvenido'],
+    ['Hola, {{curso}} {{nombre}}!', 'Hola, Aves!'],
+    ['Curso {{curso}},{{nombre}} bienvenido', 'Curso Aves bienvenido'],
+    ['A {{nombre}} B{{apellido}}C', 'A BC'],
   ];
   for (const [text, want] of cases) {
     const result = render(text, { curso: 'Aves' }, { onMissing: 'remove' });
