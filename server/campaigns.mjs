@@ -19,6 +19,7 @@ export const STAGES = ['nuevo', 'interesado', 'inscripcion', 'ganada', 'perdida'
 export const CHANNELS = ['whatsapp', 'instagram', 'facebook'];
 export const REASONS = {
   opted_out: 'Pidió la baja',
+  suppressed: 'Está en una lista de exclusión de la marca',
   no_consent: 'Sin consentimiento registrado',
   conversation_closed: 'La conversación está cerrada',
   human_control: 'Lo atiende una persona del equipo',
@@ -58,6 +59,12 @@ export function createCampaigns({
   // administración los tiene, como antes; cuando haya roles, este módulo no cambia.
   const access = createAccess({ db, crm });
   const conv = id => db.prepare('SELECT * FROM conversations WHERE id=?').get(id);
+  // Audiencias (server/modules/audiences, docs/PLAN_AUDIENCIAS.md): el módulo se crea después de este servicio y se
+  // presta con useAudiences(). Sin él, un público por audiencia no se acepta y nada más cambia.
+  let audiences = null;
+  function useAudiences(source) {
+    audiences = source;
+  }
   const defaults = b => ({
     brand_id: b,
     enabled: 0,
@@ -99,6 +106,11 @@ export function createCampaigns({
   function normalizeSegment(input, brandId) {
     const s = input && typeof input === 'object' && !Array.isArray(input) ? input : {},
       out = {};
+    // Una audiencia (lista o segmento) de la marca como público; se combina con los demás filtros.
+    if (s.audienceId !== undefined && s.audienceId !== null) {
+      if (!audiences) throw fail(400, 'Las audiencias no están disponibles.');
+      out.audienceId = audiences.check(brandId, s.audienceId);
+    }
     if (s.tagIds !== undefined) {
       if (!Array.isArray(s.tagIds) || s.tagIds.length < 1 || s.tagIds.length > 10)
         throw fail(400, 'Elige de una a diez etiquetas.');
@@ -161,6 +173,11 @@ export function createCampaigns({
       where.push('v.channel=?');
       args.push(seg.channel);
     }
+    if (seg.audienceId && audiences) {
+      const member = audiences.memberSql(camp.brand_id, seg.audienceId, { alias: 'c' });
+      where.push(member.sql);
+      args.push(...member.args);
+    }
     if (seg.tagIds) {
       where.push(`c.id IN (SELECT contact_id FROM contact_tag_links WHERE tag_id IN (${ph(seg.tagIds)}))`);
       args.push(...seg.tagIds);
@@ -181,6 +198,8 @@ export function createCampaigns({
   }
   // Reglas de elegibilidad, las mismas en la vista previa, el lanzamiento y justo antes de cada envío.
   function judge(row, camp, ctx) {
+    // Las listas de exclusión de la marca se restan siempre, sea cual sea el público.
+    if (audiences?.suppressed(camp.brand_id, row.contact_id)) return 'suppressed';
     const consent = consentOf(row.contact_id)?.status || 'unknown';
     if (consent === 'opted_out') return 'opted_out';
     if (camp.require_consent && consent !== 'opted_in') return 'no_consent';
@@ -750,6 +769,7 @@ export function createCampaigns({
     handle,
     settings,
     normalizeSegment,
+    useAudiences,
     get: id => view(get(id)),
   };
 }

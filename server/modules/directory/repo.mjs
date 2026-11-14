@@ -23,7 +23,8 @@ export const CONSENTS = Object.freeze([
 // Campos del contacto para la gramática común de condiciones (server/lib/conditions.mjs), ámbito «contact». Las
 // expresiones usan los alias de la consulta de la lista: `c` (contacts), `s` (contact_search) y `k` (contact_consent).
 // Lo que pregunta por intereses o etiquetas va en su propia subconsulta, así que repetir un campo no choca.
-export const CONTACT_FIELDS = defineFields([
+// Las declaraciones sueltas sirven a otros módulos (audiencias) para combinarlas con sus propios campos.
+export const CONTACT_FIELD_DECLARATIONS = Object.freeze([
   { key: 'name', type: 'text', label: 'Nombre', sql: 'c.name', ops: ['contains', 'not_contains', 'starts_with', 'eq'] },
   {
     key: 'email',
@@ -93,6 +94,7 @@ export const CONTACT_FIELDS = defineFields([
     ops: ['after', 'before', 'between', 'in_last_days', 'not_in_last_days'],
   },
 ]);
+export const CONTACT_FIELDS = defineFields(CONTACT_FIELD_DECLARATIONS);
 
 // Columna de contact_search por la que ordena cada orden de la lista.
 export const SORTS = Object.freeze({ name: 's.name_key', created: 's.created_at', activity: 's.activity_at' });
