@@ -7,10 +7,11 @@
 //   import contacts from './named/contacts/index.mjs';
 //   export const NAMED = defineRegistry([...contacts, ...perf]);
 import { defineRegistry } from './named.mjs';
+import attributes from './named/attributes/index.mjs';
 import contacts from './named/contacts/index.mjs';
 import identity from './named/identity/index.mjs';
 import inbox from './named/inbox/index.mjs';
 import queues from './named/queues/index.mjs';
 
 // «contacts» va después de «identity» aunque el alfabeto diga otra cosa: su búsqueda usa la clave de teléfono.
-export const NAMED = defineRegistry([...identity, ...contacts, ...inbox, ...queues]);
+export const NAMED = defineRegistry([...attributes, ...identity, ...contacts, ...inbox, ...queues]);

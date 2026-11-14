@@ -2,6 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { cancelConversationSteps } from './automation.mjs';
 import { phoneKey } from './lib/identity-keys.mjs';
+import { createPersonData, moveRows } from './lib/person-data.mjs';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const norm = v =>
@@ -35,8 +36,12 @@ export function createContacts({
   broadcast,
   events = null,
   persons = null,
+  personData = null,
   now = Date.now,
 }) {
+  // Registro de tablas ligadas a la persona (server/lib/person-data.mjs). Sin él (pruebas con esquema parcial) se usa
+  // uno propio con sólo las tablas de este módulo.
+  const registry = personData ?? createPersonData({ db });
   const requireAdmin = user => {
     const u = db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);
     if (!u || u.disabled || u.role !== 'admin') throw fail(403, 'Esta acción requiere un administrador.');
@@ -286,29 +291,9 @@ export function createContacts({
     const keep = contactOf(keepId, user),
       merge = contactOf(mergeId, user);
     if (keep.brand_id !== merge.brand_id) throw fail(400, 'Sólo se pueden fusionar contactos de la misma marca.');
-    const problems = [];
-    if (merge.source_user_id && keep.source_user_id)
-      problems.push('Los dos contactos están vinculados a perfiles distintos; no se pueden fusionar.');
-    if (merge.source_user_id && !keep.source_user_id)
-      problems.push(
-        'El contacto que se une está vinculado a un perfil: elígelo como principal para no perder su vínculo.',
-      );
-    const keepActive = db
-      .prepare('SELECT * FROM opportunities WHERE contact_id=?')
-      .all(keep.id)
-      .filter(o => !closed(o.stage));
-    for (const o of db.prepare('SELECT * FROM opportunities WHERE contact_id=?').all(merge.id))
-      if (!closed(o.stage) && keepActive.some(k => k.course_id === o.course_id && k.edition_id === o.edition_id))
-        problems.push('Ambos tienen un interés activo en el mismo curso y edición. Cierra uno antes de fusionar.');
-    const moves = {
-      opportunities: db.prepare('SELECT count(*) n FROM opportunities WHERE contact_id=?').get(merge.id).n,
-      notes: db.prepare('SELECT count(*) n FROM internal_notes WHERE contact_id=?').get(merge.id).n,
-      tags: db
-        .prepare(
-          'SELECT count(*) n FROM contact_tag_links WHERE contact_id=? AND tag_id NOT IN (SELECT tag_id FROM contact_tag_links WHERE contact_id=?)',
-        )
-        .get(merge.id, keep.id).n,
-    };
+    const problems = problemsOf(keep, merge);
+    const moves = movesOf(keep, merge);
+    const linked = registry.count(merge.id);
     const fill = { phone: !keep.phone && Boolean(merge.phone), email: !keep.email && Boolean(merge.email) };
     const token = createHash('sha256')
       .update(
@@ -323,15 +308,44 @@ export function createContacts({
           merge.email,
           moves,
           db.prepare('SELECT max(updated_at) m FROM opportunities WHERE contact_id IN (?,?)').get(keep.id, merge.id).m,
+          linked,
         ]),
       )
       .digest('hex');
-    return { keep, merge, moves, fill, problems, previewToken: token };
+    return { keep, merge, moves, linked, fill, problems, previewToken: token };
   }
+  // Por qué no se puede fusionar (vacío si se puede). Lo usan la vista previa y la fusión interna.
+  function problemsOf(keep, merge) {
+    const problems = [];
+    if (merge.source_user_id && keep.source_user_id)
+      problems.push('Los dos contactos están vinculados a perfiles distintos; no se pueden fusionar.');
+    if (merge.source_user_id && !keep.source_user_id)
+      problems.push(
+        'El contacto que se une está vinculado a un perfil: elígelo como principal para no perder su vínculo.',
+      );
+    const keepActive = db
+      .prepare('SELECT * FROM opportunities WHERE contact_id=?')
+      .all(keep.id)
+      .filter(o => !closed(o.stage));
+    for (const o of db.prepare('SELECT * FROM opportunities WHERE contact_id=?').all(merge.id))
+      if (!closed(o.stage) && keepActive.some(k => k.course_id === o.course_id && k.edition_id === o.edition_id))
+        problems.push('Ambos tienen un interés activo en el mismo curso y edición. Cierra uno antes de fusionar.');
+    return problems;
+  }
+  const movesOf = (keep, merge) => ({
+    opportunities: db.prepare('SELECT count(*) n FROM opportunities WHERE contact_id=?').get(merge.id).n,
+    notes: db.prepare('SELECT count(*) n FROM internal_notes WHERE contact_id=?').get(merge.id).n,
+    tags: db
+      .prepare(
+        'SELECT count(*) n FROM contact_tag_links WHERE contact_id=? AND tag_id NOT IN (SELECT tag_id FROM contact_tag_links WHERE contact_id=?)',
+      )
+      .get(merge.id, keep.id).n,
+  });
   const publicPlan = p => ({
     keep: summary(p.keep),
     merge: summary(p.merge),
     moves: p.moves,
+    linked: p.linked,
     fill: p.fill,
     problems: p.problems,
     canMerge: p.problems.length === 0,
@@ -343,64 +357,100 @@ export function createContacts({
       if (p.problems.length) throw fail(409, p.problems[0]);
       if (input.previewToken !== p.previewToken)
         throw fail(409, 'Los contactos cambiaron desde la vista previa. Vuelve a revisarlos.');
-      const t = now(),
-        moved = { ...p.moves, phone: p.fill.phone, email: p.fill.email };
-      db.prepare('UPDATE opportunities SET contact_id=? WHERE contact_id=?').run(p.keep.id, p.merge.id);
-      db.prepare('UPDATE internal_notes SET contact_id=? WHERE contact_id=?').run(p.keep.id, p.merge.id);
-      db.prepare(
-        'INSERT OR IGNORE INTO contact_tag_links(contact_id,tag_id,created_by,created_at) SELECT ?,tag_id,created_by,created_at FROM contact_tag_links WHERE contact_id=?',
-      ).run(p.keep.id, p.merge.id);
-      db.prepare('DELETE FROM contact_tag_links WHERE contact_id=?').run(p.merge.id);
-      // El teléfono que se hereda llega con su clave (las dos condiciones miran el teléfono de antes de la sentencia).
-      db.prepare(
-        "UPDATE contacts SET phone=CASE WHEN phone='' THEN ? ELSE phone END,phone_key=CASE WHEN phone='' THEN ? ELSE phone_key END,email=CASE WHEN email='' THEN ? ELSE email END,updated_at=? WHERE id=?",
-      ).run(p.merge.phone, phoneKey(p.merge.phone) ?? '', p.merge.email, t, p.keep.id);
-      db.prepare(
-        'INSERT INTO contact_merges(id,brand_id,kept_id,merged_id,merged_snapshot,moved,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?)',
-      ).run(
-        randomUUID(),
-        p.keep.brand_id,
-        p.keep.id,
-        p.merge.id,
-        JSON.stringify(p.merge),
-        JSON.stringify(moved),
-        user.id,
-        t,
+      return mergeInternal(p.keep.id, p.merge.id, { user, reason: 'manual' });
+    });
+  }
+
+  // Lo que este módulo declara en el registro: intereses, notas, etiquetas y consentimiento del contacto. La regla del
+  // consentimiento más restrictivo se aplica en mergeInternal antes de mover su historial.
+  registry.register({
+    name: 'contacts',
+    tables: ['opportunities', 'internal_notes', 'contact_tag_links', 'contact_consent', 'contact_consent_events'],
+    merge(keepId, mergedId) {
+      const opportunities = moveRows(db, 'opportunities', 'contact_id', keepId, mergedId);
+      const notes = moveRows(db, 'internal_notes', 'contact_id', keepId, mergedId);
+      const tags = Number(
+        db
+          .prepare(
+            'INSERT OR IGNORE INTO contact_tag_links(contact_id,tag_id,created_by,created_at) SELECT ?,tag_id,created_by,created_at FROM contact_tag_links WHERE contact_id=?',
+          )
+          .run(keepId, mergedId).changes,
       );
+      db.prepare('DELETE FROM contact_tag_links WHERE contact_id=?').run(mergedId);
+      const consent = moveRows(db, 'contact_consent_events', 'contact_id', keepId, mergedId);
+      db.prepare('DELETE FROM contact_consent WHERE contact_id=?').run(mergedId);
+      return {
+        opportunities,
+        internal_notes: notes,
+        contact_tag_links: tags,
+        contact_consent_events: consent,
+      };
+    },
+  });
+
+  // Fusión interna (docs/PLAN_FUSION_Y_DATOS_DE_PERSONA.md): une `mergedId` en `keepId` moviendo TODAS las tablas
+  // registradas en personData y borra el contacto absorbido. Componible: no abre transacción ni comprueba permisos
+  // (lo hace quien llama: la fusión manual, una fusión automática o una importación). Aplica las mismas reglas de
+  // seguridad que la vista previa. Repetirla con un contacto ya absorbido devuelve la fusión anterior.
+  //   opciones: user (quien fusiona; null en una fusión automática) y reason ('manual', 'auto'…).
+  function mergeInternal(keepId, mergedId, { user = null, reason = 'manual' } = {}) {
+    const row = id => (typeof id === 'string' ? db.prepare('SELECT * FROM contacts WHERE id=?').get(id) : null);
+    const keep = row(keepId),
+      merge = row(mergedId);
+    if (keep && !merge) {
+      const previous = db
+        .prepare('SELECT moved FROM contact_merges WHERE kept_id=? AND merged_id=? ORDER BY created_at DESC LIMIT 1')
+        .get(keepId, mergedId);
+      if (previous) return { keepId, mergedId, moved: JSON.parse(previous.moved), repeated: true };
+    }
+    if (!keep || !merge) throw fail(404, 'Contacto no disponible.');
+    if (keep.id === merge.id) throw fail(400, 'Elige dos contactos distintos.');
+    if (keep.brand_id !== merge.brand_id) throw fail(400, 'Sólo se pueden fusionar contactos de la misma marca.');
+    const problems = problemsOf(keep, merge);
+    if (problems.length) throw fail(409, problems[0]);
+    const t = now(),
+      actorId = user?.id ?? null,
+      moves = movesOf(keep, merge),
+      fill = { phone: !keep.phone && Boolean(merge.phone), email: !keep.email && Boolean(merge.email) };
+    // El consentimiento resultante es el más restrictivo de los dos; se escribe antes de mover el historial.
+    const ck = consentOf(keep.id),
+      cm = consentOf(merge.id),
+      rank = { unknown: 0, opted_in: 1, opted_out: 2 };
+    if (rank[cm.status] > rank[ck.status])
+      writeConsent(keep, cm.status, 'merge', 'Heredado al fusionar con «' + merge.name + '»', actorId);
+    // El teléfono que se hereda llega con su clave (las dos condiciones miran el teléfono de antes de la sentencia).
+    db.prepare(
+      "UPDATE contacts SET phone=CASE WHEN phone='' THEN ? ELSE phone END,phone_key=CASE WHEN phone='' THEN ? ELSE phone_key END,email=CASE WHEN email='' THEN ? ELSE email END,updated_at=? WHERE id=?",
+    ).run(merge.phone, phoneKey(merge.phone) ?? '', merge.email, t, keep.id);
+    const linked = registry.mergeContacts(keep.id, merge.id, { keep, merge, user, actorId, reason, now: t });
+    const moved = { ...moves, phone: fill.phone, email: fill.email, linked, reason };
+    db.prepare(
+      'INSERT INTO contact_merges(id,brand_id,kept_id,merged_id,merged_snapshot,moved,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?)',
+    ).run(randomUUID(), keep.brand_id, keep.id, merge.id, JSON.stringify(merge), JSON.stringify(moved), actorId, t);
+    // La nota necesita autor: una fusión automática queda sólo en contact_merges.
+    if (actorId)
       db.prepare('INSERT INTO internal_notes VALUES(?,?,?,?,?,?)').run(
         randomUUID(),
-        p.keep.id,
-        p.keep.brand_id,
-        user.id,
+        keep.id,
+        keep.brand_id,
+        actorId,
         'Fusión de contactos: se unió «' +
-          p.merge.name +
+          merge.name +
           '»' +
-          (p.merge.phone ? ' · ' + p.merge.phone : '') +
-          (p.merge.email ? ' · ' + p.merge.email : '') +
+          (merge.phone ? ' · ' + merge.phone : '') +
+          (merge.email ? ' · ' + merge.email : '') +
           '. Se movieron ' +
-          p.moves.opportunities +
+          moves.opportunities +
           ' interés(es), ' +
-          p.moves.notes +
+          moves.notes +
           ' nota(s) y ' +
-          p.moves.tags +
+          moves.tags +
           ' etiqueta(s).',
         t,
       );
-      const ck = consentOf(p.keep.id),
-        cm = consentOf(p.merge.id),
-        rank = { unknown: 0, opted_in: 1, opted_out: 2 };
-      if (rank[cm.status] > rank[ck.status])
-        writeConsent(p.keep, cm.status, 'merge', 'Heredado al fusionar con «' + p.merge.name + '»', user.id);
-      db.prepare('UPDATE contact_consent_events SET contact_id=? WHERE contact_id=?').run(p.keep.id, p.merge.id);
-      db.prepare('DELETE FROM contact_consent WHERE contact_id=?').run(p.merge.id);
-      db.prepare('DELETE FROM contacts WHERE id=?').run(p.merge.id);
-      persons?.afterContactMerge(
-        db.prepare('SELECT * FROM contacts WHERE id=?').get(p.keep.id),
-        p.merge.persona_id,
-        user,
-      );
-      return { keepId: p.keep.id, mergedId: p.merge.id, moved };
-    });
+    db.prepare('DELETE FROM contacts WHERE id=?').run(merge.id);
+    persons?.afterContactMerge(row(keep.id), merge.persona_id, user);
+    return { keepId: keep.id, mergedId: merge.id, moved };
   }
 
   // ---- exportación (sólo administración; siempre dentro de las marcas autorizadas)
@@ -611,6 +661,7 @@ export function createContacts({
     duplicates,
     plan,
     applyMerge,
+    mergeInternal,
     exportCsv,
   };
 }
