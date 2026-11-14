@@ -140,14 +140,25 @@ test('las migraciones de este bloque llegan a una base ya publicada sin tocar su
   assert.equal(hasColumn(db, 'jobs', 'lease_until'), false);
 
   const result = migrate(db, { dataDir: dir, now: () => 123 });
-  assert.deepEqual(result.applied, ['inbox/0001-webhook-inbox', 'queues/0001-leases']);
+  // las de este bloque, en su orden; otros frentes añaden las suyas al mismo registro
+  assert.deepEqual(
+    result.applied.filter(name => /^(inbox|queues)\//.test(name)),
+    ['inbox/0001-webhook-inbox', 'queues/0001-leases'],
+  );
   assertSchemaCurrent(db);
-  assert.deepEqual(await readdir(join(dir, 'backups')), ['before-inbox-0001-webhook-inbox-123.sqlite']);
+  const backups = await readdir(join(dir, 'backups'));
+  assert.equal(backups.length, 1, 'un solo respaldo para todas las migraciones pendientes');
+  assert.match(backups[0], /^before-[a-z0-9-]+-123\.sqlite$/);
   const after = snapshot();
-  assert.deepEqual(after.message, { ...before.message, send_lease_until: null, send_attempts: 0 });
-  assert.deepEqual(after.job, { ...before.job, lease_owner: null, lease_until: null });
-  assert.deepEqual(after.delivery, { ...before.delivery, lease_owner: null, lease_until: null });
-  assert.deepEqual(after.webhook, { ...before.webhook, lease_owner: null, lease_until: null });
+  // cada fila conserva lo que tenía y gana sus columnas nuevas, vacías
+  const kept = (was, now, added) => {
+    for (const [column, value] of Object.entries(was)) assert.deepEqual(now[column], value, column);
+    for (const [column, value] of Object.entries(added)) assert.deepEqual(now[column], value, column);
+  };
+  kept(before.message, after.message, { send_lease_until: null, send_attempts: 0 });
+  kept(before.job, after.job, { lease_owner: null, lease_until: null });
+  kept(before.delivery, after.delivery, { lease_owner: null, lease_until: null });
+  kept(before.webhook, after.webhook, { lease_owner: null, lease_until: null });
   assert.match(
     db.prepare("SELECT sql FROM sqlite_master WHERE name='messages_send_lease'").get().sql,
     /WHERE send_lease_until IS NOT NULL/,

@@ -124,6 +124,8 @@
   const analyticsUI = window.createAnalyticsUI({ state, api, esc, icon, icons, toast });
   const portalUI = window.createPortalUI({ state, api, esc, icon, icons, toast });
   const agendaUI = window.createAgendaUI({ state, api, esc, icon, icons, toast });
+  // Pantallas nuevas (public/screens/, docs/GUIA_PANTALLAS.md): el kit usa esto para montar cada una dentro de #page.
+  if (window.TC) window.TC.host = { state, api, esc, icon, icons, toast, showModal, setView, refresh };
   const operationsUI = window.createOperationsUI({
     state,
     api,
@@ -255,6 +257,7 @@
     try {
       const data = await api('/api/bootstrap');
       Object.assign(state, data);
+      await window.TC?.screens.ready;
       if (!localStorage.getItem('tc-mode-' + state.user.id)) state.mode = isStaff() ? 'agent' : 'customer';
       else state.mode = isStaff() ? localStorage.getItem('tc-mode-' + state.user.id) : 'customer';
       if (location.pathname === '/crm' && isStaff()) state.mode = 'agent';
@@ -295,6 +298,12 @@
       ['Resultados', ['results', 'analytics', 'activity', 'presentation']],
       ['Cuenta', ['settings']],
     ];
+    for (const screen of window.TC?.screens.menu(state.user.role) ?? []) {
+      by[screen.id] = btn(screen.id, esc(screen.nav.icon), esc(screen.title), esc(screen.nav.label));
+      const group = groups.find(([title]) => title === screen.nav.group);
+      if (group) group[1].push(screen.id);
+      else groups.splice(groups.length - 1, 0, [esc(screen.nav.group), [screen.id]]); // un grupo nuevo va antes de Cuenta
+    }
     return groups
       .map(([title, ids]) => {
         const items = ids.map(id => by[id] || '').join('');
@@ -317,6 +326,8 @@
     icons();
   }
   function pageTitle() {
+    const screen = window.TC?.screens.get(state.view);
+    if (screen) return screen.title;
     if (state.view === 'operations') return 'Operación del equipo';
     if (state.view === 'analytics') return 'Analítica comercial';
     if (state.view === 'results') return 'Mis resultados';
@@ -352,7 +363,10 @@
       .join('')}</div>`;
   }
   function renderPage() {
+    window.TC?.screens.unmount();
     if (location.pathname === '/crm' && !isStaff()) return crmUI.gate();
+    const screen = agentMode() && window.TC?.screens.get(state.view);
+    if (screen) return window.TC.screens.mount(screen.id, $('#page'));
     if (agentMode() && state.view === 'operations') return operationsUI.render();
     if (agentMode() && state.view === 'analytics') return analyticsUI.render();
     if (agentMode() && state.view === 'results') return portalUI.render();

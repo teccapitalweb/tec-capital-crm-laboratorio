@@ -2,6 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { cancelConversationSteps } from './automation.mjs';
 import { normalizePhone, normalizeEmail, normalizeName } from './persons-schema.mjs';
+import { phoneKey } from './lib/identity-keys.mjs';
 
 // Identidad única de persona (Fase 2 · bloque 2.2). Cada contacto por marca cuelga de una persona; las identidades
 // (perfil del laboratorio, teléfono E.164, correo) unen automáticamente entre marcas; cuando sólo coincide el nombre o
@@ -278,7 +279,9 @@ export function createPersons({ db, crm, events = null, body, json, audit, broad
         `SELECT DISTINCT p.* FROM persons p JOIN contacts c ON c.persona_id=p.id WHERE c.brand_id IN (${ids.map(() => '?').join(',')}) ORDER BY p.updated_at DESC LIMIT 2000`,
       )
       .all(...ids);
-    const digits = q.replace(/\D/g, '');
+    // Un teléfono completo se busca por su clave canónica: da igual si se escribe con país, sin él o con el 1 («521…»).
+    const digits = q.replace(/\D/g, ''),
+      whole = phoneKey(digits);
     const values = p =>
       isAdmin
         ? [p.phone, p.email]
@@ -290,7 +293,9 @@ export function createPersons({ db, crm, events = null, body, json, audit, broad
         p =>
           !q ||
           normalizeName(p.name).includes(q) ||
-          values(p).some(v => v && ((digits.length >= 4 && v.includes(digits)) || v.includes(q))),
+          values(p).some(
+            v => v && ((digits.length >= 4 && v.includes(digits)) || (whole && v.includes(whole)) || v.includes(q)),
+          ),
       )
       .slice(0, limit)
       .map(p => summary(p, allowed, isAdmin));

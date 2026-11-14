@@ -1,0 +1,108 @@
+/*
+ * Niebla · variables de diseño para las pantallas nuevas (public/kit y public/screens).
+ *
+ * Es la única hoja donde se escriben colores, sombras y tamaños a mano. Se carga la primera; las hojas
+ * actuales (styles.css, polish.css) siguen declarando sus variables después con los mismos valores, así
+ * que las pantallas existentes no cambian. Si un valor cambia aquí hay que cambiarlo también allí y en las
+ * páginas públicas sin guiones (docs/DISENO_Y_AUDITORIA.md). test/kit-static.test.mjs vigila que las dos
+ * listas no se separen.
+ *
+ * A propósito no declara font-family, color ni background de :root: eso se queda en styles.css.
+ */
+:root {
+  /* 1. Las variables de hoy, tal cual (styles.css:2, polish.css:3 y polish.css:228). */
+  --ink: #242428;
+  --muted: #636977;
+  --text-3: #636977;
+  --text-2: #4b515c;
+  --line: #e1e6ea;
+  --soft: #f4f6f8;
+  --glass: #ffffffb8;
+  --bg: #f1f4f6;
+  --accent: #2f6f8f;
+  --accent-strong: #255a75;
+  --accent-soft: #e8f0f4;
+  --accent-tint: #f1f6f9;
+  --accent-line: #cddbe3;
+  --ok: #256b4e;
+  --ok-soft: #e7f4ed;
+  --ok-line: #cfe6d9;
+  --warn: #7d5710;
+  --warn-soft: #fcf3df;
+  --warn-line: #efdfb8;
+  --bad: #a7433a;
+  --bad-soft: #fcecea;
+  --bad-line: #f2d2ce;
+  --wa: #06985c;
+  --ig: #bd2a88;
+  --fb: #246be9;
+  --text-1: var(--ink);
+  --shadow-1: 0 1px 2px #1a1a2a0a, 0 1px 1px #1a1a2a05;
+  --shadow-2: 0 8px 20px -10px #1a1a2a2e, 0 2px 5px #1a1a2a0a;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ring: var(--accent);
+  --shadow-card: 0 1px 2px #1d2e380a, 0 10px 28px -18px #1d2e3829;
+  --shadow-lift: 0 2px 4px #1d2e380d, 0 18px 36px -18px #1d2e3840;
+
+  /*
+   * 2. Valores que las hojas actuales escriben a mano y que el kit necesita con nombre. No son colores
+   *    nuevos: cada uno lleva la regla de la que sale.
+   */
+  --surface: #fff; /* fondo de botones, campos y paneles (.btn, input, .crm-panel) */
+  --on-accent: #fff; /* texto sobre --accent (.btn.primary) */
+  --page-glow: #d9e7ef66; /* brillo del fondo de página (.content-page) */
+  --backdrop: #1d2e3838; /* velo de las ventanas (dialog::backdrop) */
+  --shadow-dialog: 0 1px 2px #1d2e3814, 0 40px 90px -30px #1d2e3866; /* dialog */
+  --radius-dialog: 21px; /* dialog */
+
+  /*
+   * 3. Escala para lo nuevo. No se inventó: son los valores más usados hoy en las ocho hojas de public/
+   *    (recuento del 13 nov 2026; entre paréntesis, las veces que aparece cada uno).
+   */
+  /* Separaciones. gap: 8px (87), 10px (78), 6px (56), 12px (45), 4px (20), 14px (18). padding: 16px, 14px, 12px, 20px, 10px. */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 14px;
+  --space-7: 16px;
+  --space-8: 20px;
+  /* Radios: 12px (51), 10px (29), 14px (19), 6px (17), 8px (15), 999px (10). */
+  --radius-1: 6px;
+  --radius-2: 8px;
+  --radius-3: 10px;
+  --radius-4: 12px;
+  --radius-5: 14px;
+  --radius-pill: 999px;
+  /* Letra: 11px (236), 12px (153), 13px (85), 14px (20), 16px (17), 24px (8). 30px es el título de página de hoy. */
+  --font-min: 11px; /* mínimo de Niebla: nada por debajo */
+  --font-sm: 12px;
+  --font-md: 13px;
+  --font-lg: 14px;
+  --font-xl: 16px; /* también el tamaño de los campos en celular: con menos, iOS amplía la página al enfocar */
+  --font-2xl: 24px;
+  --font-title: 30px;
+  /* Alto mínimo de lo que se toca con el dedo (docs/DISENO_Y_AUDITORIA.md). */
+  --touch: 40px;
+
+  /*
+   * 4. Paleta de gráficas (diseño de estadísticas, §3.1). Validada el 13 nov 2026 sobre blanco: separación
+   *    para daltonismo entre vecinas y contraste de 3:1 o más. Por eso las gráficas van siempre dentro de
+   *    un panel blanco. Si se cambia un color hay que validar de nuevo. El color sigue a la entidad, no al
+   *    orden: «recibidos» es siempre --ch-1 aunque se filtre.
+   */
+  --ch-1: #1f78a3; /* recibidos · servicio · reglas · cerradas */
+  --ch-2: #cf6b35; /* enviados · marketing · personas */
+  --ch-3: #229b82; /* utilidad · conocimiento aprobado */
+  --ch-4: #b78a12; /* catálogo · terminó sin cerrar */
+  --ch-5: #b0508a; /* IA */
+  --ch-6: #5c6fc4; /* sexta serie */
+  --ch-seq-0: #f4f6f8; /* mapa de calor: sin actividad */
+  --ch-seq-1: #c3d5de;
+  --ch-seq-2: #8fb3c6; /* de aquí a --ch-seq-5: rampa del embudo */
+  --ch-seq-3: #5b91ab;
+  --ch-seq-4: #2f6f8f;
+  --ch-seq-5: #1d4a61;
+  --ch-neutral: #c9ced6; /* periodo anterior, «otros» */
+}
