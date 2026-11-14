@@ -69,7 +69,8 @@ export function createChannel({
   // Envío en duda (docs/PLAN_RECEPCION_DURADERA.md). Un saliente real se marca «en vuelo» en la base antes de llamar a
   // Meta. Si el proceso muere con el mensaje en vuelo, al vencer la marca no se sabe si salió: «retry» (por omisión)
   // lo vuelve a enviar dejando rastro; «fail» (WA_UNCERTAIN_SEND=fail) lo deja como no entregado para que alguien lo
-  // revise. Al tercer envío en duda seguido se deja de insistir en cualquier caso.
+  // revise. En cualquier caso NUNCA se repite sola una plantilla (cuesta dinero y la persona la vería dos veces), y al
+  // tercer envío en duda seguido se deja de insistir.
   const UNCERTAIN_POLICY = uncertainSend === 'fail' ? 'fail' : 'retry',
     UNCERTAIN_MAX = 3,
     UNCERTAIN_REASON =
@@ -211,7 +212,7 @@ export function createChannel({
         if (elsewhere.has(m.conversation_id)) return false;
         const live = db
           .prepare(
-            "SELECT send_attempts,send_lease_until FROM messages WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL AND (send_lease_until IS NULL OR send_lease_until<=?)",
+            "SELECT send_attempts,send_lease_until,wa_template FROM messages WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL AND (send_lease_until IS NULL OR send_lease_until<=?)",
           )
           .get(m.id, t);
         if (!live) return false;
@@ -220,8 +221,9 @@ export function createChannel({
           m.id,
         );
         if (live.send_lease_until !== null) {
-          m.uncertain = UNCERTAIN_POLICY === 'fail' || live.send_attempts >= UNCERTAIN_MAX ? 'fail' : 'retry';
-          if (m.uncertain === 'retry') event(m, 'lease_expired', null, null, t); // un posible duplicado deja rastro
+          const again = UNCERTAIN_POLICY === 'retry' && !live.wa_template && live.send_attempts < UNCERTAIN_MAX;
+          m.uncertain = again ? 'retry' : 'fail';
+          if (again) event(m, 'lease_expired', null, null, t); // un posible duplicado deja rastro
         }
         return true;
       });

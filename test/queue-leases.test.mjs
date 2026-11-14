@@ -320,25 +320,36 @@ test('canal: con WA_UNCERTAIN_SEND=fail el envío en duda no se repite; queda no
   assert.deepEqual(trail(db, 'm1'), ['failed', 'retry', 'sent']);
 });
 
-test('canal: al tercer envío en duda seguido se deja de insistir aunque la política sea reintentar', async t => {
+test('canal: aunque la política sea reintentar, una plantilla en duda nunca se repite sola y al tercer envío en duda se deja de insistir', async t => {
   const { db } = await base(t);
   const c = clock();
   const sent = [];
   realConversation(db, 'c1');
   realConversation(db, 'c2');
+  realConversation(db, 'c3');
   outbound(db, 'c1', 'dos');
   outbound(db, 'c2', 'tres');
+  outbound(db, 'c3', 'plantilla');
   // como quedan tras morir el proceso dos y tres veces seguidas con el mismo mensaje en vuelo
   db.prepare("UPDATE messages SET send_attempts=2,send_lease_until=? WHERE id='dos'").run(START - 1);
   db.prepare("UPDATE messages SET send_attempts=3,send_lease_until=? WHERE id='tres'").run(START - 1);
+  // y una plantilla aprobada (de pago) que estaba en vuelo cuando murió el proceso, una sola vez
+  db.prepare("UPDATE messages SET send_attempts=1,send_lease_until=?,wa_template=? WHERE id='plantilla'").run(
+    START - 1,
+    JSON.stringify({ name: 'aviso_novedad', language: 'es_MX', params: ['María'] }),
+  );
   const { channel, published } = channelOn(db, c, sent);
-  assert.deepEqual((await channel.tick()).sort(), ['c1', 'c2']);
-  assert.deepEqual(sent, ['dos']);
+  assert.deepEqual((await channel.tick()).sort(), ['c1', 'c2', 'c3']);
+  assert.deepEqual(sent, ['dos'], 'sólo se repite el texto libre que todavía tiene intentos');
   assert.deepEqual(trail(db, 'dos'), ['lease_expired', 'sent']);
-  assert.equal(message(db, 'tres').delivery_state, 'failed');
-  assert.match(message(db, 'tres').failed_reason, UNCERTAIN);
-  assert.deepEqual(trail(db, 'tres'), ['failed']);
-  assert.equal(published.length, 1);
+  for (const id of ['tres', 'plantilla']) {
+    const row = message(db, id);
+    assert.equal(row.delivery_state, 'failed', id);
+    assert.match(row.failed_reason, UNCERTAIN, id);
+    assert.deepEqual([row.provider_ref, row.send_lease_until, row.send_attempts], [null, null, 0], id);
+    assert.deepEqual(trail(db, id), ['failed'], id);
+  }
+  assert.equal(published.length, 2);
 });
 
 test('canal: lo que queda en espera o lo que Meta rechaza deja de estar en vuelo, y volver a encolarlo no es un envío en duda', async t => {

@@ -1031,8 +1031,15 @@ export function createConnectors({
   // con las mismas dos funciones. Lo que devuelve es el texto del resultado; si lanza, la bandeja reintenta (salvo 4xx
   // o permanent, que dejan la fila fallida y reprocesable).
   async function processInboxRow(row) {
-    const stored = JSON.parse(row.payload),
-      ev = stored?.event ?? stored; // se guarda como {v, event}: la versión del contrato con la que se recibió
+    let stored = null;
+    try {
+      stored = JSON.parse(row.payload);
+    } catch {
+      // se trata abajo: una carga ilegible no mejora por reintentarla
+    }
+    const ev = stored?.event ?? stored; // se guarda como {v, event}: la versión del contrato con la que se recibió
+    if (!ev || typeof ev !== 'object')
+      throw Object.assign(new Error('El evento guardado no se puede leer.'), { permanent: true });
     if (row.kind === 'channel' && row.provider === 'meta' && ev.type === 'message.inbound') {
       if (channelProvider === 'meta' && !metaLive())
         throw fail(
