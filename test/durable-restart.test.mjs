@@ -102,6 +102,12 @@ test('con WA_UNCERTAIN_SEND=fail el envío en duda no se repite: queda «no entr
   const seen = (await call(origin(), '/api/conversations/' + reply.conversation_id + '/messages', { cookie: admin }))
     .messages;
   assert.match(seen.find(m => m.id === reply.id).failed_reason, UNCERTAIN);
+  for (const served of seen)
+    assert.equal(
+      'send_lease_until' in served || 'send_attempts' in served,
+      false,
+      'las marcas internas del envío no salen por la API',
+    );
   await call(origin(), '/api/messages/' + reply.id + '/retry', { cookie: admin, body: {} });
   await until(() => message(db, reply.id).provider_ref, 'el reintento manual sale por Meta', {
     logs: state.server.logs,

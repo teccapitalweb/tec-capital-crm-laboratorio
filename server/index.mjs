@@ -600,6 +600,8 @@ function messageList(id, before = Number.MAX_SAFE_INTEGER) {
     .map(m => ({
       ...m,
       flyer_snapshot: undefined,
+      send_lease_until: undefined, // marcas internas del envío (docs/PLAN_RECEPCION_DURADERA.md): no salen por la API
+      send_attempts: undefined,
       buttons: m.buttons ? JSON.parse(m.buttons) : null,
       commercial_snapshot: m.commercial_snapshot ? JSON.parse(m.commercial_snapshot) : null,
       attachmentUrl: m.attachment_id
