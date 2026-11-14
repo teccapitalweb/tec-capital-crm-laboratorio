@@ -15,7 +15,7 @@ Campos propios de cada marca sobre sus contactos: ciudad, curso de interés, est
 
 ## Tipos y límites
 
-Texto (hasta 500 caracteres), número (decimal con punto), fecha (`AAAA-MM-DD`), lista (hasta 50 opciones) y sí/no. Un valor vacío borra; escribir el mismo valor no hace nada. Hasta 60 datos activos por marca y 50 cambios por petición. Un atributo se archiva, no se borra: sus valores se conservan y deja de aceptar escrituras. La clave y el tipo no cambian; una opción de lista que algún contacto tiene no se puede quitar. `personal` oculta el valor a quien no puede ver teléfono y correo completos, lo quita del evento de dominio y desactiva `searchable`; a esa persona tampoco le sirve `expected` para adivinarlo (se rechaza siempre igual) y escribirlo se informa siempre como cambio.
+Texto (hasta 500 caracteres), número (decimal con punto), fecha (`AAAA-MM-DD`), lista (hasta 50 opciones) y sí/no. Un valor vacío borra; escribir el mismo valor no hace nada. Hasta 60 datos activos por marca y 50 cambios por petición. Un atributo se archiva, no se borra: sus valores se conservan y deja de aceptar escrituras. La clave y el tipo no cambian; una opción de lista que algún contacto tiene no se puede quitar. `personal` oculta el valor a quien no puede ver teléfono y correo completos, lo quita del evento de dominio y desactiva `searchable`; esa persona tampoco puede escribirlo (403 `permission_denied`, con o sin `expected`, para que el efecto de una escritura no sirva para adivinarlo) y en su lectura no ve ni la fecha ni el origen del valor ni sus cambios en el historial.
 
 **Datos de sistema** (sólo lectura, de su tabla dueña): `nombre`, `telefono`, `correo`, `origen`, `creado`, `consentimiento`, `etiquetas` y, del interés comercial más reciente, `etapa` y `curso_interes`. Sus claves no se pueden usar para un atributo propio.
 
@@ -31,7 +31,7 @@ Texto (hasta 500 caracteres), número (decimal con punto), fecha (`AAAA-MM-DD`),
 | `GET /api/attributes/contacts/:id` | `contacts.view` | `{values, system, history}` (últimos 20 cambios) |
 | `PUT /api/attributes/contacts/:id` | `contacts.edit` | `{changes:[{key, value, expected?}], clientRef}` → `{changed, values, system, history}` |
 
-Errores con `code`: `attribute_invalid`, `attribute_unknown` (no existe o está archivado), `attribute_read_only` (de sistema), `attribute_exists`, `attribute_reserved`, `attribute_limit`, `attribute_option_in_use`, `stale_record` (revisión o `expected` distintos), `client_ref_conflict`, `attribute_hidden` (se pidió comprobar con `expected` un dato personal que quien escribe no puede ver). Una marca ajena responde 404, como el resto del CRM.
+Errores con `code`: `attribute_invalid`, `attribute_unknown` (no existe o está archivado), `attribute_read_only` (de sistema), `attribute_exists`, `attribute_reserved`, `attribute_limit`, `attribute_option_in_use`, `stale_record` (revisión o `expected` distintos), `client_ref_conflict`, `permission_denied` (dato personal sin permiso de ver teléfono y correo completos). Una marca ajena responde 404, como el resto del CRM.
 
 ## Integración
 

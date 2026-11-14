@@ -274,8 +274,8 @@ test('valores: escribir es componible, valida, no repite lo igual y publica un e
   );
 });
 
-test('un dato personal no se puede adivinar sin permiso: ni «expected» ni la respuesta revelan su valor', async t => {
-  const { db, api, ids } = await moduleWorld(t, { reveal: false });
+test('un dato personal no se puede adivinar sin permiso: no se escribe, ni a ciegas, y su lectura no deja rastro', async t => {
+  const { db, api, brand, ids } = await moduleWorld(t, { reveal: false });
   const user = { id: 'asesora-sin-permiso' };
   db.prepare(
     "INSERT INTO users(id,username,name,password_hash,role,test_number,created_at,last_seen) VALUES(?,'asesora.x','Asesora','x','agent',990002,1,1)",
@@ -286,29 +286,53 @@ test('un dato personal no se puede adivinar sin permiso: ni «expected» ni la r
     return res;
   };
   // Lo escribe alguien con permiso (aquí, el propio módulo, como haría una importación).
-  await put({ changes: [{ key: 'curp', value: 'SECRETO01' }] });
-  // Probar valores con «expected»: siempre el mismo error, coincida o no, y sin el valor actual.
-  for (const guess of ['SECRETO01', 'OTRO02']) {
-    const attempt = put({ changes: [{ key: 'curp', value: 'X', expected: guess }] });
-    await assert.rejects(attempt, error => {
-      assert.equal(error.status, 400);
-      assert.equal(error.code, 'attribute_hidden');
-      assert.equal(JSON.stringify(error.details ?? {}).includes('SECRETO01'), false);
+  transaction(db, () => api.set(brand, ids.ana, [{ key: 'curp', value: 'SECRETO01' }], { source: 'import' }));
+  const before = api.read(brand, ids.ana, user);
+  // Escribirlo, con o sin «expected», con el valor correcto o no y con la clave con espacios: siempre el mismo 403.
+  for (const change of [
+    { key: 'curp', value: 'SECRETO01' },
+    { key: 'curp', value: 'OTRO02' },
+    { key: 'curp', value: 'X', expected: 'SECRETO01' },
+    { key: 'curp', value: 'X', expected: 'OTRO02' },
+    { key: ' curp ', value: 'SECRETO01' },
+  ])
+    await assert.rejects(put({ changes: [change] }), error => {
+      assert.equal(error.status, 403);
+      assert.equal(error.code, 'permission_denied');
+      assert.equal(JSON.stringify(error).includes('SECRETO01'), false);
       return true;
     });
-  }
-  // Escribir el mismo valor también se informa como cambio: la respuesta no confirma una suposición.
-  const same = await put({ changes: [{ key: 'curp', value: 'X' }] });
-  const again = await put({ changes: [{ key: 'curp', value: 'X' }] });
-  assert.deepEqual(same.data.changed, ['curp']);
-  assert.deepEqual(again.data.changed, ['curp']);
-  assert.equal(again.data.values.curp.value, null);
-  assert.equal(again.data.values.curp.hidden, true);
-  assert.ok(again.data.history.every(item => item.key !== 'curp' || (item.from === null && item.to === null)));
+  // La lectura no dice ni el valor, ni cuándo ni desde dónde cambió, y su historial no aparece; nada cambió.
+  const after = api.read(brand, ids.ana, user);
+  assert.deepEqual(after, before);
+  assert.deepEqual(after.values.curp, {
+    value: null,
+    display: '•••',
+    label: 'curp',
+    type: 'text',
+    status: 'active',
+    hidden: true,
+  });
+  assert.equal(
+    after.history.some(item => item.key === 'curp'),
+    false,
+  );
+  assert.equal(api.read(brand, ids.ana, null).values.curp.value, 'SECRETO01');
+  // Las claves se normalizan una vez: « ciudad » y «ciudad» son el mismo dato repetido.
+  await assert.rejects(
+    put({
+      changes: [
+        { key: ' ciudad ', value: 'A' },
+        { key: 'ciudad', value: 'B' },
+      ],
+    }),
+    error => error.status === 400 && /dos veces/.test(error.message),
+  );
+  assert.deepEqual((await put({ changes: [{ key: ' ciudad ', value: 'Cholula' }] })).data.changed, ['ciudad']);
   // Un dato no personal sí admite «expected» y su conflicto dice el valor actual.
   await assert.rejects(
-    put({ changes: [{ key: 'ciudad', value: 'X', expected: 'Cholula' }] }),
-    error => error.code === 'stale_record' && error.details.current === 'Puebla',
+    put({ changes: [{ key: 'ciudad', value: 'X', expected: 'Puebla' }] }),
+    error => error.code === 'stale_record' && error.details.current === 'Cholula',
   );
 });
 

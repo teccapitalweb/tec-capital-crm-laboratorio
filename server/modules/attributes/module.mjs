@@ -295,11 +295,11 @@ export default {
         }
         const before = current.get(definition.id) ?? null;
         const from = before?.value ?? null;
-        // Quien no puede ver un dato personal tampoco puede compararlo: «expected» le serviría para adivinarlo.
-        const hidden = definition.personal && meta.revealPersonal === false;
-        if (hidden && Object.hasOwn(change, 'expected'))
-          throw fail(400, `«${definition.label}» es un dato personal: no se puede comprobar su valor actual.`, {
-            code: 'attribute_hidden',
+        // Quien no puede ver un dato personal tampoco lo escribe: comparar o sobrescribir y mirar el efecto
+        // (cambió o no, la fecha, el historial) le serviría para adivinarlo.
+        if (definition.personal && meta.revealPersonal === false)
+          throw fail(403, `«${definition.label}» es un dato personal: tu acceso no incluye verlo ni cambiarlo.`, {
+            code: 'permission_denied',
             field: key,
           });
         if (Object.hasOwn(change, 'expected')) {
@@ -412,32 +412,34 @@ export default {
       for (const row of repo.values(brandId, contactId)) {
         const d = defs.get(row.attribute_id);
         if (!d) continue;
-        const hidden = d.personal && !fullContact;
-        values[d.key] = {
-          value: hidden ? null : row.value,
-          display: hidden ? '•••' : display(d, row.value),
-          label: d.label,
-          type: d.type,
-          status: d.status,
-          source: row.source,
-          updatedAt: row.updated_at,
-          ...(hidden ? { hidden: true } : {}),
-        };
+        // Un dato personal oculto no dice ni su valor ni cuándo ni desde dónde cambió.
+        values[d.key] =
+          d.personal && !fullContact
+            ? { value: null, display: '•••', label: d.label, type: d.type, status: d.status, hidden: true }
+            : {
+                value: row.value,
+                display: display(d, row.value),
+                label: d.label,
+                type: d.type,
+                status: d.status,
+                source: row.source,
+                updatedAt: row.updated_at,
+              };
       }
-      const personalKeys = new Set([...defs.values()].filter(d => d.personal).map(d => d.key));
-      const history = repo.history(brandId, contactId, LIMITS.history).map(row => {
-        const hidden = personalKeys.has(row.key) && !fullContact;
-        return {
+      // Para quien no puede verlos, los cambios de datos personales no aparecen en el historial.
+      const hiddenKeys = fullContact ? new Set() : new Set([...defs.values()].filter(d => d.personal).map(d => d.key));
+      const history = repo
+        .history(brandId, contactId, LIMITS.history)
+        .filter(row => !hiddenKeys.has(row.key))
+        .map(row => ({
           seq: row.seq,
           key: row.key,
-          from: hidden ? null : row.old_value,
-          to: hidden ? null : row.new_value,
+          from: row.old_value,
+          to: row.new_value,
           source: row.source,
           actor: row.actor_name ?? null,
           at: row.created_at,
-          ...(hidden ? { hidden: true } : {}),
-        };
-      });
+        }));
       return { contactId, brandId, values, system: systemValues(brandId, contactId, user), history };
     }
 
@@ -554,14 +556,28 @@ export default {
       if (!brandId) throw fail(404, 'Contacto no disponible.', { code: 'not_found' });
       host.access.require(user, 'contacts.edit', brandId);
       const input = await host.body(req);
-      const changes = Array.isArray(input?.changes) ? input.changes : null;
+      // Las claves se normalizan una sola vez, aquí; todo lo demás usa éstas.
+      const changes = Array.isArray(input?.changes)
+        ? input.changes.map(change => ({
+            ...(change !== null && typeof change === 'object' ? change : {}),
+            key: typeof change?.key === 'string' ? change.key.trim() : '',
+          }))
+        : null;
       if (!changes || !changes.length)
         throw fail(400, 'Indica qué datos cambian: changes: [{key, value}].', { code: 'attribute_invalid' });
       if (changes.length > LIMITS.changes)
         throw fail(400, `Se pueden cambiar hasta ${LIMITS.changes} datos a la vez.`, { code: 'attribute_invalid' });
-      const keys = changes.map(change => change?.key);
+      const keys = changes.map(change => change.key);
       if (new Set(keys).size !== keys.length)
         throw fail(400, 'Un mismo dato aparece dos veces en los cambios.', { code: 'attribute_invalid' });
+      // Quien no ve los datos personales no los escribe (ni a ciegas): se rechaza antes de tocar nada.
+      const revealPersonal = host.access.can(user, 'contacts.phone', brandId);
+      const personal = revealPersonal ? null : definitions(brandId).find(d => d.personal && keys.includes(d.key));
+      if (personal)
+        throw fail(403, `«${personal.label}» es un dato personal: tu acceso no incluye verlo ni cambiarlo.`, {
+          code: 'permission_denied',
+          field: personal.key,
+        });
       const clientRef = typeof input.clientRef === 'string' && input.clientRef ? input.clientRef.slice(0, 100) : null;
       const result = host.transaction(db, () => {
         if (clientRef) {
@@ -572,16 +588,8 @@ export default {
             return { ...JSON.parse(previous.response), replayed: true };
           }
         }
-        const revealPersonal = host.access.can(user, 'contacts.phone', brandId);
         const { changed } = set(brandId, contactId, changes, { source: 'staff', actorId: user.id, revealPersonal });
-        // Un dato personal que no puede ver quien escribe se informa siempre como cambiado: si se omitiera cuando
-        // el valor ya era ése, la respuesta diría cuál era.
-        const hiddenKeys = revealPersonal
-          ? []
-          : changes
-              .map(change => change.key)
-              .filter(key => definitions(brandId).some(d => d.key === key && d.personal));
-        const response = { changed: [...new Set([...changed.map(change => change.key), ...hiddenKeys])] };
+        const response = { changed: changed.map(change => change.key) };
         if (clientRef) repo.saveRequest(brandId, { clientRef, contactId, actorId: user.id, response, at: now() });
         return response;
       });
