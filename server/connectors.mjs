@@ -1,4 +1,6 @@
-import { createHmac, timingSafeEqual, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual, randomBytes, randomUUID } from 'node:crypto';
+import { transaction } from './database.mjs';
+import { createWebhookInbox } from './app/webhook-inbox.mjs';
 
 // Contrato de conectores (Fase 1 · bloque 6). Define la interfaz que tendrán los proveedores reales de canal (Meta:
 // WhatsApp Cloud API, Instagram, Messenger) y de pago (Stripe, Conekta), y la cumple hoy con adaptadores simulados.
@@ -28,6 +30,49 @@ function safeEqual(a, b) {
   return x.length > 0 && x.length === y.length && timingSafeEqual(x, y);
 }
 const missingOf = (env, names) => names.filter(n => !String(env[n] || '').trim());
+
+// ---- Bandeja de entrada de webhooks (docs/PLAN_RECEPCION_DURADERA.md): quién escribe y carril de orden de un evento.
+// Primer identificador de quien escribe. Con el contrato 1.1 vendrá en data.peer.ids (teléfono o identificador de
+// usuario); mientras parseWebhook no lo entregue es el campo suelto de hoy (from). Vacío: no se sabe quién escribe.
+export function peerIdentifier(data) {
+  for (const id of Array.isArray(data?.peer?.ids) ? data.peer.ids : []) {
+    const value = String((id && typeof id === 'object' ? id.value : id) ?? '').trim();
+    if (value) return value;
+  }
+  return String(data?.from ?? data?.fromUserId ?? '').trim();
+}
+// Dentro de un carril los eventos se procesan de uno en uno y en orden de llegada; carriles distintos, a la vez.
+//   entrante de canal   in:<proveedor>:<número o cuenta que recibe>:<huella del primer identificador de quien escribe>
+//   estado de mensaje   st:<proveedor>:<referencia del mensaje>
+//   pago                pay:<proveedor>:<pedido, referencia o id del evento>
+//   cualquier otro      ev:<proveedor>:<id del evento>
+// El identificador de la persona va como huella: el carril sólo se compara y no debe guardar otro teléfono en claro.
+export function laneOf(kind, provider, ev) {
+  const d = ev?.data || {};
+  if (kind === 'channel' && ev.type === 'message.inbound') {
+    const who = peerIdentifier(d);
+    if (who)
+      return (
+        'in:' +
+        provider +
+        ':' +
+        String(d.account?.externalId ?? d.to ?? '') +
+        ':' +
+        createHash('sha256').update(who).digest('hex').slice(0, 16)
+      );
+  }
+  if (kind === 'channel' && ev.type === 'message.status' && d.providerRef)
+    return 'st:' + provider + ':' + d.providerRef;
+  if (kind === 'payment') return 'pay:' + provider + ':' + (d.orderId || d.reference || ev.id);
+  return 'ev:' + provider + ':' + ev.id;
+}
+// Cuánto espera la petición del webhook a que sus eventos terminen, para devolver su resultado como siempre.
+// WEBHOOK_INBOX_WAIT_MS: 0 = responder en cuanto se guardan. Siempre por debajo de los 10 s del botón «Probar webhook».
+export function inboxWaitMs(env) {
+  const raw = String(env.WEBHOOK_INBOX_WAIT_MS ?? '').trim(),
+    n = raw === '' ? NaN : Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.min(9000, n) : env.NODE_ENV === 'test' ? 8000 : 3000;
+}
 
 // Qué debe entregar cada consultora (o el equipo técnico) para encender un proveedor real. Es la fuente de docs/CONECTORES.md.
 export const REQUIREMENTS = {
@@ -857,6 +902,17 @@ export function createConnectors({
   const useInbound = fn => {
     inbound = fn;
   }; // lo fija whatsapp.mjs: convierte un entrante real en cliente, conversación y mensaje
+  // Bandeja de entrada de webhooks (docs/PLAN_RECEPCION_DURADERA.md): la petición guarda cada evento y responde; el
+  // trabajador de la bandeja los procesa aparte con processInboxRow, con reintentos y en orden por carril.
+  const waitMs = inboxWaitMs(env);
+  const inbox = createWebhookInbox({
+    db,
+    process: processInboxRow,
+    kinds: Object.keys(adapters),
+    paused: env.NODE_ENV === 'test' && env.WEBHOOK_INBOX_PAUSED === '1', // sólo pruebas: se guarda y no se procesa
+    now,
+    log,
+  });
   const requireAdmin = user => {
     const u = db.prepare('SELECT role,disabled FROM users WHERE id=?').get(user.id);
     if (!u || u.disabled || u.role !== 'admin') throw fail(403, 'Los conectores los administra un administrador.');
@@ -971,6 +1027,27 @@ export function createConnectors({
     );
     return { result };
   }
+  // Lo que el trabajador de la bandeja ejecuta por cada evento guardado: la misma decisión que antes tomaba la petición,
+  // con las mismas dos funciones. Lo que devuelve es el texto del resultado; si lanza, la bandeja reintenta (salvo 4xx
+  // o permanent, que dejan la fila fallida y reprocesable).
+  async function processInboxRow(row) {
+    const stored = JSON.parse(row.payload),
+      ev = stored?.event ?? stored; // se guarda como {v, event}: la versión del contrato con la que se recibió
+    if (row.kind === 'channel' && row.provider === 'meta' && ev.type === 'message.inbound') {
+      if (channelProvider === 'meta' && !metaLive())
+        throw fail(
+          503,
+          'WhatsApp real está elegido pero le faltan datos (' + adapters.channel.meta.missing.join(', ') + ').',
+        );
+      if (inbound && metaLive()) {
+        // Sin teléfono ni identificador de usuario no se sabe quién escribe: el entrante queda en cuarentena (fila
+        // fallida con su carga), sin anotarse como procesado, para reprocesarlo cuando se sepa leer su identificador.
+        if (!peerIdentifier(ev.data)) throw Object.assign(new Error('no_identifier'), { permanent: true });
+        return (await applyInbound(row.provider, ev)).result;
+      }
+    }
+    return apply(row.kind, row.provider, ev).result;
+  }
   async function rawBody(req) {
     let size = 0;
     const chunks = [];
@@ -1009,30 +1086,69 @@ export function createConnectors({
       throw fail(400, 'Cuerpo del webhook no válido.');
     }
     const events = adapter.parseWebhook(parsed),
-      results = [];
-    for (const ev of events) {
-      if (
-        kind === 'channel' &&
-        x[2] === 'meta' &&
-        ev.type === 'message.inbound' &&
-        channelProvider === 'meta' &&
-        !metaLive()
-      )
-        throw fail(
-          503,
-          'WhatsApp real está elegido pero le faltan datos (' +
-            adapters.channel.meta.missing.join(', ') +
-            '); Meta reintentará el mensaje.',
-        );
-      if (kind === 'channel' && x[2] === 'meta' && ev.type === 'message.inbound' && inbound && metaLive()) {
-        try {
-          results.push({ id: ev.id, type: ev.type, ...(await applyInbound(x[2], ev)) });
-        } catch (e) {
-          log.error('Entrante de WhatsApp sin procesar:', e?.name || 'Error', String(e?.message || '').slice(0, 120));
-          throw fail(503, 'El entrante no se pudo procesar; reinténtalo.');
+      accepted = [];
+    let blocked = null;
+    // Recibir es guardar: cada evento queda en la bandeja (los de una petición, en una sola transacción) y lo procesa
+    // su trabajador. No se guardan el que llega sin id o tipo ni el que ya se aplicó: se contestan como siempre.
+    if (events.length)
+      transaction(db, () => {
+        for (const ev of events) {
+          if (
+            kind === 'channel' &&
+            x[2] === 'meta' &&
+            ev.type === 'message.inbound' &&
+            channelProvider === 'meta' &&
+            !metaLive()
+          ) {
+            // un entrante que el servidor no puede atender no se guarda (lo anterior de la petición, sí)
+            blocked = fail(
+              503,
+              'WhatsApp real está elegido pero le faltan datos (' +
+                adapters.channel.meta.missing.join(', ') +
+                '); Meta reintentará el mensaje.',
+            );
+            return;
+          }
+          if (!ev.id || !ev.type) {
+            accepted.push({ ev, fixed: { result: 'rechazado: evento sin id o tipo' } });
+            continue;
+          }
+          if (db.prepare('SELECT 1 FROM connector_events WHERE provider=? AND event_id=?').get(x[2], ev.id)) {
+            accepted.push({ ev, fixed: { result: 'duplicado: ya se había procesado', duplicate: true } });
+            continue;
+          }
+          const row = inbox.accept({
+            kind,
+            provider: x[2],
+            id: ev.id,
+            type: ev.type,
+            lane: laneOf(kind, x[2], ev),
+            payload: { v: CONTRACT_VERSION, event: ev },
+          });
+          accepted.push({ ev, row });
         }
-      } else results.push({ id: ev.id, type: ev.type, ...apply(kind, x[2], ev) });
-    }
+      });
+    inbox.wake();
+    if (blocked) throw blocked;
+    // La petición espera un tiempo acotado a que sus eventos terminen; si terminan, responde con su resultado de siempre.
+    const rows = await inbox.settled(
+      accepted.filter(a => a.row).map(a => a.row.seq),
+      waitMs,
+    );
+    const results = accepted.map(({ ev, fixed, row }) => {
+      if (fixed) return { id: ev.id, type: ev.type, ...fixed };
+      const r = rows.get(row.seq) || row;
+      if (r.state === 'done')
+        return {
+          id: ev.id,
+          type: ev.type,
+          result: r.result,
+          ...(row.existing && row.state === 'done' ? { duplicate: true } : {}),
+        };
+      if (r.state === 'failed')
+        return { id: ev.id, type: ev.type, result: 'error: ' + String(r.error || '').slice(0, 160) };
+      return { id: ev.id, type: ev.type, result: 'en cola: se procesa en segundo plano', queued: true };
+    });
     json(res, 200, { received: events.length, results });
     return true;
   }
@@ -1105,7 +1221,24 @@ export function createConnectors({
       json(res, 200, await test(await body(req), user));
       return true;
     }
+    // Bandeja de entrada de webhooks: qué está en cola o falló (sin la carga, que lleva textos y números) y reproceso
+    // de una fila fallida, por ejemplo un entrante en cuarentena por «no_identifier».
+    if (path === '/api/connectors/inbox' && req.method === 'GET') {
+      const p = new URL(req.url, 'http://localhost').searchParams;
+      json(res, 200, {
+        stats: inbox.stats(),
+        items: inbox.list({ state: p.get('state') || 'failed', limit: p.get('limit') }),
+      });
+      return true;
+    }
+    const again = path.match(/^\/api\/connectors\/inbox\/(\d{1,15})\/retry$/);
+    if (again && req.method === 'POST') {
+      const item = inbox.retry(Number(again[1]));
+      audit(user, 'connectors.inbox.retry', again[1]);
+      json(res, 200, { item });
+      return true;
+    }
     throw fail(404, 'Ruta de conectores no encontrada.');
   }
-  return { status, handle, handlePublic, apply, effective, selected, adapters, useInbound, metaLive };
+  return { status, handle, handlePublic, apply, effective, selected, adapters, useInbound, metaLive, inbox };
 }

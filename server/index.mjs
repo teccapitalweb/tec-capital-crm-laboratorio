@@ -1577,6 +1577,15 @@ const webhooksTimer = setInterval(
   },
   process.env.NODE_ENV === 'test' ? 300 : 2000,
 );
+// Bandeja de entrada de webhooks (docs/PLAN_RECEPCION_DURADERA.md): red de seguridad, porque lo normal es que cada
+// petición despierte al trabajador al guardar. Cada pasada toma como mucho los huecos libres y no espera a que terminen.
+const inboxTimer = setInterval(() => {
+  try {
+    connectors.inbox.tick();
+  } catch (e) {
+    console.error('Inbox tick failed:', e.name);
+  }
+}, 250);
 const heartbeat = setInterval(() => {
   for (const [ws, user] of sessions) {
     if (
@@ -1598,6 +1607,7 @@ modules.startTimers();
 server.listen(port, host, () => console.log(`TEC Capital Laboratorio: http://${host}:${server.address().port}`));
 function stop() {
   modules.stopTimers();
+  clearInterval(inboxTimer);
   clearInterval(webhooksTimer);
   clearInterval(scheduledTimer);
   clearInterval(jobsTimer);
