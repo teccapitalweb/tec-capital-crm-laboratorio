@@ -11,7 +11,8 @@ import attributes from './named/attributes/index.mjs';
 import contacts from './named/contacts/index.mjs';
 import identity from './named/identity/index.mjs';
 import inbox from './named/inbox/index.mjs';
+import messages from './named/messages/index.mjs';
 import queues from './named/queues/index.mjs';
 
 // «contacts» va después de «identity» aunque el alfabeto diga otra cosa: su búsqueda usa la clave de teléfono.
-export const NAMED = defineRegistry([...attributes, ...identity, ...contacts, ...inbox, ...queues]);
+export const NAMED = defineRegistry([...attributes, ...identity, ...contacts, ...inbox, ...messages, ...queues]);
