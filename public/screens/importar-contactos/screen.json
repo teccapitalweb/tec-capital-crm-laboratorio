@@ -1,0 +1,10 @@
+{
+  "id": "importar-contactos",
+  "title": "Importar contactos",
+  "visibility": "preview",
+  "nav": { "group": "Gestión", "icon": "upload", "label": "Importar contactos", "order": 35 },
+  "roles": ["admin"],
+  "permission": "contacts.import",
+  "entry": "index.js",
+  "styles": ["screen.css"]
+}
