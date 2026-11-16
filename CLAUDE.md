@@ -97,11 +97,11 @@ npm start
 
 `npm run check` comprueba codificación (UTF-8, LF), sintaxis y formato (Prettier); antes de entregar, `npx prettier --write` sobre lo que tocaste.
 
-La referencia vigente es **647 pruebas aprobadas** más 29 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **657 pruebas aprobadas** más 33 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 
-**15 nov 2026 (octava):** la octava tanda (modo real por marca, apagado por omisión, y pulido de las pantallas nuevas: filtro «Sin teléfono», añadir a una lista, editar segmentos, buscar y exportar miembros, insignia «Difusión») está en la rama `chore/f0-01-codificacion`, **sin publicar**; esquema `41+17.ddceed40`. Plan: [PLAN_MODO_REAL.md](docs/PLAN_MODO_REAL.md).
+**15 nov 2026 (octava):** la octava tanda (modo real por marca, apagado por omisión, y pulido de las pantallas nuevas: filtro «Sin teléfono», añadir a una lista, editar segmentos, buscar y exportar miembros, insignia «Difusión») se **publicó** en `main` (commit `dae4f05`; esquema `41+17.ddceed40`). Plan: [PLAN_MODO_REAL.md](docs/PLAN_MODO_REAL.md).
 
 **15 nov 2026 (séptima):** la séptima tanda (API de envío de plantillas con capa de compatibilidad apagada, y cambio de número: modo escucha, abrir conversaciones recientes y registrar el número) se **publicó** en `main` (commit `d405abb`; esquema `41+16.de0f23a7`). Con ella queda construido el conjunto mínimo del plan. Planes: [PLAN_API_ENVIO.md](docs/PLAN_API_ENVIO.md) y [PLAN_CAMBIO_DE_NUMERO.md](docs/PLAN_CAMBIO_DE_NUMERO.md).
 

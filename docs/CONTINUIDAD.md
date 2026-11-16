@@ -34,7 +34,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Octava tanda de la construcción (rama `chore/f0-01-codificacion`, 15 nov 2026; sin publicar)
+## Octava tanda de la construcción (publicada en `main`, 15 nov 2026)
 
 Dos cambios visibles: el panel «Modo real» en Pagos (sólo administración) y la insignia «Difusión» en el chat del equipo. Cada pieza tiene su página.
 
@@ -42,6 +42,7 @@ Dos cambios visibles: el panel «Modo real» en Pagos (sólo administración) y 
 - **Pulido de pantallas** (siguen en vista previa): en Contactos, filtro «Sin teléfono», distintivo «Sin número», bloque «WhatsApp» del panel (identificador siempre abreviado) y «Añadir a una lista» desde la selección; en Audiencias, editar las condiciones de un segmento con conteo en vivo (los prediseñados se duplican), buscar miembros por nombre y **exportarlos a CSV** (`GET /api/audiences/:id/export`: `campaigns.view` + `contacts.export`, teléfono y correo sólo con `contacts.phone`, protección contra fórmulas, 10 000 filas, 6 por minuto, auditoría); en Difusiones, «Número oculto» con su distintivo y el motivo del modo escucha; en el chat, la insignia «Difusión» (un renglón en `public/app.js`).
 - **Base de datos:** una migración con nombre más (`real-mode/0001-brand-real-mode`, aditiva); identidad `41+17.ddceed40`.
 - **Evidencia:** 657 pruebas (dos corridas) y 33 de navegador; `npm run check` limpio; el panel «Modo real», la lista de contactos y audiencias abiertos con la base de demostración en ancho de computadora y de celular.
+- **Publicado y comprobado en producción (commit `dae4f05`):** despliegue de Railway correcto y sin corte visible; `/api/health` devuelve `"schema":"41+17.ddceed40"` (la migración aplicada) y no informa módulos fallidos; `/screens/index.json` sigue vacío; sin sesión, `/api/real-mode`, `/api/audiences`, `/api/contacts`, `/api/whatsapp/cutover` y `/api/crm` responden 401; el webhook de Meta sin firma, 401; `GET //`, 400; CI en verde (`verify` y `ui`). El modo real queda apagado en todas las marcas. No se entró con ninguna cuenta: falta ver con sesión el panel «Modo real» y la insignia «Difusión».
 - **Sigue diciendo «de práctica» o «de ejemplo» en modo real:** el arte de los flyers de demostración (`PRECIO DE EJEMPLO`), el certificado SVG, las páginas públicas de verificación de certificados y de encuestas, el enlace del calendario simulado y textos de la pantalla del equipo («enlace de pago de prueba»). Los dos primeros hay que resolverlos antes de atender clientes reales.
 - **Falta:** pasarela real, facturación y reembolsos; la insignia «Difusión» no tiene prueba de navegador propia; la tarjeta «Identidad» en Conectores; exportar o editar contactos en lote.
 
