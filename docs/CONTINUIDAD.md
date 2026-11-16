@@ -34,7 +34,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Décima tanda de la construcción: recorridos de conversación (rama `chore/f0-01-codificacion`, 16 nov 2026; sin publicar)
+## Décima tanda de la construcción: recorridos de conversación (publicada en `main`, 16 nov 2026)
 
 Lo que el dueño llama «crear los chatbots»: armar en un lienzo de cajas y flechas la conversación que atiende sola (información del curso, espera, pregunta con botones, datos de inscripción, pasar con una persona), y que el CRM diga cómo va cada uno. Detalle en [PLAN_RECORRIDOS.md](PLAN_RECORRIDOS.md) y guía de uso en [GUIA_RECORRIDOS.md](GUIA_RECORRIDOS.md).
 
@@ -45,6 +45,8 @@ Lo que el dueño llama «crear los chatbots»: armar en un lienzo de cajas y fle
 - **Correcciones al integrar:** la lista de marcas llega completa aunque se pidan los recorridos de una sola (el selector de marca desaparecía al elegir una); el saludo de la plantilla de ejemplo usa un texto de respaldo cuando no hay nombre.
 - **Base de datos:** una migración con nombre más (`chatflows/0001-chatflows`, aditiva); identidad `41+19.ed0a28d7`.
 - **Evidencia:** 678 pruebas y 39 de navegador; `npm run check` limpio. En la demostración local: crear desde la plantilla, revisar, simular, publicar, activar y **una persona de prueba atendida de punta a punta** (saludo, ficha, pregunta, correo guardado, paso a la cola del equipo), y el rendimiento con esa conversación.
+- **Publicado y comprobado en producción (commit `2d90cae`):** despliegue correcto; `/api/health` devuelve `"schema":"41+19.ed0a28d7"` y no informa módulos fallidos; `/screens/index.json` lista «Automatización» en el grupo WhatsApp; sin sesión, `/api/chatflows` responde 401; CI en verde. El dueño confirmó con su sesión que WhatsApp real sigue conectado y que un mensaje desde su teléfono entra a Conversaciones.
+- **Corrección posterior (commit `adffaed`, en la rama, sin publicar al escribir esto):** la revisión de seguridad del envío señaló que un patrón sin ancla al inicio se prueba desde cada posición del texto; medido, unos 800 ms por comparación con tres repeticiones variables y 200 caracteres. Ahora un patrón que no empieza con `^` en todas sus alternativas admite dos; con ancla, tres (peor caso aceptado: 16 ms).
 - **Falta:** reglas por palabra clave y su panel de orden de atención (N-3); materiales con archivos (N-2); listas, plantillas y servicios externos dentro de un recorrido; disparadores por evento o tiempo y secuencias (N-6); restaurar una versión; importar recorridos de otro sistema (se rearman a mano); tope de gasto de IA por marca (hoy es de todo el CRM); probar con WhatsApp real.
 
 ## Menú por grupos plegables (publicado en `main`, 16 nov 2026)
