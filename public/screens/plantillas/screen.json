@@ -1,7 +1,7 @@
 {
   "id": "plantillas",
   "title": "Plantillas de WhatsApp",
-  "visibility": "preview",
+  "visibility": "live",
   "nav": { "group": "Gestión", "icon": "file-text", "label": "Plantillas", "order": 45 },
   "roles": ["admin"],
   "permission": "templates.manage",

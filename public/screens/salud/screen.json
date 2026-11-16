@@ -1,7 +1,7 @@
 {
   "id": "salud",
   "title": "Salud de WhatsApp",
-  "visibility": "preview",
+  "visibility": "live",
   "nav": { "group": "Gestión", "icon": "activity", "label": "Salud", "order": 55 },
   "roles": ["admin"],
   "permission": "channels.whatsapp.connect",

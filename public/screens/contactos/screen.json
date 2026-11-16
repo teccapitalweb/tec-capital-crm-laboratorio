@@ -1,7 +1,7 @@
 {
   "id": "contactos",
   "title": "Contactos",
-  "visibility": "preview",
+  "visibility": "live",
   "nav": { "group": "Atención", "icon": "contact-round", "label": "Lista de contactos", "order": 30 },
   "roles": ["admin", "agent"],
   "permission": "contacts.view",

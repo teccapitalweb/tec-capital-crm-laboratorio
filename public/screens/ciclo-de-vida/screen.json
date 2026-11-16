@@ -1,7 +1,7 @@
 {
   "id": "ciclo-de-vida",
   "title": "Ciclo de las conversaciones",
-  "visibility": "preview",
+  "visibility": "live",
   "nav": { "group": "Gestión", "icon": "timer", "label": "Ciclo de conversaciones", "order": 58 },
   "roles": ["admin"],
   "permission": "settings.inbox",

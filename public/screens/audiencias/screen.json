@@ -1,7 +1,7 @@
 {
   "id": "audiencias",
   "title": "Audiencias",
-  "visibility": "preview",
+  "visibility": "live",
   "nav": { "group": "Gestión", "icon": "users-round", "label": "Audiencias", "order": 40 },
   "roles": ["admin", "agent"],
   "permission": "campaigns.view",
