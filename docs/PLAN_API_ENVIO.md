@@ -1,6 +1,6 @@
 # Plan: envío de plantillas por API y capa de compatibilidad
 
-Estado: **en la rama de integración, sin publicar**. Incremento I-8 del plan maestro (diseño de identidad y API §4.8, §4.9 y §4.12; conciliación técnica, filas 13, 15, 37, 39 y 40). Migración con nombre `api/0002-send-lookup` (sólo un índice). Apagado en la práctica: nada sale sin una llave con el permiso de enviar, las difusiones y la automatización de la marca encendidas y WhatsApp real (`CHANNEL_CONNECTOR=meta`).
+Estado: **publicado en `main`** (15 nov 2026); la capa de compatibilidad, apagada. Incremento I-8 del plan maestro (diseño de identidad y API §4.8, §4.9 y §4.12; conciliación técnica, filas 13, 15, 37, 39 y 40). Migración con nombre `api/0002-send-lookup` (sólo un índice). Apagado en la práctica: nada sale sin una llave con el permiso de enviar, las difusiones y la automatización de la marca encendidas y WhatsApp real (`CHANNEL_CONNECTOR=meta`).
 
 Para qué: que el sistema de recordatorios de clases y pagos **mande una plantilla aprobada a una persona** a través del CRM y consulte después qué pasó, cambiando lo mínimo gracias a la capa de compatibilidad.
 

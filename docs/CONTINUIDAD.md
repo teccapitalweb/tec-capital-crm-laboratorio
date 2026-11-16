@@ -34,7 +34,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Séptima tanda de la construcción (rama `chore/f0-01-codificacion`, 15 nov 2026; sin publicar)
+## Séptima tanda de la construcción (publicada en `main`, 15 nov 2026)
 
 Con esta tanda queda construido el conjunto mínimo del plan para operar el número sin el proveedor anterior. Cada pieza tiene su página.
 
@@ -44,6 +44,8 @@ Con esta tanda queda construido el conjunto mínimo del plan para operar el núm
 - **Cambio al integrar:** una difusión real no se programa por un número en escucha (bloqueo `number_listen_only`) y una en curso se detiene con ese motivo si el número vuelve a escucha.
 - **Base de datos:** dos migraciones con nombre más (`api/0002-send-lookup` y `wa-cutover/0001-listen-mode`, aditivas); identidad `41+16.de0f23a7`.
 - **Evidencia:** 647 pruebas (dos corridas) y 29 de navegador; `npm run check` limpio; la pantalla «Cambio de número» abierta con la base de demostración (sin números dados de alta: sólo el estado vacío) en ancho de computadora y de celular.
+- **Publicado y comprobado en producción (commit `d405abb`):** despliegue de Railway correcto (unos segundos sin respuesta durante el reinicio); `/api/health` devuelve `"schema":"41+16.de0f23a7"` (las dos migraciones aplicadas) y no informa módulos fallidos; `/screens/index.json` sigue vacío; sin sesión, `/api/whatsapp/cutover`, `/api/identity`, `/api/broadcasts`, `/api/whatsapp/health` y `/api/crm` responden 401; `/api/v1/messages/template/<id>` sin llave, 401; la ruta de la capa de compatibilidad responde 404 (apagada); el webhook de Meta sin firma, 401; `GET //`, 400; CI en verde (`verify` y `ui`). No se entró con ninguna cuenta.
+- **Prueba corregida antes de publicar:** la verificación sobre una copia limpia falló una vez (646 de 647) en «abrir recientes no envía nada» de `test/whatsapp-listen.test.mjs`: la cuenta de envíos incluía la respuesta del asistente de la otra marca. Ahora lista a quién le llegó algo y comprueba que a quienes se les abrió conversación no les llegó nada; pasó cuatro corridas completas seguidas.
 - **Sin verificar contra Meta real:** la llamada de registro del número, sus errores y sus límites; que el CRM reciba los webhooks mientras el proveedor anterior sigue suscrito a la misma cuenta (decide si el modo escucha sirve); el envío real de una plantilla por API y que los conteos diarios coincidan.
 - **Falta:** las respuestas del responsable del sistema de recordatorios; texto libre, archivos y lote nativo por API; notas, tareas y etapa por API (I-7b); importar el histórico del proveedor anterior; exportar y borrar los datos de una persona; quitar para clientes reales los avisos de «chat de prueba» y los pagos simulados.
 
