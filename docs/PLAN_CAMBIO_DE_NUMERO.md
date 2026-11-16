@@ -24,7 +24,7 @@ host.services.whatsapp.canSendFrom(phoneNumberId, { to, recipient }); // {ok:tru
 host.services.whatsapp.listenOnly("wa:" + phoneNumberId, phoneKey | null); // true = NO debe salir (409 number_listen_only); la misma regla de la puerta
 ```
 
-Pendiente para esos frentes: que la difusión y la API de envío pregunten antes de empezar (hoy una difusión por un número en escucha termina con sus destinatarios «fallidos», sin que salga nada) y que la API responda 409 `number_listen_only` (diseño §4.8).
+Los dos preguntan antes de empezar: una difusión real por un número en escucha no se programa (bloqueo `number_listen_only` en la vista previa) y, si el número vuelve a escucha con una difusión en curso, ésta se detiene con ese motivo; la API de envío responde 409 `number_listen_only` (diseño §4.8). La puerta de `meta.send` queda como última defensa.
 
 ## Acciones (administración con `channels.whatsapp.connect` en la marca del número)
 

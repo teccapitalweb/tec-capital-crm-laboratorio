@@ -72,6 +72,7 @@ export const STOP_REASONS = Object.freeze({
   template_not_approved_in_time: 'La plantilla no se aprobó a tiempo',
   number_restricted: 'Meta restringió el número o la cuenta',
   number_paused: 'El número está en pausa en el CRM',
+  number_listen_only: 'El número volvió al modo escucha y ya no envía',
   payment_problem: 'Meta reporta un problema con el método de pago',
   token_invalid: 'El acceso a Meta venció o no tiene permiso',
   header_unavailable: 'La imagen o el archivo del encabezado ya no se puede enviar',

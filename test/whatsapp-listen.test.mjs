@@ -303,16 +303,20 @@ test('escucha de punta a punta: cuenta sin guardar, nada sale salvo a la lista d
   ).campaign;
   const { preview } = await api(`/api/broadcasts/${draft.id}/preview`, { body: {} });
   assert.equal(preview.eligible, 1);
-  await api(`/api/broadcasts/${draft.id}/schedule`, {
-    body: { expectedRevision: draft.revision, confirmAudience: preview.willSend, acceptCost: true },
-  });
-  const recipient = await until(
-    () =>
-      db.prepare("SELECT * FROM campaign_recipients WHERE campaign_id=? AND state IN ('failed','sent')").get(draft.id),
-    'la difusión termina con su destinatario',
-    { ms: 15000 },
+  assert.ok(
+    preview.blockers.some(b => b.code === 'number_listen_only'),
+    'la vista previa avisa que el número está en escucha',
   );
-  assert.equal(recipient.state, 'failed', 'la difusión no sale');
+  const blocked = await api(`/api/broadcasts/${draft.id}/schedule`, {
+    body: { expectedRevision: draft.revision, confirmAudience: preview.willSend, acceptCost: true },
+    expected: 409,
+  });
+  assert.equal(blocked.code, 'blocked', 'una difusión real no se programa por un número en escucha');
+  assert.equal(
+    db.prepare('SELECT count(*) n FROM campaign_recipients WHERE campaign_id=?').get(draft.id).n,
+    0,
+    'no se reserva ningún destinatario',
+  );
   assert.equal(meta.sent.length, sent0, 'a Meta no llegó ningún envío');
 
   // 4) el teléfono de la lista de prueba sí conversa: entra normal, el asistente le contesta y el equipo le escribe

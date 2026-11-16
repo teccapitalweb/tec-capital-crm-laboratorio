@@ -577,6 +577,9 @@ export default {
       if (live && !c.wa_number) add('no_number', 'Elige el número de WhatsApp que envía.');
       if (c.wa_number && !repo.number(c.brand_id, c.wa_number)?.enabled)
         add('number_paused', 'El número está en pausa en el CRM.');
+      // En modo escucha el número no envía (docs/PLAN_CAMBIO_DE_NUMERO.md): una difusión real no se programa.
+      if (live && c.wa_number && repo.number(c.brand_id, c.wa_number)?.mode === 'listen')
+        add('number_listen_only', 'El número está en modo escucha: todavía no envía.');
       if (!ctx.tpl || ctx.tpl.archived_at || ![...USABLE, 'pending'].includes(ctx.tpl.status))
         add('template_not_usable', 'La plantilla ya no está aprobada.');
       if (!eligible) add('no_audience', 'Nadie del público puede recibir esta difusión.');
@@ -687,6 +690,7 @@ export default {
         if (tpl.archived_at || !USABLE.includes(tpl.status)) return 'template_rejected';
         if (!services.connectors.metaLive()) return 'whatsapp_off';
         if (c.wa_number && !repo.number(c.brand_id, c.wa_number)?.enabled) return 'number_paused';
+        if (c.wa_number && repo.number(c.brand_id, c.wa_number)?.mode === 'listen') return 'number_listen_only';
         if (c.wa_number) {
           const g = gate.check(c.wa_number, ctx.category, c.brand_id);
           if (!g.ok) return STOP_REASONS[g.reason] ? g.reason : 'number_restricted';
