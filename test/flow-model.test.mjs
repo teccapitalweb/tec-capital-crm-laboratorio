@@ -25,7 +25,8 @@ import {
   flowRates,
   flowResult,
   fromWelcomeFlow,
-  hasNestedQuantifier,
+  matchesPattern,
+  patternProblem,
   importFlow,
   inputPoint,
   issuesByNode,
@@ -702,14 +703,17 @@ test('validación «node»: pregunta, espera, condición, guardar dato, etiqueta
   fails(around('question', ask({ saveTo: { kind: 'var', name: '' } })), 'node', /nombre de la variable/, 'x');
   fails(around('question', ask({ saveTo: { kind: 'var', name: '9mal' } })), 'node', /no es válido/, 'x');
   fails(around('question', ask({ saveTo: { kind: 'attribute', key: '' } })), 'node', /Elige el dato del contacto/, 'x');
-  // Formato propio: hasta 120 caracteres, expresión válida y sin una repetición dentro de otra.
+  // Formato propio: hasta 120 caracteres, expresión válida y dentro del subconjunto seguro (sin grupos ni
+  // retrorreferencias, hasta 3 repeticiones sin tope).
   const regex = pattern => around('question', ask({ answer: { type: 'regex', pattern } }));
   passes(regex('^[A-Z]{4}\\d{6}$'), 'node');
-  passes(regex('^(\\d{2}-){2}\\d{4}$'), 'node');
+  passes(regex('^\\d{2}-\\d{2}-\\d{4}$'), 'node');
+  fails(regex('^(\\d{2}-){2}\\d{4}$'), 'node', /no admite paréntesis/, 'x');
   fails(regex(''), 'node', /Escribe el formato/, 'x');
   fails(regex('a'.repeat(121)), 'node', /hasta 120 caracteres/, 'x');
-  fails(regex('([a-z'), 'node', /no es una expresión válida/, 'x');
-  fails(regex('^(a+)+$'), 'node', /repetir un grupo/, 'x');
+  fails(regex('[a-z'), 'node', /no es una expresión válida/, 'x');
+  fails(regex('^(a+)+$'), 'node', /no admite paréntesis/, 'x');
+  fails(regex('a*a*a*a*b'), 'node', /repeticiones variables/, 'x');
   // Lo que calcula el sistema no se escribe; el teléfono y el correo sólo ya validados.
   fails(
     around('question', ask({ saveTo: { kind: 'attribute', key: 'estado_pago' } })),
@@ -1644,24 +1648,56 @@ test('datos en los textos y comparación de opciones: igual que el servidor', ()
   );
 });
 
-test('formato propio de una pregunta: una repetición dentro de otra se rechaza; una repetición exacta no', () => {
-  for (const pattern of ['(a+)+', '(a*)*', '(.+)*', '(a|b+)+', '((ab)+c)*', '(a{1,})+', '(\\d+)*x', '(?:a+){2,}']) {
-    assert.equal(hasNestedQuantifier(pattern), true, pattern);
-  }
+test('formato propio de una pregunta: sólo el subconjunto que no puede tardar de más, y textos de hasta 200', () => {
+  // Peligrosos (retroceso catastrófico) o fuera del subconjunto: grupos, alternancia repetida, retrorreferencias,
+  // más de 3 cuantificadores variables (*, +, ?, {n,}, {m,n}) o cotas enormes.
   for (const pattern of [
-    'a+b*',
-    '(ab)+',
-    '(a|b)*',
-    '(\\d{2}-){2}\\d{4}',
-    '[(+*)]+',
-    '\\(a+\\)+',
-    '(a+)(b+)',
-    '(a+)?',
-    '^[A-Z]{4}\\d{6}[A-Z0-9]{3}$',
+    'a?a?a?a?a?a?a?a?aaaaaaaa',
+    '.{0,100}.{0,100}.{0,100}.{0,100}x',
+    'a*a*a*a*b',
+    'a*?b+?c??d{1,2}?',
+    '\\1',
+    '(a+)+',
+    '(a|aa)+$',
+    '(a?){30}a{30}',
+    '(\\w)\\1',
+    '(?<x>a)\\k<x>',
+    'a*a*a*a*a*a*b',
+    '(?=a)a',
+    'a{1,1000}',
+    'a{5,}b+c*d+',
     '',
+    'a'.repeat(121),
+    '[a-z',
   ]) {
-    assert.equal(hasNestedQuantifier(pattern), false, pattern);
+    assert.ok(patternProblem(pattern), pattern);
+    assert.equal(matchesPattern(pattern, 'aaaa'), false, pattern);
   }
+  // Legítimos: se aceptan y validan bien.
+  const ok = [
+    ['^\\d{10}$', '5512345678', '55123'],
+    ['^[A-ZÑ&]{3,4}\\d{6}[A-Z0-9]{3}$', 'PELA900101AB1', 'pela'],
+    ['^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$', 'ana@example.com', 'ana@'],
+    ['^\\(\\d{3}\\) \\d{4}$', '(555) 1234', '555 1234'],
+    ['[(+*)]+', '(+)', 'abc'],
+    ['^[*+?{]+$', '*+?{', 'a'], // dentro de una clase no son cuantificadores: sólo cuenta el + de fuera
+    ['^\\?\\*$', '?*', 'a'],
+    ['^a{2}b{3}c{4}d{5}$', 'aabbbccccddddd', 'ab'], // las cotas exactas no cuentan
+    ['^a*?b+?c??$', 'abc', 'x'], // un perezoso cuenta como un solo cuantificador
+    ['^x{,3}$', 'x{,3}', 'xx'], // una llave que no forma cota es literal
+  ];
+  for (const [pattern, good, bad] of ok) {
+    assert.equal(patternProblem(pattern), null, pattern);
+    assert.equal(matchesPattern(pattern, good), true, pattern + ' ' + good);
+    assert.equal(matchesPattern(pattern, bad), false, pattern + ' ' + bad);
+  }
+  // Una entrada enorme contra un patrón aceptado responde de inmediato: más de 200 caracteres no coincide.
+  const started = Date.now();
+  assert.equal(matchesPattern('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$', 'a'.repeat(100_000)), false);
+  // El peor patrón que la regla acepta, contra 200 «a» que no coinciden.
+  assert.equal(patternProblem('^a*a*a*b$'), null);
+  assert.equal(matchesPattern('^a*a*a*b$', 'a'.repeat(200)), false);
+  assert.ok(Date.now() - started < 3000, 'en tiempo acotado');
 });
 
 // ---- Ajustes ---------------------------------------------------------------------------------------------------------

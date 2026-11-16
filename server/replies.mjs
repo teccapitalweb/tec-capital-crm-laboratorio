@@ -380,7 +380,9 @@ export function createReplies({
       .map(k => k.title);
 
   // Plan síncrono: decide intención, texto, fuentes y si hace falta el proveedor. No escribe nada.
-  function plan(c, trigger) {
+  // `opts.noFlow`: hay un recorrido en curso (docs/PLAN_RECORRIDOS.md); el flujo de bienvenida no decora esta respuesta.
+  // `opts.forcedIntent`: la persona pulsó una opción del recorrido que contesta el asistente (precio, temario…).
+  function plan(c, trigger, opts = {}) {
     // El curso de ESTE mensaje: si lo elige o lo cambia, todo lo demás (catálogo, conocimiento, ficha) se planea ya con el curso nuevo; commit() lo guarda.
     const routed = route(c, trigger);
     if (routed?.course)
@@ -390,9 +392,11 @@ export function createReplies({
       first = (user?.name || '').split(' ')[0];
     // Flujo de bienvenida de la marca (server/flows.mjs): si la persona pulsó un botón del paso en el que va, ese botón manda. Un botón de acción
     // (precio, temario, fechas, inscribirse, asesor) equivale a pedirlo con esas palabras: se responde por el camino de siempre.
-    const flow = flows?.active(c.brand_id) || null,
+    const flow = (!opts?.noFlow && flows?.active(c.brand_id)) || null,
       pressed = flow ? flows.pressed(flow, c.id, trigger.text) : null,
-      forced = pressed?.kind === 'action' ? pressed.target : null;
+      forced =
+        (INTENTS.includes(opts?.forcedIntent) && opts.forcedIntent) ||
+        (pressed?.kind === 'action' ? pressed.target : null);
     const ctx = catalogue.info(c.course_id, c.edition_id),
       course = ctx.course,
       cls = forced ? { intent: forced, confidence: 1 } : classify(trigger.text),
@@ -958,6 +962,15 @@ export function createReplies({
     insertMessage(c, null, tpl.text, 'automation', 'away:' + trigger.id, null, null, null, { category: 'service' });
   }
 
+  // Pasa la conversación a una persona: asistente apagado en ella, estado «en espera», cola del equipo y aviso de fuera
+  // de horario. Dentro de la transacción del llamador. La usan la respuesta que escala y los recorridos (conciliación,
+  // fila 20); `trigger` es el mensaje de la persona que se está atendiendo.
+  function escalate(c, trigger) {
+    db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);
+    operations.requestHuman(c, trigger.created_at);
+    away(c, trigger);
+  }
+
   // ---- aprender de la IA (docs/PLAN_APRENDER_DE_LA_IA.md): cuando el proveedor redacta una respuesta y el motor la acepta, la pregunta y la
   // respuesta quedan como BORRADOR de conocimiento. Un borrador no se usa para responder: una persona lo revisa y lo aprueba; desde entonces esa
   // pregunta se contesta sola, sin llamar a la IA. Cuidados: se quitan correos y teléfonos de la pregunta y el saludo con nombre de la respuesta;
@@ -1112,16 +1125,12 @@ export function createReplies({
     };
     if (p.mode === 'off') {
       log('skipped');
-      db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);
-      operations.requestHuman(c, trigger.created_at);
-      away(c, trigger);
+      escalate(c, trigger);
       return { action: 'skipped', reason: 'Respuestas automáticas apagadas para la marca: pasa a una persona.' };
     }
     if (p.mode === 'suggest') {
       log('suggested');
-      db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);
-      operations.requestHuman(c, trigger.created_at);
-      away(c, trigger);
+      escalate(c, trigger);
       return { action: 'suggested', reply, reason };
     }
     if (p.order) {
@@ -1142,11 +1151,7 @@ export function createReplies({
     log(handoff ? 'escalated' : 'replied', messageId);
     if (move) flows?.apply(c.id, move);
     if (p.stage) crm.setStage(c, p.stage);
-    if (handoff) {
-      db.prepare("UPDATE conversations SET bot_enabled=0,status='waiting' WHERE id=?").run(c.id);
-      operations.requestHuman(c, trigger.created_at);
-      away(c, trigger);
-    }
+    if (handoff) escalate(c, trigger);
     return { action: handoff ? 'escalated' : 'replied', messageId, reply, reason };
   }
 
@@ -1635,6 +1640,7 @@ export function createReplies({
     handle,
     plan,
     commit,
+    escalate,
     classify,
     settings,
     resumeIfPausedByMode,

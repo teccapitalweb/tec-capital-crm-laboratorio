@@ -11,6 +11,7 @@ import { migrate } from './migrations/index.mjs';
 import { createStatic } from './app/static.mjs';
 import { loadScreens } from './app/screens.mjs';
 import { loadModules } from './app/modules.mjs';
+import { createDispatcher } from './app/dispatch.mjs';
 import { clientAddress, limitKey, proxyConfig } from './app/client-address.mjs';
 import { createRateLimiter } from './app/rate-limit.mjs';
 import { createShutdown, shutdownGraceMs } from './app/shutdown.mjs';
@@ -465,6 +466,9 @@ const realtime = createRealtime({ db, crm, sessions, canSee });
 // Ciclo de vida de la conversación (server/modules/lifecycle): lo registra el módulo al crearse; insertMessage y la
 // acción «resolve» de siempre lo llaman.
 let lifecycle = null;
+// Despachador del mensaje entrante (server/app/dispatch.mjs): los motores nuevos (recorridos) se registran en él y
+// processJob lo consulta antes del asistente. Sin motores, el asistente contesta igual que siempre.
+const dispatcher = createDispatcher({ db });
 // Módulos nuevos (server/modules/<nombre>/module.mjs): se descubren y se montan solos después de los actuales.
 const modules = await loadModules({
   dir: resolve(root, 'server', 'modules'),
@@ -495,6 +499,7 @@ const modules = await loadModules({
     insertMessage,
     takeOver,
     useLifecycle: api => (lifecycle = api),
+    dispatch: dispatcher,
     selfOrigin: () => 'http://127.0.0.1:' + server.address().port,
     services: {
       crm,
@@ -740,8 +745,23 @@ async function processJob(job) {
         return null;
       }
       const trigger = db.prepare('SELECT * FROM messages WHERE id=?').get(job.message_id);
-      return { c, trigger, plan: replies.plan(c, trigger) };
+      // Quién atiende este mensaje (server/app/dispatch.mjs): un recorrido en curso o que arranca, o el asistente.
+      const routed = dispatcher.inbound(c, trigger);
+      if (routed.done) {
+        db.prepare("UPDATE jobs SET state='done',lease_owner=NULL,lease_until=NULL WHERE id=?").run(job.id);
+        return { routedDone: true };
+      }
+      const current = db.prepare('SELECT * FROM conversations WHERE id=?').get(job.conversation_id);
+      let plan = replies.plan(current, trigger, routed.planOptions);
+      if (routed.decorate) plan = routed.decorate(plan);
+      return { c: current, trigger, plan, routed };
     });
+    if (planned?.routedDone) {
+      broadcast('conversation', job.conversation_id);
+      if (!db.prepare('SELECT bot_enabled FROM conversations WHERE id=?').get(job.conversation_id)?.bot_enabled)
+        summaries.auto(job.conversation_id);
+      return;
+    }
     if (!planned) return;
     let draft = null;
     if (planned.plan.needsProvider) {
@@ -778,7 +798,8 @@ async function processJob(job) {
         db.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").run(job.id);
         return;
       }
-      replies.commit(c, planned.trigger, planned.plan, draft);
+      const result = replies.commit(c, planned.trigger, planned.plan, draft);
+      if (planned.routed.after) planned.routed.after(result); // el recorrido cuenta el desvío (server/app/dispatch.mjs)
       // Hecho y sin dueño en el mismo paso: un trabajo terminado nunca se ve con un arrendamiento vivo.
       db.prepare("UPDATE jobs SET state='done',lease_owner=NULL,lease_until=NULL WHERE id=?").run(job.id);
     });

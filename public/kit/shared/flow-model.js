@@ -673,36 +673,101 @@ function optionProblems(options, { field, noun, max }) {
   return out;
 }
 
-// Detecta un grupo que contiene un cuantificador y a su vez se repite: «(a+)+», «(.*)*». Con un texto adverso esos
-// patrones tardan un tiempo exponencial, y el patrón de una Pregunta corre en el servidor con lo que escribe cualquiera.
-// Una repetición exacta («{2}») no cuenta: no puede crecer.
-export function hasNestedQuantifier(pattern) {
-  const open = [false];
-  const grows = at => {
-    const ch = pattern[at];
-    return ch === '+' || ch === '*' || (ch === '{' && /^\{\d+,\d*\}/.test(pattern.slice(at)));
+// Formato propio de una Pregunta: corre en el servidor (un solo hilo) con lo que escribe cualquiera, así que sólo se
+// admite un SUBCONJUNTO de expresiones que no puede tardar de más, en lugar de adivinar cuáles explotan:
+//   - hasta LIMITS.regex caracteres y que la expresión compile;
+//   - sin paréntesis sin escapar (ni grupos, ni miradas adelante o atrás); un paréntesis escrito con barra delante sí;
+//   - sin retrorreferencias (barra y un dígito del 1 al 9, o barra, k y «<»);
+//   - como mucho PATTERN_LIMITS.variable cuantificadores VARIABLES en todo el patrón: cada *, +, ?, {n,} y {m,n} con
+//     m distinto de n cuenta uno (el ? que sigue a un cuantificador lo vuelve perezoso: es parte de él, no otro); la
+//     cota exacta {n} no cuenta; toda cota llega como mucho a PATTERN_LIMITS.bounded;
+//   - el texto se compara sólo si mide hasta PATTERN_LIMITS.input caracteres (si es más largo, no coincide).
+// Por qué alcanza: sin paréntesis cada cuantificador se aplica a UN solo átomo (un carácter, una clase o un escape),
+// así que el motor de expresiones sólo puede retroceder eligiendo cuántas veces repite cada uno de esos k átomos. Con
+// k ≤ 3 y un texto de n ≤ 200 caracteres el peor caso queda en torno a n^3 (unos 8 millones de pasos), que se resuelve
+// en milisegundos; con un cuarto cuantificador variable, o con grupos que repiten algo que ya repite, el trabajo crece
+// sin control y el hilo único del servidor se cuelga para todos. No relajes ningún punto de esta regla sin rehacer esa
+// cuenta. Es la única regla: la usan el editor, publicar, el simulador y el motor del servidor.
+export const PATTERN_LIMITS = Object.freeze({ variable: 3, bounded: 100, input: 200 });
+
+// Lee, carácter a carácter, una cota {m}, {m,} o {m,n} que empieza en `at`. null si no forma una cota (entonces la
+// llave es un carácter literal).
+function readBound(pattern, at) {
+  const digits = from => {
+    let to = from;
+    while (to < pattern.length && pattern[to] >= '0' && pattern[to] <= '9') to += 1;
+    return to;
   };
+  let i = digits(at + 1);
+  if (i === at + 1) return null;
+  const low = Number(pattern.slice(at + 1, i));
+  let high = low;
+  if (pattern[i] === ',') {
+    const from = i + 1;
+    i = digits(from);
+    high = i === from ? null : Number(pattern.slice(from, i));
+  }
+  return pattern[i] === '}' ? { low, high, end: i } : null;
+}
+
+// Motivo por el que un patrón no se admite, en palabras de quien arma el recorrido; null si se admite.
+export function patternProblem(pattern) {
+  if (typeof pattern !== 'string' || !pattern) return 'Escribe el formato que debe cumplir la respuesta.';
+  if (pattern.length > LIMITS.regex)
+    return `El formato admite hasta ${LIMITS.regex} caracteres (tiene ${pattern.length}).`;
+  let variable = 0;
   let inClass = false;
+  let afterQuantifier = false; // el carácter anterior cerró un cuantificador: un ? aquí lo vuelve perezoso
   for (let i = 0; i < pattern.length; i += 1) {
     const ch = pattern[i];
+    const lazy = afterQuantifier && ch === '?';
+    afterQuantifier = false;
     if (ch === '\\') {
-      i += 1;
+      const next = pattern[i + 1] ?? '';
+      if (!inClass && ((next >= '1' && next <= '9') || (next === 'k' && pattern[i + 2] === '<')))
+        return 'El formato no puede repetir lo que ya encontró (retrorreferencias).';
+      i += 1; // lo escapado es un carácter literal o una clase como \d, nunca un cuantificador
     } else if (inClass) {
-      if (ch === ']') inClass = false;
-    } else if (ch === '[') {
-      inClass = true;
-    } else if (ch === '(') {
-      open.push(false);
-    } else if (ch === ')') {
-      const inner = open.length > 1 ? open.pop() : false;
-      const repeated = grows(i + 1);
-      if (inner && repeated) return true;
-      if (inner || repeated) open[open.length - 1] = true;
-    } else if (grows(i)) {
-      open[open.length - 1] = true;
+      if (ch === ']') inClass = false; // dentro de [ ] nada es cuantificador
+    } else if (ch === '[') inClass = true;
+    else if (ch === '(' || ch === ')')
+      return 'El formato no admite paréntesis (grupos); para buscar un paréntesis escrito, pon una barra \\ delante.';
+    else if (lazy) {
+      // perezoso: parte del cuantificador anterior, no cuenta otra vez
+    } else if (ch === '*' || ch === '+' || ch === '?') {
+      variable += 1;
+      afterQuantifier = true;
+    } else if (ch === '{') {
+      const bound = readBound(pattern, i);
+      if (!bound) continue; // llave literal
+      if (bound.low > PATTERN_LIMITS.bounded || (bound.high !== null && bound.high > PATTERN_LIMITS.bounded))
+        return `El formato admite repeticiones de hasta ${PATTERN_LIMITS.bounded}, como {1,${PATTERN_LIMITS.bounded}}.`;
+      if (bound.high !== bound.low) variable += 1;
+      i = bound.end;
+      afterQuantifier = true;
     }
   }
-  return false;
+  if (variable > PATTERN_LIMITS.variable)
+    return `El formato admite como mucho ${PATTERN_LIMITS.variable} repeticiones variables (*, +, ?, {n,} o {m,n}): más pueden tardar demasiado.`;
+  try {
+    new RegExp(pattern);
+  } catch {
+    return 'El formato no es una expresión válida.';
+  }
+  return null;
+}
+
+// La expresión lista para usar, o null si el patrón no se admite.
+export function safePattern(pattern) {
+  return patternProblem(pattern) === null ? new RegExp(pattern) : null;
+}
+
+// ¿La respuesta cumple el formato? Un patrón que no se admite o un texto demasiado largo nunca coinciden; nunca lanza.
+export function matchesPattern(pattern, text) {
+  const value = String(text ?? '');
+  if (value.length > PATTERN_LIMITS.input) return false;
+  const re = safePattern(pattern);
+  return re ? re.test(value) : false;
 }
 
 function urlProblems(value, field) {
@@ -1220,29 +1285,8 @@ const TYPES = {
         out.push({ field: 'answer.min', message: `El largo de la respuesta va de 0 a ${LIMITS.text} caracteres.` });
       }
       if (a.type === 'regex') {
-        if (!a.pattern)
-          out.push({ field: 'answer.pattern', message: 'Escribe el formato que debe cumplir la respuesta.' });
-        else if (a.pattern.length > LIMITS.regex) {
-          out.push({
-            field: 'answer.pattern',
-            message: `El formato admite hasta ${LIMITS.regex} caracteres (tiene ${a.pattern.length}).`,
-          });
-        } else {
-          let valid = true;
-          try {
-            new RegExp(a.pattern);
-          } catch {
-            valid = false;
-          }
-          if (!valid) out.push({ field: 'answer.pattern', message: 'El formato no es una expresión válida.' });
-          else if (hasNestedQuantifier(a.pattern)) {
-            const why = 'una repetición dentro de otra puede tardar demasiado';
-            out.push({
-              field: 'answer.pattern',
-              message: `El formato no puede repetir un grupo que ya repite algo, como (a+)+: ${why}.`,
-            });
-          }
-        }
+        const problem = patternProblem(a.pattern);
+        if (problem) out.push({ field: 'answer.pattern', message: problem });
       }
       const mode = a.type === 'phone' || a.type === 'email' ? a.type : 'any';
       out.push(...saveToProblems(d.saveTo, { field: 'saveTo', mode }, env));
