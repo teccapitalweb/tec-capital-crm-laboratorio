@@ -20,7 +20,7 @@
 
 import { GEOMETRY, PALETTE, nodeName, portsOf, typeOf } from '../../../kit/shared/flow-model.js';
 import { listen } from '../../../kit/events.js';
-import { html, render } from '../../../kit/html.js';
+import { attrs, html, render } from '../../../kit/html.js';
 import { ids } from '../../../kit/ids.js';
 import { on } from './dom.js';
 import { icon } from './icons.js';
@@ -39,7 +39,7 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const closest = (target, selector) =>
   target && typeof target.closest === 'function' ? target.closest(selector) : null;
 
-const shell = hasSave => html`<div class="lz-bar" role="toolbar" aria-label="Herramientas del recorrido">
+const shell = (hasSave, unavailable) => html`<div class="lz-bar" role="toolbar" aria-label="Herramientas del recorrido">
     <div class="lz-seg" role="group" aria-label="Cómo ver el recorrido">
       <button type="button" class="lz-tool" data-do="ver" data-pane="outline" aria-pressed="false">${icon('list')}<span>Esquema</span></button>
       <button type="button" class="lz-tool" data-do="ver" data-pane="canvas" aria-pressed="true">${icon('canvas')}<span>Lienzo</span></button>
@@ -76,9 +76,11 @@ const shell = hasSave => html`<div class="lz-bar" role="toolbar" aria-label="Her
           <ul>
             ${group.types.map(type => {
               const def = typeOf(type);
+              // Lo que el servidor todavía no ejecuta se ve, pero no se agrega: el motivo va en el título y al pulsarlo.
+              const off = unavailable[type];
               return html`<li>
-                <button type="button" class="lz-pal" data-do="paleta-tipo" data-type="${type}" title="${def.hint}">
-                  <span class="lz-pill">${icon(def.icon)}</span><span>${def.label}</span>
+                <button type="button" class="lz-pal" data-do="paleta-tipo" data-type="${type}" title="${off || def.hint}" ${attrs({ 'aria-disabled': off ? 'true' : false })}>
+                  <span class="lz-pill">${icon(def.icon)}</span><span class="lz-pal-name">${def.label}${off ? html`<span class="lz-pal-off">Todavía no disponible</span>` : ''}</span>
                 </button>
               </li>`;
             })}
@@ -133,7 +135,9 @@ export function mountCanvas(root, options = {}) {
   };
 
   root.classList.add('lz');
-  render(root, shell(canSave));
+  // Tipos de paso que el servidor todavía no ejecuta: {tipo: motivo}. Sin servidor (vista previa) no hay ninguno.
+  const unavailable = options.unavailable || {};
+  render(root, shell(canSave, unavailable));
   const slot = name => root.querySelector(`[data-slot="${name}"]`);
   const canvas = slot('lienzo');
   const outlineEl = slot('esquema');
@@ -252,6 +256,7 @@ export function mountCanvas(root, options = {}) {
     uid,
     catalogue: () => catalogue,
     settings: () => settings,
+    remote: options.simulate,
     onClose: () => {
       setSide('edit');
       setSheet('');
@@ -400,6 +405,7 @@ export function mountCanvas(root, options = {}) {
 
   function addFromPalette(type) {
     if (ui.skipClick) return;
+    if (unavailable[type]) return flash(unavailable[type]);
     const anchor = store.selection.nodes[store.selection.nodes.length - 1];
     const added = store.addNodeNear(type, { at: store.toWorld(centre()) });
     if (!added.ok) return report(added);
@@ -418,7 +424,13 @@ export function mountCanvas(root, options = {}) {
   const paletteDrag = [
     on(paletteEl, 'pointerdown', event => {
       const button = closest(event.target, '[data-do="paleta-tipo"]');
-      if (!button || store.readOnly || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      if (
+        !button ||
+        store.readOnly ||
+        unavailable[button.dataset.type] ||
+        (event.pointerType === 'mouse' && event.button !== 0)
+      )
+        return;
       carry = {
         id: event.pointerId,
         x: event.clientX,
@@ -644,5 +656,17 @@ export function mountCanvas(root, options = {}) {
     },
     showPane: pane => setPane(pane === 'outline' ? 'outline' : 'canvas'),
     focusNode: goTo,
+    // Abre el panel de un paso (o, con null, el de los problemas del recorrido) desde fuera del lienzo.
+    openIssues(id) {
+      if (id && store.node(id)) goTo(id);
+      else store.clearSelection();
+      openPanel();
+    },
+    // Muestra u oculta las cifras por paso (con ellas a la vista el lienzo es de sólo lectura).
+    showStats(show) {
+      if (!store.overlay.stats) return;
+      store.setOverlay({ showStats: show });
+      store.setReadOnly(pinned || show);
+    },
   };
 }

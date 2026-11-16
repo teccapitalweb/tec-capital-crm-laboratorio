@@ -30,6 +30,7 @@ import {
   typeOf,
   validateGraph,
 } from '../../../kit/shared/flow-model.js';
+import { unsupportedProblems } from '../../../kit/shared/flow-support.js';
 
 export const ZOOM = Object.freeze({ min: 0.5, max: 1.5, step: 0.1, compact: 0.8 });
 export const HISTORY_LIMIT = 100;
@@ -124,6 +125,9 @@ export function createStore(options = {}) {
   const issues = () =>
     derived('issues', () => {
       const result = validateGraph(graph, ctx);
+      // Conectado al servidor (`serverRules` en el contexto), lo que el motor todavía no ejecuta es un error desde que
+      // se elige: así nadie arma un recorrido que luego no se puede publicar sin enterarse antes.
+      if (ctx && ctx.serverRules) result.errors = [...result.errors, ...unsupportedProblems(graph)];
       return { ...result, ...issuesByNode(result) };
     });
 

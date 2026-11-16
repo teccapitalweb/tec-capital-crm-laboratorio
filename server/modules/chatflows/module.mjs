@@ -22,6 +22,9 @@
 //   GET    /api/chatflows/:id/sessions?state=&before=  {sessions}
 //   GET    /api/chatflows/:id/sessions/:sid            {session, events}
 //   GET    /api/chatflows/:id/log?limit=               {events}
+//   GET    /api/chatflows/lists?brand=                 listas de la marca para el editor (cursos, materiales…)
+//   GET    /api/chatflows/:id/analytics?version=&days= rendimiento por paso, sólo cifras agregadas (analytics.mjs)
+//   POST   /api/chatflows/:id/suggestions              {} → sugerencias por reglas y con IA (review.mjs)
 //   GET    /api/chatflows/conversations/:cid           {session | null}                        (inbox.view)
 //   POST   /api/chatflows/conversations/:cid           {flowId, clientRef} → 201 {session}       (inbox.reply)
 //   DELETE /api/chatflows/conversations/:cid           {stopped}                                (inbox.reply)
@@ -43,6 +46,9 @@ import {
 } from '../../../public/kit/shared/flow-model.js';
 import { CAPS, advance, input as feed, makeEnv, newSession, route, unsupportedProblems, waitOf } from './engine.mjs';
 import { createRepo } from './repo.mjs';
+import { createAnalytics, periodOf } from './analytics.mjs';
+import { REVIEW_KINDS, cleanSuggestions, outlineOf, ruleSuggestions } from './review.mjs';
+import { UNAVAILABLE_TYPES } from '../../../public/kit/shared/flow-support.js';
 import { createRuntime } from './runtime.mjs';
 
 const ID = '[A-Za-z0-9-]{1,64}';
@@ -61,6 +67,7 @@ export default {
     const { db, fail, access } = host;
     const svc = host.services;
     const repo = createRepo(db);
+    const analytics = createAnalytics(db);
     const now = () => Date.now();
     const emit = (brandId, data) =>
       setImmediate(() => {
@@ -198,6 +205,7 @@ export default {
       start: f.start,
       revision: f.revision,
       publishedVersion: f.published_version,
+      publishedAt: repo.publishedAt(f.brand_id, f.id, f.published_version),
       updatedAt: f.updated_at,
       createdAt: f.created_at,
       metrics: counts(f.brand_id, f.id),
@@ -553,6 +561,71 @@ export default {
       };
     }
 
+    // ---- listas de la marca para el editor (lo que ofrecen sus menús y contra lo que valida mientras se arma)
+    function editorLists(brandId) {
+      const lists = repo.validationLists(brandId);
+      let attributes = [];
+      try {
+        attributes = host
+          .module('attributes')
+          .definitions(brandId, { archived: false })
+          .map(d => ({ key: d.key, label: d.label, type: d.type, status: d.status }));
+      } catch {
+        attributes = [];
+      }
+      return {
+        brand: { id: brandId, name: repo.brandName(brandId) },
+        courses: lists.courses,
+        materials: lists.materials,
+        tags: lists.tags,
+        users: lists.users,
+        flows: lists.flows,
+        attributes,
+      };
+    }
+
+    // ---- rendimiento por paso (analytics.mjs): por versión (la publicada por omisión) y periodo
+    function performance(f, params) {
+      const raw = params.get('version');
+      const version = raw === 'all' ? null : /^\d{1,6}$/.test(raw || '') ? Number(raw) : (f.published_version ?? null);
+      const num = name => (params.get(name) === null ? undefined : Number(params.get(name)));
+      const days = num('days');
+      const period = periodOf(
+        { from: num('from'), to: num('to'), days: Number.isInteger(days) ? days : undefined },
+        now(),
+      );
+      return {
+        flowId: f.id,
+        publishedVersion: f.published_version,
+        versions: analytics.versions(f.brand_id, f.id).map(v => ({ version: v.version, sessions: v.n })),
+        ...analytics.compute(f.brand_id, f.id, { version, period }),
+      };
+    }
+
+    // ---- sugerencias: reglas siempre; IA si está configurada y el tope lo permite. Fuera de toda transacción.
+    async function suggest(f, input) {
+      const params = new URLSearchParams();
+      if (Number.isInteger(input.days)) params.set('days', String(input.days));
+      const stats = performance(f, params);
+      const outline = outlineOf(f.draft, stats.nodes);
+      const rules = ruleSuggestions(outline).map(x => ({ ...x, source: 'rules' }));
+      const provider = svc.aiProvider;
+      const ai = provider?.reviewFlow
+        ? await provider.reviewFlow({ brand: repo.brandName(f.brand_id), outline })
+        : { available: false, reason: 'La IA no está configurada en este CRM.' };
+      const fromAi = ai.available ? cleanSuggestions(ai.suggestions, outline).map(x => ({ ...x, source: 'ai' })) : [];
+      return {
+        ai: {
+          available: Boolean(ai.available),
+          reason: ai.reason || null,
+          budget: Boolean(ai.budget),
+          model: ai.model || null,
+        },
+        suggestions: [...fromAi, ...rules].map(x => ({ ...x, kindLabel: REVIEW_KINDS[x.kind] || REVIEW_KINDS.other })),
+        sent: { steps: outline.length, withStats: outline.filter(s => s.stats).length },
+      };
+    }
+
     // ---- rutas
     const PREFIX = '/api/chatflows';
     async function handle(req, res, path, user, url) {
@@ -574,7 +647,20 @@ export default {
           flows: repo.flows(brandIds, { archived }).map(summary),
           limits: { ...LIMITS, ...CAPS },
           startTypes: START_TYPES,
+          // Para la pantalla: las marcas que ve, si puede editar en cada una y los tipos de paso no disponibles.
+          brands: brandIds.map(brandId => ({
+            id: brandId,
+            name: repo.brandName(brandId),
+            canManage: access.can(user, 'automation.manage', brandId),
+          })),
+          unavailable: UNAVAILABLE_TYPES,
         });
+        return true;
+      }
+      if (path === PREFIX + '/lists' && method === 'GET') {
+        const brandId = text(url.searchParams.get('brand'), 64);
+        access.require(user, 'inbox.view', brandId);
+        host.json(res, 200, { lists: editorLists(brandId) });
         return true;
       }
       if (path === PREFIX && method === 'POST') {
@@ -650,7 +736,13 @@ export default {
             publishedAt: v.published_at,
           })),
           issues: issuesOf(f.brand_id, f.id, f.draft, f.settings, f.start),
+          canManage: access.can(user, 'automation.manage', f.brand_id),
         });
+        return true;
+      }
+      if (method === 'GET' && rest === 'analytics') {
+        const f = locate(user, id, 'inbox.view');
+        host.json(res, 200, performance(f, url.searchParams));
         return true;
       }
       if (method === 'GET' && (m = rest.match(/^versions\/(\d{1,6})$/))) {
@@ -736,6 +828,14 @@ export default {
         const r = duplicate(user, id, input);
         if (!r.duplicate) host.audit(user, 'chatflow.duplicated', r.flow.id);
         host.json(res, r.duplicate ? 200 : 201, { flow: full(r.flow), duplicate: r.duplicate });
+        return true;
+      }
+      if (rest === 'suggestions') {
+        const f = locate(user, id, 'automation.manage');
+        host.rate('chatflows.suggest:' + user.id, 5);
+        const r = await suggest(f, input);
+        host.audit(user, 'chatflow.reviewed', id);
+        host.json(res, 200, r);
         return true;
       }
       if (rest === 'simulate') {

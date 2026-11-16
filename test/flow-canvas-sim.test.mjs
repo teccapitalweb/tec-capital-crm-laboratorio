@@ -466,7 +466,7 @@ test('pantalla «Automatización»: vista previa en el menú, con el lienzo y su
     id: 'automatizacion',
     title: 'Automatización',
     visibility: 'preview',
-    nav: { group: 'Gestión', icon: 'workflow', label: 'Automatización', order: 50 },
+    nav: { group: 'WhatsApp', icon: 'workflow', label: 'Automatización', order: 44.5 },
     roles: ['admin', 'agent'],
     entry: 'index.js',
     styles: ['lienzo.css', 'screen.css'],
@@ -474,9 +474,10 @@ test('pantalla «Automatización»: vista previa en el menú, con el lienzo y su
   const module = await import(new URL(screen.entry, base).href);
   assert.equal(typeof module.default.mount, 'function');
   assert.equal(typeof module.default.onEvent, 'function');
-  // Mientras no exista la API de recorridos, la pantalla trabaja con datos de ejemplo y lo dice a la vista.
+  // Conectada a /api/chatflows: guarda con expectedRevision, el editor sin guardar sobrevive a un remontaje y los
+  // datos de ejemplo ya no se usan (la plantilla para empezar es plantilla.js).
   const source = readFileSync(new URL(screen.entry, base), 'utf8');
-  assert.match(source, /Datos de ejemplo/);
-  assert.match(source, /ctx\.keep\.set\('store'/, 'el editor sin guardar sobrevive a un remontaje');
-  assert.doesNotMatch(source, /onSave:/, 'sin API no se ofrece guardar');
+  assert.match(source, /expectedRevision: record\.revision/);
+  assert.match(source, /keep\.set\('store:' \+ flowId/, 'el editor sin guardar sobrevive a un remontaje');
+  assert.doesNotMatch(source, /demo-data/);
 });

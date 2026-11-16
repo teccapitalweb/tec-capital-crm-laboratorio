@@ -1,0 +1,53 @@
+# Guía: tu primer recorrido de venta de curso
+
+Un **recorrido** es una conversación automática: saluda, manda la información del curso, espera, pregunta con botones, pide un dato y pasa con una persona del equipo. Se arma en **Automatización** (menú WhatsApp), se revisa, se prueba sin enviar nada y sólo atiende cuando lo publicas **y** lo activas. Mientras la pantalla esté en vista previa, sólo la ve quien tiene la vista previa encendida.
+
+## 1. Crear el recorrido
+
+1. Entra a **Automatización**. Verás la lista de recorridos de la marca (si tienes varias, elige la marca arriba).
+2. Pulsa **Nuevo recorrido**, escribe un nombre (por ejemplo «Venta de curso») y elige **Plantilla de ejemplo «Venta de curso»**. Trae listo: saludo, ficha del curso con su flyer, una espera corta, botones «Sí, me interesa / Ver el temario / Hablar con alguien», inscripción, pregunta del correo y pasar con una persona.
+3. Un mismo recorrido sirve para todos los cursos de la marca: el curso es el de la conversación y su precio, fechas y flyer salen siempre del catálogo vigente.
+
+## 2. Ajustarlo a tu marca
+
+- En computadora trabajas en el **lienzo** (cajas y flechas) o en el **esquema** (los pasos en orden). En celular se edita en el esquema.
+- Haz clic en un paso para cambiar su texto a la derecha. Para agregar uno, elígelo en la columna «Agregar paso»; si tienes un paso seleccionado, el nuevo queda conectado después de él. En el esquema, cada salida tiene una lista «a dónde lleva»: ahí puedes conectar con otro paso o crear uno nuevo en ese punto.
+- Los tipos que dicen **«Todavía no disponible»** (Lista, Plantilla de WhatsApp, Suscribir, Servicio externo, «¿Qué curso te interesa?») aún no se pueden publicar; algunas opciones de otros pasos tampoco, y el paso lo marca en rojo en cuanto la eliges.
+- **Ajustes** (arriba): el nombre, **cómo empieza** (a mano desde el chat, con el primer mensaje, con una palabra clave o con cualquier mensaje) y cuánto esperar antes de dar la conversación por abandonada.
+- Pulsa **Guardar** (o Ctrl+S). La barra dice «Sin guardar» mientras haya cambios. Si otra persona guardó el mismo recorrido mientras lo editabas, el CRM te avisa y **no pisa nada**: tus cambios siguen en pantalla y tú eliges.
+
+## 3. Revisar
+
+Pulsa **Revisar**. Verás una lista en palabras claras:
+
+- **Impide publicar**: hay que corregirlo (un mensaje vacío, un botón sin texto, un tipo de paso no disponible…).
+- **Recomendación**: se puede publicar, pero conviene mirarlo (por ejemplo, una salida sin conectar).
+
+Cada punto tiene **Ir al paso**, que te lleva directo a él.
+
+## 4. Probar
+
+Pulsa **Probar**. Es una conversación de ensayo con **el mismo motor que atenderá de verdad** y el catálogo real de la marca. Elige el curso y el canal, pulsa los botones o escribe como si fueras la persona. **No se envía nada a nadie ni se guarda nada.** Se prueba lo que ves en pantalla, aunque no lo hayas guardado.
+
+## 5. Publicar y activar
+
+1. **Publicar** guarda lo que hay (si falta), lo revisa y te pide confirmar. Lo publicado queda como una **versión** (1, 2, 3…), que ves en la pestaña **Versiones**.
+2. Las conversaciones que ya iban en el recorrido **siguen con la versión con la que empezaron**; las nuevas usan la recién publicada.
+3. **Activar** hace que empiece a atender, siempre que la automatización de la marca esté encendida y su asistente responda solo. **Pausar** deja de empezar con gente nueva (y, si lo eliges, detiene las conversaciones en curso). **Archivar** lo retira; su historial se conserva.
+
+## 6. Leer su rendimiento
+
+En la pestaña **Rendimiento**, elige el periodo (7, 30 o 90 días) y la versión:
+
+- **Empezaron, terminaron, pasaron con una persona, se fueron y en curso.**
+- **Dónde se pierde gente**, lo más débil primero: «El 62 % se va en el paso 4, “¿Te gustaría inscribirte?”». Con **Ver en el recorrido** las cifras aparecen sobre cada paso del lienzo o del esquema.
+- **Paso por paso**: cuántas conversaciones llegaron, cuántas siguieron, cuántas se fueron ahí y cuánto tardan en contestar (la mediana).
+- **Cómo terminaron**: terminó el recorrido, pasó con una persona, una persona tomó el chat, dejó de contestar, escribió otra cosa, error.
+
+Las cifras son conteos: no muestran nombres, teléfonos ni lo que escribió nadie.
+
+## 7. Sugerencias
+
+En Rendimiento, **Pedir sugerencias** revisa el recorrido y sus cifras y propone mejoras ligadas a un paso: mensajes demasiado largos, preguntas sin salida, pasos donde se va la gente, falta de «pasar con una persona», tono. Hay dos fuentes: la **revisión automática** (siempre) y la **IA** (si está configurada y no se alcanzó el tope mensual de la IA; si no, lo dice). A la IA sólo se le manda la estructura del recorrido y las cifras por paso, **nunca** datos de personas ni conversaciones. Las sugerencias **no cambian nada**: tú decides qué aplicar.
+
+Detalle técnico: [PLAN_RECORRIDOS.md](PLAN_RECORRIDOS.md).
