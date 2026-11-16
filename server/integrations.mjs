@@ -8,7 +8,7 @@ import { createRateLimiter } from './app/rate-limit.mjs';
 
 // API pública y webhooks salientes (docs/PLAN_API_PUBLICA.md y docs/PLAN_API_ESCRITURA.md).
 //  · API v1: llaves por marca con permisos de lectura (events, orders, contacts, editions, templates) y de escritura (contacts_write,
-//    consent_write), cabecera `Authorization: Bearer tcw_…`. Sólo se guarda la huella de la llave (se compara en tiempo constante); el valor
+//    consent_write, messages_send_template con su tope diario y número por omisión: docs/PLAN_API_ENVIO.md), cabecera `Authorization: Bearer tcw_…`. Sólo se guarda la huella de la llave (se compara en tiempo constante); el valor
 //    completo se muestra una vez. Caducidad (obligatoria si la llave escribe), rotación con 72 horas de convivencia y revocación. Límites por llave
 //    y por dirección real con cabeceras RateLimit-*, un solo formato de error con `code`, `status` y `requestId`. Las rutas de escritura las
 //    presta el módulo server/modules/api-write (useWriter), que guarda la idempotencia. Sin sesión ni Origin.
@@ -37,6 +37,9 @@ export const SCOPES = {
   contacts_write:
     'Escribir contactos: etiquetas, listas y bajas; junto con «Contactos», también alta o cambio por teléfono y datos propios',
   consent_write: 'Registrar que una persona aceptó recibir mensajes (con el origen del permiso)',
+  // Envío de plantillas por API (docs/PLAN_API_ENVIO.md).
+  messages_send_template: 'Enviar plantillas aprobadas de WhatsApp a una persona (con tope diario por llave)',
+  compat: 'Enviar plantillas con la forma de llamada del proveedor anterior (además hace falta API_COMPAT=1)',
 };
 // Lectura o escritura de cada permiso, para agruparlos en pantalla y en /api/v1/me.
 export const SCOPE_KINDS = Object.freeze({
@@ -50,13 +53,13 @@ export const SCOPE_KINDS = Object.freeze({
   templates: 'read',
   contacts_write: 'write',
   consent_write: 'write',
+  messages_send_template: 'write',
+  compat: 'write',
 });
 // Permisos de escritura de la API v1: la llave que tenga alguno caduca siempre (180 días por omisión, 365 como máximo).
-export const API_WRITE_SCOPES = Object.freeze(['contacts_write', 'consent_write']);
-// Declarados y todavía sin ruta: no se pueden dar a una llave hasta que exista su ruta (envío de plantillas, I-8).
-export const PLANNED_SCOPES = Object.freeze({
-  messages_send_template: 'Enviar plantillas aprobadas (llegará con el envío por API)',
-});
+export const API_WRITE_SCOPES = Object.freeze(['contacts_write', 'consent_write', 'messages_send_template']);
+// Declarados y todavía sin ruta: no se pueden dar a una llave hasta que exista su ruta. Hoy ninguno.
+export const PLANNED_SCOPES = Object.freeze({});
 // Qué permiso (además de `events`) hace falta para ver el CONTENIDO de cada tipo de evento por la API de lectura. Sin él se entrega el sobre (tipo, marca, entidad,
 // fecha) con `data` vacío y `redacted: true`. Un tipo sin clasificar se trata como restringido. Los webhooks no se filtran así: los registra administración y es ella
 // quien decide qué eventos manda a qué destino.
@@ -115,6 +118,9 @@ export const LIMITS = {
   writeKeyDays: 180,
   maxKeyDays: 365,
   rotateGraceMs: 72 * 3600e3,
+  // Envío de plantillas (docs/PLAN_API_ENVIO.md): envíos aceptados por llave en 24 horas, si administración no dice otro.
+  sendDailyDefault: 1000,
+  sendDailyMax: 100_000,
 };
 const DAY = 86400e3;
 
@@ -270,6 +276,8 @@ export function createIntegrations({
     createdAt: r.created_at,
     expiresAt: r.expires_at ?? null,
     rotatedFrom: r.rotated_from ?? null,
+    dailySendLimit: r.daily_send_limit ?? null,
+    defaultNumberId: r.default_number_id ?? null,
     lastUsedAt: r.last_used_at || null,
     revokedAt: r.revoked_at || null,
   });
@@ -355,14 +363,82 @@ export function createIntegrations({
           field: 'expiresInDays',
         });
     }
-    const out = insertKey({ brandId, name, scopes, actorId: user.id, at: t, expiresAt: days ? t + days * DAY : null });
+    const send = sendSettingsOf(brandId, scopes, input);
+    const out = insertKey({
+      brandId,
+      name,
+      scopes,
+      actorId: user.id,
+      at: t,
+      expiresAt: days ? t + days * DAY : null,
+      ...send,
+    });
     return { key: keyView(db.prepare('SELECT * FROM api_keys WHERE id=?').get(out.id)), token: out.token };
   }
-  function insertKey({ brandId, name, scopes, actorId, at, expiresAt, rotatedFrom = null }) {
+  // Ajustes de una llave que envía plantillas (docs/PLAN_API_ENVIO.md): tope de envíos en 24 horas (1,000 si no se
+  // dice) y número de WhatsApp por omisión (uno de la marca, o ninguno). Una llave que no envía no los lleva.
+  function sendSettingsOf(brandId, scopes, input, current = null) {
+    const given = k => input[k] !== undefined && input[k] !== null && input[k] !== '';
+    if (!scopes.includes('messages_send_template')) {
+      const field = ['dailySendLimit', 'defaultNumberId'].find(given);
+      if (field)
+        throw fail(400, 'El tope diario y el número por omisión son de las llaves que envían plantillas.', {
+          code: 'invalid_request',
+          field,
+        });
+      return { dailySendLimit: null, defaultNumberId: null };
+    }
+    const limit = given('dailySendLimit')
+      ? Number(input.dailySendLimit)
+      : (current?.daily_send_limit ?? LIMITS.sendDailyDefault);
+    if (!Number.isInteger(limit) || limit < 1 || limit > LIMITS.sendDailyMax)
+      throw fail(400, 'El tope diario de envíos va de 1 a ' + LIMITS.sendDailyMax + '.', {
+        code: 'invalid_request',
+        field: 'dailySendLimit',
+      });
+    const number =
+      input.defaultNumberId === undefined
+        ? (current?.default_number_id ?? null)
+        : given('defaultNumberId')
+          ? String(input.defaultNumberId).trim().slice(0, 40)
+          : null;
+    if (number && !db.prepare('SELECT 1 FROM wa_numbers WHERE brand_id=? AND phone_number_id=?').get(brandId, number))
+      throw fail(400, 'Ese número de WhatsApp no es de la marca.', {
+        code: 'invalid_request',
+        field: 'defaultNumberId',
+      });
+    return { dailySendLimit: limit, defaultNumberId: number };
+  }
+  // Cambiar el tope diario o el número por omisión de una llave activa, sin rotarla.
+  function updateKey(user, id, input) {
+    const k = db.prepare('SELECT * FROM api_keys WHERE id=?').get(id);
+    if (!k) throw fail(404, 'Llave no disponible.', { code: 'not_found' });
+    crm.requireBrand(user, k.brand_id);
+    if (keyState(k) === 'revoked' || keyState(k) === 'expired')
+      throw fail(409, 'Sólo se cambia una llave activa.', { code: 'key_inactive' });
+    const send = sendSettingsOf(k.brand_id, parse(k.scopes, []), input ?? {}, k);
+    db.prepare('UPDATE api_keys SET daily_send_limit=?,default_number_id=? WHERE id=?').run(
+      send.dailySendLimit,
+      send.defaultNumberId,
+      k.id,
+    );
+    return keyView(db.prepare('SELECT * FROM api_keys WHERE id=?').get(k.id));
+  }
+  function insertKey({
+    brandId,
+    name,
+    scopes,
+    actorId,
+    at,
+    expiresAt,
+    rotatedFrom = null,
+    dailySendLimit = null,
+    defaultNumberId = null,
+  }) {
     const token = 'tcw_' + randomBytes(24).toString('base64url'),
       id = randomUUID();
     db.prepare(
-      'INSERT INTO api_keys(id,brand_id,name,prefix,key_hash,scopes,created_by,created_at,expires_at,rotated_from) VALUES(?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO api_keys(id,brand_id,name,prefix,key_hash,scopes,created_by,created_at,expires_at,rotated_from,daily_send_limit,default_number_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
     ).run(
       id,
       brandId,
@@ -374,6 +450,8 @@ export function createIntegrations({
       at,
       expiresAt,
       rotatedFrom,
+      dailySendLimit,
+      defaultNumberId,
     );
     return { id, token };
   }
@@ -403,6 +481,8 @@ export function createIntegrations({
         at: t,
         expiresAt: life ? t + life : null,
         rotatedFrom: k.id,
+        dailySendLimit: k.daily_send_limit ?? null,
+        defaultNumberId: k.default_number_id ?? null,
       });
       db.prepare('UPDATE api_keys SET expires_at=? WHERE id=?').run(
         Math.min(k.expires_at ?? Infinity, t + LIMITS.rotateGraceMs),
@@ -760,7 +840,13 @@ export function createIntegrations({
     read: Number(env.API_READ_PER_MINUTE) || LIMITS.perKeyPerMinute,
     write: Number(env.API_WRITE_PER_MINUTE) || LIMITS.writePerKeyPerMinute,
   };
-  const compile = r => ({ ...r, regex: new RegExp('^' + r.pattern.replace(/\{id\}/g, '([a-f0-9-]{36})') + '$') });
+  // {id}: un uuid; {ref}: un identificador de 32 caracteres hexadecimales (los envíos de plantillas).
+  const compile = r => ({
+    ...r,
+    regex: new RegExp(
+      '^' + r.pattern.replace(/\{id\}/g, '([a-f0-9-]{36})').replace(/\{ref\}/g, '([a-f0-9]{32})') + '$',
+    ),
+  });
   const CORE = [
     { method: 'GET', pattern: '/api/v1/me', scope: null, core: 'me' },
     { method: 'GET', pattern: '/api/v1/events', scope: 'events', core: 'events' },
@@ -938,6 +1024,37 @@ export function createIntegrations({
     });
     if (out.replayed) setHeader(res, 'Idempotent-Replayed', 'true');
     json(res, out.status, out.body);
+  }
+  // Para la capa de compatibilidad (server/modules/api-write/compat.mjs): una ruta de la API v1 con la entrada ya
+  // traducida, con la misma llave, límites, permisos, actor e idempotencia que una llamada directa. `also`: permisos
+  // que la capa pide además de los de la ruta. Devuelve { status, body, replayed, requestId } y los errores salen como
+  // excepción, para que la capa los responda con su forma.
+  function invoke(req, res, ip, { method, path, input, idemKey = null, idemTtlMs, also = [] }) {
+    const key = identify(req, ip);
+    for (const scope of also) need(key, scope);
+    const route = routes.find(r => !r.core && r.method === method && r.regex.test(path));
+    if (!route) throw fail(404, 'Ruta de la API no encontrada.', { code: 'not_found' });
+    limits(res, key, route, ip);
+    if (route.scope) need(key, route.scope);
+    if (route.also) need(key, route.also);
+    const actor = route.kind === 'write' ? actorOf(key) : null;
+    if (route.kind === 'write' && route.idem === 'required' && !idemKey)
+      throw fail(400, 'Esta ruta exige una clave de idempotencia.', { code: 'idempotency_key_required' });
+    const requestId = 'req_' + randomBytes(12).toString('hex');
+    const out = writer.dispatch({
+      route,
+      params: path.match(route.regex).slice(1),
+      key,
+      actor,
+      input,
+      query: new URLSearchParams(),
+      method,
+      idemKey,
+      idemTtlMs,
+      hash: sha(method + ' ' + path + '\n' + JSON.stringify(input)),
+      requestId,
+    });
+    return { ...out, requestId };
   }
   function core(name, key, res, url) {
     const q = url.searchParams,
@@ -1118,6 +1235,7 @@ export function createIntegrations({
           writeKeyDays: LIMITS.writeKeyDays,
           maxKeyDays: LIMITS.maxKeyDays,
           rotateGraceHours: LIMITS.rotateGraceMs / 3600e3,
+          sendDailyDefault: LIMITS.sendDailyDefault,
         },
         eventTypes: events.types().map(t => ({ type: t.type, title: t.title, entity: t.entity })),
         apiVersion: API_VERSION,
@@ -1134,6 +1252,13 @@ export function createIntegrations({
     if ((x = path.match(/^\/api\/integrations\/keys\/([a-f0-9-]+)\/revoke$/)) && req.method === 'POST') {
       const k = revokeKey(user, x[1]);
       audit(user, 'apikey.revoke', x[1]);
+      json(res, 200, { key: k });
+      return true;
+    }
+    if ((x = path.match(/^\/api\/integrations\/keys\/([a-f0-9-]+)$/)) && req.method === 'PATCH') {
+      rate('integ:' + user.id, 30);
+      const k = updateKey(user, x[1], await body(req));
+      audit(user, 'apikey.update', x[1]);
       json(res, 200, { key: k });
       return true;
     }
@@ -1199,6 +1324,7 @@ export function createIntegrations({
     rotateKey,
     registerNeeds,
     useWriter,
+    invoke,
     actorOf,
     test,
     authenticate,
