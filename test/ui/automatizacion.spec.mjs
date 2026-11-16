@@ -116,13 +116,22 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
 
   // Los tipos que el servidor todavía no ejecuta se ven, pero no se agregan
   if (phone) await editor.locator('.lz-bar [data-do="paleta"]').click();
-  const list = editor.locator('[data-do="paleta-tipo"][data-type="list"]');
-  await expect(list).toHaveAttribute('aria-disabled', 'true');
-  await expect(list).toContainText('Todavía no disponible');
+  const webhook = editor.locator('[data-do="paleta-tipo"][data-type="webhook"]');
+  await expect(webhook).toHaveAttribute('aria-disabled', 'true');
+  await expect(webhook).toContainText('Todavía no disponible');
+  // la Lista y la Plantilla de WhatsApp ya se pueden agregar
+  await expect(editor.locator('[data-do="paleta-tipo"][data-type="list"]')).not.toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  await expect(editor.locator('[data-do="paleta-tipo"][data-type="template"]')).not.toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
   // aria-disabled (y no disabled) para que siga en el orden del teclado y diga por qué al pulsarlo
-  await list.click({ force: true });
+  await webhook.click({ force: true });
   await expect(editor.locator('.lz-node')).toHaveCount(1);
-  await expect(editor.locator('[data-slot="aviso"]')).toContainText('todavía no está disponible');
+  await expect(editor.locator('[data-slot="aviso"]')).toContainText('todavía no llama a servicios externos');
   if (phone) await editor.locator('.lz-palette [data-do="paleta"]').click();
 
   // Agregar un Mensaje conectado al Inicio, desde el esquema
@@ -223,5 +232,113 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   await settled(page);
   await expect(page.locator('#page')).toContainText('Hola,');
   for (const id of wereOn) await setAutomation(id, true);
+  watcher.done();
+});
+
+// Un PNG mínimo (firma y relleno): lo que acepta la subida única como imagen.
+const PNG = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(64, 7)]);
+
+// Pasos nuevos en la pantalla: un Mensaje con archivo que se sube desde el panel y una Lista de cinco opciones que se
+// prueba con el servidor (se elige una fila y el recorrido sigue).
+test('automatización: subir un archivo a un paso y probar una lista de cinco opciones', async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const watcher = watch(page);
+  const phone = testInfo.project.name === 'celular';
+  const name = `Lista y archivo UI ${testInfo.project.name}`;
+  const pageEl = page.locator('#page');
+  const headers = { Origin: baseURL };
+  const brands = (await (await page.request.get('/api/chatflows')).json()).brands;
+  const brandId = brands.find(b => b.canManage).id;
+  const row = (id, title) => ({ id, title, description: '', do: { type: 'goto' } });
+  const graph = {
+    v: 1,
+    start: 'n1',
+    variables: [],
+    nodes: [
+      { id: 'n1', type: 'start', x: 0, y: 0, data: {} },
+      {
+        id: 'm',
+        type: 'message',
+        x: 300,
+        y: 0,
+        data: { parts: [{ kind: 'media', fileId: '', caption: 'El temario' }] },
+      },
+      {
+        id: 'l',
+        type: 'list',
+        x: 600,
+        y: 0,
+        data: {
+          header: '',
+          text: '¿Qué curso te interesa?',
+          footer: '',
+          button: 'Ver cursos',
+          sections: [
+            { title: '', rows: ['Aves', 'Perros', 'Gatos', 'Peces', 'Reptiles'].map((t, i) => row('r' + (i + 1), t)) },
+          ],
+          saveAs: 'curso',
+        },
+      },
+      { id: 'e', type: 'end', x: 900, y: 0, data: { text: 'Elegiste {{var.curso}}' } },
+    ],
+    edges: [
+      { from: 'n1', port: 'next', to: 'm' },
+      { from: 'm', port: 'next', to: 'l' },
+      ...['r1', 'r2', 'r3', 'r4', 'r5'].map(r => ({ from: 'l', port: 'opt:' + r, to: 'e' })),
+    ],
+  };
+  await page.goto('/crm');
+  await expect(page.locator('#breadcrumb-title')).toHaveText('Mi día');
+  const created = await page.request.post('/api/chatflows', {
+    headers,
+    data: { brandId, name, graph, start: { type: 'manual' }, clientRef: crypto.randomUUID() },
+  });
+  expect(created.status()).toBe(201);
+  const flowId = (await created.json()).flow.id;
+
+  await page.locator('.nav [data-view="automatizacion"]').click();
+  await expect(pageEl.locator('h1')).toHaveText('Recorridos');
+  const picker = pageEl.locator('form[data-do="marca"] select');
+  if (await picker.count()) await picker.selectOption(brandId);
+  await pageEl.locator('[data-do="abrir"]', { hasText: name }).first().click();
+  const editor = pageEl.locator('.lz');
+  await expect(editor.locator('.lz-node')).toHaveCount(4);
+  // el archivo sin elegir impide publicar
+  await expect(editor.locator('.lz-bar [data-slot="problemas"]')).toHaveAttribute('data-level', 'error');
+
+  // Abrir el Mensaje desde el esquema y subir una imagen desde su panel
+  if (!phone) await editor.locator('.lz-bar [data-do="ver"][data-pane="outline"]').click();
+  await editor.locator('.lz-outline .lz-row-main', { hasText: 'Archivo' }).first().click();
+  const panel = editor.locator('[data-slot="panel"]');
+  await expect(panel.locator('.lz-upload')).toContainText('Subir archivo');
+  await settled(page);
+  await expectNiebla(page, 'automatizacion-archivo', testInfo);
+  await panel
+    .locator('[data-do="subir"]')
+    .setInputFiles({ name: 'temario-ui.png', mimeType: 'image/png', buffer: PNG });
+  await expect(panel.locator('select[data-do="ref"] option:checked')).toHaveText('temario-ui.png');
+  await expect(editor.locator('.lz-bar [data-slot="problemas"]')).not.toHaveAttribute('data-level', 'error');
+  if (phone) await page.keyboard.press('Escape');
+
+  // Probar con el servidor: el archivo y la lista se ven; se elige «Peces» y el recorrido sigue con la variable
+  await editor.locator('.lz-bar [data-do="probar"]').click();
+  const chat = editor.locator('.lz-chat');
+  await expect(chat).toContainText('temario-ui.png');
+  await expect(chat).toContainText('Ver cursos');
+  await expect(editor.locator('[data-do="prueba-opcion"]')).toHaveCount(5);
+  await editor.locator('[data-do="prueba-opcion"]', { hasText: 'Peces' }).click();
+  await expect(chat).toContainText('Elegiste Peces');
+  await editor.locator('[data-do="prueba-cerrar"]').click();
+
+  // Archivar para dejar limpio (no se guardó: se descarta lo que hay en pantalla)
+  const current = (await (await page.request.get(`/api/chatflows/${flowId}`)).json()).flow;
+  const archived = await page.request.post(`/api/chatflows/${flowId}/archive`, {
+    headers,
+    data: { expectedRevision: current.revision },
+  });
+  expect(archived.status()).toBe(200);
   watcher.done();
 });

@@ -485,6 +485,19 @@ export default {
           unavailable: meta?.unavailable || {},
           uid: ctx.uid,
           onSave: canManage ? guardar : undefined,
+          // Subir una imagen o un PDF a la biblioteca de la marca desde el paso (Mensaje con archivo, Botones).
+          uploadFile: canManage
+            ? async file => {
+                const r = await api.post('/api/chatflows/files', {
+                  brandId: marca,
+                  clientRef: newClientRef(),
+                  file,
+                });
+                lists = { ...lists, files: [r.file, ...(lists.files || []).filter(f => f.id !== r.file.id)] };
+                keep.set('lists:' + marca, lists);
+                return r.file;
+              }
+            : undefined,
           // Probar usa el servidor: con permiso, el borrador tal como está en pantalla (aunque no esté guardado).
           simulate: body =>
             api.post(

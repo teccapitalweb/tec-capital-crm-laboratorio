@@ -1188,6 +1188,28 @@
   min-width: 0;
 }
 
+/* «Subir archivo» junto a la lista de archivos: un botón con el campo de archivo oculto dentro; el foco del teclado
+   se ve en el botón. */
+.lz-field > .lz-upload {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.lz-field > .lz-upload:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .lz-field > label,
 .lz-group > legend,
 .lz-list > legend {
