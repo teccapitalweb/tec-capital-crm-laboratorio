@@ -97,9 +97,11 @@ npm start
 
 `npm run check` comprueba codificación (UTF-8, LF), sintaxis y formato (Prettier); antes de entregar, `npx prettier --write` sobre lo que tocaste.
 
-La referencia vigente es **663 pruebas aprobadas** más 37 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **663 pruebas aprobadas** más 39 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
+
+**16 nov 2026 (menú):** el menú lateral conserva su desplazamiento al cambiar de pantalla y queda en seis grupos plegables (Atención, Contactos, Ventas, WhatsApp, Resultados, Ajustes); cada pantalla nueva declara su grupo en `nav.group`. Se **publicó** en `main` (commit `1dcad3c`).
 
 **16 nov 2026 (pantallas):** ocho pantallas nuevas pasan a visibles (`live`) para presentar el avance; siguen en vista previa Ejemplo, Automatización y Cambio de número. Se **publicó** en `main` (commit `f4ecabd`): ver [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md).
 

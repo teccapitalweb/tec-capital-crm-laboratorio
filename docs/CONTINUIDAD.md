@@ -34,13 +34,14 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Menú por grupos plegables (rama `chore/f0-01-codificacion`, 16 nov 2026; sin publicar)
+## Menú por grupos plegables (publicado en `main`, 16 nov 2026)
 
 Pedido del dueño al ver las pantallas nuevas en el menú: «hay mucho» y, al dar clic en un módulo, el menú volvía arriba. Dos cambios en `public/app.js` (`sideNav` y `shell`) y `public/polish.css`, sólo interfaz:
 
 - **El menú conserva su desplazamiento.** `shell()` vuelve a dibujar la barra lateral al cambiar de pantalla; ahora guarda y repone hasta dónde estaba desplazada.
 - **Grupos por lo que la persona va a hacer, plegables:** Atención (Mi día, Conversaciones, Operación, Tareas, Agenda), Contactos (Contactos, Lista de contactos, Importar contactos, Audiencias, Datos de contacto), Ventas (Oportunidades, Catálogo), WhatsApp (Difusiones, Plantillas, Salud), Resultados y Ajustes (Equipo, Ciclo de conversaciones, Mi configuración). El título de cada grupo es un botón; por omisión queda abierto «Atención» y el grupo de la pantalla actual, y lo que cada persona abre o cierra se recuerda en su navegador (`tc-nav-groups`). De 21 entradas a la vista se pasa a 5 más los seis títulos. En pantallas de 850 px o menos el menú es una fila sin títulos y nada se pliega. Cada pantalla nueva declara su grupo en `nav.group` de su `screen.json`.
 - **Pruebas:** `test/ui/menu.spec.mjs` (plegado por omisión, abrir, recordar, sin salto; celular sin plegado); las demás pruebas de navegador entran con todos los grupos abiertos (`NAV_GROUPS_OPEN` en `test/ui/helpers.mjs`).
+- **Publicado y comprobado en producción (commit `1dcad3c`):** despliegue correcto; producción sirve el `app.js` y los estilos del menú nuevo y `/screens/index.json` trae cada pantalla en su grupo; CI en verde (663 pruebas y 39 de navegador). Falta que el dueño lo vea con su sesión.
 
 ## Pantallas nuevas visibles (publicado en `main`, 16 nov 2026)
 
