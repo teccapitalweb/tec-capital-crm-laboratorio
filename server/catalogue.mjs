@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { noHour } from './reply-copy.mjs';
+import { forBrand } from './lib/real-mode.mjs';
 import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { transaction } from './database.mjs';
@@ -297,6 +298,7 @@ export function createCatalogue({
       text = `${k.title} · ${e.name}\nFecha: ${ctx.dateLabel}\nDocente: ${e.instructor || 'Por confirmar'}`;
     else
       text = `Te comparto la información de ${k.title} · ${e.name}.\n${ctx.dateLabel}\nPrecio de ejemplo: ${money(ctx.priceCents, e.currency)}.\nLaboratorio: no constituye una oferta comercial real.`;
+    text = forBrand(db, c.brand_id, text); // modo real (docs/PLAN_MODO_REAL.md): ni «precio de ejemplo» ni avisos de prueba
     const selected = input.flyerId || template?.flyer_id;
     if (selected) {
       flyer = db.prepare('SELECT * FROM flyers WHERE id=?').get(selected);
@@ -572,7 +574,13 @@ export function createCatalogue({
         (t.edition_id && t.edition_id !== e.id)
       )
         throw fail(400, 'La plantilla no corresponde a esta edición.');
-      json(res, 200, { text: templateText(t, info(e.course_id, e.id), txt(input.name, 60) || 'Cliente de prueba') });
+      json(res, 200, {
+        text: forBrand(
+          db,
+          e.brand_id,
+          templateText(t, info(e.course_id, e.id), txt(input.name, 60) || 'Cliente de prueba'),
+        ),
+      });
       return true;
     }
     if (path === '/api/catalogue/files' && req.method === 'POST') {

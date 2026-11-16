@@ -5,6 +5,7 @@ import { transaction } from './database.mjs';
 import { variables, templateValues, fillTemplate, validateTemplateBody } from './catalogue.mjs';
 import { linkKeys } from './ai-provider.mjs';
 import { encodeQR, qrSvgPath } from './qr.mjs';
+import { forBrand, isRealBrand } from './lib/real-mode.mjs';
 
 // Contenido (Fase 2 · bloque 2.6). Cierra el ciclo de mensajes del curso con plantillas por evento: cada marca mapea un
 // hecho (bienvenida por anuncio, pago pendiente, pago confirmado, recordatorio de sesión, grabación disponible, certificado
@@ -185,7 +186,8 @@ export function createContent({
     } catch {
       values = { nombre: name || 'Hola', marca: brandName(brandId) };
     }
-    const out = fillTemplate(t.body, { ...values, ...extra });
+    // modo real (docs/PLAN_MODO_REAL.md): una plantilla escrita para el laboratorio no le dice «de prueba» a un cliente real
+    const out = forBrand(db, brandId, fillTemplate(t.body, { ...values, ...extra }));
     if (out.length > 5000) return null;
     return { text: out, templateId: t.id, templateRevision: t.revision, category: EVENTS[event].category };
   }
@@ -434,6 +436,7 @@ export function createContent({
       ctx.promotion?.id || '',
       ctx.promotion?.revision || '',
       ctx.brand.name,
+      ...(isRealBrand(db, ctx.brand.id) ? ['real'] : []), // al encender el modo real la ficha se rehace sin el aviso
     ].join(':');
   }
   function sheetSvg(ctx) {
@@ -477,7 +480,7 @@ ${e.instructor ? `<text x="96" y="${300 + title.length * 78 + 134}" font-size="2
 ${p ? `<text x="${128 + money(ctx.priceCents).length * 34}" y="${H - 212}" font-size="26" fill="#8a919c" text-decoration="line-through">${esc(money(e.price_cents))}</text>` : ''}
 <g transform="translate(${W - 96 - side},${H - 330 + (150 - side) / 2})"><rect width="${side}" height="${side}" fill="#fff" rx="8"/><path d="${path}" fill="#1f242c" shape-rendering="crispEdges"/></g>
 <text x="96" y="${H - 120}" font-size="26" fill="#1f242c" font-weight="500">Escríbenos por WhatsApp, Instagram o Facebook</text>
-<text x="96" y="${H - 84}" font-size="20" fill="#8a919c">${esc(link)} · Laboratorio: ficha de práctica con datos del catálogo</text>
+<text x="96" y="${H - 84}" font-size="20" fill="#8a919c">${esc(link)}${isRealBrand(db, brand.id) ? '' : ' · Laboratorio: ficha de práctica con datos del catálogo'}</text>
 </svg>`;
   }
   function sheet(editionId, user, { refresh = false } = {}) {

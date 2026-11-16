@@ -3,7 +3,10 @@
 // Reglas que estos textos respetan:
 //  · Precio, fecha, docente y promoción salen SIEMPRE del catálogo vigente (el contexto `ctx`), nunca de un texto fijo.
 //  · No prometen lo que el sistema no hace: no confirman pagos por su cuenta ni apartan lugares.
-//  · Es un laboratorio: donde hay dinero o una oferta se dice, una vez y en corto, que es de prueba.
+//  · Es un laboratorio: donde hay dinero o una oferta se dice, una vez y en corto, que es de prueba. Una marca en modo real
+//    (docs/PLAN_MODO_REAL.md) no lo dice: server/lib/real-mode.mjs pasa cada texto por LAB_SWAPS (al final de este
+//    archivo) y quita las oraciones de aviso. Un texto nuevo con aviso de prueba lleva su equivalente real en LAB_SWAPS
+//    si quitar la oración no basta.
 // Funciones puras: reciben datos y devuelven texto; no leen la base ni la red.
 
 const money = (cents, currency) =>
@@ -327,3 +330,18 @@ export function paymentConfirmed({ name, reference, course, edition, perSession 
     '.\nEl equipo coordinador te enviará por aquí los accesos y los recordatorios antes de empezar.\n\nPago de prueba: no se realizó ningún cobro real.'
   );
 }
+
+// ---- Modo real por marca (docs/PLAN_MODO_REAL.md): cambios exactos que server/lib/real-mode.mjs aplica antes de quitar las
+// oraciones de aviso. Sólo hace falta una entrada cuando el texto de laboratorio promete algo que en una marca real no existe
+// (tarjeta u OXXO simulados, «Paga aquí» con un botón de pago de prueba); los avisos sueltos se quitan solos.
+export const REAL_PAYMENT_METHODS =
+  'Al inscribirte te mando tu pedido con un enlace donde verás cómo pagar. Cuando hayas pagado, envía tu comprobante por este chat y una persona del equipo lo valida. Si quieres empezar, escribe «Quiero inscribirme».';
+export const LAB_SWAPS = Object.freeze([
+  [paymentMethods, REAL_PAYMENT_METHODS],
+  [
+    '\nSi prefieres transferencia, envía tu comprobante por este chat y una persona lo valida.\n\nPago de prueba: no se cobra nada real.',
+    '\nCuando hayas pagado, envía tu comprobante por este chat y una persona del equipo lo valida.',
+  ],
+  ['\n\nPaga aquí: ', '\n\nCómo pagar: '],
+  ['Paga aquí (simulado): ', 'Cómo pagar: '],
+]);

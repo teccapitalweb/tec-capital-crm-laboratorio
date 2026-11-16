@@ -1,6 +1,7 @@
 import { randomUUID, randomBytes } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { csvCell } from './contacts.mjs';
+import { forBrand } from './lib/real-mode.mjs';
 
 // Encuestas (Fase 2 · resto del bloque 2.3). Una encuesta por sesión realizada o por apertura: cada inscrito recibe por su
 // chat una invitación con token propio y responde sin iniciar sesión en /encuesta/<token> (o desde la app, por la misma
@@ -157,7 +158,11 @@ export function createSurveys({
       });
       const msg = tpl
         ? tpl.text
-        : `¿Cómo te fue en ${what} de ${c.title}? Cuéntanos en dos minutos (tres calificaciones, una recomendación y un comentario): ${link(token)}\nTus respuestas ayudan a mejorar las próximas sesiones. Laboratorio: encuesta de práctica.`;
+        : forBrand(
+            db,
+            conv.brand_id,
+            `¿Cómo te fue en ${what} de ${c.title}? Cuéntanos en dos minutos (tres calificaciones, una recomendación y un comentario): ${link(token)}\nTus respuestas ayudan a mejorar las próximas sesiones. Laboratorio: encuesta de práctica.`,
+          );
       try {
         insertMessage(conv, null, msg, 'automation', 'survey:' + survey.id + ':' + r.enrollment_id, null, null, null, {
           category: 'utility',

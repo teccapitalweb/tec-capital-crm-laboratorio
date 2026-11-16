@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { transaction } from './database.mjs';
 import { qrSvgPath, encodeQR } from './qr.mjs';
 import { artworkAsset } from './demo-catalog.mjs';
+import { forBrand } from './lib/real-mode.mjs';
 
 // Certificación (Fase 2 · bloque 2.5). Un solo emisor: al cerrar una apertura (o a mano desde Coordinación) cada
 // inscripción con la asistencia mínima recibe un certificado con folio secuencial IPCI-AAAA-NNNNN, snapshot de lo
@@ -243,7 +244,11 @@ export function createCertificates({
           null,
           tpl
             ? tpl.text
-            : `¡Felicidades, ${holder}! Tu certificado de ${course?.title || 'el curso'} (${e.name}) ya está emitido.\nFolio: ${folio}\nVerifícalo y descárgalo aquí: ${verifyUrl(folio, code)}\nLaboratorio: certificado de práctica.`,
+            : forBrand(
+                db,
+                conv.brand_id,
+                `¡Felicidades, ${holder}! Tu certificado de ${course?.title || 'el curso'} (${e.name}) ya está emitido.\nFolio: ${folio}\nVerifícalo y descárgalo aquí: ${verifyUrl(folio, code)}\nLaboratorio: certificado de práctica.`,
+              ),
           'automation',
           'certificate:' + folio,
           null,
