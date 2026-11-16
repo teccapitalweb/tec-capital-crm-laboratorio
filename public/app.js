@@ -463,7 +463,7 @@
       ? list
           .map(
             c =>
-              `<button class="thread ${c.id === state.selected ? 'active' : ''}" data-conversation="${c.id}" data-channel="${c.channel}" aria-pressed="${c.id === state.selected}">${avatar(agentMode() ? c.customer_name : c.brand_name, c.channel)}<div class="thread-copy"><div class="thread-name"><strong>${esc(agentMode() ? c.customer_name : c.brand_name)}</strong><time>${time(c.updated_at)}</time></div><div class="thread-brand">${esc(agentMode() ? c.brand_name + ' · ' + (c.wa_display || (c.wa_peer ? '+' + c.wa_peer : '#' + c.test_number)) : c.course_title)}</div>${agentMode() ? tagsUI.chips(c) : ''}<p class="thread-preview">${esc(c.match_text || c.last_text || 'Conversación lista para empezar')}</p><div class="thread-meta"><span>${c.match_text ? 'Coincide en mensaje · ' : ''}${channels[c.channel].name}${c.customer_online && agentMode() ? ' · En línea' : ''}</span>${unread(c) ? `<span class="unread">${unread(c)}</span>` : `<span>${c.status === 'resolved' ? 'Cerrada' : c.status === 'waiting' ? 'Espera asesor' : c.bot_enabled ? 'Automática' : c.agent_name ? 'Con asesor' : 'Abierta'}</span>`}</div></div></button>`,
+              `<button class="thread ${c.id === state.selected ? 'active' : ''}" data-conversation="${c.id}" data-channel="${c.channel}" aria-pressed="${c.id === state.selected}">${avatar(agentMode() ? c.customer_name : c.brand_name, c.channel)}<div class="thread-copy"><div class="thread-name"><strong>${esc(agentMode() ? c.customer_name : c.brand_name)}</strong><time>${time(c.updated_at)}</time></div><div class="thread-brand">${esc(agentMode() ? c.brand_name + ' · ' + (c.wa_display || (c.wa_peer ? '+' + c.wa_peer : '#' + c.test_number)) : c.course_title)}</div>${agentMode() ? tagsUI.chips(c) : ''}<p class="thread-preview">${esc(c.match_text || c.last_text || 'Conversación lista para empezar')}</p><div class="thread-meta"><span>${c.match_text ? 'Coincide en mensaje · ' : ''}${channels[c.channel].name}${c.customer_online && agentMode() ? ' · En línea' : ''}</span>${agentMode() && lcListed.has(c.state) ? lcChip(c) : ''}${unread(c) ? `<span class="unread">${unread(c)}</span>` : `<span>${c.status === 'resolved' ? 'Cerrada' : c.status === 'waiting' ? 'Espera asesor' : c.bot_enabled ? 'Automática' : c.agent_name ? 'Con asesor' : 'Abierta'}</span>`}</div></div></button>`,
           )
           .join('')
       : `<div class="empty-list">${state.query ? 'No encontramos conversaciones con esa búsqueda.' : agentMode() ? 'Las conversaciones aparecerán aquí cuando los participantes escriban.' : 'Explora un curso para empezar tu primera conversación.'}</div>`;
@@ -513,7 +513,7 @@
             .map(([id, name]) => `<option value="${id}" ${id === c.stage ? 'selected' : ''}>${name}</option>`)
             .join('')}</select>`
         : `<span class="pill">${stages[c.stage]}</span>`
-    }</div>${team ? '<div id="conv-summary" class="conv-summary"></div>' : ''}${chatWindow(c, team)}<div class="history" id="history" role="log" aria-label="Mensajes de la conversación" aria-live="polite"></div><div class="chat-bottom"><div class="typing" id="typing"></div><div class="assist-row"><span class="assist-label">${icon(c.bot_enabled ? 'workflow' : c.status === 'waiting' ? 'clock-3' : 'user-round')}<span>${esc(c.status === 'resolved' ? 'Conversación cerrada' : c.bot_enabled ? 'Automatización por reglas' : c.agent_name ? 'Atiende ' + c.agent_name : 'Esperando a un asesor')}</span></span>${team && c.status !== 'resolved' ? `<div class="assist-actions"><button class="btn" data-chat-action="${c.bot_enabled || !c.assigned_to ? 'take' : 'automate'}">${c.bot_enabled || !c.assigned_to ? 'Tomar chat' : 'Reactivar reglas'}</button>${c.status !== 'resolved' ? '<button class="icon-btn" data-chat-action="resolve" aria-label="Cerrar conversación">' + icon('check-check') + '</button>' : ''}</div>` : ''}</div>${c.status === 'resolved' ? `<div class="closed-notice"><span>Esta conversación terminó.</span>${!team ? '<button class="btn" data-action="new-chat">Nueva prueba</button>' : ''}</div>` : `<div class="quick-replies">${team ? `<button data-action="ops-detail">${icon('users-round')} Equipo</button><button data-action="tg-open">${icon('tag')} Etiquetas</button><button data-action="qr-open">${icon('zap')} Respuestas</button><button data-action="qr-remind">${icon('alarm-clock')} Recordarme</button><button data-action="cat-materials">${icon('library')} Biblioteca</button><button data-template="flyer">${icon('image')} Flyer</button><button data-action="crm-insert-signature">Mi firma</button><button data-template="syllabus">Temario</button><button data-template="price">Precio</button><button data-action="pay-new">${icon('credit-card')} Cobrar</button>` : ['Información', 'Precio', 'Temario', 'Hablar con asesor'].map(x => `<button data-quick="${x}">${x}</button>`).join('')}</div>${team ? '<div id="conv-appointments" class="conv-scheduled"></div><div id="conv-scheduled" class="conv-scheduled"></div>' : ''}<form class="compose" id="message-form">${state.attachment ? `<div class="attachment-preview">${icon('paperclip')}<span>${esc(state.attachment.name)}</span><button type="button" class="icon-btn" data-action="remove-attachment" aria-label="Quitar archivo">${icon('x')}</button></div>` : ''}<textarea id="message-input" aria-label="Escribir mensaje" placeholder="${team ? 'Responder por ' + channels[c.channel].name + '…' : 'Escribe un mensaje'}" rows="${team ? 2 : 1}" maxlength="5000">${esc(state.drafts[c.id] || '')}</textarea><div class="compose-footer"><div class="compose-left"><button type="button" class="icon-btn" data-action="attach" aria-label="Adjuntar imagen o PDF">${icon('paperclip')}</button><button type="button" class="icon-btn compose-expand" data-action="compose-expand" aria-label="Ampliar el cuadro para escribir" aria-pressed="false" title="Ampliar o reducir el cuadro">${icon('maximize-2')}</button>${team ? `<button type="button" class="btn sch-open" data-action="sch-open" aria-label="Programar el envío de un mensaje">${icon('clock')}<span>Programar</span></button><button type="button" class="btn sch-open" data-action="apt-open" aria-label="Agendar una cita con esta persona">${icon('calendar-plus')}<span>Agendar cita</span></button>` : ''}<small>${channels[c.channel].name} · ${c.real || c.wa_peer ? 'número real' : 'Laboratorio'}</small></div><button class="btn primary" id="send-button" type="submit" ${state.sending ? 'disabled' : ''}><span>${state.sending ? 'Enviando' : 'Enviar'}</span>${icon(state.sending ? 'loader-circle' : 'arrow-up')}</button></div><input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"></form>`}</div>`;
+    }</div>${team ? lcBar(c) : ''}${team ? '<div id="conv-summary" class="conv-summary"></div>' : ''}${chatWindow(c, team)}<div class="history" id="history" role="log" aria-label="Mensajes de la conversación" aria-live="polite"></div><div class="chat-bottom"><div class="typing" id="typing"></div><div class="assist-row"><span class="assist-label">${icon(c.bot_enabled ? 'workflow' : c.status === 'waiting' ? 'clock-3' : 'user-round')}<span>${esc(c.status === 'resolved' ? 'Conversación cerrada' : c.bot_enabled ? 'Automatización por reglas' : c.agent_name ? 'Atiende ' + c.agent_name : 'Esperando a un asesor')}</span></span>${team && c.status !== 'resolved' ? `<div class="assist-actions"><button class="btn" data-chat-action="${c.bot_enabled || !c.assigned_to ? 'take' : 'automate'}">${c.bot_enabled || !c.assigned_to ? 'Tomar chat' : 'Reactivar reglas'}</button>${c.status !== 'resolved' ? '<button class="icon-btn" data-chat-action="resolve" aria-label="Cerrar conversación">' + icon('check-check') + '</button>' : ''}</div>` : ''}</div>${c.status === 'resolved' ? `<div class="closed-notice"><span>Esta conversación terminó.</span>${!team ? '<button class="btn" data-action="new-chat">Nueva prueba</button>' : ''}</div>` : `<div class="quick-replies">${team ? `<button data-action="ops-detail">${icon('users-round')} Equipo</button><button data-action="tg-open">${icon('tag')} Etiquetas</button><button data-action="qr-open">${icon('zap')} Respuestas</button><button data-action="qr-remind">${icon('alarm-clock')} Recordarme</button><button data-action="cat-materials">${icon('library')} Biblioteca</button><button data-template="flyer">${icon('image')} Flyer</button><button data-action="crm-insert-signature">Mi firma</button><button data-template="syllabus">Temario</button><button data-template="price">Precio</button><button data-action="pay-new">${icon('credit-card')} Cobrar</button>` : ['Información', 'Precio', 'Temario', 'Hablar con asesor'].map(x => `<button data-quick="${x}">${x}</button>`).join('')}</div>${team ? '<div id="conv-appointments" class="conv-scheduled"></div><div id="conv-scheduled" class="conv-scheduled"></div>' : ''}<form class="compose" id="message-form">${state.attachment ? `<div class="attachment-preview">${icon('paperclip')}<span>${esc(state.attachment.name)}</span><button type="button" class="icon-btn" data-action="remove-attachment" aria-label="Quitar archivo">${icon('x')}</button></div>` : ''}<textarea id="message-input" aria-label="Escribir mensaje" placeholder="${team ? 'Responder por ' + channels[c.channel].name + '…' : 'Escribe un mensaje'}" rows="${team ? 2 : 1}" maxlength="5000">${esc(state.drafts[c.id] || '')}</textarea><div class="compose-footer"><div class="compose-left"><button type="button" class="icon-btn" data-action="attach" aria-label="Adjuntar imagen o PDF">${icon('paperclip')}</button><button type="button" class="icon-btn compose-expand" data-action="compose-expand" aria-label="Ampliar el cuadro para escribir" aria-pressed="false" title="Ampliar o reducir el cuadro">${icon('maximize-2')}</button>${team ? `<button type="button" class="btn sch-open" data-action="sch-open" aria-label="Programar el envío de un mensaje">${icon('clock')}<span>Programar</span></button><button type="button" class="btn sch-open" data-action="apt-open" aria-label="Agendar una cita con esta persona">${icon('calendar-plus')}<span>Agendar cita</span></button>` : ''}<small>${channels[c.channel].name} · ${c.real || c.wa_peer ? 'número real' : 'Laboratorio'}</small></div><button class="btn primary" id="send-button" type="submit" ${state.sending ? 'disabled' : ''}><span>${state.sending ? 'Enviando' : 'Enviar'}</span>${icon(state.sending ? 'loader-circle' : 'arrow-up')}</button></div><input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"></form>`}</div>`;
     renderMessages(atBottom, oldTop);
     updateTyping();
     icons();
@@ -530,6 +530,52 @@
     }
   }
   // Canal simulado: ventana de servicio y origen por anuncio en la cabecera; estados de entrega y botones en cada mensaje.
+  // Ciclo de vida (server/modules/lifecycle; docs/PLAN_CICLO_DE_VIDA.md): el ESTADO de la conversación, aparte de
+  // quién la atiende. Chip en la cabecera del chat (y en la lista, sólo los estados que piden atención) y sus acciones.
+  const lcLabels = {
+    open: 'Abierta',
+    pending: 'Pendiente',
+    solved: 'Resuelta',
+    expired: 'Expirada',
+    awaiting: 'Esperando respuesta',
+    blocked: 'Bloqueada',
+  };
+  const lcActions = {
+    open: [
+      ['pending', 'Dejar pendiente'],
+      ['solved', 'Resolver'],
+    ],
+    pending: [
+      ['open', 'Quitar pendiente'],
+      ['solved', 'Resolver'],
+    ],
+    solved: [['open', 'Reabrir']],
+    expired: [['solved', 'Resolver']],
+    awaiting: [['solved', 'Resolver']],
+  };
+  const lcListed = new Set(['pending', 'expired', 'awaiting', 'blocked']);
+  const lcChip = c => {
+    const s = lcLabels[c.state] ? c.state : 'open';
+    return `<span class="lc-chip lc-${s}" title="Estado de la conversación">${lcLabels[s]}</span>`;
+  };
+  const lcBar = c =>
+    `<div class="lc-bar" role="group" aria-label="Estado de la conversación">${lcChip(c)}${(
+      lcActions[c.state || 'open'] || []
+    )
+      .map(([to, label]) => `<button type="button" class="btn lc-action" data-lc-to="${to}">${label}</button>`)
+      .join('')}</div>`;
+  async function lifecycleMove(to) {
+    const c = current();
+    if (!c) return;
+    try {
+      await api(`/api/lifecycle/conversations/${c.id}/state`, {
+        method: 'POST',
+        body: { to, expectedRevision: c.state_revision ?? 1, clientRef: crypto.randomUUID() },
+      });
+    } finally {
+      await refresh(); // con la revisión al día, aunque la conversación haya cambiado mientras tanto
+    }
+  }
   function chatWindow(c, team) {
     const w = c.window,
       ref = c.referral ? `<span class="pill">${icon('megaphone')} Anuncio: ${esc(c.referral.ad)}</span>` : '';
@@ -1431,6 +1477,7 @@
         return;
       }
       if (button.dataset.quick) return sendMessage(button.dataset.quick);
+      if (button.dataset.lcTo) return await lifecycleMove(button.dataset.lcTo);
       if (button.dataset.chatAction) {
         await api(`/api/conversations/${state.selected}/action`, {
           method: 'POST',
