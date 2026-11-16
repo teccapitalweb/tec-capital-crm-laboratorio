@@ -4,7 +4,9 @@
  * Lista las listas (conjuntos fijos de contactos) y los segmentos (filtros vivos) de la marca con su conteo. Crea
  * segmentos con el constructor de condiciones del kit y enseña en vivo cuántos entran y cuántos quedan fuera y por
  * qué; crea listas (también de exclusión); abre una audiencia para ver a sus miembros por páginas con su motivo, y
- * archiva o restaura. Todo lo decide el servidor (/api/audiences); aquí sólo se pinta.
+ * archiva o restaura. Un segmento propio se edita con el mismo constructor y su conteo en vivo (un prediseñado no
+ * se edita: se duplica). En los miembros se busca por nombre y se exportan a CSV si el acceso lo permite. Todo lo
+ * decide el servidor (/api/audiences); aquí sólo se pinta.
  */
 import { html, render, when } from '../../kit/html.js';
 import { formValues, listen } from '../../kit/events.js';
@@ -38,14 +40,18 @@ function resumen(datos) {
   </div>`;
 }
 
-/** Ventana para crear un segmento: nombre, constructor de condiciones y conteo en vivo. */
-function ventanaSegmento({ api, ctx, marca, campos }) {
+/**
+ * Ventana para crear un segmento, o para editar uno propio si llega `audiencia`: nombre, constructor de condiciones
+ * y conteo en vivo. Editar manda `expectedRevision`: si otra persona lo cambió antes, el servidor responde 409 y se
+ * avisa sin perder lo escrito.
+ */
+function ventanaSegmento({ api, ctx, marca, campos, audiencia = null }) {
   return dialog({
-    title: 'Nuevo segmento',
+    title: audiencia ? `Editar «${audiencia.name}»` : 'Nuevo segmento',
     wide: true,
     mount(cuerpo, cerrar) {
       const clientRef = newClientRef();
-      let definicion = { version: 1, match: 'any', groups: [] };
+      let definicion = audiencia?.definition ?? { version: 1, match: 'any', groups: [] };
       let completo = true;
       let vista = null;
       let error = '';
@@ -54,13 +60,16 @@ function ventanaSegmento({ api, ctx, marca, campos }) {
       render(
         cuerpo,
         html`<form class="k-stack" novalidate data-do="segmento">
-          ${field({ name: 'name', label: 'Nombre', required: true, maxlength: 80, autocomplete: 'off' }, { id: ctx.uid('seg-nombre') })}
+          ${field(
+            { name: 'name', label: 'Nombre', required: true, maxlength: 80, autocomplete: 'off' },
+            { id: ctx.uid('seg-nombre'), value: audiencia?.name ?? '' },
+          )}
           <div data-slot="condiciones"></div>
           <div class="k-card aud-vista" data-slot="vista"></div>
           <p class="k-error" data-slot="error"></p>
           <div class="k-actions">
             <button type="button" class="k-btn" data-do="cancelar">Cancelar</button>
-            <button type="submit" class="k-btn k-btn--primary">Crear segmento</button>
+            <button type="submit" class="k-btn k-btn--primary">${audiencia ? 'Guardar cambios' : 'Crear segmento'}</button>
           </div>
         </form>`,
       );
@@ -128,13 +137,19 @@ function ventanaSegmento({ api, ctx, marca, campos }) {
               return pintarVista();
             }
             try {
-              const { audience } = await api.post('/api/audiences', {
-                brandId: marca,
-                kind: 'segment',
-                name: nombre,
-                definition: definicion,
-                clientRef,
-              });
+              const { audience } = audiencia
+                ? await api.patch(`/api/audiences/${audiencia.id}`, {
+                    name: nombre,
+                    definition: definicion,
+                    expectedRevision: audiencia.revision,
+                  })
+                : await api.post('/api/audiences', {
+                    brandId: marca,
+                    kind: 'segment',
+                    name: nombre,
+                    definition: definicion,
+                    clientRef,
+                  });
               cerrar(audience);
             } catch (e) {
               error = e.message;
@@ -207,18 +222,52 @@ function ventanaLista({ api, ctx, marca }) {
   });
 }
 
-/** Ventana con los miembros de una audiencia, por páginas, con su motivo de exclusión. */
-function ventanaMiembros({ api, audiencia }) {
+/** Filas por exportación (las mismas del servidor): de ahí en adelante se avisa antes de descargar. */
+const TOPE_EXPORTAR = 10000;
+
+/**
+ * Ventana con los miembros de una audiencia, por páginas, con su motivo de exclusión. Se busca por nombre (en el
+ * servidor) y, con permiso, se exportan a CSV. La búsqueda no viaja a la exportación: la dirección de descarga sólo
+ * lleva el id de la audiencia, nunca lo que se escribió.
+ */
+function ventanaMiembros({ api, ctx, audiencia, puedeExportar }) {
   return dialog({
     title: audiencia.name,
     wide: true,
     actions: [{ id: 'cerrar', label: 'Cerrar' }],
     mount(cuerpo) {
+      const enlace = `/api/audiences/${audiencia.id}/export`;
+      let q = '';
+      let espera = 0;
       render(
         cuerpo,
         html`<div class="k-stack">
           <p class="k-hint">${tipoDe(audiencia)}${audiencia.description ? ` · ${audiencia.description}` : ''}</p>
           <div data-slot="resumen">${loading('Contando…')}</div>
+          <div class="aud-herramientas">
+            <div class="k-field aud-buscar">
+              <label class="k-label" for="${ctx.uid('miembros-buscar')}">Buscar por nombre</label>
+              <input
+                class="k-input"
+                type="search"
+                id="${ctx.uid('miembros-buscar')}"
+                data-do="buscar-miembro"
+                maxlength="100"
+                autocomplete="off"
+              />
+            </div>
+            ${when(
+              puedeExportar,
+              () => html`<div class="aud-exportar">
+                <a class="k-btn" href="${enlace}" download>Exportar CSV</a>
+                ${when(
+                  audiencia.memberCount > TOPE_EXPORTAR,
+                  () =>
+                    html`<p class="k-hint">Se exportan los primeros ${numero(TOPE_EXPORTAR)} de ${numero(audiencia.memberCount)}.</p>`,
+                )}
+              </div>`,
+            )}
+          </div>
           <div data-slot="miembros"></div>
         </div>`,
       );
@@ -243,15 +292,31 @@ function ventanaMiembros({ api, audiencia }) {
         async load({ cursor, signal }) {
           const datos = await api.get(
             `/api/audiences/${audiencia.id}/members`,
-            { limit: '50', ...(cursor ? { cursor } : {}) },
+            { limit: '50', ...(q ? { q } : {}), ...(cursor ? { cursor } : {}) },
             { signal },
           );
-          if (datos.summary) render(cuerpo.querySelector('[data-slot="resumen"]'), resumen(datos.summary));
+          // El resumen es de toda la audiencia: no cambia con la búsqueda.
+          if (datos.summary && !q) render(cuerpo.querySelector('[data-slot="resumen"]'), resumen(datos.summary));
           return { rows: datos.members, next: datos.next };
         },
-        empty: { title: 'Sin contactos', text: 'Esta audiencia todavía no tiene a nadie.' },
+        empty: { title: 'Sin contactos', text: 'Nadie coincide, o esta audiencia todavía no tiene a nadie.' },
       });
-      return tabla.destroy;
+      const quitar = listen(cuerpo, {
+        input: {
+          'buscar-miembro': (_evento, campo) => {
+            clearTimeout(espera);
+            espera = setTimeout(() => {
+              q = campo.value.trim();
+              tabla.reload();
+            }, 300);
+          },
+        },
+      });
+      return () => {
+        clearTimeout(espera);
+        quitar();
+        tabla.destroy();
+      };
     },
   });
 }
@@ -339,6 +404,11 @@ export default {
             label: 'Acciones',
             cell: fila => html`<span class="aud-acciones">
               <button type="button" class="k-btn" data-do="ver" data-id="${fila.id}">Ver</button>
+              ${when(datos.canEdit && fila.kind === 'segment' && !fila.archived, () =>
+                fila.preset
+                  ? html`<button type="button" class="k-btn" data-do="duplicar" data-id="${fila.id}">Duplicar</button>`
+                  : html`<button type="button" class="k-btn" data-do="editar" data-id="${fila.id}">Editar</button>`,
+              )}
               ${when(datos.canEdit, () =>
                 fila.archived
                   ? html`<button type="button" class="k-btn" data-do="restaurar" data-id="${fila.id}">Restaurar</button>`
@@ -406,7 +476,25 @@ export default {
             },
             async ver(_evento, boton) {
               const audiencia = buscar(boton.getAttribute('data-id'));
-              if (audiencia) await ventanaMiembros({ api, audiencia });
+              if (audiencia) await ventanaMiembros({ api, ctx, audiencia, puedeExportar: Boolean(datos?.canExport) });
+            },
+            async editar(_evento, boton) {
+              const audiencia = buscar(boton.getAttribute('data-id'));
+              if (!audiencia || audiencia.preset) return;
+              const guardado = await ventanaSegmento({ api, ctx, marca, campos: await camposDeMarca(), audiencia });
+              if (!guardado) return;
+              ctx.toast(`Se guardó «${guardado.name}»: ${numero(guardado.memberCount)} contactos.`);
+              recargar();
+            },
+            async duplicar(_evento, boton) {
+              const audiencia = buscar(boton.getAttribute('data-id'));
+              if (!audiencia) return;
+              const { audience } = await api.post(`/api/audiences/${audiencia.id}/duplicate`, {
+                name: `${audiencia.name} (copia)`.slice(0, 80),
+                clientRef: newClientRef(),
+              });
+              ctx.toast(`Se creó «${audience.name}». Ya puedes editar sus condiciones.`);
+              recargar();
             },
             async archivar(_evento, boton) {
               const audiencia = buscar(boton.getAttribute('data-id'));

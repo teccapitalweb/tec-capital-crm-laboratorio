@@ -25,7 +25,7 @@ Cada contacto seleccionado recibe el primer motivo que cumple: `excluded` (lo qu
 
 ## Rutas (`/api/audiences`; ver `campaigns.view`, editar `audiences.edit`)
 
-`GET ?brand=&archived=1` · `GET /fields?brand=` (campos para el constructor del kit) · `POST` `{brandId, kind, name, description?, role?, definition?, contactIds?, fromAudienceId?, clientRef}` · `GET|PATCH /:id` (`expectedRevision`) · `POST /:id/duplicate|archive|restore|recount` · `POST /preview` `{brandId, definition | audienceId | spec, requireConsent?}` → `{total, eligible, excluded:[{reason,label,count}], sample, ms}` (60 por minuto) · `GET /:id/members?status=all|eligible|excluded&reason=&cursor=&limit=` (orden por nombre e id; `summary` en la primera página) · `POST /:id/members` `{add?, remove?}` (≤500, idempotente). Archivar o pasar a exclusión una audiencia que usa una campaña programada, enviando, en pausa o detenida responde 409 `audience_in_use` con las campañas. Topes: 200 listas y 50 segmentos propios activos por marca, 50 000 miembros por lista.
+`GET ?brand=&archived=1` · `GET /fields?brand=` (campos para el constructor del kit) · `POST` `{brandId, kind, name, description?, role?, definition?, contactIds?, fromAudienceId?, clientRef}` · `GET|PATCH /:id` (`expectedRevision`) · `POST /:id/duplicate|archive|restore|recount` · `POST /preview` `{brandId, definition | audienceId | spec, requireConsent?}` → `{total, eligible, excluded:[{reason,label,count}], sample, ms}` (60 por minuto) · `GET /:id/members?status=all|eligible|excluded&reason=&q=&cursor=&limit=` (orden por nombre e id; `q` busca por nombre sin acentos; `summary` en la primera página) · `GET /:id/export?status=` (CSV, ver abajo) · `POST /:id/members` `{add?, remove?}` (≤500, idempotente). Archivar o pasar a exclusión una audiencia que usa una campaña programada, enviando, en pausa o detenida responde 409 `audience_in_use` con las campañas. Topes: 200 listas y 50 segmentos propios activos por marca, 50 000 miembros por lista.
 
 ## Para otros módulos (`host.module('audiences')`)
 
@@ -36,7 +36,11 @@ Cada contacto seleccionado recibe el primer motivo que cumple: `excluded` (lo qu
 
 ## Pantalla
 
-`public/screens/audiencias/` (grupo Gestión, icono `users-round`, administración y asesor con `campaigns.view`; hoy sólo administración lo tiene): audiencias de la marca con su conteo, nuevo segmento con el constructor de condiciones y el conteo en vivo con los excluidos por motivo, nueva lista (o de exclusión), ver miembros por páginas con su estado, archivar y restaurar. Prueba: `test/ui/audiencias.spec.mjs`.
+`public/screens/audiencias/` (grupo Gestión, icono `users-round`, administración y asesor con `campaigns.view`; hoy sólo administración lo tiene): audiencias de la marca con su conteo, nuevo segmento con el constructor de condiciones y el conteo en vivo con los excluidos por motivo, nueva lista (o de exclusión), ver miembros por páginas con su estado, archivar y restaurar. Además (15 nov 2026): **editar las condiciones** de un segmento propio con el mismo constructor y su conteo en vivo (`PATCH` con `expectedRevision`; un 409 se avisa sin perder lo escrito); un prediseñado no se edita, lleva **«Duplicar»**; **buscar dentro de los miembros** por nombre; y **«Exportar CSV»** si el acceso lo permite (con aviso cuando pasa del tope). Desde «Lista de contactos» se añaden contactos a una lista. Prueba: `test/ui/audiencias.spec.mjs`.
+
+## Exportar miembros
+
+`GET /api/audiences/:id/export?status=all|eligible|excluded` → `text/csv` con BOM. Columnas: nombre, teléfono y correo (**sólo con `contacts.phone`**; sin él no hay columna, ni enmascarada), consentimiento y estado (o el motivo de exclusión). Permisos: `campaigns.view` en la marca de la audiencia y **`contacts.export`** (existe en el catálogo; hoy sólo administración). Otra marca: 404. Cada celda pasa por `csvCell` (lo que empieza con `=`, `+`, `-`, `@`, tabulador o retorno lleva un apóstrofo delante; un teléfono `+52…` también). Seis exportaciones por minuto y persona (`host.rate`, 429). Tope de 10 000 filas: la respuesta trae `X-Export-Rows` y `X-Export-Truncated: 1`, y la pantalla avisa antes de descargar. Auditoría `audience.exported` con `entity_id` = `<audiencia>:<filas>`. Nombre de archivo `audiencia-<nombre sin acentos ni signos>-<fecha>.csv`. La URL sólo lleva el id y el estado: la búsqueda no viaja a la exportación. Prueba: `test/screens-polish.test.mjs`.
 
 ## Medido (pruebas, 6 500 contactos, servidor real)
 
@@ -44,4 +48,4 @@ Vista previa de toda la marca ≈ 50 ms; recontar ≈ 20 ms; recorrer los 6 500 
 
 ## Fuera de este incremento
 
-Motor y asistente de difusiones (D-5), campos de resultados de campañas (`campaign`, `campaign_count`, `ad`) y el prediseñado «Muy activos», `fromCampaign`, exportar miembros a CSV, buscar dentro de los miembros, añadir a una lista desde la lista de contactos, editar las condiciones de un segmento desde la pantalla (la API ya lo permite) y avisos en vivo de progreso de importación por audiencia (la importación ya los emite como trabajo).
+Motor y asistente de difusiones (D-5), campos de resultados de campañas (`campaign`, `campaign_count`, `ad`) y el prediseñado «Muy activos», `fromCampaign` y avisos en vivo de progreso de importación por audiencia (la importación ya los emite como trabajo).

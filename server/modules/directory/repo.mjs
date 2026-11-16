@@ -137,12 +137,17 @@ export function createRepo(db) {
     return { sql: parts.length ? ' AND ' + parts.join(' AND ') : '', params };
   }
 
+  // «Sin número»: no tiene teléfono y conversa por WhatsApp real en su marca (con su identificador de usuario, docs/
+  // PLAN_IDENTIDAD_SIN_TELEFONO.md). Sólo dice eso: ni el identificador ni nada que lo deje adivinar sale de aquí.
+  const WA_ONLY = `(c.phone_key = '' AND c.source_user_id IS NOT NULL AND EXISTS (SELECT 1 FROM conversations wv
+    WHERE wv.customer_id = c.source_user_id AND wv.brand_id = c.brand_id AND wv.wa_number IS NOT NULL))`;
   const FROM = `FROM contact_search s
     CROSS JOIN contacts c ON c.id = s.contact_id
     LEFT JOIN contact_consent k ON k.contact_id = c.id`;
   const COLUMNS = `c.id, c.brand_id, c.name, c.phone, c.email, c.source, c.created_at, c.updated_at, c.persona_id,
     c.source_user_id, s.name_key, s.activity_at, COALESCE(k.status, 'unknown') consent,
-    (SELECT u.test_number FROM users u WHERE u.id = c.source_user_id) test_number`;
+    (SELECT u.test_number FROM users u WHERE u.id = c.source_user_id) test_number,
+    ${WA_ONLY} wa_only`;
 
   // Una página de una marca. `after` es el cursor ya validado ({v, i}) o null.
   function brandPage(brandId, { sort, dir, after, limit, filter }) {

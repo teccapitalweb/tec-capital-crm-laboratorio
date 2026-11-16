@@ -7,7 +7,8 @@
  *
  * Qué hace: búsqueda con espera (nombre, correo o teléfono en cualquier formato), filtros rápidos en chips,
  * constructor de filtros con la gramática común, tabla con columnas elegibles y «Cargar más», y panel con
- * el detalle del contacto. Sólo lectura: crear y editar siguen en la vista actual («Editar en Contactos»).
+ * el detalle del contacto (con su bloque «WhatsApp» de GET /api/identity/contacts/:id). Crear y editar siguen en
+ * la vista actual («Editar en Contactos»); desde aquí sólo se añade la selección a una lista de Audiencias.
  *
  * En vivo: el servidor avisa `contacts.changed` con los ids que cambiaron; aquí se vuelven a pedir sólo
  * esas filas (con la misma búsqueda y filtros, así que una fila que dejó de cumplir sale de la lista).
@@ -15,11 +16,13 @@
  * vive en ctx.keep.
  */
 import { html, render, when } from '../../kit/html.js';
-import { listen } from '../../kit/events.js';
+import { formValues, listen } from '../../kit/events.js';
 import { createStore } from '../../kit/state.js';
-import { isAbort } from '../../kit/api.js';
+import { isAbort, newClientRef } from '../../kit/api.js';
 import { pagedTable } from '../../kit/components/table.js';
 import { detailPanel } from '../../kit/components/panel.js';
+import { dialog } from '../../kit/components/dialog.js';
+import { field } from '../../kit/components/form.js';
 import {
   conditionProblems,
   conditionsBuilder,
@@ -53,6 +56,7 @@ const ORIGENES = { manual: 'Alta manual', whatsapp: 'WhatsApp', ipcil: 'Históri
 /** Filtros rápidos: los mismos que acepta el servidor en `quick`. */
 const RAPIDOS = [
   { id: 'with_phone', label: 'Con teléfono' },
+  { id: 'no_phone', label: 'Sin teléfono' },
   { id: 'opted_in', label: 'Aceptó mensajes' },
   { id: 'active', label: 'Con interés abierto' },
   { id: 'recent', label: 'Alta en 30 días' },
@@ -142,8 +146,18 @@ function etiquetas(lista, tope = 3) {
   </span>`;
 }
 
+/** Quien conversa por WhatsApp real sin teléfono visible lleva el distintivo «sin número» (nunca su identificador). */
+const sinNumero = () => html`<span class="k-chip ct-sin-numero">Sin número</span>`;
 const telefono = contacto =>
-  contacto.phone || (contacto.labNumber ? html`<span class="k-muted">${contacto.labNumber} (prueba)</span>` : '—');
+  contacto.phone ||
+  (contacto.noNumber
+    ? sinNumero()
+    : contacto.labNumber
+      ? html`<span class="k-muted">${contacto.labNumber} (prueba)</span>`
+      : '—');
+
+/** Tope de contactos por llamada al añadir a una lista (el mismo del servidor). */
+const TOPE_LISTA = 500;
 
 /** Columnas de la tabla. La de marca sólo empieza visible cuando se miran todas las marcas. */
 function columnas(todas) {
@@ -181,7 +195,23 @@ const enVivo = new WeakMap();
 // Panel del contacto
 // ---------------------------------------------------------------------------------------------------
 
-function fichaContacto(d) {
+/** Bloque «WhatsApp» del panel: sólo si hay algo que decir. El identificador va abreviado (sus cuatro últimos). */
+function bloqueWhatsApp(wa, dato) {
+  if (!wa || !(wa.real || wa.username || wa.bsuidHint || wa.phoneSeenAt)) return html``;
+  return html`<section class="ct-seccion" data-key="ct-whatsapp">
+    <h3 class="ct-subtitulo">WhatsApp</h3>
+    <dl class="ct-datos">
+      ${dato('Teléfono', wa.phone || (wa.hasPhone ? '—' : sinNumero()))}
+      ${when(wa.username, () => dato('Usuario', `@${wa.username}`))}
+      ${when(wa.bsuidHint, () => dato('Identificador', `··${wa.bsuidHint}`))}
+      ${dato('Número real', wa.real ? 'Sí, conversa por WhatsApp real' : 'No')}
+      ${when(wa.phoneSeenAt, () => dato('Teléfono conocido desde', fecha(wa.phoneSeenAt)))}
+    </dl>
+    ${when(wa.bsuidHint, () => html`<p class="k-hint">El identificador se muestra abreviado.</p>`)}
+  </section>`;
+}
+
+function fichaContacto(d, wa = null) {
   const c = d.contact;
   const dato = (titulo, valor) => html`<div class="ct-dato"><dt>${titulo}</dt><dd>${valor}</dd></div>`;
   return html`<div class="k-stack ct-ficha">
@@ -193,6 +223,8 @@ function fichaContacto(d) {
       </dl>
       ${when(c.phoneMasked, () => html`<p class="k-hint">Tu acceso muestra el teléfono y el correo enmascarados.</p>`)}
     </section>
+
+    ${bloqueWhatsApp(wa, dato)}
 
     <section class="ct-seccion">
       <h3 class="ct-subtitulo">Etiquetas</h3>
@@ -252,6 +284,132 @@ function fichaContacto(d) {
       <button type="button" class="k-btn" data-do="ir-contactos">Editar en Contactos</button>
     </div>
   </div>`;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Añadir a una lista
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * Ventana para añadir los contactos elegidos a una lista existente de su marca o a una nueva. Una lista es de
+ * una sola marca: si la selección mezcla marcas, se pide elegir de una. Repetir no duplica (el servidor ignora a
+ * quien ya está y la lista nueva lleva su clientRef).
+ */
+function ventanaLista({ api, ctx, elegidos, marca }) {
+  return dialog({
+    title: 'Añadir a una lista',
+    mount(cuerpo, cerrar) {
+      const clientRef = newClientRef();
+      const ids = elegidos.map(c => c.id);
+      let listas = [];
+      let destino = '';
+      let error = '';
+      let ocupado = false;
+      const aviso = texto =>
+        render(
+          cuerpo,
+          html`<div class="k-stack">
+            <p>${texto}</p>
+            <div class="k-actions"><button type="button" class="k-btn" data-do="cancelar">Cerrar</button></div>
+          </div>`,
+        );
+      const opcion = l => ({
+        value: l.id,
+        label: `${l.name}${l.role === 'suppression' ? ' (exclusión)' : ''} · ${NUMERO.format(l.memberCount)}`,
+      });
+      const pintar = () =>
+        render(
+          cuerpo,
+          html`<form class="k-stack" novalidate data-do="lista">
+            <p class="k-hint">${ids.length === 1 ? '1 contacto elegido.' : `${NUMERO.format(ids.length)} contactos elegidos.`}</p>
+            ${field(
+              {
+                name: 'destino',
+                label: 'Lista',
+                type: 'select',
+                options: [{ value: '', label: 'Nueva lista…' }, ...listas.map(opcion)],
+              },
+              { id: ctx.uid('lista-destino'), value: destino },
+            )}
+            ${when(destino === '', () =>
+              field(
+                { name: 'name', label: 'Nombre de la lista nueva', required: true, maxlength: 80, autocomplete: 'off' },
+                { id: ctx.uid('lista-nombre') },
+              ),
+            )}
+            <p class="k-error" role="alert">${error}</p>
+            <div class="k-actions">
+              <button type="button" class="k-btn" data-do="cancelar">Cancelar</button>
+              <button type="submit" class="k-btn k-btn--primary">Añadir</button>
+            </div>
+          </form>`,
+        );
+      async function cargar() {
+        if (!marca) return aviso('Elige contactos de una sola marca: cada lista pertenece a una marca.');
+        if (ids.length > TOPE_LISTA)
+          return aviso(`Se pueden añadir hasta ${NUMERO.format(TOPE_LISTA)} contactos a la vez. Elige menos.`);
+        render(cuerpo, loading('Cargando las listas…'));
+        try {
+          const datos = await api.get('/api/audiences', { brand: marca });
+          if (!datos.canEdit) return aviso('Tu acceso no permite cambiar las listas de esta marca.');
+          listas = datos.audiences.filter(a => a.kind === 'list' && !a.archived);
+        } catch (e) {
+          if (isAbort(e)) return;
+          const sinPermiso = e?.status === 403 || e?.status === 404;
+          return aviso(
+            sinPermiso ? 'Tu acceso no permite usar las listas de esta marca.' : 'No se pudieron cargar las listas.',
+          );
+        }
+        pintar();
+      }
+      cargar();
+      return listen(cuerpo, {
+        click: { cancelar: () => cerrar(null) },
+        change: {
+          lista(_evento, formulario) {
+            const elegido = String(formValues(formulario).destino ?? '');
+            if (elegido === destino) return;
+            destino = elegido;
+            error = '';
+            pintar();
+          },
+        },
+        submit: {
+          async lista(_evento, formulario) {
+            if (ocupado) return;
+            const valores = formValues(formulario);
+            if (!destino && !String(valores.name ?? '').trim()) {
+              error = 'Escribe el nombre de la lista nueva.';
+              return pintar();
+            }
+            ocupado = true;
+            try {
+              if (!destino) {
+                const { audience } = await api.post('/api/audiences', {
+                  brandId: marca,
+                  kind: 'list',
+                  name: String(valores.name).trim(),
+                  contactIds: ids,
+                  clientRef,
+                });
+                return cerrar({ name: audience.name, added: audience.memberCount, already: 0 });
+              }
+              const respuesta = await api.post(`/api/audiences/${encodeURIComponent(destino)}/members`, {
+                add: ids,
+                clientRef,
+              });
+              cerrar({ name: respuesta.audience.name, added: respuesta.added, already: ids.length - respuesta.added });
+            } catch (e) {
+              error = e.message;
+              pintar();
+            } finally {
+              ocupado = false;
+            }
+          },
+        },
+      });
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -335,6 +493,8 @@ export default {
       rowKey: c => c.id,
       rowLabel: c => c.name,
       cards: true,
+      selectable: true,
+      actions: () => html`<button type="button" class="k-btn" data-do="anadir-lista">Añadir a una lista</button>`,
       columns: columnas(marca === 'all'),
       sort: ctx.keep.get('orden') ?? { by: 'activity', dir: 'desc' },
       onSort: orden => ctx.keep.set('orden', orden),
@@ -385,8 +545,16 @@ export default {
           let vivo = true;
           async function recargar() {
             try {
-              const datos = await api.get(`/api/contacts/${encodeURIComponent(id)}`);
-              if (vivo) render(cuerpo, fichaContacto(datos));
+              const ruta = encodeURIComponent(id);
+              // El bloque «WhatsApp» es un extra: si no llega, la ficha se pinta igual.
+              const [datos, wa] = await Promise.all([
+                api.get(`/api/contacts/${ruta}`),
+                api.get(`/api/identity/contacts/${ruta}`).catch(error => {
+                  if (isAbort(error)) throw error;
+                  return null;
+                }),
+              ]);
+              if (vivo) render(cuerpo, fichaContacto(datos, wa?.whatsapp ?? null));
             } catch (error) {
               if (!vivo || isAbort(error)) return;
               render(cuerpo, failure({ title: 'No se pudo abrir el contacto', error, retry: 'ficha-reintentar' }));
@@ -529,6 +697,21 @@ export default {
       clearTimeout(espera);
     });
 
+    // ---- Añadir la selección a una lista (de Audiencias). Los permisos los decide el servidor (audiences.edit).
+    async function anadirALista() {
+      const claves = new Set(tabla.selection());
+      const elegidos = tabla.rows().filter(c => claves.has(c.id));
+      if (!elegidos.length) return;
+      const marcas = [...new Set(elegidos.map(c => c.brandId))];
+      const hecho = await ventanaLista({ api, ctx, elegidos, marca: marcas.length === 1 ? marcas[0] : null });
+      if (!hecho) return;
+      const cuantos =
+        hecho.added === 1 ? 'Se añadió 1 contacto' : `Se añadieron ${NUMERO.format(hecho.added)} contactos`;
+      const ya = hecho.already ? ` (${NUMERO.format(hecho.already)} ya estaban)` : '';
+      ctx.toast(`${cuantos} a «${hecho.name}»${ya}.`);
+      tabla.clearSelection();
+    }
+
     // ---- Eventos de la pantalla
     ctx.onUnmount(
       listen(
@@ -561,6 +744,7 @@ export default {
               tabla.reload();
             },
             opciones: cargarOpciones,
+            'anadir-lista': anadirALista,
           },
           scroll: {
             // La posición de la lista sobrevive a un remontaje.

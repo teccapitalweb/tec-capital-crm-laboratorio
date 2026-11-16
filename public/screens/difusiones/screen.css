@@ -22,6 +22,15 @@
   list-style: none;
 }
 
+/* Motivo de una espera o detención bajo el estado de la fila. */
+.dif-motivo {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  white-space: normal;
+}
+
 .dif-paso {
   display: grid;
   gap: var(--space-5);
