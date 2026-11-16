@@ -1,6 +1,6 @@
 # Motor y asistente de difusiones (D-5)
 
-Estado: construido en la rama de integración, **sin publicar**. Migración con nombre `broadcasts/0002-engine` (aditiva; la escalera sigue en 41). La pantalla nace en vista previa (`SCREENS_PREVIEW=1`). Fuente: diseño de difusiones §5 adaptado a la conciliación técnica (filas 13, 15, 16, 25, 28, 37, 39, 40 y 41; hallazgos F-4 y F-19), que manda.
+Estado: **publicado en `main`** (15 nov 2026), apagado por marca. Migración con nombre `broadcasts/0002-engine` (aditiva; la escalera sigue en 41). La pantalla nace en vista previa (`SCREENS_PREVIEW=1`). Fuente: diseño de difusiones §5 adaptado a la conciliación técnica (filas 13, 15, 16, 25, 28, 37, 39, 40 y 41; hallazgos F-4 y F-19), que manda.
 
 ## Qué hace
 

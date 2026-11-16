@@ -34,7 +34,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Quinta tanda de la construcción (rama `chore/f0-01-codificacion`, 14 nov 2026; sin publicar)
+## Quinta tanda de la construcción (publicada en `main`, 15 nov 2026)
 
 Sin cambios visibles en producción: las dos pantallas nacen en vista previa y el envío nace apagado por marca. Cada pieza tiene su página.
 
@@ -44,6 +44,7 @@ Sin cambios visibles en producción: las dos pantallas nacen en vista previa y e
 - **Corrección al integrar:** un trabajo del asistente se marca hecho y suelta su arrendamiento en la misma sentencia (quitó una prueba intermitente de `test/durable-restart.test.mjs`).
 - **Base de datos:** dos migraciones con nombre más (`broadcasts/0002-engine` y `channel-health/0001-health`, aditivas); identidad `41+12.c4f56640`.
 - **Evidencia:** 631 pruebas (dos corridas) y 27 de navegador; `npm run check` limpio; las dos pantallas revisadas en ancho de computadora y de celular con la base de demostración.
+- **Publicado y comprobado en producción (commit `e69324b`):** despliegue de Railway correcto y sin corte visible; `/api/health` devuelve `"schema":"41+12.c4f56640"` (las dos migraciones aplicadas) y no informa módulos fallidos; `/screens/index.json` sigue vacío (pantallas ocultas); sin sesión, `/api/broadcasts`, `/api/whatsapp/health`, `/api/audiences`, `/api/whatsapp/templates`, `/api/contacts` y `/api/crm` responden 401; el webhook de Meta sin firma responde 401; `GET //` responde 400. No se entró con ninguna cuenta: falta comprobar con sesión que la bandeja y un entrante de WhatsApp real se comportan igual (el paso del entrante ahora mira si es respuesta a una difusión). **CI de ese commit:** `ui` en verde y `verify` en rojo por una sola prueba del reloj de salud que dependía del milisegundo (630 de 631); la prueba está corregida en la rama (sin cambio en el producto) y sube con el siguiente envío.
 - **Sin verificar contra Meta real** (listas completas en los dos planes): todo el envío real (que el dato de vuelta llegue en cada estado, que el `wa_id` coincida con el remitente, la carga del botón, los códigos de error y el límite por nivel, 10 envíos por segundo con el chat atendiendo) y los nombres de los campos y la forma de los avisos de salud. Requisito externo: suscribir en la app de Meta los campos de aviso además de `messages`.
 - **Falta:** tablero global, calendario y exportación de resultados (D-6); reorientar, duplicar y pruebas A/B (D-7); la insignia «Difusión» en el chat y la vista «Difusiones» de la bandeja; programar con zona horaria; identidad sin teléfono (I-2); la API de escritura y de envío (I-6, I-7a, I-8); cambio de número (I-11). El uso diario que calcula la salud cuenta también a los destinatarios de los ensayos (estimación algo alta). Los respaldos `before-*` siguen sin rotarse.
 

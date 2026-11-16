@@ -97,11 +97,11 @@ npm start
 
 `npm run check` comprueba codificación (UTF-8, LF), sintaxis y formato (Prettier); antes de entregar, `npx prettier --write` sobre lo que tocaste.
 
-La referencia vigente es **617 pruebas aprobadas** más 23 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **631 pruebas aprobadas** más 27 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 
-**14 nov 2026 (última del día):** la quinta tanda (motor y asistente de difusiones con plantilla, apagado por marca, y salud del número y de la cuenta de WhatsApp) está en la rama `chore/f0-01-codificacion`, **sin publicar**; esquema `41+12.c4f56640`. Planes: [PLAN_MOTOR_DIFUSIONES.md](docs/PLAN_MOTOR_DIFUSIONES.md) y [PLAN_SALUD_NUMERO.md](docs/PLAN_SALUD_NUMERO.md).
+**15 nov 2026:** la quinta tanda (motor y asistente de difusiones con plantilla, apagado por marca, y salud del número y de la cuenta de WhatsApp) se **publicó** en `main` (commit `e69324b`; esquema `41+12.c4f56640`). Planes: [PLAN_MOTOR_DIFUSIONES.md](docs/PLAN_MOTOR_DIFUSIONES.md) y [PLAN_SALUD_NUMERO.md](docs/PLAN_SALUD_NUMERO.md).
 
 **14 nov 2026 (noche):** la cuarta tanda (plantillas completas de WhatsApp con encabezado y botones y su adopción por lote, subida única de archivos, y audiencias: listas, segmentos y listas de exclusión) se **publicó** en `main` (commit `39f3dc7` y su corrección de permisos de plantillas `65983ff`; esquema `41+10.f226e990`). Planes: [PLAN_PLANTILLAS_COMPLETAS.md](docs/PLAN_PLANTILLAS_COMPLETAS.md) y [PLAN_AUDIENCIAS.md](docs/PLAN_AUDIENCIAS.md).
 
