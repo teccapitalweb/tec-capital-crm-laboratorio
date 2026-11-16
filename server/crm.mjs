@@ -105,7 +105,9 @@ export function createCRM({ db, body, json, audit, passwordHash, checkPassword, 
     db.prepare('UPDATE team_invites SET used_by=? WHERE id=?').run(user.id, invite.id);
     audit(user, 'team.invite.accepted', invite.id);
   };
-  function syncConversation(c) {
+  // `adoptContactId` (identidad, docs/PLAN_IDENTIDAD_SIN_TELEFONO.md): un contacto de la marca sin dueño que pasa a
+  // ser el del cliente cuando éste todavía no tiene contacto en la marca (p. ej. importado con el mismo teléfono).
+  function syncConversation(c, { adoptContactId = null } = {}) {
     if (!c.edition_id) {
       c.edition_id = defaultEditionId(c.course_id);
       db.prepare('UPDATE conversations SET edition_id=? WHERE id=?').run(c.edition_id, c.id);
@@ -119,6 +121,18 @@ export function createCRM({ db, body, json, audit, passwordHash, checkPassword, 
     let contact = db
       .prepare('SELECT * FROM contacts WHERE source_user_id=? AND brand_id=?')
       .get(c.customer_id, c.brand_id);
+    if (
+      !contact &&
+      adoptContactId &&
+      db
+        .prepare(
+          'UPDATE contacts SET source_user_id=?,updated_at=? WHERE id=? AND brand_id=? AND source_user_id IS NULL',
+        )
+        .run(c.customer_id, now, adoptContactId, c.brand_id).changes
+    ) {
+      contact = db.prepare('SELECT * FROM contacts WHERE id=?').get(adoptContactId);
+      contactHook(contact);
+    }
     if (!contact) {
       const id = randomUUID();
       db.prepare(

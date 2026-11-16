@@ -61,6 +61,12 @@ export function createChannel({
   const useOutbound = fn => {
     outboundOf = fn;
   }; // lo fija whatsapp.mjs: arma lo que viaja a un número real (texto, botones, archivo)
+  // Estado del par (identidad, I-2; conciliación, fila 41): el último mensaje de la persona a ese número en cualquier
+  // conversación (`lastInboundAt(c)`) y el número visible de una conversación real (`display(c)`). Lo fija whatsapp.mjs.
+  let peer = null;
+  const usePeer = api => {
+    peer = api;
+  };
   const WA_CLOSED =
     'Pasaron más de 24 horas desde el último mensaje de esta persona: WhatsApp sólo deja enviarle una plantilla aprobada (botón «Enviar plantilla») hasta que vuelva a escribir.';
   const HOLD_MS = Math.max(1, Number(process.env.WA_HOLD_DAYS) || 7) * DAY,
@@ -81,6 +87,8 @@ export function createChannel({
   };
 
   // Ventana de servicio: 24 h desde el último mensaje del cliente; si llegó por anuncio, además 72 h desde su primer mensaje.
+  // Es la ÚNICA fuente de la ventana. En una conversación real, el último mensaje de la persona es el mayor entre el de
+  // esta conversación y el de su estado del par (la ventana de Meta es por persona y número, no por conversación).
   function windowOf(c, { lastCustomerAt, firstCustomerAt } = {}, cache = null) {
     if (lastCustomerAt === undefined) {
       const r = db
@@ -90,6 +98,10 @@ export function createChannel({
         .get(c.id);
       lastCustomerAt = r.l;
       firstCustomerAt = r.f;
+    }
+    if (c.wa_number && peer) {
+      const byPeer = peer.lastInboundAt(c);
+      if (byPeer && byPeer > (lastCustomerAt || 0)) lastCustomerAt = byPeer;
     }
     const referral = typeof c.referral === 'string' ? parseReferral(c.referral) : c.referral || null;
     const real = Boolean(c.wa_number),
@@ -111,6 +123,9 @@ export function createChannel({
     const cache = new Map();
     return rows.map(c => ({
       ...c,
+      // conversación real y número visible (diseño de identidad §3.7): «+52…», «@usuario» o «Número oculto ··a1b2»
+      real: Boolean(c.wa_number),
+      wa_display: c.wa_number ? (peer ? peer.display(c) : c.wa_peer ? '+' + c.wa_peer : '') : '',
       referral: parseReferral(c.referral),
       window: windowOf(c, { lastCustomerAt: c.last_customer_at, firstCustomerAt: c.first_customer_at }, cache),
     }));
@@ -575,6 +590,7 @@ export function createChannel({
     handle,
     useConnector,
     useOutbound,
+    usePeer,
     applyStatus,
   };
 }
