@@ -101,6 +101,8 @@ La referencia vigente es **631 pruebas aprobadas** más 27 de navegador con `npm
 
 ## Lo siguiente
 
+**15 nov 2026 (después):** la sexta tanda (identidad por identificador de usuario de WhatsApp y API de escritura con llaves de permisos, caducidad y rotación) está en la rama `chore/f0-01-codificacion`, **sin publicar**; esquema `41+14.11b80d17`. Planes: [PLAN_IDENTIDAD_SIN_TELEFONO.md](docs/PLAN_IDENTIDAD_SIN_TELEFONO.md) y [PLAN_API_ESCRITURA.md](docs/PLAN_API_ESCRITURA.md).
+
 **15 nov 2026:** la quinta tanda (motor y asistente de difusiones con plantilla, apagado por marca, y salud del número y de la cuenta de WhatsApp) se **publicó** en `main` (commit `e69324b`; esquema `41+12.c4f56640`). Planes: [PLAN_MOTOR_DIFUSIONES.md](docs/PLAN_MOTOR_DIFUSIONES.md) y [PLAN_SALUD_NUMERO.md](docs/PLAN_SALUD_NUMERO.md).
 
 **14 nov 2026 (noche):** la cuarta tanda (plantillas completas de WhatsApp con encabezado y botones y su adopción por lote, subida única de archivos, y audiencias: listas, segmentos y listas de exclusión) se **publicó** en `main` (commit `39f3dc7` y su corrección de permisos de plantillas `65983ff`; esquema `41+10.f226e990`). Planes: [PLAN_PLANTILLAS_COMPLETAS.md](docs/PLAN_PLANTILLAS_COMPLETAS.md) y [PLAN_AUDIENCIAS.md](docs/PLAN_AUDIENCIAS.md).
