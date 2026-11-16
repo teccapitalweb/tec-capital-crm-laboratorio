@@ -1,0 +1,10 @@
+{
+  "id": "cambio-numero",
+  "title": "Cambio de número",
+  "visibility": "preview",
+  "nav": { "group": "Gestión", "icon": "repeat", "label": "Cambio de número", "order": 56 },
+  "roles": ["admin"],
+  "permission": "channels.whatsapp.connect",
+  "entry": "index.js",
+  "styles": ["screen.css"]
+}

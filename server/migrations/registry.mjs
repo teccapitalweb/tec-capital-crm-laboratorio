@@ -19,6 +19,7 @@ import inbox from './named/inbox/index.mjs';
 import jobs from './named/jobs/index.mjs';
 import messages from './named/messages/index.mjs';
 import queues from './named/queues/index.mjs';
+import waCutover from './named/wa-cutover/index.mjs';
 
 // «contacts» va después de «identity» aunque el alfabeto diga otra cosa: su búsqueda usa la clave de teléfono.
 // «messages» va después de «queues»: las dos añaden columnas a messages y una base nueva debe quedar con el mismo orden
@@ -27,6 +28,7 @@ import queues from './named/queues/index.mjs';
 // «audiences» va después de todas: usa la búsqueda de contactos y la importación la llena.
 // «channel-health» va al final: añade columnas a wa_account (broadcasts) y llegó después de todas las publicadas.
 // «api» va después de todas: añade columnas a api_keys y webhook_endpoints (escalera) y llegó después de las publicadas.
+// «wa-cutover» va al final: añade columnas a wa_numbers (después de identity) y llegó después de las publicadas.
 export const NAMED = defineRegistry([
   ...attributes,
   ...broadcasts,
@@ -40,4 +42,5 @@ export const NAMED = defineRegistry([
   ...audiences,
   ...channelHealth,
   ...api,
+  ...waCutover,
 ]);
