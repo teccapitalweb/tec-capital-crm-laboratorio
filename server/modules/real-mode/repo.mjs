@@ -35,6 +35,15 @@ export function createRepo(db) {
           now,
         ),
       ),
+    // Cursos activos sin flyer propio aprobado: en laboratorio usan el arte de demostración (el incluido con los cursos de
+    // ejemplo o el generado con «PRECIO DE EJEMPLO»); en modo real ese arte no sale y el material va sin imagen.
+    demoFlyerCourses: brandId =>
+      db
+        .prepare(
+          "SELECT c.title FROM courses c WHERE c.brand_id=? AND c.active=1 AND NOT EXISTS (SELECT 1 FROM flyers f JOIN library_files l ON l.id=f.file_id WHERE f.brand_id=c.brand_id AND f.course_id=c.id AND f.status='approved' AND l.builtin_id IS NULL) ORDER BY c.title",
+        )
+        .all(brandId)
+        .map(r => r.title),
     // Textos que la marca escribió y que todavía avisan de la prueba: plantillas aprobadas, conocimiento aprobado,
     // respuestas rápidas compartidas, bienvenida del curso y flujo de bienvenida. En modo real esas frases se quitan al
     // enviar, pero conviene reescribirlos para que digan lo correcto.

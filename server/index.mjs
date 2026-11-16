@@ -1409,6 +1409,8 @@ const server = http.createServer(async (req, res) => {
           { course_id: course.id, edition_id: ctx.edition.id, brand_id: course.brand_id, channel: 'whatsapp' },
           { kind: 'flyer' },
         );
+        // Modo real (docs/PLAN_MODO_REAL.md): sin flyer propio no hay imagen; el arte de demostración no se muestra.
+        if (!prepared.flyerSnapshot) throw fail(404, 'Este curso todavía no tiene flyer propio.');
         if (prepared.flyerSnapshot.libraryFileId)
           return await catalogue.serveFile(res, prepared.flyerSnapshot.libraryFileId);
         return await serveFlyer(res, prepared.flyerSnapshot.course, ctx.brand, null);

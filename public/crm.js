@@ -161,7 +161,9 @@ window.createCRMUI = function ({
       opportunities: [
         'Seguimiento comercial',
         'Oportunidades',
-        'Cada curso tiene su propio seguimiento. Las ventas son de práctica.',
+        state.brands.find(b => b.id === state.brand)?.realMode
+          ? 'Cada curso tiene su propio seguimiento.'
+          : 'Cada curso tiene su propio seguimiento. Las ventas son de práctica.',
       ],
       tasks: ['El siguiente paso', 'Tareas', 'Dale continuidad a cada conversación.'],
       team: ['Administración', 'Equipo y accesos', 'Invita a cada asesor y define qué marcas puede atender.'],

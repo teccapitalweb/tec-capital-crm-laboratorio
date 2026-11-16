@@ -62,6 +62,13 @@ export default {
       if (!repo.hasCurrentEdition(brandId, now())) out.push('una edición publicada con precio y fecha vigentes');
       const lab = repo.labTexts(brandId, LAB_WORDING);
       if (lab.length) out.push(lab.length + ' texto' + (lab.length === 1 ? '' : 's') + ' propios con aviso de prueba');
+      const demo = repo.demoFlyerCourses(brandId);
+      if (demo.length)
+        out.push(
+          demo.length +
+            (demo.length === 1 ? ' curso con flyer de demostración' : ' cursos con flyer de demostración') +
+            ' (sin flyer propio aprobado)',
+        );
       return out;
     }
     function card(brandId) {
@@ -77,6 +84,7 @@ export default {
         updatedByName: s.updated_by ? repo.userName(s.updated_by) : null,
         missing: missing(brandId, s),
         labTexts: lab.slice(0, 20),
+        demoFlyerCourses: repo.demoFlyerCourses(brandId).slice(0, 20),
       };
     }
 

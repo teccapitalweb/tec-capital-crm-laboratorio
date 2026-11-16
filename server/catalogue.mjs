@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { noHour } from './reply-copy.mjs';
-import { forBrand } from './lib/real-mode.mjs';
+import { forBrand, isRealBrand } from './lib/real-mode.mjs';
 import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { transaction } from './database.mjs';
@@ -270,6 +270,12 @@ export function createCatalogue({
     )
       throw fail(400, 'Usa sólo las variables disponibles y cierra sus llaves.');
   }
+  // Flyer de demostración: su archivo es uno de los artes incluidos con los cursos de ejemplo (library_files.builtin_id).
+  const isDemoFlyer = f =>
+    Boolean(
+      db.prepare('SELECT builtin_id FROM library_files WHERE brand_id=? AND id=?').get(f.brand_id, f.file_id)
+        ?.builtin_id,
+    );
   function prepare(c, input = {}, name = null) {
     const ctx = info(c.course_id, c.edition_id),
       { course: k, edition: e, promotion: p, brand } = ctx;
@@ -299,6 +305,10 @@ export function createCatalogue({
     else
       text = `Te comparto la información de ${k.title} · ${e.name}.\n${ctx.dateLabel}\nPrecio de ejemplo: ${money(ctx.priceCents, e.currency)}.\nLaboratorio: no constituye una oferta comercial real.`;
     text = forBrand(db, c.brand_id, text); // modo real (docs/PLAN_MODO_REAL.md): ni «precio de ejemplo» ni avisos de prueba
+    // Modo real: los flyers de demostración (el arte incluido con los cursos de ejemplo y el generado con «PRECIO DE
+    // EJEMPLO») no salen a un cliente real. Uno elegido a mano se rechaza con el motivo; en la elección automática se
+    // salta y el material sale sin imagen hasta que la marca suba el suyo (Preparar marca lo lista).
+    const real = isRealBrand(db, c.brand_id);
     const selected = input.flyerId || template?.flyer_id;
     if (selected) {
       flyer = db.prepare('SELECT * FROM flyers WHERE id=?').get(selected);
@@ -310,6 +320,14 @@ export function createCatalogue({
         flyerState(flyer) !== 'Listo para enviar'
       )
         throw fail(409, 'El flyer no está vigente y aprobado para esta edición y canal.');
+      if (real && isDemoFlyer(flyer))
+        throw Object.assign(
+          fail(
+            409,
+            'Es un flyer de demostración y esta marca atiende clientes reales. Sube el flyer propio del curso en Catálogo.',
+          ),
+          { code: 'demo_flyer' },
+        );
     } else if (!template && kind === 'flyer')
       flyer =
         db
@@ -317,7 +335,7 @@ export function createCatalogue({
             "SELECT * FROM flyers WHERE edition_id=? AND status='approved' AND channel IN ('all',?) ORDER BY updated_at DESC,id",
           )
           .all(e.id, c.channel)
-          .find(f => flyerState(f) === 'Listo para enviar') || null;
+          .find(f => flyerState(f) === 'Listo para enviar' && !(real && isDemoFlyer(f))) || null;
     const commercial = {
       courseId: k.id,
       courseTitle: k.title,
@@ -340,7 +358,7 @@ export function createCatalogue({
       flyerId: flyer?.id || null,
       flyerRevision: flyer?.revision || null,
     };
-    const hasFlyer = Boolean(flyer) || (!template && kind === 'flyer');
+    const hasFlyer = Boolean(flyer) || (!template && kind === 'flyer' && !real);
     const flyerSnapshot = hasFlyer
       ? {
           course: {
