@@ -49,7 +49,7 @@ Fusión de clientes **segura** = sin dos conversaciones abiertas del mismo curso
 
 ## Visualización y privacidad
 
-- La lista y el chat reciben `real` y `wa_display` («+52…», «@usuario» o «Número oculto ··a1b2»); `public/app.js` sólo los usa en los cuatro sitios de D.7. El distintivo «sin número», el bloque «WhatsApp» de la ficha, el filtro «Sin teléfono» y la tarjeta «Identidad» en Conectores quedan para la interfaz nueva (las rutas ya existen).
+- La lista y el chat reciben `real` y `wa_display` («+52…», «@usuario» o «Número oculto ··a1b2»); `public/app.js` sólo los usa en los cuatro sitios de D.7. Hecho en la interfaz nueva (15 nov 2026, en vista previa): el distintivo «sin número» y el filtro «Sin teléfono» en «Lista de contactos», el bloque «WhatsApp» del panel del contacto (con `GET /api/identity/contacts/:id`; el identificador siempre abreviado) y el distintivo en los destinatarios de una difusión. Falta la tarjeta «Identidad» en Conectores.
 - La búsqueda de la bandeja incluye usuario e identificador **sólo para el equipo** (misma regla que `wa_peer`; hoy el equipo coincide con `contacts.phone`).
 - El identificador nunca va completo a la bitácora de conectores, a `identity_events`, a eventos ni a respuestas para quien no es administración.
 
