@@ -229,7 +229,11 @@ test('reloj: no se pisa a sí mismo, respeta el mínimo entre consultas y relee 
   assert.ok(db.prepare("SELECT refresh_due FROM channel_health WHERE account_ref='wa:300000000201'").get().refresh_due);
   await api.tick();
   assert.equal(state.calls.length, 3);
-  db.prepare("UPDATE channel_health SET checked_at=checked_at-61000 WHERE account_ref='wa:300000000201'").run();
+  // pasa un minuto: la consulta y el aviso quedan atrás (un aviso del mismo milisegundo que la relectura se conserva
+  // a propósito, así que la prueba no puede depender de que el reloj avance entre dos líneas)
+  db.prepare(
+    "UPDATE channel_health SET checked_at=checked_at-61000,refresh_due=refresh_due-61000 WHERE account_ref='wa:300000000201'",
+  ).run();
   await api.tick();
   assert.equal(state.calls.filter(c => c === '300000000201').length, 2, 'pasado el mínimo, se relee');
   assert.equal(
