@@ -18,18 +18,22 @@
 // Apagada por omisión: hace falta API_COMPAT=1 en el entorno Y una llave con el permiso `compat` (además de
 // `messages_send_template`). Apagada responde 404. La ruta heredada lleva el teléfono en la dirección (así la usa ese
 // sistema): queda en los registros del proxy; por eso es un puente que se retira cuando deje de usarse.
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
+import { loadPeerKey } from '../../lib/peer-key.mjs';
 import { SEND_ROUTE } from './send.mjs';
 
 const LEGACY = /^\/api\/compat(?:\/[A-Za-z0-9_-]{1,64})?\/api\/v1\/sendTemplateMessage$/;
 const BULK = /^\/api\/compat\/api\/ext\/v3\/messageTemplates\/send$/;
 const MAX_RECIPIENTS = 100;
 const BODY_BYTES = 256 * 1024;
-const sha = v => createHash('sha256').update(v).digest('hex');
 
 export function createCompat(host) {
   const env = process.env;
   const integrations = host.services.integrations;
+  // La clave de duplicados lleva el teléfono: se deriva con la llave de la instalación (server/lib/peer-key.mjs), no
+  // con un SHA-256 a secas, que se revierte probando números.
+  const peerKey = loadPeerKey({ env, dataDir: host.dataDir });
+  const sha = v => createHmac('sha256', peerKey).update(v).digest('hex');
   const on = () => env.API_COMPAT === '1';
   const ttlMs = () => Math.max(1, Number(env.API_COMPAT_DEDUPE_SECONDS) || 600) * 1000;
   const send = (res, status, payload, headers = {}) => {
