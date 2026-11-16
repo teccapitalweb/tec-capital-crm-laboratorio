@@ -160,7 +160,7 @@ test('envío por API de punta a punta: reglas, idempotencia, topes, estado, even
       body: { brandId: BRAND, name: 'Recordatorios ' + scopes.join('+'), scopes, ...over },
       expected,
     });
-  const reminder = seedTemplate(db, { name: 'recordatorio_clase', vars: ['nombre', 'llamada.fecha', 'llamada.hora'] });
+  seedTemplate(db, { name: 'recordatorio_clase', vars: ['nombre', 'llamada.fecha', 'llamada.hora'] });
   seedTemplate(db, { name: 'promo_curso', category: 'marketing', vars: ['nombre'], body: 'Hola {{1}}, hay curso.' });
   seedTemplate(db, { name: 'en_revision', vars: [], body: 'Aviso.', status: 'pending' });
   const foreign = seedTemplate(db, { brand: 'odonteck', name: 'aviso_otra_marca', vars: [], body: 'Otra marca.' });
