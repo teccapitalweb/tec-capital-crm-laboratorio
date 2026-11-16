@@ -29,11 +29,11 @@ window.createIntegrationsUI = function ({ state, api, esc, icon, showModal, toas
   function keyRow(k) {
     const [label, kind] = KSTATE[k.state] || KSTATE[k.status === 'active' ? 'active' : 'revoked'];
     const live = k.state === 'active' || k.state === 'grace';
-    return `<article class="ops-row int-row"><div class="ops-row-person"><span class="avatar">${icon('key-round')}</span><div><strong>${esc(k.name)}</strong><small><code>${esc(k.prefix)}…</code> · ${esc(k.brandName)} · ${k.kind === 'write' ? 'Lectura y escritura' : 'Sólo lectura'} · ${k.scopes.map(s => esc(data.scopes[s] || s)).join(', ')}</small><small>Creada ${esc(stamp(k.createdAt))} · ${k.expiresAt ? (k.state === 'expired' ? 'caducó ' : 'caduca ') + esc(stamp(k.expiresAt)) : 'sin caducidad'} · ${k.lastUsedAt ? 'último uso ' + esc(stamp(k.lastUsedAt)) : 'sin usos todavía'}${k.revokedAt ? ' · revocada ' + esc(stamp(k.revokedAt)) : ''}</small></div></div><div class="actions">${chip(label, kind)}${k.state === 'active' ? btn('key-rotate', 'Rotar', k.id) : ''}${live ? btn('key-revoke', 'Revocar', k.id) : ''}</div></article>`;
+    return `<article class="ops-row int-row"><div class="ops-row-person"><span class="avatar">${icon('key-round')}</span><div><strong>${esc(k.name)}</strong><small><code>${esc(k.prefix)}…</code> · ${esc(k.brandName)} · ${k.kind === 'write' ? 'Lectura y escritura' : 'Sólo lectura'} · ${k.scopes.map(s => esc(data.scopes[s] || s)).join(', ')}</small><small>Creada ${esc(stamp(k.createdAt))} · ${k.expiresAt ? (k.state === 'expired' ? 'caducó ' : 'caduca ') + esc(stamp(k.expiresAt)) : 'sin caducidad'} · ${k.lastUsedAt ? 'último uso ' + esc(stamp(k.lastUsedAt)) : 'sin usos todavía'}${k.revokedAt ? ' · revocada ' + esc(stamp(k.revokedAt)) : ''}</small>${k.dailySendLimit ? `<small>Envía hasta ${esc(String(k.dailySendLimit))} plantillas en 24 horas · número ${k.defaultNumberId ? `<code>${esc(k.defaultNumberId)}</code>` : 'el único de la marca'}</small>` : ''}</div></div><div class="actions">${chip(label, kind)}${k.state === 'active' && k.dailySendLimit ? btn('key-send', 'Envíos', k.id) : ''}${k.state === 'active' ? btn('key-rotate', 'Rotar', k.id) : ''}${live ? btn('key-revoke', 'Revocar', k.id) : ''}</div></article>`;
   }
   function keysHtml() {
     return `<section class="crm-panel"><div class="ops-card-top"><h2>Llaves de la API</h2>${chip('Sólo administración')}${btn('key-new', icon('plus') + ' Nueva llave')}</div>
-      ${note('Una llave da acceso a los datos de <strong>una marca</strong>, sólo con los permisos que elijas. Se manda como <code>Authorization: Bearer tcw_…</code> a <code>' + esc(base()) + '</code> (otros sistemas: leen y, si la llave lo permite, escriben contactos) o al conector de Claude, <code>' + esc(location.origin + '/mcp') + '</code>. Sólo guardamos su huella: el valor completo se muestra <strong>una sola vez</strong> al crearla.')}
+      ${note('Una llave da acceso a los datos de <strong>una marca</strong>, sólo con los permisos que elijas. Se manda como <code>Authorization: Bearer tcw_…</code> a <code>' + esc(base()) + '</code> (otros sistemas: leen y, si la llave lo permite, escriben contactos o envían plantillas aprobadas) o al conector de Claude, <code>' + esc(location.origin + '/mcp') + '</code>. Sólo guardamos su huella: el valor completo se muestra <strong>una sola vez</strong> al crearla.')}
       ${note('Los permisos que empiezan con «Claude:» son para conectar el CRM con Claude. El de <strong>MODIFICAR</strong> deja cambiar cursos y aperturas a nombre de quien crea la llave: dalo sólo cuando haga falta y revoca la llave al terminar.')}
       <div class="ops-queue">${data.keys.map(keyRow).join('') || `<div class="crm-empty">${icon('key-round')}<h3>Sin llaves</h3><p>Crea una para que otro sistema consulte tus datos.</p></div>`}</div></section>`;
   }
@@ -88,7 +88,19 @@ window.createIntegrationsUI = function ({ state, api, esc, icon, showModal, toas
         .join('')}
       <label class="field">Caducidad<select name="expiresInDays"><option value="">${esc('Por omisión: sin caducidad si sólo lee; ' + ((data.keyPolicy && data.keyPolicy.writeKeyDays) || 180) + ' días si escribe')}</option>${[30, 90, 180, 365].map(d => `<option value="${d}">${d} días</option>`).join('')}</select></label>
       ${note('Una llave que escribe caduca siempre. Al rotarla, la anterior sigue sirviendo ' + ((data.keyPolicy && data.keyPolicy.rotateGraceHours) || 72) + ' horas para que la cambies en el otro sistema.')}
+      ${sendFields()}
       <button class="btn primary" type="submit">Crear llave</button></form>`,
+    );
+  }
+  // Envío de plantillas (docs/PLAN_API_ENVIO.md): tope de envíos en 24 horas y número por omisión de la llave.
+  const sendFields = (k = null) =>
+    `<label class="field">Tope de envíos en 24 horas (sólo si envía plantillas)<input name="dailySendLimit" type="number" min="1" max="100000" inputmode="numeric" value="${k ? esc(String(k.dailySendLimit)) : ''}" placeholder="${esc(String((data.keyPolicy && data.keyPolicy.sendDailyDefault) || 1000))}"></label>
+      <label class="field">Número de WhatsApp por omisión (identificador; vacío = el único de la marca)<input name="defaultNumberId" maxlength="40" value="${k && k.defaultNumberId ? esc(k.defaultNumberId) : ''}"></label>`;
+  function sendForm(k) {
+    showModal(
+      'Envíos de la llave',
+      `<form id="int-key-send-form" class="form-grid"><input type="hidden" name="id" value="${esc(k.id)}">${sendFields(k)}
+      <button class="btn primary" type="submit">Guardar</button></form>`,
     );
   }
   function secretBox(label, value, extra = '') {
@@ -149,6 +161,11 @@ window.createIntegrationsUI = function ({ state, api, esc, icon, showModal, toas
     }
     if (name === 'int-key-new') {
       keyForm();
+      return true;
+    }
+    if (name === 'int-key-send') {
+      const k = data.keys.find(x => x.id === id);
+      if (k) sendForm(k);
       return true;
     }
     if (name === 'int-key-revoke') {
@@ -244,10 +261,23 @@ window.createIntegrationsUI = function ({ state, api, esc, icon, showModal, toas
           name: input.name,
           scopes,
           ...(input.expiresInDays ? { expiresInDays: Number(input.expiresInDays) } : {}),
+          ...(input.dailySendLimit ? { dailySendLimit: Number(input.dailySendLimit) } : {}),
+          ...(input.defaultNumberId ? { defaultNumberId: input.defaultNumberId } : {}),
         },
       });
       keyCreated(r);
       return 'reload-keep';
+    }
+    if (id === 'int-key-send-form') {
+      await api('/api/integrations/keys/' + input.id, {
+        method: 'PATCH',
+        body: {
+          ...(input.dailySendLimit ? { dailySendLimit: Number(input.dailySendLimit) } : {}),
+          defaultNumberId: input.defaultNumberId || null,
+        },
+      });
+      toast('Envíos de la llave guardados.');
+      return 'reload';
     }
     if (id === 'int-hook-form') {
       const events = fd.has('all') ? ['*'] : fd.getAll('ev');

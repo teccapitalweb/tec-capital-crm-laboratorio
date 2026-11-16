@@ -17,6 +17,8 @@ import { canonicalPhone } from '../../lib/identity-keys.mjs';
 import { countryOptions } from '../contact-import/mapping.mjs';
 import { definitionOf, varsOf } from '../wa-templates/definition.mjs';
 import { createRepo, IDEM_TTL_MS } from './repo.mjs';
+import { createSender, SEND_EVENT_TYPES, SEND_LIMITS, SEND_ROUTE } from './send.mjs';
+import { createCompat } from './compat.mjs';
 
 export const LIMITS = Object.freeze({ batch: 100, listAdd: 100, tagsPerCall: 12, attributesPerCall: 50 });
 
@@ -100,6 +102,24 @@ const ROUTES = [
     idem: 'optional',
     action: 'api.list.add',
   },
+  // Envío de plantillas (send.mjs, docs/PLAN_API_ENVIO.md). La clave de idempotencia es obligatoria: un reintento
+  // nunca manda dos mensajes.
+  {
+    name: 'send',
+    method: 'POST',
+    pattern: SEND_ROUTE,
+    scope: 'messages_send_template',
+    kind: 'write',
+    idem: 'required',
+    action: 'api.message.template',
+  },
+  {
+    name: 'sendStatus',
+    method: 'GET',
+    pattern: SEND_ROUTE + '/{ref}',
+    scope: 'messages_send_template',
+    kind: 'read',
+  },
 ];
 
 export default {
@@ -116,6 +136,10 @@ export default {
     const contacts = host.services.contacts;
     const integrations = host.services.integrations;
     const scopesOf = key => integrations.scopesOf(key);
+    const sender = createSender(host, repo);
+    host.services.events.registerTypes(SEND_EVENT_TYPES, { entities: { api_send: 'Envío por la API' } });
+    integrations.registerNeeds({ 'envio_api.aceptado': 'templates', 'envio_api.estado': 'templates' });
+    host.services.connectors.on('message.status', data => sender.onStatus(data), { order: 210, name: 'api-envios' });
 
     // ---- entrada
 
@@ -509,6 +533,8 @@ export default {
           body: { added: out.added, refused: out.refused, unknown: unique.filter(id => !known.includes(id)) },
         };
       },
+      send: ctx => sender.send(ctx, now()),
+      sendStatus: ctx => sender.status(ctx),
     };
 
     // ---- idempotencia y registro
@@ -532,8 +558,10 @@ export default {
       try {
         return host.transaction(db, () => {
           if (ctx.idemKey) {
+            // La capa de compatibilidad deriva su clave y la hace valer menos (10 minutos por omisión).
+            const ttl = Math.min(IDEM_TTL_MS, ctx.idemTtlMs ?? IDEM_TTL_MS);
             const previous = repo.findIdem(ctx.key.id, ctx.idemKey);
-            if (previous && previous.response !== null && previous.created_at > now() - IDEM_TTL_MS) {
+            if (previous && previous.response !== null && previous.created_at > now() - ttl) {
               if (previous.request_hash !== ctx.hash)
                 throw fail(409, 'Esta Idempotency-Key ya se usó con otra petición. Usa una clave nueva.', {
                   code: 'idempotency_key_reused',
@@ -547,7 +575,7 @@ export default {
             idemKey: ctx.idemKey,
             hash: ctx.hash,
             status: out.status,
-            entityKind: ctx.route.name === 'listAdd' ? 'audience' : out.entity ? 'contact' : null,
+            entityKind: out.entityKind ?? (ctx.route.name === 'listAdd' ? 'audience' : out.entity ? 'contact' : null),
             entityId: out.entity ?? null,
             units: out.units ?? 1,
             response: JSON.stringify(out.body),
@@ -571,16 +599,27 @@ export default {
     integrations.useWriter({
       routes: ROUTES,
       dispatch,
-      limits: { batchMax: LIMITS.batch, listAddMax: LIMITS.listAdd },
+      limits: {
+        batchMax: LIMITS.batch,
+        listAddMax: LIMITS.listAdd,
+        sendParametersMax: SEND_LIMITS.parameters,
+      },
     });
+    const compat = createCompat(host);
 
     return {
       async handle() {
         return false; // sin rutas con sesión: las llaves se administran en /api/integrations
       },
+      handleCompat: compat.handle,
       purge: () => repo.purge(now()),
       dispatch,
     };
+  },
+  // Capa de compatibilidad con el proveedor anterior (compat.mjs): sin sesión, con la llave de la API.
+  public: {
+    prefixes: ['/api/compat'],
+    handle: (api, req, res, path, url, ip) => api.handleCompat(req, res, path, url, ip),
   },
   timers: [{ name: 'limpieza', everyMs: 3_600_000, testEveryMs: 500, run: api => api.purge() }],
 };

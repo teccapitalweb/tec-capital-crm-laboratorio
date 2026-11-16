@@ -80,5 +80,41 @@ export function createRepo(db) {
           "SELECT * FROM wa_templates WHERE brand_id=? AND status IN ('approved','flagged') AND archived_at IS NULL ORDER BY name, language",
         )
         .all(brandId),
+
+    // ---- envío de plantillas (docs/PLAN_API_ENVIO.md)
+    templateById: (brandId, id) =>
+      db.prepare('SELECT * FROM wa_templates WHERE brand_id=? AND id=? AND archived_at IS NULL').get(brandId, id),
+    templatesByName: (brandId, name) =>
+      db
+        .prepare('SELECT * FROM wa_templates WHERE brand_id=? AND name=? AND archived_at IS NULL ORDER BY language')
+        .all(brandId, name),
+    number: (brandId, numberId) =>
+      db
+        .prepare('SELECT phone_number_id,enabled FROM wa_numbers WHERE brand_id=? AND phone_number_id=?')
+        .get(brandId, numberId),
+    enabledNumbers: brandId =>
+      db.prepare('SELECT phone_number_id FROM wa_numbers WHERE brand_id=? AND enabled=1').all(brandId),
+    // Envíos que la API aceptó a una llave desde `since`: su cuenta para el tope diario (sobrevive a un reinicio).
+    sendsSince: (brandId, keyId, route, since) =>
+      db
+        .prepare(
+          'SELECT coalesce(sum(units),0) n, min(created_at) oldest FROM api_requests WHERE brand_id=? AND key_id=? AND route=? AND status=202 AND created_at>?',
+        )
+        .get(brandId, keyId, route, since),
+    // ¿Este envío lo hizo esta llave (o la que rotó en ella)? Sólo ésas pueden ver su estado.
+    sendOwner: (brandId, sendId) =>
+      db
+        .prepare(
+          "SELECT key_id FROM api_requests WHERE brand_id=? AND entity_kind='send' AND entity_id=? AND status=202 LIMIT 1",
+        )
+        .get(brandId, sendId),
+    recipientByRef: ref =>
+      db.prepare('SELECT id,state,fail_code FROM campaign_recipients WHERE provider_ref=?').get(ref),
+    sendByRecipient: sendId =>
+      db
+        .prepare(
+          "SELECT brand_id,key_id FROM api_requests WHERE entity_kind='send' AND entity_id=? AND status=202 LIMIT 1",
+        )
+        .get(sendId),
   };
 }

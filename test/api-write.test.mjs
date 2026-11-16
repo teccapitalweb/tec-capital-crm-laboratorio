@@ -133,12 +133,15 @@ test('servidor real: llaves de escritura, idempotencia, errores, consentimiento 
   assert.equal(write.key.kind, 'write');
   assert.equal(write.key.expiresAt - write.key.createdAt, 180 * DAY);
   await mkKey(['contacts_write'], { expiresInDays: 400 }, 400);
-  await mkKey(['messages_send_template'], {}, 400);
+  // El permiso de enviar plantillas ya se puede dar (I-8, test/api-send.test.mjs): es de escritura y caduca.
+  const sendKey = await mkKey(['messages_send_template']);
+  assert.equal(sendKey.key.expiresAt - sendKey.key.createdAt, 180 * DAY);
   const short = await mkKey(['contacts'], { expiresInDays: 7 });
   assert.equal(short.key.expiresAt - short.key.createdAt, 7 * DAY);
   const listing = await call('/api/integrations', admin);
   assert.equal(listing.scopeKinds.contacts_write, 'write');
-  assert.ok(listing.plannedScopes.messages_send_template);
+  assert.equal(listing.scopeKinds.messages_send_template, 'write');
+  assert.deepEqual(listing.plannedScopes, {});
 
   // ---- /me
   const me = await api('GET', '/api/v1/me', write.token, { expected: 200 });
