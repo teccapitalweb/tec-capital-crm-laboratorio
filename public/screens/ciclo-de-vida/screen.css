@@ -10,7 +10,7 @@
 }
 .cv-card h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--font-lg);
 }
 .cv-row {
   display: flex;
@@ -31,7 +31,7 @@
 }
 .cv-row small {
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--font-sm);
   line-height: 1.4;
 }
 .cv-days {
@@ -40,7 +40,7 @@
   justify-content: space-between;
   gap: var(--space-4);
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--font-md);
 }
 .cv-days input {
   width: 72px;

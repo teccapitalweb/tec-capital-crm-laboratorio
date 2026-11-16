@@ -77,12 +77,23 @@ async function lab(t, { prefix = 'crm-ciclo-' } = {}) {
       expected: extra.expected ?? 201,
     });
   const rev = id => db.prepare('SELECT revision FROM service_state WHERE conversation_id=?').get(id)?.revision ?? 1;
-  const move = (cookie, id, to, extra = {}) =>
-    call(origin, `/api/lifecycle/conversations/${id}/state`, {
-      cookie,
-      body: { to, expectedRevision: rev(id), clientRef: randomUUID(), ...extra },
-      expected: extra.expected ?? 200,
-    });
+  // Con la revisión al día. El reparto de fondo (operations.reconcile) también sube la revisión (por ejemplo, al anotar
+  // el último responsable), así que una acción que se espera buena se repite con la revisión nueva si la anterior quedó
+  // vieja por eso; las que prueban el 409 pasan su propia revisión y no se repiten.
+  const move = async (cookie, id, to, extra = {}) => {
+    for (let attempt = 0; ; attempt++) {
+      const response = await fetch(origin + `/api/lifecycle/conversations/${id}/state`, {
+        method: 'POST',
+        headers: { Cookie: cookie, Origin: origin, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, expectedRevision: rev(id), clientRef: randomUUID(), ...extra }),
+      });
+      const result = await response.json();
+      const retry = response.status === 409 && result.code === 'stale_record' && !('expectedRevision' in extra);
+      if (retry && (extra.expected ?? 200) !== 409 && attempt < 3) continue;
+      assert.equal(response.status, extra.expected ?? 200, to + ': ' + JSON.stringify(result));
+      return result;
+    }
+  };
   const events = (type, id) =>
     db
       .prepare('SELECT payload FROM domain_events WHERE type=? AND entity_id=? ORDER BY seq')
