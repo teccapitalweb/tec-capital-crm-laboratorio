@@ -13,7 +13,7 @@ import { addColumn } from '../../named.mjs';
 
 export default {
   name: 'wa-cutover/0001-listen-mode',
-  after: ['identity/0002-user-keys'],
+  after: [], // sólo toca wa_numbers (escalera) y sus tablas propias
   up(db) {
     addColumn(db, 'wa_numbers', 'mode', "TEXT NOT NULL DEFAULT 'live' CHECK(mode IN ('live','listen'))");
     addColumn(db, 'wa_numbers', 'listen_allow', "TEXT NOT NULL DEFAULT '[]'");
