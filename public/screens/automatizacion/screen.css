@@ -1,28 +1,97 @@
 /*
- * Composición de la pantalla «Automatización»: un encabezado breve y el editor de recorridos ocupando el resto del
- * alto. Los estilos del editor están en lienzo.css; aquí sólo va el marco, con variables de public/tokens.css.
+ * Composición de la pantalla «Automatización»: la lista de recorridos y el editor de uno (encabezado, pestañas Editar,
+ * Rendimiento y Versiones). Los estilos del editor están en lienzo.css; aquí sólo va el marco, con variables de
+ * public/tokens.css.
  */
 
 .au-page {
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
   padding: var(--space-7);
 }
 
 .au-head {
-  align-items: center;
-  margin-bottom: var(--space-3);
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
 }
 
 .au-head h1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--font-2xl);
 }
 
-.au-lead {
-  margin-bottom: var(--space-6);
+.au-titulo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.au-volver {
+  margin-left: calc(var(--space-3) * -1);
+}
+
+.au-meta {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+
+.au-acciones {
+  flex-wrap: wrap;
+}
+
+.au-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+}
+
+.au-marca {
+  min-width: 220px;
+}
+
+.au-archivados {
+  min-height: var(--touch);
+}
+
+.au-aviso {
+  flex-basis: 100%;
+}
+
+.au-nombre {
+  font-weight: 600;
+  text-align: left;
+}
+
+.au-fila-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* En la columna de la página nada se encoge: una fila de pestañas con desplazamiento propio quedaría sin alto. */
+.au-page > * {
+  flex-shrink: 0;
+}
+
+.au-page .au-panel[hidden] {
+  display: none;
 }
 
 /* El lienzo necesita un alto propio: toma lo que sobra de la página y nunca menos de lo que hace falta para trabajar. */
+.au-panel[data-slot='p-editar'] {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 560px;
+}
+
 .au-editor {
   flex: 1 0 560px;
   height: auto;
@@ -30,15 +99,112 @@
   border-radius: var(--radius-5);
 }
 
+/* Revisión */
+.au-problemas,
+.au-debiles,
+.au-sugerencias,
+.au-finales,
+.au-versiones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.au-problema,
+.au-sugerencias li,
+.au-debiles li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--surface);
+}
+
+.au-problema__texto,
+.au-sugerencia__texto,
+.au-debiles li > span {
+  flex: 1 1 260px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--font-md);
+  overflow-wrap: anywhere;
+}
+
+.au-revision {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Versiones */
+.au-versiones {
+  padding: var(--space-4);
+}
+
+.au-versiones li {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.au-versiones li:last-child {
+  border-bottom: 0;
+}
+
+.au-nota {
+  margin-top: var(--space-1);
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+
+/* Rendimiento */
+.au-rend-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.au-rend-filtros .k-field {
+  min-width: 200px;
+}
+
+.au-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.au-finales li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--font-md);
+}
+
+.au-finales li:last-child {
+  border-bottom: 0;
+}
+
+.au-tabla th[scope='row'] {
+  font-weight: 500;
+  text-align: left;
+}
+
 @media (max-width: 680px) {
   .au-page {
     padding: var(--space-3);
   }
 
-  .au-lead {
-    margin-bottom: var(--space-3);
-  }
-
+  .au-panel[data-slot='p-editar'],
   .au-editor {
     flex-basis: 620px;
   }

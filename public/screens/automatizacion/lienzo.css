@@ -383,6 +383,27 @@
   height: 26px;
 }
 
+/* Un tipo de paso que el servidor todavía no ejecuta: se ve atenuado, con el aviso en texto (no sólo el color). */
+.lz-pal[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+.lz-pal[aria-disabled='true'] .lz-pill {
+  opacity: 0.55;
+}
+
+.lz-pal-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.lz-pal-off {
+  color: var(--text-3);
+  font-size: var(--font-min);
+  font-weight: 500;
+}
+
 .lz-ghost {
   position: fixed;
   z-index: 8;

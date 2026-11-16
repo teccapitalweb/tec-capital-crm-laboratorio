@@ -14,6 +14,7 @@ import {
   SYSTEM_ATTRIBUTES,
   findRef,
   flowResult,
+  matchesPattern,
   norm,
   normalizeGraph,
   normalizeSettings,
@@ -656,11 +657,8 @@ export function checkAnswer(answer, input) {
       return date && time ? { ok: true, value: `${date} ${time}` } : bad;
     }
     case 'regex':
-      try {
-        return new RegExp(answer.pattern).test(typed.slice(0, 200)) ? { ok: true, value: typed } : bad;
-      } catch {
-        return bad;
-      }
+      // La misma regla que el editor, publicar y el motor: un patrón fuera de la regla segura nunca coincide.
+      return matchesPattern(answer.pattern, typed) ? { ok: true, value: typed } : bad;
     default:
       return typed !== '' && inRange(typed.length) ? { ok: true, value: typed } : bad;
   }
@@ -906,6 +904,49 @@ export const outcomeText = outcome => `${FLOW_RESULTS[flowResult(outcome)]}: ${O
 
 const MEDIA_LABELS = { image: 'una imagen', document: 'un documento', video: 'un video', audio: 'un audio' };
 
+// Lo que devuelve la ruta de simulación del servidor, en la forma de la conversación de este panel.
+const labelOf = b => (typeof b === 'string' ? b : b?.title || b?.label || '');
+export function fromServer(previous, r) {
+  const transcript = [...previous.transcript];
+  for (const m of r.messages || []) {
+    if (m.from === 'person') transcript.push({ who: 'in', text: m.text });
+    else
+      transcript.push({
+        who: 'out',
+        nodeId: m.nodeId || null,
+        label: m.from === 'assistant' ? 'Contesta el asistente' : '',
+        text: m.text,
+        flyer: Boolean(m.flyer),
+        options: (m.buttons || []).map(labelOf).filter(Boolean),
+      });
+  }
+  for (const text of r.notes || []) transcript.push({ who: 'note', nodeId: null, text });
+  const waiting = r.waiting
+    ? {
+        kind: r.waiting.kind === 'choice' ? 'options' : 'answer',
+        nodeId: r.waiting.nodeId,
+        options: (r.waiting.options || []).map(o => ({ id: o.id, title: labelOf(o) })),
+      }
+    : null;
+  return {
+    status: waiting ? 'waiting' : 'ended',
+    transcript,
+    waiting,
+    outcome: r.outcome || (waiting ? null : 'completed'),
+    trace: [...previous.trace, ...(r.trace || []).map(t => ({ nodeId: t.nodeId }))],
+    server: r.state || null,
+  };
+}
+
+// Por qué no se pudo probar, en palabras: con los problemas que lo impiden, si el servidor los mandó.
+function blockedText(error) {
+  const issues = error?.data?.details?.issues?.errors || [];
+  const first = issues.slice(0, 3).map(i => i.message);
+  if (!first.length) return `No se pudo probar: ${error?.message || 'inténtalo de nuevo'}`;
+  const more = issues.length > 3 ? ` (y ${issues.length - 3} más)` : '';
+  return `No se puede probar todavía: ${first.join(' ')}${more} Usa «Revisar» para verlos todos.`;
+}
+
 const bubble = e => {
   if (e.who === 'note') return html`<p class="lz-chat-note">${icon('spark')}<span>${e.text}</span></p>`;
   if (e.who === 'in')
@@ -925,8 +966,14 @@ const bubble = e => {
 
 // Monta el panel de pruebas dentro de `container`. `options.catalogue()` devuelve los datos de ejemplo vigentes,
 // `options.settings()` los ajustes del recorrido y `options.onClose()` avisa que la persona cerró la prueba.
+// Con `options.remote(cuerpo)` (una promesa con la respuesta de POST /api/chatflows/:id/simulate) la prueba corre en
+// el servidor, con el mismo motor que atenderá de verdad y el catálogo real de la marca; sin ella, es la vista previa
+// local de arriba. En los dos casos no se envía ni se guarda nada.
 export function createSimulator(container, store, options) {
   const uid = options.uid;
+  const remote = typeof options.remote === 'function' ? options.remote : null;
+  let ticket = 0;
+  let busy = false;
   const fieldIds = { course: uid('prueba-curso'), channel: uid('prueba-canal'), text: uid('prueba-texto') };
   let env = null;
   let state = null;
@@ -947,7 +994,7 @@ export function createSimulator(container, store, options) {
           <span class="lz-pill" data-group="atencion">${icon('test')}</span>
           <div class="lz-panel-names">
             <h2 class="lz-panel-title">Probar el recorrido</h2>
-            <p class="lz-hint">Vista previa con datos de ejemplo: no se envía ni se guarda nada.</p>
+            <p class="lz-hint">${remote ? 'Con el mismo motor que atiende de verdad y el catálogo de la marca. No se envía nada a nadie ni se guarda nada.' : 'Vista previa con datos de ejemplo: no se envía ni se guarda nada.'}</p>
           </div>
           <button type="button" class="lz-icon-btn" data-do="prueba-cerrar" aria-label="Cerrar la prueba">${icon('close')}</button>
         </div>
@@ -974,13 +1021,14 @@ export function createSimulator(container, store, options) {
   }
 
   function controls() {
-    if (!state) return html``;
+    if (!state || state.status === 'blocked') return html``;
+    if (busy) return html`<p class="lz-hint" role="status">Probando…</p>`;
     if (state.status === 'ended') {
       return html`<p class="lz-sim-end" role="status">${icon('flag')}<span>Fin de la prueba. ${outcomeText(state.outcome)}</span></p>`;
     }
     const w = state.waiting;
-    const node = env.byId.get(w.nodeId);
-    const answer = w.kind === 'answer' ? node.data.answer : null;
+    const node = remote ? null : env.byId.get(w.nodeId);
+    const answer = w.kind === 'answer' && node ? node.data.answer : null;
     const kinds =
       answer?.type === 'media' ? (answer.mediaKinds.length ? answer.mediaKinds : Object.keys(MEDIA_LABELS)) : [];
     return html`${
@@ -1003,7 +1051,35 @@ export function createSimulator(container, store, options) {
         <input id="${fieldIds.text}" type="text" name="texto" autocomplete="off" placeholder="Escribe como la persona…" />
         <button type="submit" class="lz-btn" aria-label="Enviar el mensaje de prueba">${icon('send')}</button>
       </form>
-      <button type="button" class="lz-link" data-do="prueba-silencio">Simular que no responde</button>`;
+      ${remote ? '' : html`<button type="button" class="lz-link" data-do="prueba-silencio">Simular que no responde</button>`}`;
+  }
+
+  // En el servidor: cada llamada lleva el estado que devolvió la anterior. Una respuesta que llega tarde (porque se
+  // reinició la prueba o se cerró el panel) se descarta.
+  function ask(body, keepFocus) {
+    const mine = ++ticket;
+    busy = true;
+    sync(false);
+    Promise.resolve()
+      .then(() => remote({ ...body, courseId: courseId || undefined, channel }))
+      .then(
+        r => {
+          if (mine === ticket && active) state = fromServer(state, r);
+        },
+        error => {
+          if (mine !== ticket || !active) return;
+          state = {
+            ...state,
+            status: state.server ? state.status : 'blocked',
+            transcript: [...state.transcript, { who: 'note', nodeId: null, text: blockedText(error) }],
+          };
+        },
+      )
+      .finally(() => {
+        if (mine !== ticket || !active) return;
+        busy = false;
+        sync(keepFocus);
+      });
   }
 
   // Sólo se agregan los mensajes nuevos: un lector de pantalla anuncia lo que llega, no toda la conversación otra vez.
@@ -1031,6 +1107,15 @@ export function createSimulator(container, store, options) {
   }
 
   function restart(keepFocus = false) {
+    if (remote) {
+      state = { status: 'loading', transcript: [], waiting: null, outcome: null, trace: [], server: null };
+      shownCount = 0;
+      stale = false;
+      const chat = slot('chat');
+      if (chat) chat.replaceChildren();
+      ask({}, keepFocus);
+      return;
+    }
     const date = new Date();
     env = simulationEnv({
       graph: store.graph,
@@ -1049,7 +1134,12 @@ export function createSimulator(container, store, options) {
   }
 
   function step(input) {
-    if (!state || state.status !== 'waiting') return;
+    if (!state || state.status !== 'waiting' || busy) return;
+    if (remote) {
+      const said = input.optionId ? { optionId: input.optionId } : { text: input.text || '' };
+      ask({ state: state.server, input: said }, true);
+      return;
+    }
     state = simInput(env, state, input);
     sync(true);
   }
@@ -1094,6 +1184,8 @@ export function createSimulator(container, store, options) {
     },
     close() {
       active = false;
+      ticket += 1;
+      busy = false;
       env = null;
       state = null;
       container.replaceChildren();
