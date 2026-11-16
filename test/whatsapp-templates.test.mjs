@@ -358,12 +358,15 @@ test('plantillas de WhatsApp de punta a punta: crear, aprobar, enviar desde el c
           .get(id),
       'el asistente terminó',
     );
-  const closeWindow = id =>
-    db
-      .prepare(
-        "UPDATE messages SET created_at=created_at-25*3600000 WHERE conversation_id=? AND sender_kind='customer'",
-      )
-      .run(id);
+  // la ventana es por persona y número (identidad I-2): se atrasan sus mensajes y su estado del par
+  const closeWindow = id => {
+    db.prepare(
+      "UPDATE messages SET created_at=created_at-25*3600000 WHERE conversation_id=? AND sender_kind='customer'",
+    ).run(id);
+    db.prepare(
+      'UPDATE wa_peer_state SET last_inbound_at=last_inbound_at-25*3600000 WHERE user_id=(SELECT customer_id FROM conversations WHERE id=?)',
+    ).run(id);
+  };
   const tplSends = name => sent.filter(m => m.type === 'template' && m.template.name === name);
 
   const admin = await call('/api/auth/register', '', {

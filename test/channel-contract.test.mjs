@@ -258,7 +258,7 @@ test('lector tolerante: acepta 1.0, 1.1 y la forma sin sobre; otra familia del c
   );
 });
 
-test('contrato 1.1 de punta a punta: columnas canónicas del entrante y del estado, bitácora sin el número y cuarentena del entrante sin teléfono', async t => {
+test('contrato 1.1 de punta a punta: columnas canónicas del entrante y del estado, bitácora sin el número y el entrante sin teléfono entra', async t => {
   const lab = await whatsappLab(t);
   const { db } = lab;
   const message = id => db.prepare('SELECT * FROM messages WHERE client_ref=?').get('meta:' + id);
@@ -342,7 +342,8 @@ test('contrato 1.1 de punta a punta: columnas canónicas del entrante y del esta
   });
   assert.match(notice.body.results[0].result, /^aplicado: plantilla que el CRM no usa/);
 
-  // 5) Sólo con identificador de usuario: cuarentena «no_phone» con su carga 1.1, sin crear cliente ni mensaje.
+  // 5) Sólo con identificador de usuario: desde la identidad por identificador (I-2) ya no queda en cuarentena
+  // «no_phone»: entra como cualquier mensaje (las pruebas de test/whatsapp-identity.test.mjs cubren el resto).
   const users = db.prepare('SELECT count(*) n FROM users').get().n;
   const blind = await metaInbound(
     lab.origin(),
@@ -353,12 +354,8 @@ test('contrato 1.1 de punta a punta: columnas canónicas del entrante y del esta
       bsuid: BSUID,
     },
   );
-  assert.equal(blind.body.results[0].result, 'error: no_phone');
-  const parked = lab.inboxRow('wamid.in-bsuid');
-  assert.deepEqual([parked.state, parked.error], ['failed', 'no_phone']);
-  const stored = JSON.parse(parked.payload);
-  assert.equal(stored.v, '1.1');
-  assert.deepEqual(stored.event.data.peer.ids, [{ kind: 'wa_bsuid', value: BSUID }]);
-  assert.equal(db.prepare('SELECT count(*) n FROM users').get().n, users);
-  assert.equal(message('wamid.in-bsuid'), undefined);
+  assert.match(blind.body.results[0].result, /^recibido: conversación nueva/);
+  assert.equal(lab.inboxRow('wamid.in-bsuid').state, 'done');
+  assert.equal(db.prepare('SELECT count(*) n FROM users').get().n, users + 1);
+  assert.equal(message('wamid.in-bsuid').text, 'Hola');
 });

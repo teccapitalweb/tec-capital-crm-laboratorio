@@ -731,12 +731,13 @@ test('alta, edición, fusión e históricos mantienen la clave; quien se captur�
     await textIn('5215512345678', 'Hola, ¿cuánto cuesta el curso?', 'Mary'),
     /^recibido: conversación nueva/,
   );
+  // Adopción (identidad I-2, docs/PLAN_IDENTIDAD_SIN_TELEFONO.md): el contacto capturado a mano con ese teléfono y sin
+  // dueño pasa a ser el de quien escribe. Un solo contacto y una sola persona: ni duplicado ni candidatura.
   const wa = waContact('5215512345678');
-  assert.equal(wa.source, 'whatsapp');
-  assert.equal(wa.phone, '+525512345678', 'el entrante guarda el teléfono canónico, sin el 1');
+  assert.equal(wa.id, manual, 'se adopta el contacto capturado a mano');
+  assert.equal(wa.source, 'manual', 'conserva su origen');
   assert.equal(wa.phone_key, '525512345678');
   assert.equal(wa.phone_key, row(manual).phone_key, 'la misma clave que la persona capturada a mano');
-  assert.notEqual(wa.id, manual);
   // el identificador tal como llegó sigue siendo el destino: la respuesta sale a 521…
   const conversation = db.prepare('SELECT wa_peer FROM conversations WHERE customer_id=?').get(wa.source_user_id);
   assert.equal(conversation.wa_peer, '5215512345678');
@@ -744,27 +745,25 @@ test('alta, edición, fusión e históricos mantienen la clave; quien se captur�
     () => sent.some(m => m.to === '5215512345678'),
     'la respuesta del asistente sale por Meta al mismo número',
   );
-  // se reconocen como la misma: duplicados de la marca y candidatura de persona, las dos por la clave canónica
   groups = (await call('/api/crm/duplicates?brand=globalvet', admin.cookie)).groups.filter(g => g.reason === 'phone');
-  assert.ok(groups.some(g => ids(g).join() === [manual, wa.id].sort().join()));
+  assert.equal(
+    groups.some(g => ids(g).includes(manual)),
+    false,
+    'no hay duplicado',
+  );
   const { candidates } = await call('/api/persons/candidates', admin.cookie);
-  const pair = [row(manual).persona_id, wa.persona_id].sort();
-  const candidate = candidates.find(c => c.person_a === pair[0] && c.person_b === pair[1]);
-  assert.ok(candidate, 'queda una candidatura entre las dos personas');
-  assert.deepEqual(
-    { reason: candidate.reason, detail: candidate.detail },
-    { reason: 'identity_conflict', detail: 'Mismo teléfono +525512345678' },
+  assert.equal(
+    candidates.some(c => c.person_a === wa.persona_id || c.person_b === wa.persona_id),
+    false,
+    'ni candidatura',
   );
   assert.equal(db.prepare('SELECT phone FROM persons WHERE id=?').get(wa.persona_id).phone, '+525512345678');
   // un segundo mensaje no cambia el contacto ni crea otro
   assert.match(await textIn('5215512345678', 'Gracias', 'Mary'), /^recibido: conversación existente/);
   assert.deepEqual(waContact('5215512345678'), wa);
-  // otro país: el identificador ya es el número completo
+  // otro país: el identificador ya es el número completo (y se adopta el contacto capturado antes con «+1 415…»)
   await textIn('14155552671', 'Hello', 'John');
-  assert.deepEqual(
-    [waContact('14155552671').phone, waContact('14155552671').phone_key],
-    ['+14155552671', '14155552671'],
-  );
+  assert.equal(waContact('14155552671').phone_key, '14155552671');
   // un identificador que no se reconoce como teléfono: se conserva tal como llegó y queda sin clave
   await textIn('99912345678', 'Hola', 'Desconocido');
   assert.deepEqual([waContact('99912345678').phone, waContact('99912345678').phone_key], ['+99912345678', '']);
@@ -779,17 +778,13 @@ test('alta, edición, fusión e históricos mantienen la clave; quien se captur�
   const foreign = await create('Captura Extranjera', '1 (415) 555-0109', 'dermalysse');
   assert.equal(row(foreign).phone_key, '14155550109');
   assert.equal(row(foreign).persona_id, waContact('14155550109').persona_id);
-  // y el duplicado reconocido se resuelve con la fusión de siempre: queda un contacto, una persona y un solo dueño
-  // del teléfono, sin candidatura pendiente
-  await merge(wa.id, manual);
-  assert.deepEqual([row(wa.id).phone, row(wa.id).phone_key], ['+525512345678', '525512345678']);
+  // y con la adopción no queda nada que fusionar: un solo dueño del teléfono y sin candidatura pendiente
   assert.deepEqual(rows(db, "SELECT person_id FROM person_identities WHERE kind='phone' AND value='+525512345678'"), [
     { person_id: wa.persona_id },
   ]);
-  assert.equal(db.prepare('SELECT count(*) n FROM persons WHERE id=?').get(pair.find(id => id !== wa.persona_id)).n, 0);
   assert.equal(
     (await call('/api/persons/candidates', admin.cookie)).candidates.some(
-      c => pair.includes(c.person_a) || pair.includes(c.person_b),
+      c => c.person_a === wa.persona_id || c.person_b === wa.persona_id,
     ),
     false,
   );
