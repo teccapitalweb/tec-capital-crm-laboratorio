@@ -66,6 +66,7 @@ export async function startFakeMeta() {
     failing: false,
     calls: [],
   };
+  const registration = { calls: [], fail: null };
   const accountOf = waba => {
     if (!templates.has(waba)) templates.set(waba, []);
     return templates.get(waba);
@@ -147,6 +148,20 @@ export async function startFakeMeta() {
           type: url.searchParams.get('file_type'),
         });
         return send(200, { id: 'upload:sesion' + uploads.length });
+      }
+      // registro del número en la cuenta con su PIN (cambio de número, I-11). `registration.fail` = {code, message}
+      // hace que Meta lo rechace; el mensaje puede repetir el PIN para comprobar que el CRM no lo deja ver.
+      if ((match = url.pathname.match(/^\/v25\.0\/(\d+)\/register$/)) && req.method === 'POST') {
+        const body = JSON.parse(Buffer.concat(chunks).toString() || '{}');
+        registration.calls.push({ id: match[1], ...body });
+        if (registration.fail)
+          return send(400, {
+            error: {
+              code: registration.fail.code,
+              message: String(registration.fail.message).replace('{pin}', body.pin),
+            },
+          });
+        return send(200, { success: true });
       }
       if ((match = url.pathname.match(/^\/v25\.0\/(\d+)\/media$/)) && req.method === 'POST') {
         uploads.push({ kind: 'media', from: match[1], bytes: Buffer.concat(chunks).length });
@@ -243,6 +258,7 @@ export async function startFakeMeta() {
     uploads,
     listCalls,
     health,
+    registration,
     // Variables de entorno de un servidor con WhatsApp real completo, apuntando a este Meta de mentira.
     env: {
       CHANNEL_CONNECTOR: 'meta',
