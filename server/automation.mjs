@@ -26,7 +26,18 @@ export function cancelSteps(db, rows, reason, actor = null, now = Date.now()) {
   }
   return rows.length;
 }
+// Ganchos de «la conversación deja de ser de la automatización» (toma humana, cierre, asignación…). Todo lugar que
+// cancela los pasos de una conversación pasa por cancelConversationSteps, así que es el punto único para que otros
+// motores (los recorridos, docs/PLAN_RECORRIDOS.md) terminen también lo suyo. Un gancho es síncrono, no abre
+// transacción ni hace red y se compone con la del llamador. Se registran por base de datos.
+const cancelHooks = new WeakMap();
+export function onConversationCancel(db, hook) {
+  if (typeof hook !== 'function') throw new TypeError('El gancho debe ser una función.');
+  if (!cancelHooks.has(db)) cancelHooks.set(db, []);
+  cancelHooks.get(db).push(hook);
+}
 export function cancelConversationSteps(db, conversationId, reason, now = Date.now()) {
+  for (const hook of cancelHooks.get(db) ?? []) hook(conversationId, reason, now);
   return cancelSteps(
     db,
     db
@@ -67,7 +78,9 @@ export function createAutomation({
     handlers[kind] = handler;
   };
 
-  function enqueue({
+  // Variante componible de enqueue: misma lógica, dentro de la transacción de quien llama (el motor de recorridos
+  // avanza dentro de una transacción y transaction() no se anida).
+  function enqueueInTx({
     brandId,
     conversationId = null,
     kind,
@@ -84,25 +97,24 @@ export function createAutomation({
       throw fail(400, 'Programación no válida.');
     const text = JSON.stringify(payload);
     if (text.length > 8000) throw fail(400, 'El contenido del paso es demasiado grande.');
-    return transaction(db, () => {
-      const existing = db.prepare('SELECT * FROM automation_steps WHERE dedupe_key=?').get(dedupeKey);
-      if (existing) {
-        if (existing.kind !== kind || existing.brand_id !== brandId || existing.conversation_id !== conversationId)
-          throw fail(409, 'La clave de idempotencia ya pertenece a otro paso.');
-        return { step: view(existing), duplicate: true };
-      }
-      if (!enabledFor(brandId)) return { skipped: 'disabled' };
-      const t = now(),
-        id = randomUUID();
-      db.prepare(
-        'INSERT INTO automation_steps(id,brand_id,conversation_id,kind,payload,dedupe_key,scheduled_at,next_attempt_at,max_attempts,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-      ).run(id, brandId, conversationId, kind, text, dedupeKey, scheduledAt, scheduledAt, maxAttempts, t, t);
-      event(db, { id, brand_id: brandId }, 'created', { kind, scheduledAt }, null, t);
-      const step = view(get(id));
-      if (onCreate) onCreate(step);
-      return { step, duplicate: false };
-    });
+    const existing = db.prepare('SELECT * FROM automation_steps WHERE dedupe_key=?').get(dedupeKey);
+    if (existing) {
+      if (existing.kind !== kind || existing.brand_id !== brandId || existing.conversation_id !== conversationId)
+        throw fail(409, 'La clave de idempotencia ya pertenece a otro paso.');
+      return { step: view(existing), duplicate: true };
+    }
+    if (!enabledFor(brandId)) return { skipped: 'disabled' };
+    const t = now(),
+      id = randomUUID();
+    db.prepare(
+      'INSERT INTO automation_steps(id,brand_id,conversation_id,kind,payload,dedupe_key,scheduled_at,next_attempt_at,max_attempts,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+    ).run(id, brandId, conversationId, kind, text, dedupeKey, scheduledAt, scheduledAt, maxAttempts, t, t);
+    event(db, { id, brand_id: brandId }, 'created', { kind, scheduledAt }, null, t);
+    const step = view(get(id));
+    if (onCreate) onCreate(step);
+    return { step, duplicate: false };
   }
+  const enqueue = input => transaction(db, () => enqueueInTx(input));
 
   // Recupera pasos cuyo ejecutor dejó caducar el arrendamiento y reserva los vencidos de marcas habilitadas.
   function claim(limit = batch) {
@@ -423,6 +435,7 @@ export function createAutomation({
   return {
     register,
     enqueue,
+    enqueueInTx,
     claim,
     tick,
     cancel,
