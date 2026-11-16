@@ -67,9 +67,9 @@ function comoEmpieza(start, types = START_FALLBACK) {
 }
 // La marca no atiende con recorridos (automatización apagada, en pausa o asistente que no responde solo): qué pasa,
 // por qué y dónde se enciende. Sin esto, un recorrido «activo» parece roto.
-const avisoAtencion = a =>
+const avisoAtencion = (a, nombre = '') =>
   html`<div class="k-notice k-notice--warn au-aviso au-atencion" role="status">
-    <strong>La marca no está atendiendo con recorridos.</strong> ${a.label} Los recorridos activos no contestarán
+    <strong>${nombre ? nombre + ' no' : 'La marca no'} está atendiendo con recorridos.</strong> ${a.label} Los recorridos activos no contestarán
     (contesta el asistente de siempre) hasta que se encienda en <strong>${a.where}</strong>.
   </div>`;
 
@@ -157,7 +157,7 @@ export default {
               <input type="checkbox" data-do="archivados" ${attrs({ checked: archivados })} />
               <span>Ver también los archivados</span>
             </label>
-            ${when(atencion() && !atencion().ok, () => avisoAtencion(atencion()))}
+            ${when(atencion() && !atencion().ok, () => avisoAtencion(atencion(), marcaActual()?.name))}
             ${when(
               meta && !puedeEditar(),
               () =>

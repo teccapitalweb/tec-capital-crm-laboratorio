@@ -291,7 +291,20 @@ test('rendimiento por paso: llegaron, siguieron, dónde se fueron, cuánto tarda
 test('¿atiende la marca con recorridos?: la misma regla que el motor, con su motivo y dónde se enciende', async t => {
   const L = await lab(t);
   const flow = await L.published('globalvet');
-  const brand = async () => (await L.api('/api/chatflows?brand=globalvet')).brands[0].attending;
+  const brand = async () =>
+    (await L.api('/api/chatflows?brand=globalvet')).brands.find(b => b.id === 'globalvet').attending;
+  // pedir los recorridos de una marca no acorta la lista de marcas: la pantalla necesita todas para su selector
+  const one = await L.api('/api/chatflows?brand=globalvet');
+  const every = await L.api('/api/chatflows');
+  assert.ok(every.brands.length > 1, 'la administración ve varias marcas');
+  assert.deepEqual(
+    one.brands.map(b => b.id),
+    every.brands.map(b => b.id),
+  );
+  assert.ok(
+    one.flows.every(f => f.brandId === 'globalvet'),
+    'los recorridos sí vienen sólo de la marca pedida',
+  );
   // apagada por omisión
   let a = await brand();
   assert.equal(a.ok, false);

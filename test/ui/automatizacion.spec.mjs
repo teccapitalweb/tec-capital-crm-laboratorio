@@ -82,10 +82,26 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   await expect(page.locator('#breadcrumb-title')).toHaveText('Automatización');
   await expect(pageEl.locator('h1')).toHaveText('Recorridos');
   const notAttending = pageEl.locator('.au-atencion');
-  await expect(notAttending).toContainText('La marca no está atendiendo con recorridos');
+  await expect(notAttending).toContainText('no está atendiendo con recorridos');
   await expect(notAttending).toContainText('Operación → Ventas y cobro → Seguimientos → Automatización');
   await settled(page);
   await expectNiebla(page, 'automatizacion-lista', testInfo);
+
+  // Cambiar de marca no esconde el selector: las marcas llegan completas aunque se pidan los recorridos de una sola
+  const brandPicker = pageEl.locator('form[data-do="marca"] select');
+  await expect(brandPicker).toBeVisible();
+  const original = await brandPicker.inputValue();
+  const others = (await brandPicker.locator('option').evaluateAll(options => options.map(o => o.value))).filter(
+    value => value && value !== original,
+  );
+  expect(others.length, 'hay más de una marca para elegir').toBeGreaterThan(0);
+  await brandPicker.selectOption(others[0]);
+  await settled(page);
+  await expect(brandPicker).toBeVisible();
+  await expect(brandPicker).toHaveValue(others[0]);
+  await brandPicker.selectOption(original);
+  await settled(page);
+  await expect(brandPicker).toHaveValue(original);
 
   // Crear en blanco
   await pageEl.locator('[data-do="nuevo"]').click();

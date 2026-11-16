@@ -659,12 +659,15 @@ export default {
       let m;
       if (path === PREFIX && method === 'GET') {
         const brand = url.searchParams.get('brand');
+        // Las marcas que la persona puede ver van SIEMPRE completas, aunque pida los recorridos de una sola: con
+        // ellas la pantalla pinta el selector de marca, y si se acortaran al elegir una, el selector desaparecería.
+        const visible = access.brandIds(user, 'inbox.view');
         let brandIds;
         if (brand) {
           access.require(user, 'inbox.view', brand);
           brandIds = [brand];
         } else {
-          brandIds = access.brandIds(user, 'inbox.view');
+          brandIds = visible;
           if (!brandIds.length) access.require(user, 'inbox.view');
         }
         const archived = url.searchParams.get('archived') === '1';
@@ -673,7 +676,7 @@ export default {
           limits: { ...LIMITS, ...CAPS },
           startTypes: START_TYPES,
           // Para la pantalla: las marcas que ve, si puede editar en cada una y los tipos de paso no disponibles.
-          brands: brandIds.map(brandId => ({
+          brands: (visible.length ? visible : brandIds).map(brandId => ({
             id: brandId,
             name: repo.brandName(brandId),
             canManage: access.can(user, 'automation.manage', brandId),
