@@ -106,6 +106,7 @@ Detalle: [PLAN_NUMERO_POR_CONSULTORA.md](PLAN_NUMERO_POR_CONSULTORA.md).
 | Escribes y no aparece nada en el CRM, ni en «Últimos eventos recibidos» | La app no está publicada o no está suscrita a los avisos de la cuenta | Pasos 4b y 4c: publicar la app y pulsar «Recibir mensajes reales» |
 | Aparece en «Últimos eventos recibidos» como «ignorado» | El número no tiene marca asignada o está en pausa | Paso 3 |
 | «Pasaron más de 24 horas…» | Regla de WhatsApp | Usa «Enviar plantilla» en el chat (hace falta una plantilla aprobada), o espera a que la persona escriba |
+| «Al token de Meta le falta permiso…» seguido de «Meta dice (código …)» | Es un error de permiso; el final de la frase es lo que respondió Meta | Si dice `API access blocked`, el bloqueo es de Meta sobre la app o la cuenta y un token nuevo no lo arregla: revisa los avisos del panel de la app y el estado de la cuenta del negocio. En otro caso, revisa los permisos y los activos del usuario del sistema |
 | Mensaje «No entregado» en el chat | Meta lo rechazó; el motivo queda en el historial de entrega del mensaje | Corrige y pulsa reintentar |
 
 ## Token permanente (para que no venza cada día)
