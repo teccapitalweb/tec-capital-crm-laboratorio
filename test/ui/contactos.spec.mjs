@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { AUTH, expectNiebla, settled, watch } from './helpers.mjs';
 
 test.use({ storageState: AUTH.admin });
@@ -71,5 +73,107 @@ test('Contactos se monta desde el menú, busca, abre el panel, cumple Niebla y r
   await expect(page.locator('#page [data-do="buscar"]')).toHaveValue('ZUNIGA');
   await expect(rows).toHaveCount(1);
   await settled(page);
+  watcher.done();
+});
+
+// Alguien que conversa por WhatsApp real sólo con su identificador de usuario (sin teléfono visible). Se escribe en la
+// base de la prueba: un cliente, su contacto, una conversación con número real y su identificador (inventado).
+const SIN_NUMERO = 'Julián Sin Número Prueba';
+function sembrarSinNumero() {
+  const db = new DatabaseSync(join(process.env.CRM_UI_DATA_DIR, 'laboratorio.sqlite'), { timeout: 5000 });
+  try {
+    if (db.prepare('SELECT 1 FROM contacts WHERE id=?').get('ui-sin-numero')) return;
+    const t = Date.now();
+    db.prepare(
+      "INSERT INTO users(id,username,name,password_hash,role,test_number,created_at,last_seen) VALUES('ui-cli-wa','ui.cliente.wa',?,'x','customer',990777,?,?)",
+    ).run(SIN_NUMERO, t, t);
+    db.prepare(
+      "INSERT INTO contacts(id,brand_id,name,phone,phone_key,source,source_user_id,created_at,updated_at) VALUES('ui-sin-numero','globalvet',?,'','','whatsapp','ui-cli-wa',?,?)",
+    ).run(SIN_NUMERO, t, t);
+    db.prepare(
+      "INSERT INTO conversations(id,customer_id,brand_id,course_id,channel,status,created_at,updated_at,wa_number) VALUES('ui-cv-wa','ui-cli-wa','globalvet','aves','whatsapp','resolved',?,?,'ui-numero')",
+    ).run(t, t);
+    db.prepare(
+      "INSERT INTO identity_keys(kind,scope,value,user_id,username,source,first_seen,last_seen) VALUES('wa_bsuid','waba:ui','MX.ui0000000000c0de','ui-cli-wa','julian.prueba','webhook',?,?)",
+    ).run(t, t);
+  } finally {
+    db.close();
+  }
+}
+
+test('Contactos: «Sin teléfono», distintivo «sin número», bloque WhatsApp y añadir a una lista', async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  sembrarSinNumero();
+  const watcher = watch(page);
+  await page.goto('/crm');
+  await page.locator('.nav [data-view="contactos"]').click();
+  await expect(page.locator('#breadcrumb-title')).toHaveText('Contactos');
+  const buscar = page.locator('#page [data-do="buscar"]');
+  const rows = page.locator('#page .k-table__grid tbody tr');
+
+  // Filtro «Sin teléfono» y el distintivo «sin número» (nunca el identificador).
+  await buscar.fill('sin numero prueba');
+  const chip = page.locator('#page [data-do="rapido"][data-id="no_phone"]');
+  await chip.click();
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText(SIN_NUMERO);
+  await expect(rows.first().locator('.ct-sin-numero')).toHaveText('Sin número');
+  await expect(page.locator('#page')).not.toContainText('c0de');
+  await settled(page);
+  await expectNiebla(page, 'contactos-sin-telefono', testInfo);
+
+  // El bloque «WhatsApp» del panel, con el identificador abreviado.
+  await rows.first().locator('[data-do="k-open"]').click();
+  const panel = page.locator('#page .k-side[open]');
+  const bloque = panel.locator('[data-key="ct-whatsapp"]');
+  await expect(bloque).toContainText('WhatsApp');
+  await expect(bloque).toContainText('@julian.prueba');
+  await expect(bloque).toContainText('··c0de');
+  await expect(bloque).toContainText('Sí, conversa por WhatsApp real');
+  await expect(bloque).not.toContainText('MX.ui');
+  await settled(page);
+  await expectNiebla(page, 'contactos-whatsapp', testInfo);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#page .k-side[open]')).toHaveCount(0);
+
+  // Añadir a una lista nueva dos contactos elegidos; repetirlo en la misma lista no duplica.
+  await chip.click();
+  await buscar.fill('prueba');
+  await expect(rows.first()).toBeVisible();
+  const elegir = nombre => page.locator(`#page input[data-do="k-row"][aria-label="Seleccionar ${nombre}"]`).check();
+  await elegir('Fernanda Zúñiga Prueba');
+  await elegir(SIN_NUMERO);
+  await page.locator('#page [data-do="anadir-lista"]').click();
+  const ventana = page.getByRole('dialog');
+  await expect(ventana).toContainText('2 contactos elegidos.');
+  const nombre = `Lista desde contactos ${testInfo.project.name}`;
+  await ventana.locator('[name="name"]').fill(nombre);
+  await settled(page, 'dialog.k-dialog');
+  await expectNiebla(page, 'contactos-lista', testInfo);
+  await ventana.getByRole('button', { name: 'Añadir' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('#page input[data-do="k-row"]:checked')).toHaveCount(0);
+
+  const headers = { Origin: baseURL };
+  const listaCreada = async () => {
+    const r = await page.request.get('/api/audiences?brand=globalvet', { headers });
+    expect(r.ok()).toBe(true);
+    return (await r.json()).audiences.find(a => a.name === nombre);
+  };
+  expect((await listaCreada()).memberCount).toBe(2);
+
+  await elegir('Fernanda Zúñiga Prueba');
+  await page.locator('#page [data-do="anadir-lista"]').click();
+  await page
+    .getByRole('dialog')
+    .locator('[name="destino"]')
+    .selectOption({ label: `${nombre} · 2` });
+  await expect(page.getByRole('dialog').locator('[name="name"]')).toHaveCount(0);
+  await page.getByRole('dialog').getByRole('button', { name: 'Añadir' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect((await listaCreada()).memberCount).toBe(2);
   watcher.done();
 });

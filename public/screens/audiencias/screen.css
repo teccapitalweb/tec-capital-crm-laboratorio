@@ -40,3 +40,37 @@
 .aud-vista {
   min-height: 72px;
 }
+
+/* Buscar dentro de los miembros y exportar: en una fila en computadora, apilados en celular. */
+.aud-herramientas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.aud-buscar {
+  flex: 1 1 240px;
+  max-width: 360px;
+}
+
+.aud-exportar {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-2);
+}
+
+.aud-exportar .k-hint {
+  margin: 0;
+}
+
+@media (max-width: 680px) {
+  .aud-buscar {
+    max-width: none;
+  }
+
+  .aud-exportar {
+    justify-items: start;
+  }
+}

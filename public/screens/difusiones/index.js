@@ -160,7 +160,13 @@ export default {
             cell: fila => html`<span class="dif-nombre">${fila.title}</span>
               <span class="k-hint">${fila.template?.name ?? ''}</span>`,
           },
-          { id: 'status', label: 'Estado', cell: fila => chipEstado(fila) },
+          {
+            id: 'status',
+            label: 'Estado',
+            // El motivo de una espera o de una detención (p. ej. el número volvió al modo escucha), con su texto.
+            cell: fila =>
+              html`${chipEstado(fila)}${when(fila.reasonLabel, () => html`<span class="dif-motivo">${fila.reasonLabel}</span>`)}`,
+          },
           { id: 'recipients', label: 'Destinatarios', numeric: true, cell: fila => numero(fila.stats.recipients) },
           { id: 'sent', label: 'Enviados', numeric: true, cell: fila => numero(fila.stats.sentTotal) },
           { id: 'read', label: 'Leídos', numeric: true, cell: fila => numero(fila.stats.read) },
@@ -603,7 +609,8 @@ export default {
             <ul class="k-stack" aria-label="Destinatarios">
               ${r.recipients.map(
                 x => html`<li class="dif-destinatario" data-key="${x.id}">
-                  <strong>${x.name || 'Sin nombre'}</strong> · ${x.phone || '—'} ·
+                  <strong>${x.name || 'Sin nombre'}</strong> · ${x.phone || '—'}
+                  ${when(x.noNumber, () => html` <span class="k-chip dif-sin-numero">Sin número</span>`)} ·
                   <span class="k-chip">${x.stateLabel}</span>
                   ${x.reasonLabel || x.failReason ? ` ${x.reasonLabel ?? x.failReason}` : ''}
                   ${x.clickLabel ? ` · tocó «${x.clickLabel}»` : x.repliedAt ? ' · respondió' : ''}

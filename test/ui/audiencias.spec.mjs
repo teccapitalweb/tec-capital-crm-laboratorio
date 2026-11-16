@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { AUTH, expectNiebla, settled, watch } from './helpers.mjs';
 
 test.use({ storageState: AUTH.admin });
@@ -67,7 +68,46 @@ test('Audiencias: prediseñados, crear un segmento con conteo en vivo y ver sus 
   const miembros = page.getByRole('dialog');
   await expect(miembros).toContainText('Renata Audiencia Prueba');
   await expect(miembros).toContainText('Sin consentimiento para promociones');
+  // Buscar dentro de los miembros (sin acentos ni mayúsculas) y exportarlos a CSV.
+  await miembros.locator('[data-do="buscar-miembro"]').fill('RENATA');
+  const filasMiembros = miembros.locator('.k-table__grid tbody tr');
+  await expect(filasMiembros).toHaveCount(1);
+  await expect(filasMiembros.first()).toContainText('Renata Audiencia Prueba');
+  await settled(page, 'dialog.k-dialog');
+  await expectNiebla(page, 'audiencias-miembros', testInfo);
+  const [descarga] = await Promise.all([
+    page.waitForEvent('download'),
+    miembros.getByRole('link', { name: 'Exportar CSV' }).click(),
+  ]);
+  expect(descarga.suggestedFilename()).toMatch(/^audiencia-[a-z0-9-]+-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(descarga.url()).not.toContain('renata');
+  const csv = await readFile(await descarga.path(), 'utf8');
+  expect(csv.replace(/^﻿/, '').split('\r\n')[0]).toBe('nombre,telefono,correo,consentimiento,estado');
+  expect(csv).toContain('Mateo Audiencia Prueba');
   await miembros.getByRole('button', { name: 'Cerrar' }).first().click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Un prediseñado no se edita (se duplica); el segmento propio sí, con su conteo en vivo.
+  const preset = tabla.locator('tbody tr', { hasText: 'Alumnos inscritos' });
+  await expect(preset.locator('[data-do="duplicar"]')).toBeVisible();
+  await expect(preset.locator('[data-do="editar"]')).toHaveCount(0);
+  await fila.locator('[data-do="editar"]').click();
+  const edicion = page.getByRole('dialog');
+  await expect(edicion).toContainText(`Editar «${nombre}»`);
+  await expect(edicion.locator('[name="name"]')).toHaveValue(nombre);
+  await expect(edicion.locator('[data-slot="vista"]')).toContainText('Tiene teléfono');
+  await edicion.locator('[data-do="k-cond-field"]').first().selectOption('name');
+  await edicion.locator('[data-do="k-cond-value"]').first().fill('Mateo Audiencia');
+  await expect(edicion.locator('[data-slot="vista"]')).toContainText('Mateo Audiencia');
+  await expect(edicion.locator('.aud-cifra')).toContainText('de 1 pueden recibir');
+  await settled(page, 'dialog.k-dialog');
+  await expectNiebla(page, 'audiencias-editar', testInfo);
+  await edicion.getByRole('button', { name: 'Guardar cambios' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await fila.locator('[data-do="ver"]').click();
+  await expect(page.getByRole('dialog')).toContainText('Mateo Audiencia Prueba');
+  await expect(page.getByRole('dialog')).not.toContainText('Renata Audiencia Prueba');
+  await page.getByRole('dialog').getByRole('button', { name: 'Cerrar' }).first().click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await page.locator('.nav [data-view="day"]').click();
