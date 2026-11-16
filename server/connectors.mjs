@@ -1110,6 +1110,26 @@ export function metaChannel({
       if (d?.success === false) throw fail(502, 'Meta no confirmó la suscripción.');
       return { ok: true };
     },
+    // Registra el número en la cuenta con su PIN de verificación en dos pasos: es el corte en sí
+    // (docs/PLAN_CAMBIO_DE_NUMERO.md). El PIN viaja a Meta y no se guarda, no se registra y no aparece en un error.
+    async register(id, pin) {
+      if (missing.length) throw fail(503, 'Conector de Meta sin configurar: faltan ' + missing.join(', ') + '.');
+      const secret = String(pin ?? '');
+      if (!/^\d{6}$/.test(secret)) throw fail(400, 'El PIN son seis dígitos.');
+      try {
+        const d = await graph('/' + numberId(id) + '/register', {
+          method: 'POST',
+          payload: { messaging_product: 'whatsapp', pin: secret },
+        });
+        if (d?.success === false) throw fail(502, 'Meta no confirmó el registro del número.');
+        return { ok: true };
+      } catch (e) {
+        // por si Meta devolviera el PIN dentro de su mensaje de error
+        if (typeof e?.message === 'string' && e.message.includes(secret))
+          e.message = e.message.split(secret).join('······');
+        throw e;
+      }
+    },
     // Comprueba token y número sin enviar nada: lee los datos públicos del número.
     async ping(id) {
       if (missing.length) throw fail(503, 'Conector de Meta sin configurar: faltan ' + missing.join(', ') + '.');
@@ -1427,6 +1447,25 @@ export function createConnectors({
     },
   };
   const selected = { channel: adapters.channel[channelProvider], payment: adapters.payment[paymentProvider] };
+  // Puerta única de salida (docs/PLAN_CAMBIO_DE_NUMERO.md): TODO lo que sale por Meta —chat, asistente, plantillas,
+  // difusiones, programados, recordatorios— pasa por meta.send, así que la puerta se pone aquí, una vez. La fija
+  // server/whatsapp.mjs (modo escucha); es síncrona, no hace red y lanza para que el envío no ocurra.
+  let sendGate = null;
+  const useSendGate = fn => {
+    sendGate = typeof fn === 'function' ? fn : null;
+  };
+  {
+    const meta = adapters.channel.meta,
+      send = meta.send;
+    meta.send = async m => {
+      sendGate?.({
+        from: String(m?.from || env.META_PHONE_NUMBER_ID || '').trim(),
+        to: m?.to ?? null,
+        recipient: m?.recipient ?? null,
+      });
+      return send.call(meta, m);
+    };
+  }
   // Un proveedor real sin configurar no rompe el laboratorio: el envío cae al simulado y el estado lo dice claramente.
   const effective = kind => (selected[kind].configured ? selected[kind] : adapters[kind].simulated);
   if (selected.channel.provider !== 'simulated' && !selected.channel.configured)
@@ -1884,5 +1923,18 @@ export function createConnectors({
     }
     throw fail(404, 'Ruta de conectores no encontrada.');
   }
-  return { status, handle, handlePublic, apply, effective, selected, adapters, useInbound, metaLive, inbox, on };
+  return {
+    status,
+    handle,
+    handlePublic,
+    apply,
+    effective,
+    selected,
+    adapters,
+    useInbound,
+    useSendGate,
+    metaLive,
+    inbox,
+    on,
+  };
 }

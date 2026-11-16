@@ -6,6 +6,7 @@ import { artworkAsset } from './demo-catalog.mjs';
 import * as copy from './reply-copy.mjs';
 import { brandCourses, matchCourse } from './course-match.mjs';
 import { createIdentity, peerOf } from './lib/identity.mjs';
+import { createListen } from './lib/wa-listen.mjs';
 
 // WhatsApp real (Meta · Cloud API). docs/PLAN_WHATSAPP_REAL.md
 // Convierte un mensaje que llega a un número real en cliente, conversación y mensaje del CRM —el mismo camino que sigue un
@@ -78,6 +79,11 @@ export function createWhatsApp({
   // quién se le contesta y la ventana de 24 h por persona y número (channel.windowOf la lee por usePeer).
   const identity = createIdentity({ db, crm, now });
   channel.usePeer?.({ lastInboundAt: identity.lastInboundAt, display: identity.displayFor });
+  // Modo escucha (I-11, docs/PLAN_CAMBIO_DE_NUMERO.md): la puerta única de salida vive en el adaptador de Meta y aquí
+  // se le dice qué números están en escucha; los estados de mensajes del proveedor anterior sólo se cuentan.
+  const listen = createListen({ db, now });
+  connectors.useSendGate?.(listen.gate);
+  connectors.on?.('message.status', listen.onStatus, { order: 50, name: 'escucha' });
 
   // ---- Contrato de canal 1.1 (docs/PLAN_CONTRATO_CANAL.md): lo que el entrante trae además del texto queda en las
   // columnas canónicas del mensaje ya guardado. Paso con nombre del camino del entrante (conciliación, fila 33): corre
@@ -190,6 +196,9 @@ export function createWhatsApp({
         ' no tiene una marca asignada (Operación → Conectores → WhatsApp real)'
       );
     if (!number.enabled) return 'ignorado: el número está en pausa en el CRM';
+    // 3) número en escucha (conciliación, fila 33): se identifica y se cuenta, nada más. Un teléfono de la lista de
+    // prueba sigue el camino normal, para que el equipo ensaye una conversación de verdad antes del corte.
+    if (listen.isListen(number) && !listen.allowed(number, waId)) return listenInbound(d, number, who);
     const kind = String(d.kind || 'text');
     if (SKIPPED.has(kind)) return 'ignorado: tipo de mensaje «' + kind + '» sin contenido que mostrar';
     if (db.prepare('SELECT 1 FROM messages WHERE client_ref=?').get(ref))
@@ -421,6 +430,48 @@ export function createWhatsApp({
     );
   }
 
+  // ---- Entrante en escucha (diseño §3.6 punto 3 y §7.5): se resuelve quién escribe (la persona nace si es nueva,
+  // sin contacto ni conversación), se anota la hora de su último mensaje (wa_peer_state: la ventana de 24 h que el
+  // día del corte permite abrir sus conversaciones) y se cuenta. No se guarda el texto ni se descarga el archivo; no
+  // hay conversación, mensaje, trabajo del asistente, tarea, evento ni aviso. Un fallo se cuenta y se relanza para
+  // que la bandeja de webhooks lo reintente.
+  async function listenInbound(d, number, who) {
+    const ref = String(d.providerRef).slice(0, 200);
+    try {
+      const hash = identity.needsUser({
+        scope: identity.scopeFor(number, d.account),
+        phone: who.phone,
+        bsuid: who.bsuid,
+      })
+        ? await passwordHash(randomBytes(32).toString('hex'))
+        : null;
+      const counted = transaction(db, () => {
+        const t = now();
+        if (!listen.firstSeen(number, ref, t)) return false;
+        const me = identity.resolve({
+          number,
+          account: d.account,
+          phone: who.phone,
+          bsuid: who.bsuid,
+          parent: who.parent,
+          username: who.username,
+          name: who.name,
+          hash,
+        });
+        // una reacción o un aviso de sistema no es un mensaje de la persona: no abre la ventana
+        if (!SKIPPED.has(String(d.kind || 'text'))) identity.touchPeer(number.phone_number_id, me.userId, t);
+        listen.countPerson(number, me.userId, t);
+        return true;
+      });
+      return counted
+        ? 'escucha: mensaje contado; no se guardó su contenido ni se respondió'
+        : 'duplicado: el mensaje ya se había contado en escucha';
+    } catch (e) {
+      listen.countError(number, now());
+      throw e;
+    }
+  }
+
   // ---- Saliente: lo que viaja a Meta para un mensaje ya guardado (texto, botones y, si WhatsApp lo admite, el archivo o el flyer).
   async function outbound(row, { closed = false } = {}) {
     const m = db
@@ -546,6 +597,12 @@ export function createWhatsApp({
   const useBroadcasts = api => {
     broadcasts = api;
   };
+  // ---- Cambio de número (server/modules/wa-cutover, I-11): sus rutas viven bajo /api/whatsapp/numbers/:id/… y
+  // /api/whatsapp/cutover; este archivo sólo se las delega. El módulo se registra con useCutover().
+  let cutover = null;
+  const useCutover = api => {
+    cutover = api;
+  };
   const needTemplates = () => {
     if (!templates) throw fail(503, 'Las plantillas de WhatsApp no están disponibles en este momento.');
     return templates;
@@ -562,6 +619,7 @@ export function createWhatsApp({
     label: n.label,
     enabled: Boolean(n.enabled),
     multi: Boolean(n.multi),
+    mode: n.mode === 'listen' ? 'listen' : 'live',
     revision: n.revision,
     updatedAt: n.updated_at,
     conversations: db.prepare('SELECT count(*) n FROM conversations WHERE wa_number=?').get(n.phone_number_id).n,
@@ -728,6 +786,14 @@ export function createWhatsApp({
       path.startsWith('/api/whatsapp/templates/')
     )
       return needTemplates().handle(req, res, path, user);
+    // cambio de número: el módulo decide el permiso por marca
+    if (
+      path === '/api/whatsapp/cutover' ||
+      /^\/api\/whatsapp\/numbers\/\d{1,30}\/(mode|open-recent|register)$/.test(path)
+    ) {
+      if (!cutover) throw fail(503, 'El cambio de número no está disponible en este momento.');
+      return cutover.handle(req, res, path, user);
+    }
     if (!path.startsWith('/api/whatsapp')) return false;
     requireAdmin(user);
     if (path === '/api/whatsapp' && req.method === 'GET') {
@@ -760,5 +826,19 @@ export function createWhatsApp({
     }
     throw fail(404, 'Ruta de WhatsApp no encontrada.');
   }
-  return { handle, inbound, outbound, status, pick, useTemplates, useBroadcasts, identity };
+  return {
+    handle,
+    inbound,
+    outbound,
+    status,
+    pick,
+    useTemplates,
+    useBroadcasts,
+    useCutover,
+    identity,
+    listen,
+    // Para el motor de difusiones y la API de envío: ¿puede salir algo por este número hacia este destino?
+    // canSendFrom(phoneNumberId, {to?, recipient?}) → {ok:true, test?} | {ok:false, code:'number_listen_only', message}
+    canSendFrom: listen.canSendFrom,
+  };
 }
