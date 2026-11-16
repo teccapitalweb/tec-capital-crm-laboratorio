@@ -1,6 +1,6 @@
 # Plan: API v1 de escritura (llaves de escritura y API de contactos)
 
-Estado: rama de integración `chore/f0-01-codificacion`, **sin publicar**. Incrementos I-6 e I-7a del plan maestro (diseño de identidad y API §4.1–§4.7; conciliación técnica, filas 14, 15, 17 y 47). Migración con nombre `api/0001-write-keys`. Apagado en la práctica: nada se escribe hasta que administración cree una llave con un permiso de escritura.
+Estado: **publicado en `main`** (15 nov 2026). Incrementos I-6 e I-7a del plan maestro (diseño de identidad y API §4.1–§4.7; conciliación técnica, filas 14, 15, 17 y 47). Migración con nombre `api/0001-write-keys`. Apagado en la práctica: nada se escribe hasta que administración cree una llave con un permiso de escritura.
 
 Para qué: que un sistema de la empresa (inscripciones, recordatorios) **cree o actualice contactos** de una marca sin entrar al CRM, sin duplicar y sin saltarse las reglas de consentimiento.
 

@@ -34,7 +34,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Sexta tanda de la construcción (rama `chore/f0-01-codificacion`, 15 nov 2026; sin publicar)
+## Sexta tanda de la construcción (publicada en `main`, 15 nov 2026)
 
 Un cambio visible, sólo para administración: la pantalla de llaves de la API. Cada pieza tiene su página.
 
@@ -44,6 +44,7 @@ Un cambio visible, sólo para administración: la pantalla de llaves de la API. 
 - **Corrección de seguridad incluida:** el alta por teléfono, el lote y el cambio de un contacto piden también el permiso de lectura, para que una llave de sólo escritura no pueda averiguar si un teléfono ya es contacto de la marca.
 - **Base de datos:** dos migraciones con nombre más (`identity/0002-user-keys` y `api/0001-write-keys`, aditivas); identidad `41+14.11b80d17`.
 - **Evidencia:** 640 pruebas (dos corridas) y 27 de navegador; `npm run check` limpio; la pantalla de llaves revisada en ancho de computadora y de celular con la base de demostración.
+- **Publicado y comprobado en producción (commit `d1e22ab`):** despliegue de Railway correcto (unos segundos sin respuesta durante el reinicio); `/api/health` devuelve `"schema":"41+14.11b80d17"` (las dos migraciones aplicadas) y no informa módulos fallidos; `/screens/index.json` sigue vacío; sin sesión, `/api/identity`, `/api/broadcasts`, `/api/whatsapp/health`, `/api/integrations/keys` y `/api/crm` responden 401; `/api/v1/me` sin llave responde 401 con el formato de error único y `requestId`; el webhook de Meta sin firma responde 401; `GET //` responde 400; CI en verde (`verify` y `ui`). No se entró con ninguna cuenta: falta comprobar con sesión la pantalla de llaves y, con WhatsApp real encendido, un mensaje entrante.
 - **Sin verificar contra Meta real:** los nombres de los campos del identificador en el webhook y en la respuesta de un envío, el envío dirigido al identificador, si el ámbito debe ser la cuenta o el portafolio, y el error 131062. Si los nombres fueran otros, esos entrantes quedan en cuarentena `no_identifier` (no se pierden) hasta corregir el lector.
 - **Falta:** el envío de plantillas por API y la capa de compatibilidad (I-8); notas, tareas y etapa por API (I-7b); modo escucha y cambio de número (I-11); en la interfaz nueva, el distintivo «sin número», el filtro «Sin teléfono» y el bloque «WhatsApp» de la ficha (las rutas ya existen); los avisos de Meta de cambio de número o de identificador.
 

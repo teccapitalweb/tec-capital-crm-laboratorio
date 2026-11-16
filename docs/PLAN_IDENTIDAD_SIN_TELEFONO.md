@@ -1,6 +1,6 @@
 # Identidad por identificador de usuario (incremento I-2)
 
-Estado: construido en la rama de integración, **sin publicar**. Migración con nombre `identity/0002-user-keys`. Fuente de las decisiones: la conciliación técnica (filas 5, 18, 28, 33, 37 y 41; D.7) y el diseño de identidad §3, que manda en lo demás.
+Estado: **publicado en `main`** (15 nov 2026). Migración con nombre `identity/0002-user-keys`. Fuente de las decisiones: la conciliación técnica (filas 5, 18, 28, 33, 37 y 41; D.7) y el diseño de identidad §3, que manda en lo demás.
 
 ## Qué resuelve
 
