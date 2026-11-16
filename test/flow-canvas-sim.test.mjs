@@ -459,13 +459,13 @@ test('iconos del lienzo: cada tipo de paso tiene el suyo, pintado con la plantil
   for (const def of Object.values(NODE_TYPES)) assert.ok(hasIcon(def.icon), `${def.type}: su icono existe`);
 });
 
-test('pantalla «Automatización»: vista previa en el menú, con el lienzo y sus estilos', async () => {
+test('pantalla «Automatización»: visible en el menú, con el lienzo y sus estilos', async () => {
   const base = new URL('../public/screens/automatizacion/', import.meta.url);
   const screen = JSON.parse(readFileSync(new URL('screen.json', base), 'utf8'));
   assert.deepEqual(screen, {
     id: 'automatizacion',
     title: 'Automatización',
-    visibility: 'preview',
+    visibility: 'live',
     nav: { group: 'WhatsApp', icon: 'workflow', label: 'Automatización', order: 44.5 },
     roles: ['admin', 'agent'],
     entry: 'index.js',

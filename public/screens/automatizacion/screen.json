@@ -1,7 +1,7 @@
 {
   "id": "automatizacion",
   "title": "Automatización",
-  "visibility": "preview",
+  "visibility": "live",
   "nav": { "group": "WhatsApp", "icon": "workflow", "label": "Automatización", "order": 44.5 },
   "roles": ["admin", "agent"],
   "entry": "index.js",
