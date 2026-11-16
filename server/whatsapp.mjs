@@ -840,5 +840,7 @@ export function createWhatsApp({
     // Para el motor de difusiones y la API de envío: ¿puede salir algo por este número hacia este destino?
     // canSendFrom(phoneNumberId, {to?, recipient?}) → {ok:true, test?} | {ok:false, code:'number_listen_only', message}
     canSendFrom: listen.canSendFrom,
+    // Contrato de la API de envío: listenOnly('wa:' + phone_number_id, phoneKey | null) → true si NO debe salir (409 number_listen_only)
+    listenOnly: listen.listenOnly,
   };
 }

@@ -9,6 +9,8 @@
 //   gate(m)                         la puerta ÚNICA de salida: connectors.mjs la llama antes de CADA envío a Meta
 //                                   (chat, asistente, plantillas, difusiones, programados, recordatorios). Lanza 409
 //                                   `number_listen_only` si el número está en escucha y el destino no es de prueba.
+//   listenOnly(accountRef, phoneKey) → boolean   LA regla: true si ese envío no debe salir (escucha y destino fuera de
+//                                   la lista de prueba). La usan la puerta, canSendFrom y la API de envío.
 //   canSendFrom(numberId, {to, recipient}) → {ok, test?, code?, message?}   la misma decisión, para preguntar antes.
 //   allowed(number, phone)          ¿ese teléfono está en la lista de prueba del número?
 //   firstSeen / countPerson / countError / onStatus   contadores por día (dentro de la transacción del llamador).
@@ -72,11 +74,21 @@ export function createListen({ db, now = Date.now }) {
     return Boolean(key && parseAllow(number?.listen_allow).includes(key));
   }
 
+  // LA regla (contrato con la API de envío): true cuando un envío NO debe salir porque el número está en escucha y el
+  // destinatario no está en la lista de prueba. `accountRef` = 'wa:' + phone_number_id; `key` = clave canónica del
+  // teléfono (identity-keys) o null (sin teléfono: nadie así puede estar en la lista de prueba).
+  function listenOnly(accountRef, key) {
+    const number = numberRow(String(accountRef ?? '').replace(/^wa:/, ''));
+    if (!isListen(number)) return false;
+    return !(typeof key === 'string' && key && parseAllow(number.listen_allow).includes(key));
+  }
+
   function canSendFrom(numberId, { to = null } = {}) {
-    const number = numberRow(numberId);
-    if (!isListen(number)) return { ok: true };
+    const ref = 'wa:' + String(numberId ?? '');
+    if (!isListen(numberRow(numberId))) return { ok: true };
     // sólo por teléfono: quien no comparte su número (identificador de usuario) no puede estar en la lista de prueba
-    if (allowed(number, to)) return { ok: true, test: true };
+    const key = to ? phoneKey(String(to), { international: true }) : null;
+    if (!listenOnly(ref, key)) return { ok: true, test: true };
     return { ok: false, code: 'number_listen_only', message: LISTEN_ONLY };
   }
   // La puerta: síncrona, sin red ni transacción; la llama connectors.mjs justo antes de pedirle a Meta un envío.
@@ -171,5 +183,5 @@ export function createListen({ db, now = Date.now }) {
     };
   }
 
-  return { isListen, allowed, canSendFrom, gate, firstSeen, countPerson, countError, onStatus, stats };
+  return { isListen, allowed, listenOnly, canSendFrom, gate, firstSeen, countPerson, countError, onStatus, stats };
 }

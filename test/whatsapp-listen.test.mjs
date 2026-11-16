@@ -14,6 +14,7 @@ import { openDatabase } from '../server/database.mjs';
 import { NAMED, migrate } from '../server/migrations/index.mjs';
 import { defineRegistry } from '../server/migrations/named.mjs';
 import { createListen, dayOf, normalizeAllow } from '../server/lib/wa-listen.mjs';
+import { phoneKey } from '../server/lib/identity-keys.mjs';
 import { assertSchemaCurrent } from './helpers/schema.mjs';
 import { PASSWORD, call, until } from './helpers/crm.mjs';
 import { whatsappLab } from './helpers/crm.mjs';
@@ -99,6 +100,14 @@ test('migración wa-cutover/0001: los números que ya existen quedan activos, ig
     () => listen.gate({ from: NUMBER, to: PA }),
     e => e.status === 409 && e.code === 'number_listen_only',
   );
+  // contrato con la API de envío: listenOnly('wa:' + phone_number_id, clave de teléfono | null) → ¿NO debe salir?
+  assert.equal(listen.listenOnly('wa:' + NUMBER, phoneKey(PA, { international: true })), true);
+  assert.equal(listen.listenOnly('wa:' + NUMBER, phoneKey(PT, { international: true })), false, 'lista de prueba');
+  assert.equal(listen.listenOnly('wa:' + NUMBER, null), true, 'sin teléfono no hay lista de prueba');
+  assert.equal(listen.listenOnly('wa:999', null), false, 'número desconocido');
+  db.prepare("UPDATE wa_numbers SET mode='live' WHERE phone_number_id=?").run(NUMBER);
+  assert.equal(listen.listenOnly('wa:' + NUMBER, null), false, 'activo');
+  db.prepare("UPDATE wa_numbers SET mode='listen' WHERE phone_number_id=?").run(NUMBER);
   assert.deepEqual(migrate(db, { backup: false }).applied, [], 'una sola vez');
 });
 
