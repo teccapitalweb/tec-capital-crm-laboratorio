@@ -59,3 +59,29 @@ test('ciclo de vida: chip de estado y acciones en el chat', async ({ browser }, 
   await teamContext.close();
   await customerContext.close();
 });
+
+// «Ciclo de conversaciones» (public/screens/ciclo-de-vida, en vista previa): ajustes por marca, sólo administración. Se
+// enciende la expiración en una marca y se vuelve a apagar al final, para no cambiar el laboratorio de las demás pruebas.
+test('ciclo de vida: ajustes por marca con revisión', async ({ browser }, testInfo) => {
+  const context = await adminContext(browser);
+  const page = await context.newPage();
+  const watcher = watch(page);
+  await page.goto('/crm');
+  await page.locator('.nav [data-view="ciclo-de-vida"]').click();
+  await expect(page.locator('#breadcrumb-title')).toHaveText('Ciclo de las conversaciones');
+  const card = () => page.locator('form[data-brand="dermalysse"]');
+  await expect(card().locator('[name="autoExpire"]')).not.toBeChecked();
+  const start = Number(await card().getAttribute('data-revision'));
+  await settled(page);
+  await expectNiebla(page, 'ciclo-de-vida-ajustes', testInfo);
+  await card().locator('[name="autoExpire"]').check();
+  await card().locator('button[type="submit"]').click();
+  await expect(card()).toHaveAttribute('data-revision', String(start + 1));
+  await expect(card().locator('[name="autoExpire"]')).toBeChecked();
+  await card().locator('[name="autoExpire"]').uncheck();
+  await card().locator('button[type="submit"]').click();
+  await expect(card()).toHaveAttribute('data-revision', String(start + 2));
+  await expect(card().locator('[name="autoExpire"]')).not.toBeChecked();
+  watcher.done();
+  await context.close();
+});

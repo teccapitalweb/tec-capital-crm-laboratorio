@@ -1,0 +1,55 @@
+/* Ciclo de conversaciones: tarjetas de ajustes por marca (sólo variables de public/tokens.css). */
+.cv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-5);
+}
+.cv-card {
+  display: grid;
+  gap: var(--space-4);
+}
+.cv-card h2 {
+  margin: 0;
+  font-size: 15px;
+}
+.cv-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  min-height: 40px;
+  cursor: pointer;
+}
+.cv-row input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.cv-row span {
+  display: grid;
+  gap: 2px;
+}
+.cv-row small {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.cv-days {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.cv-days input {
+  width: 72px;
+  min-height: 40px;
+}
+.cv-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.cv-actions .k-btn {
+  min-height: 40px;
+}

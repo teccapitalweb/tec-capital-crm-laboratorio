@@ -727,7 +727,11 @@ export default {
           settings: access
             .brandIds(user)
             .filter(b => access.can(user, 'inbox.view', b))
-            .map(b => ({ ...settings(b), canEdit: access.can(user, 'settings.inbox', b) })),
+            .map(b => ({
+              ...settings(b),
+              brandName: db.prepare('SELECT name FROM brands WHERE id=?').get(b)?.name ?? b,
+              canEdit: access.can(user, 'settings.inbox', b),
+            })),
         });
         return true;
       }
