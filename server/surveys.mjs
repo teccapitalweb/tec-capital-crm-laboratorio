@@ -1,7 +1,7 @@
 import { randomUUID, randomBytes } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { csvCell } from './contacts.mjs';
-import { forBrand } from './lib/real-mode.mjs';
+import { anyRealBrand, forBrand, isRealBrand } from './lib/real-mode.mjs';
 
 // Encuestas (Fase 2 · resto del bloque 2.3). Una encuesta por sesión realizada o por apertura: cada inscrito recibe por su
 // chat una invitación con token propio y responde sin iniciar sesión en /encuesta/<token> (o desde la app, por la misma
@@ -355,7 +355,10 @@ export function createSurveys({
     ].join('\n') + '\n';
   // ---- página pública (sin script: formulario clásico; estilos en línea permitidos por la CSP)
   function page(i, token, state) {
-    const v = i ? publicView(i) : null;
+    const v = i ? publicView(i) : null,
+      // Modo real (docs/PLAN_MODO_REAL.md): la encuesta de una marca real no habla de laboratorio; un enlace que no existe
+      // tampoco, si alguna marca ya atiende clientes reales.
+      real = i ? isRealBrand(db, i.brand_id) : anyRealBrand(db);
     const head = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Encuesta · ${esc(v?.title || 'no disponible')}</title><meta name="robots" content="noindex"><style>body{margin:0;background:#f1f4f6;color:#242428;font:15px/1.6 Inter,'Segoe UI',Helvetica,Arial,sans-serif}main{max-width:640px;margin:0 auto;padding:40px 16px}.card{background:#fff;border:1px solid #e1e6ea;border-radius:18px;padding:28px}.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2f6f8f;font-weight:600}h1{font-size:24px;margin:6px 0 4px;font-weight:600}.sub{margin:0 0 18px;color:#636977;font-size:13px}fieldset{border:0;padding:0;margin:0 0 18px}legend{font-size:13px;font-weight:500;margin-bottom:8px}.scale{display:flex;flex-wrap:wrap;gap:6px}.scale label{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:44px;min-height:40px;padding:0 8px;border:1px solid #e2e5eb;border-radius:12px;background:#fafbfc;font-size:13px;cursor:pointer}.scale input{margin:0}.scale label:has(input:checked){border-color:#2f6f8f;background:#e8f0f4;color:#255a75;font-weight:600}label.block{display:block;font-size:13px;font-weight:500;margin:4px 0 18px}textarea{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:10px 12px;border:1px solid #d7dbe3;border-radius:12px;font:inherit;font-size:14px}button{display:inline-block;padding:11px 18px;border:1px solid #2f6f8f;border-radius:12px;background:#2f6f8f;color:#fff;font:inherit;font-size:13px;cursor:pointer;min-height:40px}.state{display:inline-block;padding:7px 14px;border-radius:20px;font-size:13px;border:1px solid #cfe6d9;background:#e7f4ed;color:#256b4e}.err{color:#a7433a;font-size:13px;background:#fcecea;border:1px solid #f2d2ce;border-radius:12px;padding:10px 12px}small{display:block;color:#636977;font-size:12px;margin-top:22px}</style></head><body><main><div class="card"><div class="eyebrow">Encuesta de satisfacción</div>`;
     const radios = (name, lo, hi) =>
       Array.from({ length: hi - lo + 1 }, (_, k) => lo + k)
@@ -363,7 +366,9 @@ export function createSurveys({
         .join('');
     let main;
     if (!v)
-      main = `<h1>Encuesta no disponible</h1><p>El enlace no corresponde a ninguna encuesta de este laboratorio. Revisa que esté completo.</p>`;
+      main = real
+        ? `<h1>Encuesta no disponible</h1><p>El enlace no corresponde a ninguna encuesta. Revisa que esté completo.</p>`
+        : `<h1>Encuesta no disponible</h1><p>El enlace no corresponde a ninguna encuesta de este laboratorio. Revisa que esté completo.</p>`;
     else if (state?.ok || v.answered)
       main = `<h1>¡Gracias!</h1><span class="state">Respuesta registrada</span><p>Tus respuestas sobre <strong>${esc(v.title)}</strong> (${esc(v.course)} · ${esc(v.edition)}) quedaron registradas. Las ve sólo el equipo de ${esc(v.brand)}.</p>`;
     else if (!v.open)
@@ -373,7 +378,9 @@ export function createSurveys({
     return (
       head +
       main +
-      `<small>Laboratorio TEC Capital · encuesta de práctica. Consulta del ${esc(longDate(now()))}.</small></div></main></body></html>`
+      (real
+        ? `<small>Consulta del ${esc(longDate(now()))}.</small></div></main></body></html>`
+        : `<small>Laboratorio TEC Capital · encuesta de práctica. Consulta del ${esc(longDate(now()))}.</small></div></main></body></html>`)
     );
   }
   async function handlePublic(req, res, path, ip) {

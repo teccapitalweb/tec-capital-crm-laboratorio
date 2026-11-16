@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { transaction } from './database.mjs';
 import { qrSvgPath, encodeQR } from './qr.mjs';
 import { artworkAsset } from './demo-catalog.mjs';
-import { forBrand } from './lib/real-mode.mjs';
+import { anyRealBrand, forBrand, isRealBrand } from './lib/real-mode.mjs';
 
 // Certificación (Fase 2 · bloque 2.5). Un solo emisor: al cerrar una apertura (o a mano desde Coordinación) cada
 // inscripción con la asistencia mínima recibe un certificado con folio secuencial IPCI-AAAA-NNNNN, snapshot de lo
@@ -175,6 +175,9 @@ export function createCertificates({
       editionEnds: e.ends_at,
       instructor: e.instructor,
       modality: e.modality,
+      // Modo real (docs/PLAN_MODO_REAL.md): se anota al emitir y el certificado conserva para siempre lo que decía; los
+      // emitidos en laboratorio no llevan la marca y siguen diciendo «de práctica» aunque la marca se encienda después.
+      ...(isRealBrand(db, en.brand_id) ? { realMode: true } : {}),
     };
     db.prepare(
       "INSERT INTO certificates(id,folio,verify_code,brand_id,enrollment_id,person_id,contact_id,course_id,edition_id,holder_name,course_title,edition_name,brand_name,sessions_held,sessions_attended,attendance_pct,hours,issued_at,issued_by,source,status,snapshot,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'issued',?,?)",
@@ -570,8 +573,7 @@ ${s.signer ? `<line x1="${W - 440}" y1="610" x2="${W - 200}" y2="610" stroke="#b
 <g transform="translate(${W - 80 - side},78)"><rect width="${side}" height="${side}" fill="#fff"/><path d="${path}" fill="#000" shape-rendering="crispEdges"/></g>
 <text x="${W - 80 - side / 2}" y="${78 + side + 18}" font-size="11" fill="#8a919c" text-anchor="middle">Escanea para verificar</text>
 ${revoked ? `<g transform="rotate(-18 ${W / 2} ${H / 2})"><rect x="${W / 2 - 260}" y="${H / 2 - 50}" width="520" height="100" fill="none" stroke="#ac3d30" stroke-width="6" rx="12"/><text x="${W / 2}" y="${H / 2 + 18}" font-size="56" fill="#ac3d30" text-anchor="middle" font-weight="700">REVOCADO</text></g>` : ''}
-<text x="${W / 2}" y="${H - 52}" font-size="11" fill="#b0b6bf" text-anchor="middle">Laboratorio TEC Capital · certificado de práctica, sin validez oficial</text>
-</svg>`;
+${s.realMode ? '' : `<text x="${W / 2}" y="${H - 52}" font-size="11" fill="#b0b6bf" text-anchor="middle">Laboratorio TEC Capital · certificado de práctica, sin validez oficial</text>\n`}</svg>`;
   }
   // ---- verificación pública (sin sesión; con límite por IP)
   const publicView = (c, full) => ({
@@ -593,15 +595,24 @@ ${revoked ? `<g transform="rotate(-18 ${W / 2} ${H / 2})"><rect x="${W / 2 - 260
   });
   function verifyPage(c, folio, full) {
     const v = c ? publicView(c, full) : null,
-      ok = v && v.status === 'issued';
+      ok = v && v.status === 'issued',
+      // Modo real: el certificado dice lo que decía al emitirse (snapshot.realMode); un folio que no existe no habla de
+      // laboratorio si alguna marca ya atiende clientes reales.
+      real = c ? JSON.parse(c.snapshot || '{}').realMode === true : anyRealBrand(db);
     const head = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Verificación de certificado · ${esc(folio)}</title><meta name="robots" content="noindex"><style>body{margin:0;background:#f1f4f6;color:#242428;font:15px/1.6 Inter,'Segoe UI',Helvetica,Arial,sans-serif}main{max-width:720px;margin:0 auto;padding:40px 16px}.card{background:#fff;border:1px solid #e1e6ea;border-radius:18px;padding:28px}.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2f6f8f;font-weight:600}h1{font-size:26px;margin:6px 0 18px;font-weight:600}.state{display:inline-block;padding:7px 14px;border-radius:20px;font-size:13px;border:1px solid #e1e6ea;background:#f4f6f8;color:#4b515c}.ok{background:#e7f4ed;color:#256b4e;border-color:#cfe6d9}.bad{background:#fcecea;color:#a7433a;border-color:#f2d2ce}dl{display:grid;grid-template-columns:max-content 1fr;gap:8px 18px;margin:22px 0;font-size:14px}dt{color:#636977}dd{margin:0}a.btn{display:inline-block;margin-top:8px;padding:11px 16px;border:1px solid #2f6f8f;border-radius:12px;background:#2f6f8f;color:#fff;text-decoration:none;font-size:13px;font-weight:600}a.btn:hover{background:#255a75;border-color:#255a75}small{display:block;color:#636977;font-size:12px;margin-top:22px}@media(max-width:480px){dl{grid-template-columns:1fr;gap:2px}dt{margin-top:8px}}</style></head><body><main><div class="card"><div class="eyebrow">Verificación de certificado</div>`;
     const body = !v
-      ? `<h1>Folio no encontrado</h1><span class="state bad">No existe</span><p>El folio <strong>${esc(folio)}</strong> no corresponde a ningún certificado emitido por este laboratorio. Revisa que esté bien escrito.</p>`
+      ? `<h1>Folio no encontrado</h1><span class="state bad">No existe</span><p>${
+          real
+            ? `El folio <strong>${esc(folio)}</strong> no corresponde a ningún certificado emitido. Revisa que esté bien escrito.`
+            : `El folio <strong>${esc(folio)}</strong> no corresponde a ningún certificado emitido por este laboratorio. Revisa que esté bien escrito.`
+        }</p>`
       : `<h1>${esc(v.holder)}</h1><span class="state ${ok ? 'ok' : 'bad'}">${ok ? 'Certificado vigente' : 'Certificado revocado'}</span><dl><dt>Folio</dt><dd><strong>${esc(v.folio)}</strong></dd><dt>Curso</dt><dd>${esc(v.course)}</dd><dt>Edición</dt><dd>${esc(v.edition)}</dd><dt>Marca</dt><dd>${esc(v.brand)}</dd><dt>Emisor</dt><dd>${esc(v.issuer)}</dd><dt>Fecha de emisión</dt><dd>${esc(v.issuedLabel)}</dd><dt>Asistencia</dt><dd>${v.attendancePct} %${v.hours ? ' · ' + v.hours + ' h' : ''}</dd>${v.revokedAt ? `<dt>Revocado</dt><dd>${esc(longDate(v.revokedAt))}</dd>` : ''}</dl>${full ? `<a class="btn" href="/verificar/${esc(v.folio)}/${esc(c.verify_code)}.svg">Ver el certificado</a>` : `<p>Nombre abreviado por privacidad. Para ver el nombre completo y el certificado, abre el enlace del código QR impreso en él (incluye su código de verificación).</p>`}`;
     return (
       head +
       body +
-      `<small>Laboratorio TEC Capital · certificado de práctica, sin validez oficial. Consulta realizada el ${esc(longDate(now()))}.</small></div></main></body></html>`
+      (real
+        ? `<small>Consulta realizada el ${esc(longDate(now()))}.</small></div></main></body></html>`
+        : `<small>Laboratorio TEC Capital · certificado de práctica, sin validez oficial. Consulta realizada el ${esc(longDate(now()))}.</small></div></main></body></html>`)
     );
   }
   function bump(c) {

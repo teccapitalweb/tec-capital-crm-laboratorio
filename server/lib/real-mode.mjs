@@ -11,7 +11,7 @@ import { LAB_SWAPS } from '../reply-copy.mjs';
 // pueden ser parte de un curso real («Bioseguridad en el laboratorio», «práctica simulada»), así que sólo cuentan las
 // frases con las que el CRM avisa de la prueba.
 export const LAB_WORDING =
-  /chat de prueba|pagos? de prueba|tarjetas? de prueba|precios? de ejemplo|son de ejemplo|comprobante de ejemplo|(?:aviso|certificado|encuesta|ficha|inscripción|datos|cifras) de práctica|pagos? simulad[oa]s?|tarjeta simulada|pasarela simulada|\(simulad[oa]s?\)|(?:^|[\s(])laboratorio\s*:|en este laboratorio|\(laboratorio\)|cobros? reales?|ningún cobro real|no se cobra nada real|no constituye una oferta comercial real/i;
+  /chat de prueba|pagos? de prueba|tarjetas? de prueba|precios? de ejemplo|son de ejemplo|comprobante de ejemplo|(?:aviso|certificado|encuesta|ficha|inscripción|datos|cifras) de práctica|pagos? simulad[oa]s?|tarjeta simulada|pasarela simulada|\(simulad[oa]s?\)|(?:^|[\s(])laboratorio\s*:|(?:en|por|de) este laboratorio|\(laboratorio\)|cobros? reales?|ningún cobro real|no se cobra nada real|no constituye una oferta comercial real/i;
 
 // ¿La marca atiende clientes reales? Una lectura por llave primaria; si la tabla aún no existe (base a medio migrar en
 // una prueba), la marca sigue en laboratorio.
@@ -21,6 +21,30 @@ export function isRealBrand(db, brandId) {
     return db.prepare('SELECT enabled FROM brand_real_mode WHERE brand_id=?').get(brandId)?.enabled === 1;
   } catch {
     return false;
+  }
+}
+
+// ¿Alguna marca atiende clientes reales? Para las páginas públicas que no saben de qué marca es el enlace (folio o
+// encuesta que no existe): si hay alguna marca real, la página no habla de «laboratorio». Sin la tabla, ninguna.
+export function anyRealBrand(db) {
+  try {
+    return Boolean(db.prepare('SELECT 1 FROM brand_real_mode WHERE enabled=1 LIMIT 1').get());
+  } catch {
+    return false;
+  }
+}
+
+// Marcas en modo real (para marcar la lista de marcas de la sesión). Sin la tabla, ninguna.
+export function realBrandIds(db) {
+  try {
+    return new Set(
+      db
+        .prepare('SELECT brand_id FROM brand_real_mode WHERE enabled=1')
+        .all()
+        .map(r => r.brand_id),
+    );
+  } catch {
+    return new Set();
   }
 }
 

@@ -1063,6 +1063,7 @@ export function createPayments({
       coupon,
       couponError,
       enabled: Boolean(s.enabled),
+      realMode: isRealBrand(db, c.brand_id), // la ventana «Cobrar» del equipo no dice «de prueba» en una marca real
       reason: ctx.reason || closed || null,
       course: ctx.course.title,
       edition: ctx.edition.name,

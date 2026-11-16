@@ -576,7 +576,7 @@
     if (!x) return '';
     return agentMode() || outgoing
       ? `<div class="msg-buttons"><span class="msg-button">${icon('credit-card')} Enlace de pago</span></div>`
-      : `<div class="msg-buttons"><button type="button" class="msg-button" data-action="pay-open" data-id="${x[1]}">${icon('credit-card')} Abrir pago de prueba</button></div>`;
+      : `<div class="msg-buttons"><button type="button" class="msg-button" data-action="pay-open" data-id="${x[1]}">${icon('credit-card')} ${brandById(current()?.brand_id)?.realMode ? 'Abrir pago' : 'Abrir pago de prueba'}</button></div>`;
   }
   function surveyLink(m, outgoing) {
     const x = String(m.text || '').match(/\/encuesta\/([a-f0-9]{32})/);
@@ -1278,7 +1278,7 @@
       if (!p.enabled) return toast('La venta con pago está apagada para esta marca. Actívala en Operación → Pagos.');
       if (p.reason) return toast(p.reason + '.');
       showModal(
-        'Cobrar · enlace de pago de prueba',
+        p.realMode ? 'Cobrar · enlace de pago' : 'Cobrar · enlace de pago de prueba',
         `<dl class="summary-grid"><div><dt>Curso</dt><dd>${esc(p.course)} · ${esc(p.edition)}</dd></div><div><dt>Importe vigente</dt><dd>${esc(p.amountLabel)}${p.promotion ? ' · ' + esc(p.promotion) : ''}</dd></div><div><dt>Vigencia del enlace</dt><dd>${p.linkHours} h</dd></div></dl>${p.existing ? `<div class="info-box">Ya existe el pedido <strong>${esc(p.existing.reference)}</strong> (${esc(p.existing.statusLabel.toLowerCase())}). Se reenvía su enlace; no se crea otro.</div>` : '<div class="info-box">Se crea el pedido con el precio del catálogo de este momento y se envía el enlace al cliente por este chat. Tomas la conversación, como al enviar una plantilla.</div>'}<form id="order-link-form" class="form-grid"><input type="hidden" name="resend" value="${p.existing ? '1' : '0'}">${!p.existing && p.sessionPriceCents ? `<fieldset class="survey-form"><legend>Plan de pago</legend><div class="co-radios"><label><input type="radio" name="plan" value="full" checked> Curso completo · ${esc(p.amountLabel)}</label><label><input type="radio" name="plan" value="per_session"> Por sesión · ${esc(p.sessionPriceLabel)} ahora (primera sesión) y cada sesión antes de la clase</label></div></fieldset>` : ''}${p.existing ? '' : `<label class="field">Cupón de descuento (opcional)<span class="co-coupon"><input name="coupon" maxlength="24" autocomplete="off" placeholder="Por ejemplo VERANO10" aria-describedby="order-coupon-result"><button type="button" class="btn" data-action="pay-coupon-check">Aplicar</button></span></label><p class="crm-hint" id="order-coupon-result" aria-live="polite">Aplica al curso completo. Se comprueba al crear el pedido.</p>`}<button class="btn primary" type="submit">${p.existing ? 'Reenviar enlace' : 'Crear pedido y enviar enlace'}</button></form>`,
       );
       return;
@@ -1452,7 +1452,9 @@
       if (button.dataset.editCourse) return editCourse(button.dataset.editCourse);
       if (button.dataset.courseFlyer)
         return showModal(
-          'Flyer de práctica',
+          brandById(courseById(button.dataset.courseFlyer)?.brand_id)?.realMode
+            ? 'Flyer del curso'
+            : 'Flyer de práctica',
           `<img class="full-flyer" src="/api/courses/${button.dataset.courseFlyer}/flyer" alt="Flyer actual del curso">`,
         );
     } catch (error) {
@@ -1658,7 +1660,7 @@
         const link = location.origin + r.order.link;
         showModal(
           r.created ? 'Pedido creado y enlace enviado' : 'Enlace reenviado',
-          `<span class="pill">${esc(r.order.reference)}</span><dl class="summary-grid"><div><dt>Importe</dt><dd>${esc(r.order.amountLabel)}</dd></div><div><dt>Enlace de pago</dt><dd><code>${esc(link)}</code></dd></div></dl><div class="info-box">El cliente ya lo recibió en este chat. Si lo necesitas por otro medio, cópialo. Al abrirlo verá la pantalla de pago (tarjeta u OXXO simulados) y, al pagar, la venta entra sola a Finanzas.</div><div class="actions"><button type="button" class="btn primary" data-action="order-copy-link" data-link="${esc(link)}">${icon('link')} Copiar enlace</button><button type="button" class="btn" data-action="close-modal">Listo</button></div>`,
+          `<span class="pill">${esc(r.order.reference)}</span><dl class="summary-grid"><div><dt>Importe</dt><dd>${esc(r.order.amountLabel)}</dd></div><div><dt>Enlace de pago</dt><dd><code>${esc(link)}</code></dd></div></dl><div class="info-box">El cliente ya lo recibió en este chat. Si lo necesitas por otro medio, cópialo. ${r.order.realMode ? 'Al abrirlo verá su pedido y cómo pagar. Cuando pague, registra el pago en el detalle del pedido (Operación → Pagos).' : 'Al abrirlo verá la pantalla de pago (tarjeta u OXXO simulados) y, al pagar, la venta entra sola a Finanzas.'}</div><div class="actions"><button type="button" class="btn primary" data-action="order-copy-link" data-link="${esc(link)}">${icon('link')} Copiar enlace</button><button type="button" class="btn" data-action="close-modal">Listo</button></div>`,
         );
         return true;
       }

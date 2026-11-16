@@ -157,9 +157,10 @@ const NOT_FOR_CUSTOMERS = [
   ['simulada', 'estado interno de la prelectura del comprobante (lo ve el equipo)'],
   ['no acepta pagos del proveedor simulado', 'resultado de un webhook en la bitácora de conectores'],
   ['Cliente de prueba', 'nombre de ejemplo en la vista previa de una plantilla (lo ve el equipo)'],
-  ['meet.simulado', 'enlace del calendario simulado: una marca real conecta su calendario (fuera de este encargo)'],
-  ['ningún certificado emitido por este laboratorio', 'página pública de verificación de certificados (fuera)'],
-  ['ninguna encuesta de este laboratorio', 'página pública de encuestas (fuera)'],
+  [
+    'meet.simulado',
+    'enlace del calendario simulado: en una marca real no se genera ni sale en el recordatorio (real-mode-surfaces)',
+  ],
 ];
 test('recorrido de las cadenas de los archivos que hablan con el cliente', async () => {
   const left = [];
