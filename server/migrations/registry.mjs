@@ -5,6 +5,7 @@
 // orden alfabético salvo que una dependa de otra (lo declara en `after` y debe ir después).
 //
 //   import contacts from './named/contacts/index.mjs';
+import conversations from './named/conversations/index.mjs';
 //   export const NAMED = defineRegistry([...contacts, ...perf]);
 import { defineRegistry } from './named.mjs';
 import api from './named/api/index.mjs';
@@ -35,6 +36,7 @@ import waCutover from './named/wa-cutover/index.mjs';
 // «real-mode» va al final: tabla propia (brand_real_mode) y llegó después de las publicadas.
 // «lifecycle» va al final: añade columnas a conversations y llegó después de todas las publicadas.
 // «chatflows» va al final: tablas propias (recorridos) y llegó después de todas las publicadas.
+// «conversations» va al final: la bandeja nueva (vistas guardadas e índices); usa conversations.state de «lifecycle».
 export const NAMED = defineRegistry([
   ...attributes,
   ...broadcasts,
@@ -52,4 +54,5 @@ export const NAMED = defineRegistry([
   ...realMode,
   ...lifecycle,
   ...chatflows,
+  ...conversations,
 ]);
