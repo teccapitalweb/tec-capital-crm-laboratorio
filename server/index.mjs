@@ -699,14 +699,26 @@ function insertMessage(c, user, text, kind, ref, attachmentId = null, flyer = nu
   if (options.template)
     db.prepare('UPDATE messages SET wa_template=? WHERE id=?').run(JSON.stringify(options.template), id); // sale como plantilla aprobada de WhatsApp
   db.prepare('UPDATE conversations SET updated_at=? WHERE id=?').run(now, c.id);
-  // estado y ciclo de atención antes del objetivo de respuesta (conciliación, fila 33)
-  lifecycle?.onMessage(c, {
-    id,
-    kind,
-    at: now,
-    origin: options.origin,
-    campaignId: options.campaignId ?? options.template?.campaignId ?? null,
-  });
+  // estado y ciclo de atención antes del objetivo de respuesta (conciliación, fila 33). Dentro de un SAVEPOINT: si el
+  // ciclo de vida falla, lo suyo se deshace entero y el mensaje se guarda igual (un fallo ahí no puede dejar a nadie
+  // sin poder escribir); el reloj del módulo repara el estado después.
+  if (lifecycle) {
+    db.exec('SAVEPOINT lifecycle_message');
+    try {
+      lifecycle.onMessage(c, {
+        id,
+        kind,
+        at: now,
+        origin: options.origin,
+        campaignId: options.campaignId ?? options.template?.campaignId ?? null,
+      });
+      db.exec('RELEASE lifecycle_message');
+    } catch (error) {
+      db.exec('ROLLBACK TO lifecycle_message');
+      db.exec('RELEASE lifecycle_message');
+      console.error('Lifecycle onMessage failed', error?.name, String(error?.message || '').slice(0, 160));
+    }
+  }
   operations.message(c, kind, user);
   if (kind === 'customer') contacts.recordInbound(c, text);
   return id;
