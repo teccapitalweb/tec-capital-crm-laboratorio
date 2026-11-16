@@ -8,7 +8,14 @@
 // El grafo y sus tipos de paso son los del modelo compartido (public/kit/shared/flow-model.js): el servidor valida y
 // limpia con ese mismo archivo, no con una copia.
 import { defineFields, evaluate, normalizeText } from '../../lib/conditions.mjs';
-import { normalizeGraph, normalizeSettings, tokensIn, typeOf } from '../../../public/kit/shared/flow-model.js';
+import {
+  LIMITS,
+  hasNestedQuantifier,
+  normalizeGraph,
+  normalizeSettings,
+  tokensIn,
+  typeOf,
+} from '../../../public/kit/shared/flow-model.js';
 
 // ---- Topes (sin bucles y sin ráfagas)
 export const CAPS = Object.freeze({
@@ -266,6 +273,21 @@ function parseTime(text) {
   if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
   return `${m[1].padStart(2, '0')}:${m[2]}`;
 }
+// Expresión de una Pregunta «formato propio»: la escribe quien arma el recorrido y corre con lo que escribe cualquiera,
+// así que el motor repite por sí mismo las comprobaciones de publicar (largo y cuantificadores anidados, que tardan un
+// tiempo exponencial) y sólo la prueba contra los primeros caracteres. Una expresión no válida o no segura nunca
+// coincide y nunca lanza.
+const REGEX_INPUT = 200;
+export function safePattern(pattern) {
+  if (typeof pattern !== 'string' || !pattern || pattern.length > LIMITS.regex || hasNestedQuantifier(pattern))
+    return null;
+  try {
+    return new RegExp(pattern);
+  } catch {
+    return null;
+  }
+}
+
 // Devuelve el valor que se guarda o null si la respuesta no vale.
 export function checkAnswer(answer, raw) {
   const text = String(raw ?? '').trim();
@@ -300,11 +322,7 @@ export function checkAnswer(answer, raw) {
       return !rest.length && date && time ? `${date} ${time}` : null;
     }
     case 'regex':
-      try {
-        return new RegExp(answer.pattern).test(text.slice(0, 200)) ? text : null;
-      } catch {
-        return null;
-      }
+      return safePattern(answer.pattern)?.test(text.slice(0, REGEX_INPUT)) ? text : null;
     default:
       return null;
   }
@@ -371,6 +389,31 @@ function unavailable(node, env, s, reason) {
   return { end: 'handoff', handoff: { to: 'queue' } };
 }
 
+// Lo que espera un paso de Botones o de Pregunta, armado SIEMPRE desde el nodo del grafo ya limpio (clean del modelo):
+// el simulador lo reconstruye así en lugar de confiar en un estado que manda el navegador.
+export function waitOf(node, env, { misses = 0, tries = 0 } = {}) {
+  const def = typeOf(node?.type);
+  if (!def || (node.type !== 'buttons' && node.type !== 'question')) return null;
+  const d = def.clean(node.data);
+  if (node.type === 'buttons')
+    return {
+      kind: 'choice',
+      nodeId: node.id,
+      options: d.options.map(o => ({ id: o.id, label: o.label, do: o.do })),
+      onUnexpected: d.onUnexpected || env.settings.onUnexpected,
+      misses,
+    };
+  return {
+    kind: 'question',
+    nodeId: node.id,
+    answer: d.answer,
+    saveTo: d.saveTo,
+    errorText: d.errorText,
+    attempts: Math.min(Math.max(d.attempts || 2, 1), 3),
+    tries,
+  };
+}
+
 // Qué hace cada tipo de paso. Devuelve {next: salida} | {wait} | {delay: ms} | {end: resultado, …acciones finales}.
 const EXEC = {
   start: () => ({ next: 'next' }),
@@ -396,29 +439,11 @@ const EXEC = {
     }
     if (d.footer) text += '\n\n' + renderText(d.footer, env, s);
     say(env, s, { text, buttons: d.options.map(o => o.label), prepared });
-    return {
-      wait: {
-        kind: 'choice',
-        nodeId: node.id,
-        options: d.options.map(o => ({ id: o.id, label: o.label, do: o.do })),
-        onUnexpected: d.onUnexpected || env.settings.onUnexpected,
-        misses: 0,
-      },
-    };
+    return { wait: waitOf(node, env) };
   },
   question(node, d, env, s) {
     say(env, s, { text: renderText(d.text, env, s) });
-    return {
-      wait: {
-        kind: 'question',
-        nodeId: node.id,
-        answer: d.answer,
-        saveTo: d.saveTo,
-        errorText: d.errorText,
-        attempts: Math.min(Math.max(d.attempts || 2, 1), 3),
-        tries: 0,
-      },
-    };
+    return { wait: waitOf(node, env) };
   },
   condition(node, d, env, s) {
     const record = conditionRecord(env, s);

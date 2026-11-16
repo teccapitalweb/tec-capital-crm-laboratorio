@@ -34,13 +34,14 @@ import * as copy from '../../reply-copy.mjs';
 import { forBrand } from '../../lib/real-mode.mjs';
 import {
   LIMITS,
+  VARIABLE_RE,
   emptyGraph,
   normalizeSettings,
   repairGraph,
   validateGraph,
   validateSettings,
 } from '../../../public/kit/shared/flow-model.js';
-import { CAPS, advance, input as feed, makeEnv, newSession, route, unsupportedProblems } from './engine.mjs';
+import { CAPS, advance, input as feed, makeEnv, newSession, route, unsupportedProblems, waitOf } from './engine.mjs';
 import { createRepo } from './repo.mjs';
 import { createRuntime } from './runtime.mjs';
 
@@ -72,7 +73,8 @@ export default {
     const runtime = createRuntime({ host, repo, now, emit });
 
     // Cableado: el despachador del entrante, el paso durable de las esperas y el gancho de «una persona manda».
-    host.dispatch.register('chatflows', { order: 40, inbound: runtime.inbound, onError: runtime.onError });
+    // (Una instalación sin despachador, como el registro de datos de persona en sus pruebas, sólo omite el entrante.)
+    host.dispatch?.register('chatflows', { order: 40, inbound: runtime.inbound, onError: runtime.onError });
     svc.automation.register('flow.wake', runtime.wake);
     onConversationCancel(db, runtime.onCancel);
 
@@ -352,9 +354,20 @@ export default {
         const v = repo.version(brandId, id, input.version);
         if (!v) throw fail(404, 'Versión no disponible.', { code: 'not_found' });
         ({ graph, settings } = v);
-      } else {
+      } else if (input.graph !== undefined || input.settings !== undefined) {
+        // Un grafo sin guardar: lo prueba quien puede editar recorridos y pasa por la misma validación que publicar.
+        access.require(user, 'automation.manage', brandId);
         graph = input.graph !== undefined ? cleanGraph(input.graph) : f.draft;
         settings = normalizeSettings(input.settings !== undefined ? input.settings : f.settings);
+        const issues = issuesOf(brandId, f.id, graph, settings, f.start);
+        if (issues.errors.length)
+          throw fail(422, 'El recorrido tiene problemas: corrígelos antes de probarlo.', {
+            code: 'flow_invalid',
+            details: { issues },
+          });
+      } else {
+        graph = f.draft;
+        settings = normalizeSettings(f.settings);
       }
       const courses = repo.validationLists(brandId).courses;
       const courseId = courses.some(k => k.id === input.courseId) ? input.courseId : courses[0]?.id || null;
@@ -441,16 +454,37 @@ export default {
             trace.push({ event, nodeId: d.nodeId ?? null, port: d.port ?? null, detail: d.detail ?? null }),
         };
       };
-      let s;
-      if (input.state && typeof input.state === 'object') {
-        s = JSON.parse(JSON.stringify(input.state));
-        if (typeof s.nodeId !== 'string' || !Number.isInteger(s.seq) || typeof s.vars !== 'object' || !s.vars)
-          throw fail(400, 'El estado de la prueba no es válido: vuelve a empezar.', { code: 'invalid_request' });
-        s.steps = Math.min(Number(s.steps) || 0, CAPS.perSession);
-        s.unanswered = 0;
-      } else s = null;
       const io = { current: null };
       const env = makeEnv({ graph, settings, io: null, now: now() });
+      // Del estado que devuelve el navegador sólo se toma lo mínimo: el paso en el que va, las variables (acotadas) y
+      // los contadores. Lo que espera ese paso (opciones, tipo de respuesta, expresión) se vuelve a armar desde el
+      // grafo, nunca desde lo que mande el cliente.
+      let s = null;
+      if (input.state && typeof input.state === 'object') {
+        const given = input.state;
+        const nodeId = typeof given.nodeId === 'string' ? given.nodeId : '';
+        const waitingNode = env.byId.get(nodeId);
+        const count = v => Math.min(Math.max(Number.isInteger(v) ? v : 0, 0), 3);
+        const waiting = waitingNode
+          ? waitOf(waitingNode, env, { misses: count(given.waiting?.misses), tries: count(given.waiting?.tries) })
+          : null;
+        if (!waiting)
+          throw fail(400, 'El estado de la prueba no es válido: vuelve a empezar.', { code: 'invalid_request' });
+        const vars = {};
+        const entries = given.vars && typeof given.vars === 'object' ? Object.entries(given.vars) : [];
+        for (const [key, value] of entries.slice(0, LIMITS.variables))
+          if (VARIABLE_RE.test(key) && ['string', 'number'].includes(typeof value))
+            vars[key] = String(value).slice(0, LIMITS.value);
+        s = newSession({ id: 'simulacion', flowId: id, version: 0, graph: env.graph, now: now(), vars });
+        Object.assign(s, {
+          nodeId,
+          state: 'waiting',
+          waiting,
+          seq: Math.min(Math.max(Number.isInteger(given.seq) ? given.seq : 0, 0), CAPS.perSession),
+          steps: Math.min(Math.max(Number.isInteger(given.steps) ? given.steps : 0, 0), CAPS.perSession),
+          expiresAt: null,
+        });
+      }
       const bind = session => {
         io.current = sim(session);
         env.io = io.current;
@@ -705,6 +739,7 @@ export default {
         return true;
       }
       if (rest === 'simulate') {
+        host.rate('chatflows.simulate:' + user.id, 60);
         host.json(res, 200, await simulate(user, id, input));
         return true;
       }

@@ -12,6 +12,7 @@ import {
   makeEnv,
   newSession,
   route,
+  safePattern,
   unsupportedProblems,
 } from '../server/modules/chatflows/engine.mjs';
 import { createNode, normalizeGraph } from '../public/kit/shared/flow-model.js';
@@ -96,6 +97,14 @@ test('respuestas de una Pregunta: formatos que se aceptan y valor que se guarda'
   assert.equal(checkAnswer({ type: 'number', min: 1, max: 10 }, '11'), null);
   assert.equal(checkAnswer({ type: 'text', min: 3 }, 'ok'), null);
   assert.equal(checkAnswer({ type: 'regex', pattern: '^[A-Z]{3}\\d{2}$' }, 'ABC12'), 'ABC12');
+  // Aunque llegara al motor, una expresión no segura no se evalúa: no coincide y no lanza.
+  const started = Date.now();
+  assert.equal(checkAnswer({ type: 'regex', pattern: '(a+)+$' }, 'a'.repeat(5000) + '!'), null);
+  assert.ok(Date.now() - started < 1000);
+  assert.equal(safePattern('(.*)*'), null);
+  assert.equal(safePattern('a'.repeat(121)), null);
+  assert.equal(safePattern('(sin cerrar'), null);
+  assert.ok(safePattern('^\\d{5}$'));
   assert.equal(checkAnswer({ type: 'text' }, '   '), null);
 });
 

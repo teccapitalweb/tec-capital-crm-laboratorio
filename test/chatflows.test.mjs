@@ -358,6 +358,41 @@ test('almacén: borrador, validación, versiones, activar y pausar, duplicar, ar
   assert.equal(sim.ended, true);
   assert.equal(sim.outcome, 'handoff');
   assert.match(sim.messages.at(-1).text, /ana@example\.com/);
+  // Un estado fabricado no salta la validación: lo que espera el paso se arma desde el grafo guardado (aquí, un
+  // correo), no desde la expresión que trae el estado; y la respuesta llega en tiempo acotado.
+  const evil = '(a+)+$';
+  const started = Date.now();
+  sim = await api('/api/chatflows/' + copy.flow.id + '/simulate', {
+    body: {
+      state: {
+        nodeId: 'n8',
+        seq: 1,
+        vars: { correo: 'x', 'mal nombre': 'y' },
+        waiting: { kind: 'question', answer: { type: 'regex', pattern: evil } },
+      },
+      input: { text: 'a'.repeat(40) + '!' },
+    },
+  });
+  assert.ok(Date.now() - started < 5000, 'responde en tiempo acotado');
+  assert.equal(sim.waiting.kind, 'question');
+  assert.match(sim.messages.at(-1).text, /no parece válido/);
+  assert.deepEqual(sim.state.vars, { correo: 'x' });
+  await api('/api/chatflows/' + copy.flow.id + '/simulate', {
+    body: { state: { nodeId: 'n2', seq: 1, vars: {} }, input: { text: 'hola' } },
+    expected: 400,
+  });
+  // Una expresión con cuantificadores anidados no se publica, ni se prueba sin guardar.
+  const risky = saleGraph();
+  risky.nodes.find(x => x.id === 'n8').data.answer = { type: 'regex', pattern: evil };
+  const riskyCheck = await api('/api/chatflows/' + copy.flow.id + '/validate', { body: { graph: risky } });
+  assert.ok(riskyCheck.issues.errors.some(e => e.nodeId === 'n8'));
+  await api('/api/chatflows/' + copy.flow.id + '/simulate', { body: { graph: risky }, expected: 422 });
+  // Probar un grafo sin guardar es de quien edita recorridos.
+  await call(L.origin(), '/api/chatflows/' + copy.flow.id + '/simulate', {
+    cookie: outsider.cookie,
+    body: { graph: saleGraph() },
+    expected: 403,
+  });
   assert.deepEqual(counts(), before);
   // Bitácora de auditoría.
   const audited = db
