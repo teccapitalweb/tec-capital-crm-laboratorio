@@ -1698,6 +1698,29 @@ test('formato propio de una pregunta: sólo el subconjunto que no puede tardar d
   assert.equal(patternProblem('^a*a*a*b$'), null);
   assert.equal(matchesPattern('^a*a*a*b$', 'a'.repeat(200)), false);
   assert.ok(Date.now() - started < 3000, 'en tiempo acotado');
+
+  // Sin ancla al inicio el motor prueba desde cada posición (n veces más trabajo): admite un cuantificador variable
+  // menos. Con tres, sólo si TODAS las alternativas empiezan con ^.
+  for (const pattern of [
+    'a*a*a*b',
+    '.*.*.*x',
+    '[a-z]*[a-z]*[a-z]*\\d',
+    'x|a*a*a*b',
+    '^x|a*a*a*b',
+    '\\^a*a*a*b',
+    '^a*a*a*|',
+  ]) {
+    assert.match(patternProblem(pattern) ?? '', /no empieza con \^/, pattern);
+    assert.equal(matchesPattern(pattern, 'aaab'), false, pattern);
+  }
+  for (const pattern of ['a*a*b', '.*.*x', '^a*a*a*b', '^x|^a*a*a*b', '^[|]*a*a*b', 'a+@a+']) {
+    assert.equal(patternProblem(pattern), null, pattern);
+  }
+  // El peor caso sin ancla que la regla acepta, contra 200 «a», también en tiempo acotado.
+  const unanchored = Date.now();
+  for (const pattern of ['a*a*b', '.*.*x', '[a-z]*[a-z]*\\d'])
+    assert.equal(matchesPattern(pattern, 'a'.repeat(200)), false);
+  assert.ok(Date.now() - unanchored < 3000, 'sin ancla, en tiempo acotado');
 });
 
 // ---- Ajustes ---------------------------------------------------------------------------------------------------------

@@ -686,9 +686,14 @@ function optionProblems(options, { field, noun, max }) {
 // así que el motor de expresiones sólo puede retroceder eligiendo cuántas veces repite cada uno de esos k átomos. Con
 // k ≤ 3 y un texto de n ≤ 200 caracteres el peor caso queda en torno a n^3 (unos 8 millones de pasos), que se resuelve
 // en milisegundos; con un cuarto cuantificador variable, o con grupos que repiten algo que ya repite, el trabajo crece
-// sin control y el hilo único del servidor se cuelga para todos. No relajes ningún punto de esta regla sin rehacer esa
-// cuenta. Es la única regla: la usan el editor, publicar, el simulador y el motor del servidor.
-export const PATTERN_LIMITS = Object.freeze({ variable: 3, bounded: 100, input: 200 });
+// sin control y el hilo único del servidor se cuelga para todos.
+//   - esa cuenta vale para un patrón ANCLADO: cada alternativa (lo que separa una barra vertical) empieza con ^, así
+//     que el motor sólo prueba desde el principio del texto. Sin ancla prueba desde cada posición y el peor caso sube
+//     a n^4 (medido: unos 800 ms con tres cuantificadores y 200 caracteres), por eso un patrón sin ancla admite un
+//     cuantificador variable menos (PATTERN_LIMITS.unanchored): n por n^2, otra vez milisegundos.
+// No relajes ningún punto de esta regla sin rehacer esa cuenta. Es la única regla: la usan el editor, publicar, el
+// simulador y el motor del servidor.
+export const PATTERN_LIMITS = Object.freeze({ variable: 3, unanchored: 2, bounded: 100, input: 200 });
 
 // Lee, carácter a carácter, una cota {m}, {m,} o {m,n} que empieza en `at`. null si no forma una cota (entonces la
 // llave es un carácter literal).
@@ -718,10 +723,17 @@ export function patternProblem(pattern) {
   let variable = 0;
   let inClass = false;
   let afterQuantifier = false; // el carácter anterior cerró un cuantificador: un ? aquí lo vuelve perezoso
+  let anchored = true; // todas las alternativas empiezan con ^
+  let alternativeStart = true; // estamos en el primer carácter de una alternativa
   for (let i = 0; i < pattern.length; i += 1) {
     const ch = pattern[i];
     const lazy = afterQuantifier && ch === '?';
     afterQuantifier = false;
+    if (alternativeStart) {
+      if (ch !== '^') anchored = false;
+      alternativeStart = false;
+    }
+    if (!inClass && ch === '|') alternativeStart = true; // sin grupos, toda barra fuera de [ ] separa alternativas
     if (ch === '\\') {
       const next = pattern[i + 1] ?? '';
       if (!inClass && ((next >= '1' && next <= '9') || (next === 'k' && pattern[i + 2] === '<')))
@@ -747,8 +759,11 @@ export function patternProblem(pattern) {
       afterQuantifier = true;
     }
   }
+  if (alternativeStart) anchored = false; // termina en barra: una alternativa vacía coincide en cualquier posición
   if (variable > PATTERN_LIMITS.variable)
     return `El formato admite como mucho ${PATTERN_LIMITS.variable} repeticiones variables (*, +, ?, {n,} o {m,n}): más pueden tardar demasiado.`;
+  if (!anchored && variable > PATTERN_LIMITS.unanchored)
+    return `Un formato que no empieza con ^ admite como mucho ${PATTERN_LIMITS.unanchored} repeticiones variables (*, +, ?, {n,} o {m,n}); empiézalo con ^ para usar ${PATTERN_LIMITS.variable}.`;
   try {
     new RegExp(pattern);
   } catch {
