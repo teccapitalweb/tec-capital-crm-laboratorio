@@ -3,6 +3,8 @@
 Estado: **publicado en `main`** (7 nov 2026), **esquema 35** (tres tablas nuevas), sin cambio de versión. Dos correcciones posteriores a la revisión de seguridad automática (rama `fix/api-seguridad`, sin publicar) están en «Seguridad».
 
 > **13 nov 2026:** las mismas llaves sirven para el conector de Claude ([PLAN_MCP_CLAUDE.md](PLAN_MCP_CLAUDE.md)), con tres permisos propios que la API v1 no usa.
+>
+> **15 nov 2026:** la v1 ya no es sólo de lectura: llaves con permisos de escritura de contactos, caducidad, rotación, idempotencia, límites con cabeceras y un formato único de error ([PLAN_API_ESCRITURA.md](PLAN_API_ESCRITURA.md)). Las rutas de lectura de este documento no cambian de forma; los errores de llave, permisos, límites y ruta ganan `code`, `status` y `requestId` (los de sus filtros, como `?type=` o `?status=`, conservan su forma `{ error }`), y un método que la ruta no admite responde 405 con `Allow`.
 
 ## Para qué
 

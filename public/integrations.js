@@ -19,8 +19,17 @@ window.createIntegrationsUI = function ({ state, api, esc, icon, showModal, toas
   }
   const note = copy => `<p class="crm-hint">${copy}</p>`;
 
+  // Estado de la llave (docs/PLAN_API_ESCRITURA.md): activa, en convivencia tras rotarla, caducada o revocada.
+  const KSTATE = {
+    active: ['Activa', 'ok'],
+    grace: ['En convivencia', 'warn'],
+    expired: ['Caducada', ''],
+    revoked: ['Revocada', ''],
+  };
   function keyRow(k) {
-    return `<article class="ops-row int-row"><div class="ops-row-person"><span class="avatar">${icon('key-round')}</span><div><strong>${esc(k.name)}</strong><small><code>${esc(k.prefix)}…</code> · ${esc(k.brandName)} · ${k.scopes.map(s => esc(data.scopes[s] || s)).join(', ')}</small><small>Creada ${esc(stamp(k.createdAt))} · ${k.lastUsedAt ? 'último uso ' + esc(stamp(k.lastUsedAt)) : 'sin usos todavía'}${k.revokedAt ? ' · revocada ' + esc(stamp(k.revokedAt)) : ''}</small></div></div><div class="actions">${chip(k.status === 'active' ? 'Activa' : 'Revocada', k.status === 'active' ? 'ok' : '')}${k.status === 'active' ? btn('key-revoke', 'Revocar', k.id) : ''}</div></article>`;
+    const [label, kind] = KSTATE[k.state] || KSTATE[k.status === 'active' ? 'active' : 'revoked'];
+    const live = k.state === 'active' || k.state === 'grace';
+    return `<article class="ops-row int-row"><div class="ops-row-person"><span class="avatar">${icon('key-round')}</span><div><strong>${esc(k.name)}</strong><small><code>${esc(k.prefix)}…</code> · ${esc(k.brandName)} · ${k.kind === 'write' ? 'Lectura y escritura' : 'Sólo lectura'} · ${k.scopes.map(s => esc(data.scopes[s] || s)).join(', ')}</small><small>Creada ${esc(stamp(k.createdAt))} · ${k.expiresAt ? (k.state === 'expired' ? 'caducó ' : 'caduca ') + esc(stamp(k.expiresAt)) : 'sin caducidad'} · ${k.lastUsedAt ? 'último uso ' + esc(stamp(k.lastUsedAt)) : 'sin usos todavía'}${k.revokedAt ? ' · revocada ' + esc(stamp(k.revokedAt)) : ''}</small></div></div><div class="actions">${chip(label, kind)}${k.state === 'active' ? btn('key-rotate', 'Rotar', k.id) : ''}${live ? btn('key-revoke', 'Revocar', k.id) : ''}</div></article>`;
   }
   function keysHtml() {
     return `<section class="crm-panel"><div class="ops-card-top"><h2>Llaves de la API</h2>${chip('Sólo administración')}${btn('key-new', icon('plus') + ' Nueva llave')}</div>
@@ -63,12 +72,22 @@ window.createIntegrationsUI = function ({ state, api, esc, icon, showModal, toas
       'Nueva llave de la API',
       `<form id="int-key-form" class="form-grid">${brandSelect()}
       <label class="field">Nombre (para quién o para qué es)<input name="name" maxlength="60" required placeholder="Panel de finanzas"></label>
-      <fieldset class="survey-form"><legend>Permisos</legend><div class="int-scopes">${Object.entries(data.scopes)
+      ${['read', 'write']
         .map(
-          ([k, l]) =>
-            `<label><input type="checkbox" name="scope-${esc(k)}" ${k === 'events' ? 'checked' : ''}> ${esc(l)}</label>`,
+          group =>
+            `<fieldset class="survey-form"><legend>${group === 'read' ? 'Lectura' : 'Escritura'}</legend><div class="int-scopes">${Object.entries(
+              data.scopes,
+            )
+              .filter(([k]) => ((data.scopeKinds || {})[k] || 'read') === group)
+              .map(
+                ([k, l]) =>
+                  `<label><input type="checkbox" name="scope-${esc(k)}" ${k === 'events' ? 'checked' : ''}> ${esc(l)}</label>`,
+              )
+              .join('')}</div></fieldset>`,
         )
-        .join('')}</div></fieldset>
+        .join('')}
+      <label class="field">Caducidad<select name="expiresInDays"><option value="">${esc('Por omisión: sin caducidad si sólo lee; ' + ((data.keyPolicy && data.keyPolicy.writeKeyDays) || 180) + ' días si escribe')}</option>${[30, 90, 180, 365].map(d => `<option value="${d}">${d} días</option>`).join('')}</select></label>
+      ${note('Una llave que escribe caduca siempre. Al rotarla, la anterior sigue sirviendo ' + ((data.keyPolicy && data.keyPolicy.rotateGraceHours) || 72) + ' horas para que la cambies en el otro sistema.')}
       <button class="btn primary" type="submit">Crear llave</button></form>`,
     );
   }
@@ -80,7 +99,7 @@ window.createIntegrationsUI = function ({ state, api, esc, icon, showModal, toas
       'Llave creada',
       `${secretBox('Llave de la API', r.token, 'revócala y crea otra')}
       <p class="crm-hint">Prueba que funciona (reemplaza la llave):</p><pre class="int-code">curl ${esc(base())}/me \\\n  -H "Authorization: Bearer ${esc(r.token)}"</pre>
-      <p class="crm-hint">Rutas de lectura: <code>/me</code>, <code>/events?after=&limit=</code>, <code>/orders?after=&status=</code>, <code>/contacts?after=</code>, <code>/editions</code>. Guía completa en <code>docs/PLAN_API_PUBLICA.md</code>.</p>`,
+      <p class="crm-hint">Rutas de lectura: <code>/me</code>, <code>/events?after=&limit=</code>, <code>/orders?after=&status=</code>, <code>/contacts?after=</code>, <code>/editions</code>, <code>/templates</code>, <code>/lists</code>. Escritura de contactos (con <code>Idempotency-Key</code>): <code>POST /contacts</code>, <code>PATCH /contacts/{id}</code>, etiquetas, consentimiento y listas. Guías en <code>docs/PLAN_API_PUBLICA.md</code> y <code>docs/PLAN_API_ESCRITURA.md</code>.</p>`,
     );
   }
   function hookForm(w = null) {
@@ -137,6 +156,19 @@ window.createIntegrationsUI = function ({ state, api, esc, icon, showModal, toas
       await api('/api/integrations/keys/' + id + '/revoke', { method: 'POST', body: {} });
       toast('Llave revocada.');
       return 'reload';
+    }
+    if (name === 'int-key-rotate') {
+      if (
+        !confirm(
+          '¿Rotar esta llave? Se crea una nueva con los mismos permisos y la anterior deja de servir en ' +
+            ((data.keyPolicy && data.keyPolicy.rotateGraceHours) || 72) +
+            ' horas.',
+        )
+      )
+        return true;
+      const r = await api('/api/integrations/keys/' + id + '/rotate', { method: 'POST', body: {} });
+      keyCreated(r);
+      return 'reload-keep';
     }
     if (name === 'int-hook-new') {
       hookForm();
@@ -207,7 +239,12 @@ window.createIntegrationsUI = function ({ state, api, esc, icon, showModal, toas
       const scopes = Object.keys(data.scopes).filter(k => fd.has('scope-' + k));
       const r = await api('/api/integrations/keys', {
         method: 'POST',
-        body: { brandId: input.brandId, name: input.name, scopes },
+        body: {
+          brandId: input.brandId,
+          name: input.name,
+          scopes,
+          ...(input.expiresInDays ? { expiresInDays: Number(input.expiresInDays) } : {}),
+        },
       });
       keyCreated(r);
       return 'reload-keep';

@@ -8,7 +8,11 @@
 //         guardarse en el CRM y se ignoran.
 //   opts  { onExisting: 'update'|'skip', nameFallback: 'phone'|'error', actorId, importId, label (nombre del archivo),
 //         consent: { mode: 'none'|'declared', origin },
-//         allow: { edit, tags, consent, phone } }
+//         allow: { edit, tags, consent, phone },
+//         source: 'import'|'api' (origen del alta, del consentimiento y de los datos; por omisión 'import'),
+//         contactId (la API v1 ya sabe qué contacto es: se escribe en ése, que debe ser de la marca; no hace falta
+//         teléfono ni correo en la fila), keepName (en un contacto existente no se cambia el nombre),
+//         attributeEvents (true: cada dato cambiado publica su evento, como en pantalla; la importación no lo hace) }
 //   allow   lo que puede quien importa (por omisión, todo). Sin `edit` no se tocan contactos existentes ni se escriben
 //           datos de contacto; sin `tags`, sin etiquetas; sin `consent`, sin consentimiento; sin `phone`, sin datos
 //           personales (regla del módulo de atributos). Lo que no se puede es un error de la fila, nunca un salto
@@ -86,8 +90,10 @@ export function createRowWriter({ db, contacts, persons, attributes, now = Date.
   );
   const contactRow = db.prepare('SELECT * FROM contacts WHERE id=?');
   const insert = db.prepare(
-    "INSERT INTO contacts(id,brand_id,name,phone,phone_key,email,source,created_at,updated_at) VALUES(?,?,?,?,?,?,'import',?,?)",
+    'INSERT INTO contacts(id,brand_id,name,phone,phone_key,email,source,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',
   );
+  const byId = db.prepare('SELECT * FROM contacts WHERE brand_id=? AND id=?');
+  const sourceOf = opts => (opts.source === 'api' ? 'api' : 'import');
   const update = db.prepare('UPDATE contacts SET name=?,phone=?,phone_key=?,email=?,updated_at=? WHERE id=?');
 
   const error = (reason, message, extra = {}) => ({
@@ -115,7 +121,7 @@ export function createRowWriter({ db, contacts, persons, attributes, now = Date.
           value: email,
         }),
       };
-    if (!phone && !email)
+    if (!phone && !email && !opts.contactId)
       return {
         problem: error('no_identifier', 'La fila no trae teléfono ni correo: no hay con qué reconocer al contacto.'),
       };
@@ -155,13 +161,15 @@ export function createRowWriter({ db, contacts, persons, attributes, now = Date.
     if (value !== true && value !== false) return null;
     const current = contacts.consentOf(contact.id).status;
     const label = text(opts.label, 80) || 'archivo';
+    const source = sourceOf(opts);
+    const via = source === 'api' ? `Por la API («${label}»)` : `Importado de «${label}»`;
     if (value === false) {
       if (current === 'opted_out') return null;
       contacts.writeConsent(
         contact,
         'opted_out',
-        'import',
-        text(`Importado de «${label}»: no desea mensajes.`, 200),
+        source,
+        text(`${via}: no desea mensajes.`, 200),
         opts.actorId ?? null,
       );
       return 'opted_out';
@@ -169,8 +177,8 @@ export function createRowWriter({ db, contacts, persons, attributes, now = Date.
     if (current === 'opted_out') return 'kept_opt_out';
     if (current === 'opted_in') return null;
     if (opts.consent?.mode !== 'declared') return 'not_recorded';
-    const note = text(`Importado de «${label}». Origen del permiso: ${opts.consent.origin}`, 200);
-    contacts.writeConsent(contact, 'opted_in', 'import', note, opts.actorId ?? null);
+    const note = text(`${via}. Origen del permiso: ${opts.consent.origin}`, 200);
+    contacts.writeConsent(contact, 'opted_in', source, note, opts.actorId ?? null);
     return 'opted_in';
   }
 
@@ -187,7 +195,14 @@ export function createRowWriter({ db, contacts, persons, attributes, now = Date.
     if ((row.consent === true || row.consent === false) && !allow.consent) return denied('consent', 'contacts.consent');
     if (Object.values(row.attrs ?? {}).some(value => String(value ?? '').trim()) && !allow.edit)
       return denied(null, 'contacts.edit');
-    const existing = findExisting(brandId, phone, email);
+    let existing;
+    if (opts.contactId) {
+      existing = byId.get(brandId, opts.contactId) ?? null;
+      if (!existing)
+        return error('not_found', 'Contacto no disponible.', {
+          field: null,
+        });
+    } else existing = findExisting(brandId, phone, email);
     if (existing && opts.onExisting !== 'skip' && !allow.edit) return denied(null, 'contacts.edit');
     if (existing && opts.onExisting === 'skip')
       return {
@@ -209,12 +224,25 @@ export function createRowWriter({ db, contacts, persons, attributes, now = Date.
       let changed = false;
       if (!contact) {
         const id = randomUUID();
-        insert.run(id, brandId, ready.name, phone?.e164 ?? '', phone?.key ?? '', email, createdAt ?? t, t);
+        insert.run(
+          id,
+          brandId,
+          ready.name,
+          phone?.e164 ?? '',
+          phone?.key ?? '',
+          email,
+          sourceOf(opts),
+          createdAt ?? t,
+          t,
+        );
         contact = contactRow.get(id);
-        persons?.attach(contact, 'import', { candidates: false });
+        persons?.attach(contact, sourceOf(opts), { candidates: false });
         contact = contactRow.get(id);
       } else {
-        const name = ready.name && text(row.name, 100) && ready.name !== contact.name ? ready.name : contact.name;
+        const name =
+          !opts.keepName && ready.name && text(row.name, 100) && ready.name !== contact.name
+            ? ready.name
+            : contact.name;
         const mail = email && email !== contact.email.toLowerCase() ? email : contact.email;
         const addPhone = phone && !contact.phone_key;
         if (name !== contact.name || mail !== contact.email || addPhone) {
@@ -229,7 +257,7 @@ export function createRowWriter({ db, contacts, persons, attributes, now = Date.
           changed = true;
           contact = contactRow.get(contact.id);
           if (addPhone || mail !== existing.email) {
-            persons?.attach(contact, 'import', { candidates: false });
+            persons?.attach(contact, sourceOf(opts), { candidates: false });
             contact = contactRow.get(contact.id);
           }
         }
@@ -247,10 +275,10 @@ export function createRowWriter({ db, contacts, persons, attributes, now = Date.
           return { key, value: definition ? attributeValue(definition, value) : value };
         });
         const result = api.set(brandId, contact.id, changes, {
-          source: 'import',
+          source: sourceOf(opts),
           sourceId: opts.importId ?? null,
           actorId: opts.actorId ?? null,
-          events: false,
+          events: opts.attributeEvents === true,
           // Quien no puede ver los datos personales tampoco los escribe (regla del módulo de atributos).
           revealPersonal: allow.phone,
         });
