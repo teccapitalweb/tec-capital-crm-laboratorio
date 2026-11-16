@@ -609,7 +609,7 @@
           else
             attachment = `<a class="file-link" href="${esc(m.attachmentUrl)}" target="_blank" rel="noopener">${icon('file-text')}<span>${esc(m.filename)}</span>${icon('download')}</a>`;
         }
-        return `<article class="message ${outgoing ? 'outgoing' : ''}"><div class="bubble">${attachment}${esc(m.text)}${renderButtons(m, outgoing)}${payLink(m, outgoing)}${surveyLink(m, outgoing)}</div><div class="message-meta">${m.sender_kind === 'automation' ? icon(m.ai_drafted ? 'sparkles' : 'workflow') : ''}<span>${esc(name)} · ${time(m.created_at)}</span>${outgoing ? deliveryMark(m, c) : ''}${m.receipt_status ? `<span class="msg-tag">${{ pending: 'Comprobante en revisión', accepted: 'Comprobante aceptado', rejected: 'Comprobante rechazado' }[m.receipt_status]}</span>` : ''}</div></article>`;
+        return `<article class="message ${outgoing ? 'outgoing' : ''}"><div class="bubble">${attachment}${esc(m.text)}${renderButtons(m, outgoing)}${payLink(m, outgoing)}${surveyLink(m, outgoing)}</div><div class="message-meta">${m.sender_kind === 'automation' ? icon(m.ai_drafted ? 'sparkles' : 'workflow') : ''}<span>${esc(name)} · ${time(m.created_at)}</span>${outgoing ? deliveryMark(m, c) : ''}${agentMode() && String(m.client_ref || '').startsWith('campaign:') ? `<span class="msg-tag">${esc('Difusión')}</span>` : ''}${m.receipt_status ? `<span class="msg-tag">${{ pending: 'Comprobante en revisión', accepted: 'Comprobante aceptado', rejected: 'Comprobante rechazado' }[m.receipt_status]}</span>` : ''}</div></article>`;
       })
       .join(
         '',

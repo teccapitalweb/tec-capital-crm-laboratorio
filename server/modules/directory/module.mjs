@@ -28,6 +28,8 @@ const MAX_FILTER = CONDITION_LIMITS.maxBytes;
 // Filtros rápidos (los chips de la pantalla): cada uno es una condición de la gramática común.
 const QUICK = {
   with_phone: () => ({ field: 'has_phone', op: 'is', value: true }),
+  // «Sin teléfono»: lo mismo que ya se ve en la fila (tiene o no tiene); no pregunta por el contenido de nada.
+  no_phone: () => ({ field: 'has_phone', op: 'is', value: false }),
   opted_in: () => ({ field: 'consent', op: 'eq', value: 'opted_in' }),
   active: () => ({ field: 'active_interest', op: 'is', value: true }),
   recent: () => ({ field: 'created', op: 'in_last_days', value: 30 }),
@@ -184,6 +186,8 @@ export default {
         name: row.name,
         phone: access.phone(user, row.phone, row.brand_id) ?? '',
         phoneMasked: Boolean(row.phone) && !full,
+        // Conversa por WhatsApp real sin teléfono visible (distintivo «sin número»). Nunca el identificador.
+        noNumber: Boolean(row.wa_only),
         labNumber: row.test_number ? '#' + row.test_number : '',
         email: full ? row.email : maskEmail(row.email),
         source: row.source,

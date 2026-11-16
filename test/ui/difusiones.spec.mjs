@@ -132,8 +132,39 @@ test('Difusiones: asistente de un ensayo, revisión con excluidos y detalle con 
   await expect(page.locator('#page [aria-label="Destinatarios"]')).toContainText('Persona Difusión');
   await settled(page);
   await expectNiebla(page, 'difusiones-detalle', testInfo);
+
+  // Un destinatario al que se le escribió por su identificador (sin teléfono) y una difusión detenida porque el
+  // número volvió al modo escucha. Se simula en la base: un ensayo no usa identificadores ni cambia de número.
+  const db = new DatabaseSync(join(process.env.CRM_UI_DATA_DIR, 'laboratorio.sqlite'), { timeout: 5000 });
+  try {
+    const { id } = db
+      .prepare(
+        'SELECT c.id FROM campaigns c JOIN wa_templates t ON t.id=c.wa_template_id WHERE t.name=? ORDER BY c.rowid DESC LIMIT 1',
+      )
+      .get(PLANTILLA);
+    db.prepare(
+      "UPDATE campaign_recipients SET wa_to=NULL, wa_recipient='MX.ui00000000beef' WHERE campaign_id=? AND contact_id='ui-dif-2'",
+    ).run(id);
+    db.prepare("UPDATE campaigns SET status='stopped', status_reason='number_listen_only' WHERE id=?").run(id);
+  } finally {
+    db.close();
+  }
+  const estado = page.locator('#page form[data-do="filtro"] select');
+  await estado.selectOption('sent');
+  await estado.selectOption('');
+  const destinatarios = page.locator('#page [aria-label="Destinatarios"]');
+  const sinNumero = destinatarios.locator('li', { hasText: 'Persona Difusión 2' });
+  await expect(sinNumero).toContainText('Número oculto ··beef');
+  await expect(sinNumero.locator('.dif-sin-numero')).toHaveText('Sin número');
+  await expect(destinatarios).not.toContainText('MX.ui');
+  await expect(page.locator('#page .dif-aviso')).toHaveText('El número volvió al modo escucha y ya no envía');
+  await settled(page);
+  await expectNiebla(page, 'difusiones-sin-numero', testInfo);
   await page.locator('#page [data-do="volver"]').click();
   await expect(page.locator('#page [data-slot="tabla"]')).toContainText(PLANTILLA);
+  await expect(page.locator('#page [data-slot="tabla"] .dif-motivo').first()).toHaveText(
+    'El número volvió al modo escucha y ya no envía',
+  );
 
   await page.locator('.nav [data-view="day"]').click();
   await expect(page.locator('#breadcrumb-title')).toHaveText('Mi día');

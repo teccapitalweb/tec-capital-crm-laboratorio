@@ -222,7 +222,16 @@ export function createRepo(db) {
   function page(
     brandId,
     include,
-    { exclude = null, requireConsent = true, status = 'all', reason = null, order = 'name', after = null, limit = 50 },
+    {
+      exclude = null,
+      requireConsent = true,
+      status = 'all',
+      reason = null,
+      order = 'name',
+      after = null,
+      limit = 50,
+      words = [],
+    },
   ) {
     const suppressed = selectSuppressed(brandId);
     const args = [];
@@ -265,6 +274,8 @@ export function createRepo(db) {
     ];
     if (after)
       where.push(byName ? add('(s.name_key, s.contact_id) > (?, ?)', [after.n, after.i]) : add('c.id > ?', [after.i]));
+    // Búsqueda por nombre (palabras ya sin acentos, con la clave de contact_search): sólo el nombre, que todos ven.
+    for (const word of words) where.push(add("instr(COALESCE(s.name_key, ''), ?) > 0", [word]));
     const outer = [];
     if (status === 'eligible') outer.push('reason IS NULL');
     if (status === 'excluded') outer.push('reason IS NOT NULL');
