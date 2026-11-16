@@ -18,7 +18,14 @@ export function saleTemplate() {
       node(
         'm',
         'message',
-        { parts: [{ kind: 'text', text: 'Hola, {{nombre}}. Gracias por tu interés en {{curso}}.' }] },
+        {
+          parts: [
+            {
+              kind: 'text',
+              text: 'Hola, {{nombre|qué gusto saludarte}}. Gracias por tu interés en {{curso|nuestros cursos}}.',
+            },
+          ],
+        },
         'Saludo',
       ),
       node('f', 'course_card', { text: '', flyer: true }),
