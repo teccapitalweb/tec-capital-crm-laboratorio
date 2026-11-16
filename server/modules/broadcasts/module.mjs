@@ -1531,6 +1531,8 @@ export default {
               : full
                 ? ''
                 : maskDigits(r.wa_to),
+          // se le escribe por su identificador de usuario: distintivo «sin número» (el texto de arriba ya va abreviado)
+          noNumber: !r.wa_to && Boolean(r.wa_recipient),
           state: r.state,
           stateLabel: RECIPIENT_STATES[r.state] ?? r.state,
           reason: r.skip_reason,

@@ -16,6 +16,8 @@
 //                                                       → {total, eligible, excluded:[{reason,label,count}], sample, ms}
 //   GET   /api/audiences/:id/members?status=&reason=&cursor=&limit=&requireConsent=
 //   POST  /api/audiences/:id/members                   {add?:[ids], remove?:[ids], clientRef?} (≤500 por llamada)
+//   GET   /api/audiences/:id/members?q=                buscar dentro de los miembros por nombre
+//   GET   /api/audiences/:id/export?status=            los miembros en CSV (campaigns.view + contacts.export)
 //
 // Permisos: ver = `campaigns.view` en la marca; crear y editar = `audiences.edit`. El teléfono de cada miembro pasa
 // por host.access.phone. Privacidad: quien no tiene `contacts.phone` no filtra por el contenido del teléfono, del
@@ -37,6 +39,8 @@ import {
   normalizeText,
   validate,
 } from '../../lib/conditions.mjs';
+import { toCsv } from '../../lib/csv.mjs';
+import { searchKey } from '../../lib/search-key.mjs';
 import { CHANNELS, KINDS, REASONS, ROLES, buildFields, createRepo } from './repo.mjs';
 
 export const LIMITS = Object.freeze({
@@ -46,13 +50,33 @@ export const LIMITS = Object.freeze({
   perCall: 500, // contactos por llamada al añadir o quitar
   previewPerMinute: 60,
   specEntries: 5,
+  exportRows: 10_000, // filas por exportación; lo que pase se avisa en la pantalla y en la cabecera
+  exportsPerMinute: 6,
 });
 const PAGE = 50;
 const MAX_NAME = 80;
 const MAX_DESCRIPTION = 300;
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
 const UUID = /^[0-9a-f-]{36}$/;
-const ROUTE = /^\/api\/audiences\/([0-9a-f-]{36})(?:\/(members|archive|restore|recount|duplicate))?$/;
+const ROUTE = /^\/api\/audiences\/([0-9a-f-]{36})(?:\/(members|archive|restore|recount|duplicate|export))?$/;
+const MAX_SEARCH = 100;
+const CONSENT_LABELS = { unknown: 'Sin respuesta', opted_in: 'Aceptó mensajes', opted_out: 'No quiere mensajes' };
+
+// Palabras de una búsqueda por nombre, sin acentos (la misma clave que contact_search).
+const searchWords = text =>
+  searchKey(String(text ?? '').slice(0, MAX_SEARCH))
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 8);
+// Nombre de archivo seguro: sólo letras sin acento, cifras y guiones; nunca datos de un contacto.
+export function exportFilename(name, at = Date.now()) {
+  const slug =
+    searchKey(name)
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || 'audiencia';
+  return `audiencia-${slug}-${new Date(at).toISOString().slice(0, 10)}.csv`;
+}
 const STATUSES = new Set(['all', 'eligible', 'excluded']);
 // Estados de campaña en los que su público no puede desaparecer.
 const LIVE_CAMPAIGN = new Set(['scheduled', 'sending', 'paused', 'stopped']);
@@ -772,6 +796,7 @@ export default {
           brands: brands.map(id => ({ id, name: repo.brandName(id), canEdit: access.can(user, 'audiences.edit', id) })),
           brandId,
           canEdit: access.can(user, 'audiences.edit', brandId),
+          canExport: access.can(user, 'contacts.export', brandId),
           audiences: repo.list(brandId, { archived }).map(a => shape(a)),
           reasons: Object.entries(REASONS).map(([reason, label]) => ({ reason, label })),
           limits: { ...LIMITS, ...CONDITION_LIMITS_VIEW },
@@ -857,8 +882,12 @@ export default {
         const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || PAGE, 1), PAGE);
         const after = decodeCursor(url.searchParams.get('cursor'), fail);
         const requireConsent = url.searchParams.get('requireConsent') !== '0';
+        const q = url.searchParams.get('q') ?? '';
+        if (q.length > MAX_SEARCH)
+          throw fail(400, `La búsqueda admite hasta ${MAX_SEARCH} caracteres.`, { code: 'invalid_input', field: 'q' });
+        const words = searchWords(q);
         const include = selectOf(brandId, audience, now());
-        const page = repo.page(brandId, include, { requireConsent, status, reason, after, limit });
+        const page = repo.page(brandId, include, { requireConsent, status, reason, after, limit, words });
         const added =
           audience.kind === 'list'
             ? new Map(
@@ -880,6 +909,10 @@ export default {
         });
         return true;
       }
+      if (action === 'export' && method === 'GET') {
+        exportMembers(user, audience, url, res);
+        return true;
+      }
       if (action === 'members' && method === 'POST') {
         const result = editMembers(user, audience, (await host.body(req)) ?? {});
         host.json(res, 200, { audience: shape(result.audience), added: result.added, removed: result.removed });
@@ -887,6 +920,53 @@ export default {
       }
       return false;
     }
+    // Exportar los miembros a CSV. Pide ver la audiencia (campaigns.view, ya comprobado) y `contacts.export` en su
+    // marca. El teléfono y el correo sólo salen para quien tiene `contacts.phone`; para los demás no hay columna (ni
+    // enmascarada: una hoja con cuatro dígitos sueltos no sirve para nada y sí se puede cruzar). Cada celda pasa por
+    // csvCell (protección contra fórmulas), hay límite de frecuencia y de filas, y queda en la auditoría quién exportó
+    // qué audiencia y cuántas filas. La URL sólo lleva el id de la audiencia y el estado: nada personal.
+    function exportMembers(user, audience, url, res) {
+      const brandId = audience.brand_id;
+      access.require(user, 'contacts.export', brandId);
+      const status = url.searchParams.get('status') ?? 'all';
+      if (!STATUSES.has(status))
+        throw fail(400, 'status es all, eligible o excluded.', { code: 'invalid_input', field: 'status' });
+      host.rate(`audiences.export:${user.id}`, LIMITS.exportsPerMinute);
+      const full = access.can(user, 'contacts.phone', brandId);
+      const at = now();
+      const include = selectOf(brandId, audience, at);
+      const header = ['nombre', ...(full ? ['telefono', 'correo'] : []), 'consentimiento', 'estado'];
+      const lines = [];
+      let after = null;
+      let truncated = false;
+      for (;;) {
+        const room = LIMITS.exportRows - lines.length;
+        const page = repo.page(brandId, include, { status, after, limit: Math.min(500, room) });
+        for (const row of page.rows)
+          lines.push([
+            row.name,
+            ...(full ? [row.phone ?? '', row.email ?? ''] : []),
+            CONSENT_LABELS[row.consent] ?? row.consent,
+            row.reason ? REASONS[row.reason] : 'Puede recibir',
+          ]);
+        if (!page.next) break;
+        if (lines.length >= LIMITS.exportRows) {
+          truncated = true;
+          break;
+        }
+        after = page.next;
+      }
+      host.audit(user, 'audience.exported', `${audience.id}:${lines.length}`);
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${exportFilename(audience.name, at)}"`,
+        'Cache-Control': 'no-store',
+        'X-Export-Rows': String(lines.length),
+        'X-Export-Truncated': truncated ? '1' : '0',
+      });
+      res.end(toCsv(lines, { header, bom: true }));
+    }
+
     const summaryView = totals => ({
       total: totals.total,
       eligible: totals.eligible,
