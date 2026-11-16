@@ -24,6 +24,12 @@ export const METHODS = {
   transfer: 'Transferencia con comprobante',
 };
 import { orderLink, paymentConfirmed } from './reply-copy.mjs';
+import { forBrand, isRealBrand, realModeOf } from './lib/real-mode.mjs';
+// Métodos que el cliente puede «pagar» él mismo en el laboratorio. Una marca en modo real (docs/PLAN_MODO_REAL.md) no los
+// ofrece ni los acepta: su pedido lo marca pagado una persona del equipo o, cuando exista, una pasarela real.
+export const SIMULATED_METHODS = Object.freeze(['card', 'oxxo']);
+const REAL_MODE_REFUSED =
+  'Esta marca atiende clientes reales y no acepta pagos simulados. Sigue las instrucciones de pago de la pantalla o envía tu comprobante por el chat.';
 const money = (cents, currency) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency || 'MXN' }).format(cents / 100);
 const stamp = t =>
@@ -116,7 +122,7 @@ export function createPayments({
     contact: db.prepare('SELECT name FROM contacts WHERE id=?').get(o.contact_id)?.name || 'Cliente',
   });
   const say = (c, textOut, ref, category = 'utility') =>
-    insertMessage(c, null, textOut, 'automation', ref, null, null, null, { category });
+    insertMessage(c, null, forBrand(db, c.brand_id, textOut), 'automation', ref, null, null, null, { category });
   const sessionOf = o =>
     o.session_id ? db.prepare('SELECT * FROM edition_sessions WHERE id=?').get(o.session_id) : null;
   const planLabel = o => (o.plan === 'per_session' ? 'Por sesión' : 'Curso completo');
@@ -141,21 +147,25 @@ export function createPayments({
       },
     });
     if (t) return t.text + promo;
-    return orderLink({
-      reference: o.reference,
-      course: n.course,
-      edition: n.edition,
-      amount: money(o.amount_cents, o.currency),
-      note:
-        o.plan === 'per_session'
-          ? ' (plan por sesión: este pago cubre tu primera sesión; las siguientes se cobran antes de cada clase)'
-          : n.promotion
-            ? ' (' + n.promotion + ')'
-            : '',
-      coupon: promo,
-      link: linkFor(o),
-      until: stamp(o.expires_at),
-    });
+    return forBrand(
+      db,
+      o.brand_id,
+      orderLink({
+        reference: o.reference,
+        course: n.course,
+        edition: n.edition,
+        amount: money(o.amount_cents, o.currency),
+        note:
+          o.plan === 'per_session'
+            ? ' (plan por sesión: este pago cubre tu primera sesión; las siguientes se cobran antes de cada clase)'
+            : n.promotion
+              ? ' (' + n.promotion + ')'
+              : '',
+        coupon: promo,
+        link: linkFor(o),
+        until: stamp(o.expires_at),
+      }),
+    );
   }
   // Enlace de pago de una sesión (plan por sesión): mismo recorrido de cobro, un pedido por sesión e inscripción.
   function sessionLinkMessage(o) {
@@ -174,7 +184,11 @@ export function createPayments({
       },
     });
     if (t) return t.text;
-    return `Pago de la sesión ${s.number} (${s.title}) · ${n.course} · ${stamp(s.starts_at)}: ${money(o.amount_cents, o.currency)}.\nPedido ${o.reference}. Paga aquí (simulado): ${linkFor(o)}\nVigente hasta ${stamp(o.expires_at)}. También puedes enviar tu comprobante de transferencia por este chat.\nLaboratorio: no se realizan cobros reales.`;
+    return forBrand(
+      db,
+      o.brand_id,
+      `Pago de la sesión ${s.number} (${s.title}) · ${n.course} · ${stamp(s.starts_at)}: ${money(o.amount_cents, o.currency)}.\nPedido ${o.reference}. Paga aquí (simulado): ${linkFor(o)}\nVigente hasta ${stamp(o.expires_at)}. También puedes enviar tu comprobante de transferencia por este chat.\nLaboratorio: no se realizan cobros reales.`,
+    );
   }
   // Crea el pedido dentro de la transacción del llamador. Si ya hay uno vigente en la conversación, lo devuelve.
   // plan='per_session': el importe es el precio por sesión de la edición y el pago cubre la primera sesión disponible.
@@ -571,13 +585,15 @@ export function createPayments({
   function pay(o, user, input) {
     const c = db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id);
     if (!c || c.customer_id !== user.id) throw fail(404, 'Pedido no disponible.');
+    // Modo real: ningún método simulado marca pagado el pedido, aunque la petición se arme a mano. El pedido sigue igual.
+    if (isRealBrand(db, o.brand_id)) throw Object.assign(fail(409, REAL_MODE_REFUSED), { code: 'real_mode' });
     if (o.status === 'pending' && o.expires_at <= now()) {
       transaction(db, () => expire(o));
       throw fail(409, 'El enlace de pago venció. Pide uno nuevo por el chat.');
     }
     if (o.status !== 'pending')
       throw fail(409, 'Este pedido ya no admite pago: ' + STATUS[o.status].toLowerCase() + '.');
-    const method = ['card', 'oxxo'].includes(input.method) ? input.method : null;
+    const method = SIMULATED_METHODS.includes(input.method) ? input.method : null;
     if (!method) throw fail(400, 'Elige tarjeta u OXXO (simulados).');
     const approved = input.outcome !== 'declined',
       providerRef = 'sim_' + randomBytes(6).toString('hex');
@@ -778,6 +794,9 @@ export function createPayments({
         'rechazado: el importe del proveedor (' + d.amountCents + ') no coincide con el pedido (' + o.amount_cents + ')'
       );
     const c = db.prepare('SELECT * FROM conversations WHERE id=?').get(o.conversation_id);
+    // Modo real: el proveedor simulado (y los webhooks de ensayo) no confirman el pedido de una marca real.
+    if (provider === 'simulated' && ev.type === 'payment.succeeded' && isRealBrand(db, o.brand_id))
+      return 'rechazado: la marca atiende clientes reales y no acepta pagos del proveedor simulado';
     if (ev.type === 'payment.succeeded') {
       if (!['pending', 'review'].includes(o.status))
         return 'ignorado: el pedido ya estaba ' + STATUS[o.status].toLowerCase();
@@ -1071,6 +1090,7 @@ export function createPayments({
       amountLabel: money(o.amount_cents, o.currency),
       statusLabel: STATUS[o.status],
       methodLabel: o.method ? METHODS[o.method] : null,
+      realMode: isRealBrand(db, o.brand_id),
       couponCode: o.coupon_code || null,
       couponBy: o.coupon_code ? (o.coupon_source === 'customer' ? 'cliente' : 'equipo') : null,
       discountLabel: o.discount_cents > 0 ? money(o.discount_cents, o.currency) : null,
@@ -1162,7 +1182,8 @@ export function createPayments({
       brand = db.prepare('SELECT name FROM brands WHERE id=?').get(o.brand_id);
     if (o.status === 'pending' && o.expires_at <= now()) transaction(db, () => expire(o));
     const fresh = get(o.id),
-      s = sessionOf(o);
+      s = sessionOf(o),
+      real = isRealBrand(db, o.brand_id);
     return {
       id: o.id,
       reference: o.reference,
@@ -1195,7 +1216,11 @@ export function createPayments({
       expiresAt: o.expires_at,
       conversationId: o.conversation_id,
       checkoutUrl: fresh.checkout_url && !fresh.checkout_url.includes('/?pay=') ? fresh.checkout_url : null,
-      methods: Object.entries(METHODS).map(([id, label]) => ({ id, label })),
+      // Modo real (docs/PLAN_MODO_REAL.md): sin métodos que el cliente pueda «pagar» solo; la página muestra las
+      // instrucciones que escribió la marca o, si no hay, que un asesor le dará los datos. Nunca datos inventados.
+      realMode: real,
+      methods: real ? [] : Object.entries(METHODS).map(([id, label]) => ({ id, label })),
+      paymentInstructions: real ? realModeOf(db, o.brand_id).payment_instructions || null : null,
     };
   }
   function setSettings(brandId, input, user) {
