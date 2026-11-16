@@ -348,6 +348,14 @@ const META_ERRORS = {
   132015: 'Meta pausó esta plantilla por baja calidad; no se puede enviar por ahora.',
   132016: 'Meta desactivó esta plantilla por baja calidad.',
 };
+// Lo que dijo Meta, en una línea y recortado. Una cadena larga sin espacios podría ser un token o una firma: se tacha.
+const metaDetail = error =>
+  String(error?.error_user_msg || error?.error_data?.details || error?.title || error?.message || '')
+    .replace(/[A-Za-z0-9_|.=+/-]{40,}/g, '[…]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 140);
+
 export function explainMeta(error, status = 0) {
   const code = Number(error?.code) || 0,
     sub = Number(error?.error_subcode) || 0;
@@ -356,12 +364,22 @@ export function explainMeta(error, status = 0) {
       ? 'Meta no encuentra ese número: revisa META_PHONE_NUMBER_ID (es el «Identificador del número de teléfono», no el número) y que el token tenga acceso a él.'
       : 'Meta rechazó la petición por un dato no válido' +
           (error?.error_data?.details ? ': ' + String(error.error_data.details).slice(0, 140) : '.');
+  // Los errores de permiso se parecen entre sí y la explicación propia no alcanza para saber cuál es: llevan además
+  // el código y lo que dijo Meta.
+  if (code === 10 || code === 131005 || (code >= 200 && code < 300)) {
+    const said = metaDetail(error);
+    return (
+      (META_ERRORS[code] || META_ERRORS[200]) +
+      ' Meta dice (código ' +
+      code +
+      (sub ? ', subcódigo ' + sub : '') +
+      ')' +
+      (said ? ': ' + said : '.')
+    );
+  }
   if (META_ERRORS[code]) return META_ERRORS[code];
-  if (code >= 200 && code < 300) return META_ERRORS[200];
   if (status === 401) return META_ERRORS[190];
-  const detail = String(error?.error_user_msg || error?.error_data?.details || error?.title || error?.message || '')
-    .replace(/\s+/g, ' ')
-    .slice(0, 140);
+  const detail = metaDetail(error);
   return (
     'Meta rechazó la operación' +
     (code ? ' (código ' + code + ')' : status ? ' (HTTP ' + status + ')' : '') +

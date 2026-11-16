@@ -24,6 +24,20 @@ test('adaptador de Meta: explica los errores en español, no acepta un token mal
   assert.match(explainMeta({ code: 100, error_subcode: 33, message: 'Object does not exist' }), /META_PHONE_NUMBER_ID/);
   assert.match(explainMeta({ code: 999, message: 'Algo raro' }), /código 999\): Algo raro/);
   assert.match(explainMeta(null, 401), /token de Meta/);
+  // Los errores de permiso llevan además el código y lo que dijo Meta, para saber cuál de todos es.
+  assert.match(
+    explainMeta({ code: 10, message: '(#10) Application does not have permission for this action' }),
+    /falta permiso para este número.*Meta dice \(código 10\): \(#10\) Application does not have permission/,
+  );
+  assert.match(explainMeta({ code: 200, error_subcode: 2018, message: 'x' }), /\(código 200, subcódigo 2018\): x/);
+  assert.match(explainMeta({ code: 230 }), /falta permiso para este número.*Meta dice \(código 230\)\.$/);
+  assert.match(explainMeta({ code: 131005, message: 'Access denied' }), /\(código 131005\): Access denied/);
+  // Nada que parezca un token llega al texto, y el texto de Meta se recorta.
+  const leaked = explainMeta({ code: 10, message: 'Bad token ' + 'EAAx'.repeat(20) + ' given ' + 'a b '.repeat(80) });
+  assert.doesNotMatch(leaked, /EAAxEAAx/);
+  assert.match(leaked, /Bad token \[…\] given/);
+  assert.ok(leaked.length < 320, 'el texto de Meta va recortado');
+  assert.doesNotMatch(explainMeta({ code: 999, message: 'z ' + 'Q'.repeat(60) }), /QQQQ/);
   const calls = [],
     ok = id => ({ ok: true, status: 200, json: async () => ({ messages: [{ id }] }) });
   const env = {
