@@ -30,7 +30,7 @@ export function conversationPage(db, user, options = {}, online = () => false) {
     .prepare(
       `SELECT c.*,COALESCE(o.stage,CASE WHEN c.stage='inscrito' THEN 'ganada' ELSE c.stage END) AS stage,
     e.name edition_name,o.id opportunity_id,o.contact_id contact_id,o.revision opportunity_revision,u.name customer_name,u.test_number,b.name brand_name,k.title course_title,
-    a.name agent_name,(SELECT text FROM messages m WHERE m.conversation_id=c.id ORDER BY seq DESC LIMIT 1) last_text,
+    a.name agent_name,COALESCE((SELECT s.revision FROM service_state s WHERE s.conversation_id=c.id),1) state_revision,(SELECT text FROM messages m WHERE m.conversation_id=c.id ORDER BY seq DESC LIMIT 1) last_text,
     (SELECT MIN(created_at) FROM messages m WHERE m.conversation_id=c.id AND m.sender_kind='customer') first_customer_at,
     (SELECT MAX(created_at) FROM messages m WHERE m.conversation_id=c.id AND m.sender_kind='customer') last_customer_at,
     (SELECT text FROM messages m WHERE @query!='' AND m.conversation_id=c.id AND instr(search_text(m.text),search_text(@query))>0 ORDER BY seq DESC LIMIT 1) match_text,

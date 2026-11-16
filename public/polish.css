@@ -1497,3 +1497,67 @@ dialog {
   margin-top: 2px;
   overflow-wrap: anywhere;
 }
+
+/* Ciclo de vida (docs/PLAN_CICLO_DE_VIDA.md): estado de la conversación en la cabecera del chat y en la lista. */
+.lc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.lc-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.lc-chip.lc-open {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+}
+.lc-chip.lc-pending {
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.lc-chip.lc-solved {
+  border-color: var(--ok-line);
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.lc-chip.lc-expired,
+.lc-chip.lc-blocked {
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.lc-bar .lc-action {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.thread-meta .lc-chip {
+  margin-left: auto;
+  margin-right: 6px;
+}
+@media (max-width: 680px) {
+  .lc-bar {
+    padding: 6px 12px;
+  }
+  .lc-bar .lc-action {
+    flex: 1 1 auto;
+    min-height: 40px;
+  }
+}

@@ -5,6 +5,7 @@ import { transaction } from './database.mjs';
 import { artworkAsset } from './demo-catalog.mjs';
 import * as copy from './reply-copy.mjs';
 import { brandCourses, matchCourse } from './course-match.mjs';
+import { findThread } from './lib/conversation-thread.mjs';
 import { createIdentity, peerOf } from './lib/identity.mjs';
 import { createListen } from './lib/wa-listen.mjs';
 
@@ -262,11 +263,12 @@ export function createWhatsApp({
         if (hit) broadcasts.adopt(hit, userId);
         const fromCampaign = hit ? broadcasts.courseOf(hit) : null;
         // 3) conversación abierta con ese número; si no hay, una nueva en el curso que toca
-        let c = db
-            .prepare(
-              "SELECT * FROM conversations WHERE customer_id=? AND wa_number=? AND brand_id=? AND status!='resolved' ORDER BY updated_at DESC LIMIT 1",
-            )
-            .get(userId, number.phone_number_id, number.brand_id),
+        // (hilo de la persona: lifecycle.threadFor con el comportamiento de hoy, conciliación fila 24)
+        let c = findThread(db, {
+            customerId: userId,
+            brandId: number.brand_id,
+            waNumber: number.phone_number_id,
+          }).conversation,
           created = false;
         const ad = adOf(d),
           fromAd = adCourse(number, ad, t),
@@ -366,7 +368,23 @@ export function createWhatsApp({
           );
         }
         if (!attachmentId) replies.resumeIfPausedByMode(c);
-        const messageId = insertMessage(c, { id: userId, role: 'customer' }, content, 'customer', ref, attachmentId);
+        // el origen del ciclo que abre este mensaje: el anuncio que trae o la difusión a la que responde (fila 25)
+        const origin = refJson
+          ? { kind: 'ad', ref: ad?.id ?? null }
+          : hit
+            ? { kind: 'broadcast', ref: hit.campaign.id }
+            : null;
+        const messageId = insertMessage(
+          c,
+          { id: userId, role: 'customer' },
+          content,
+          'customer',
+          ref,
+          attachmentId,
+          null,
+          null,
+          { origin },
+        );
         db.prepare('UPDATE messages SET provider_ref=? WHERE id=?').run(String(d.providerRef).slice(0, 200), messageId);
         recordChannelFacts(messageId, c.id, d);
         // ventana de 24 h por persona y número (conciliación, fila 41: channel.windowOf la lee)

@@ -17,6 +17,7 @@ import contacts from './named/contacts/index.mjs';
 import identity from './named/identity/index.mjs';
 import inbox from './named/inbox/index.mjs';
 import jobs from './named/jobs/index.mjs';
+import lifecycle from './named/lifecycle/index.mjs';
 import messages from './named/messages/index.mjs';
 import queues from './named/queues/index.mjs';
 import realMode from './named/real-mode/index.mjs';
@@ -31,6 +32,7 @@ import waCutover from './named/wa-cutover/index.mjs';
 // «api» va después de todas: añade columnas a api_keys y webhook_endpoints (escalera) y llegó después de las publicadas.
 // «wa-cutover» va al final: añade columnas a wa_numbers (después de identity) y llegó después de las publicadas.
 // «real-mode» va al final: tabla propia (brand_real_mode) y llegó después de las publicadas.
+// «lifecycle» va al final: añade columnas a conversations y llegó después de todas las publicadas.
 export const NAMED = defineRegistry([
   ...attributes,
   ...broadcasts,
@@ -46,4 +48,5 @@ export const NAMED = defineRegistry([
   ...api,
   ...waCutover,
   ...realMode,
+  ...lifecycle,
 ]);
