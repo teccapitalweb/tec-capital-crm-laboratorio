@@ -284,11 +284,21 @@ function unavailable(node, env, s, reason) {
   return { end: 'handoff', handoff: { to: 'queue' } };
 }
 
-// Lo que espera un paso de Botones o de Pregunta, armado SIEMPRE desde el nodo del grafo ya limpio (clean del modelo):
-// el simulador lo reconstruye así en lugar de confiar en un estado que manda el navegador.
+// Un archivo o una plantilla que no se pueden enviar (de otra marca, borrados, sin número real, número en escucha…):
+// no se manda otra cosa en su lugar. Queda anotado el motivo y la conversación pasa a una persona con el aviso de
+// siempre (no el de «edición no disponible», que habla del curso).
+function cannotSend(node, env, s, reason) {
+  env.io.log('error', { nodeId: node.id, detail: 'No se envió: ' + reason });
+  return { end: 'handoff', handoff: { to: 'queue', notice: true } };
+}
+
+// Lo que espera un paso de Botones, Lista, Plantilla con botones o Pregunta, armado SIEMPRE desde el nodo del grafo ya
+// limpio (clean del modelo): el simulador lo reconstruye así en lugar de confiar en un estado que manda el navegador.
+// Una Lista espera como unos Botones con más opciones (sus filas, en orden) y `list: true`: sus opciones no se vuelven
+// a ofrecer como botones (WhatsApp admite 3), sino como lista o como texto numerado.
 export function waitOf(node, env, { misses = 0, tries = 0 } = {}) {
   const def = typeOf(node?.type);
-  if (!def || (node.type !== 'buttons' && node.type !== 'question')) return null;
+  if (!def || !['buttons', 'list', 'template', 'question'].includes(node.type)) return null;
   const d = def.clean(node.data);
   if (node.type === 'buttons')
     return {
@@ -296,8 +306,29 @@ export function waitOf(node, env, { misses = 0, tries = 0 } = {}) {
       nodeId: node.id,
       options: d.options.map(o => ({ id: o.id, label: o.label, do: o.do })),
       onUnexpected: d.onUnexpected || env.settings.onUnexpected,
+      ...(d.saveAs ? { saveAs: d.saveAs } : {}),
       misses,
     };
+  if (node.type === 'list')
+    return {
+      kind: 'choice',
+      list: true,
+      nodeId: node.id,
+      options: d.sections.flatMap(s => s.rows).map(r => ({ id: r.id, label: r.title, do: r.do })),
+      onUnexpected: d.onUnexpected || env.settings.onUnexpected,
+      ...(d.saveAs ? { saveAs: d.saveAs } : {}),
+      misses,
+    };
+  if (node.type === 'template') {
+    if (!d.wait || !d.buttons.length) return null;
+    return {
+      kind: 'choice',
+      nodeId: node.id,
+      options: d.buttons.map((label, i) => ({ id: String(i + 1), label, do: { type: 'goto' } })),
+      onUnexpected: env.settings.onUnexpected,
+      misses,
+    };
+  }
   return {
     kind: 'question',
     nodeId: node.id,
@@ -306,6 +337,33 @@ export function waitOf(node, env, { misses = 0, tries = 0 } = {}) {
     errorText: d.errorText,
     attempts: Math.min(Math.max(d.attempts || 2, 1), 3),
     tries,
+  };
+}
+
+// Las opciones numeradas, una por renglón: así se ven una Lista en el chat del laboratorio y en el CRM, y así se
+// ofrecen de nuevo en un canal que no muestra listas. La persona contesta con el número o con el nombre.
+export const numberedOptions = options => options.map((o, i) => `${i + 1}. ${o.label}`).join('\n');
+
+// Una Lista lista para enviar: el texto con encabezado y pie (como en Botones) y la lista interactiva de WhatsApp. El id
+// de cada fila lleva el del paso (`<paso>:<fila>`): al pulsarla, la respuesta se reconoce aunque dos listas compartan
+// ids de fila.
+export function listMessage(node, d, env, s) {
+  const header = d.header.trim() ? renderText(d.header, env, s) : '';
+  const body = renderText(d.text, env, s);
+  const footer = d.footer.trim() ? renderText(d.footer, env, s) : '';
+  return {
+    text: [header, body, footer].filter(Boolean).join('\n\n'),
+    list: {
+      header,
+      body,
+      footer,
+      button: d.button,
+      sections: d.sections.map(sec => ({
+        title: sec.title,
+        rows: sec.rows.map(r => ({ id: node.id + ':' + r.id, title: r.title, description: r.description })),
+      })),
+      options: d.sections.flatMap(sec => sec.rows).map(r => ({ label: r.title })),
+    },
   };
 }
 
@@ -320,6 +378,11 @@ const EXEC = {
         const material = env.io.material(part.templateId);
         if (material.reason) return unavailable(node, env, s, material.reason);
         say(env, s, { text: material.text, prepared: material.prepared });
+      } else if (part.kind === 'media') {
+        // Un archivo de la biblioteca de la MARCA: se vuelve a comprobar al enviar (la marca, que exista y su tipo).
+        const file = env.io.file(part.fileId);
+        if (file.reason) return cannotSend(node, env, s, file.reason);
+        say(env, s, { text: renderText(part.caption, env, s), file });
       }
     }
     return { next: 'next' };
@@ -327,14 +390,35 @@ const EXEC = {
   buttons(node, d, env, s) {
     let text = renderText(d.text, env, s);
     let prepared = null;
+    let file = null;
     if (d.header.kind === 'text') text = renderText(d.header.text, env, s) + '\n\n' + text;
     if (d.header.kind === 'course_flyer') {
       const card = env.io.catalogue('flyer');
       if (!card.reason) prepared = card.prepared;
     }
+    if (d.header.kind === 'media') {
+      // Sin el archivo los botones salen igual (la persona puede elegir) y queda anotado por qué.
+      const found = env.io.file(d.header.fileId);
+      if (found.reason) env.io.log('error', { nodeId: node.id, detail: 'Encabezado sin archivo: ' + found.reason });
+      else file = found;
+    }
     if (d.footer) text += '\n\n' + renderText(d.footer, env, s);
-    say(env, s, { text, buttons: d.options.map(o => o.label), prepared });
+    say(env, s, { text, buttons: d.options.map(o => o.label), prepared, file });
     return { wait: waitOf(node, env) };
+  },
+  list(node, d, env, s) {
+    say(env, s, listMessage(node, d, env, s));
+    return { wait: waitOf(node, env) };
+  },
+  // Una plantilla aprobada por Meta, por el mismo camino que la envía el equipo desde el chat (módulo wa-templates):
+  // sólo por un número real, de la marca, aprobada, con sus datos y su categoría de costo. Es el único paso que habla
+  // con la ventana de 24 horas cerrada.
+  template(node, d, env, s) {
+    const template = env.io.template(d.waTemplateId);
+    if (template.reason) return cannotSend(node, env, s, template.reason);
+    say(env, s, { template });
+    const wait = waitOf(node, env);
+    return wait ? { wait } : { next: 'next' };
   },
   question(node, d, env, s) {
     say(env, s, { text: renderText(d.text, env, s) });
@@ -463,7 +547,8 @@ export function advance(s, env) {
       s.steps += 1;
       s.state = 'running';
       env.io.log('enter', { nodeId: node.id, nodeType: node.type });
-      if (def.speaks(d) && !env.io.windowOpen()) {
+      // La plantilla de WhatsApp es lo único que sale con la ventana cerrada (la regla es de Meta).
+      if (def.speaks(d) && node.type !== 'template' && !env.io.windowOpen()) {
         end(s, env, 'window_closed', node.id);
         break;
       }
@@ -523,6 +608,27 @@ export function follow(s, env, port) {
   return advance(s, env);
 }
 
+// La opción que la persona pulsó, si el canal lo dijo (contrato 1.1: `messages.reply` = {kind, id, title, payload}).
+// Una fila de lista llega con el id que se le puso al enviarla (`<paso>:<fila>`). Un botón (normal o de plantilla)
+// llega con un id o una carga que no nombra la opción del recorrido y se reconoce por su texto, como siempre.
+function pressed(w, message) {
+  let reply = message?.reply;
+  if (typeof reply === 'string') {
+    try {
+      reply = JSON.parse(reply);
+    } catch {
+      reply = null;
+    }
+  }
+  if (!reply || typeof reply !== 'object') return null;
+  if (w.list && reply.kind === 'list' && typeof reply.id === 'string') {
+    const at = reply.id.indexOf(':');
+    if (at > 0 && reply.id.slice(0, at) === w.nodeId)
+      return w.options.find(o => o.id === reply.id.slice(at + 1)) || null;
+  }
+  return null;
+}
+
 const INTERRUPT = ['human', 'refund'];
 const PAID = /comprobante|pague|ya pague|transferi|deposite/;
 
@@ -546,7 +652,7 @@ export function route(s, env, message, classify) {
     return value === null ? { kind: 'invalid' } : { kind: 'answer', value };
   }
   const index = /^\d{1,2}$/.test(key) ? Number(key) - 1 : -1;
-  const option = w.options.find(o => normalizeText(o.label) === key) || w.options[index] || null;
+  const option = pressed(w, message) || w.options.find(o => normalizeText(o.label) === key) || w.options[index] || null;
   if (option) {
     if (option.do?.type === 'intent') return { kind: 'intent', option, stay: option.do.stay !== false };
     return { kind: 'consume', port: 'opt:' + option.id, option };
@@ -563,7 +669,10 @@ export function input(s, env, r) {
   s.unanswered = 0;
   const w = s.waiting;
   env.io.log('input', { nodeId: s.nodeId, detail: r.kind });
-  if (r.kind === 'consume') return follow(s, env, r.port);
+  if (r.kind === 'consume') {
+    rememberChoice(s, w, r.option);
+    return follow(s, env, r.port);
+  }
   if (r.kind === 'default') return follow(s, env, 'default');
   if (r.kind === 'answer') {
     if (w.saveTo.kind === 'attribute') env.io.setAttribute(w.saveTo.key, r.value);
@@ -585,8 +694,16 @@ export function input(s, env, r) {
       end(s, env, 'left');
       return {};
     }
-    say(env, s, { text: renderText(env.settings.fallbackText, env, s), buttons: w.options.map(o => o.label) });
+    const fallback = renderText(env.settings.fallbackText, env, s);
+    // Una lista no cabe en 3 botones: se repite como texto numerado (y se acepta el número o el nombre).
+    if (w.list) say(env, s, { text: fallback + '\n\n' + numberedOptions(w.options) });
+    else say(env, s, { text: fallback, buttons: w.options.map(o => o.label) });
     return {};
   }
   return {};
+}
+
+// «Guardar la opción elegida en la variable» de Botones y Lista: guarda el texto de la opción, tal como se ofreció.
+export function rememberChoice(s, w, option) {
+  if (w?.saveAs && option) s.vars[w.saveAs] = option.label;
 }

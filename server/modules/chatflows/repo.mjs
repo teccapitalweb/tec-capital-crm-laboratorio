@@ -1,5 +1,7 @@
 // Todo el SQL de los recorridos (docs/PLAN_RECORRIDOS.md). Cada función recibe la marca primero y filtra por ella:
 // un recorrido, una sesión o un evento de otra marca no existe para quien pregunta.
+import { FLOW_FILE_MIMES } from '../../../public/kit/shared/flow-support.js';
+
 const json = (text, fallback) => {
   try {
     return JSON.parse(text);
@@ -318,6 +320,32 @@ export function createRepo(db) {
       one('SELECT count(*) n FROM messages WHERE client_ref >= ? AND client_ref < ?', prefix, prefix + '￿').n,
     material: (brandId, id) =>
       one('SELECT id,title,status FROM content_templates WHERE brand_id=? AND id=?', brandId, id),
+    // Archivos de la biblioteca: siempre con la marca. Uno de otra marca no existe para el recorrido.
+    libraryFile: (brandId, id) =>
+      one(
+        'SELECT id,filename,mime,size FROM library_files WHERE brand_id=? AND id=? AND storage_name IS NOT NULL',
+        brandId,
+        id,
+      ),
+    waTemplate: (brandId, id) => one('SELECT * FROM wa_templates WHERE brand_id=? AND id=?', brandId, id),
+    insertFile(brandId, f) {
+      run(
+        'INSERT INTO library_files(id,brand_id,filename,mime,size,storage_name,created_by,created_at) VALUES(?,?,?,?,?,?,?,?)',
+        f.id,
+        brandId,
+        f.filename,
+        f.mime,
+        f.size,
+        f.storageName,
+        f.userId,
+        f.at,
+      );
+    },
+    // Lo que el mensaje recién guardado lleva además de su texto (dentro de la misma transacción que lo insertó).
+    attachFile: (messageId, snapshot) =>
+      run('UPDATE messages SET flyer_snapshot=? WHERE id=?', JSON.stringify(snapshot), messageId),
+    setInteractive: (messageId, interactive) =>
+      run('UPDATE messages SET interactive=? WHERE id=?', JSON.stringify(interactive), messageId),
     replyLog(brandId, r) {
       run(
         'INSERT INTO reply_log(id,conversation_id,brand_id,trigger_message_id,reply_message_id,intent,confidence,mode,action,reply_text,sources,reason,created_at) VALUES(?,?,?,?,?,?,1,?,?,?,?,?,?)',
@@ -378,6 +406,15 @@ export function createRepo(db) {
           "SELECT id,name,published_version FROM chatflows WHERE brand_id=? AND status!='archived'",
           brandId,
         ).map(f => ({ id: f.id, name: f.name, published: f.published_version !== null })),
+        // Archivos que un recorrido puede enviar: de la biblioteca de la marca, guardados por el CRM (no los artes de
+        // ejemplo) y de un tipo admitido. Un id que no esté aquí se rechaza al publicar como «no existe en esta marca».
+        files: all(
+          `SELECT id,filename name,mime FROM library_files WHERE brand_id=? AND storage_name IS NOT NULL AND mime IN (${FLOW_FILE_MIMES.map(() => '?').join(',')}) ORDER BY created_at DESC LIMIT 500`,
+          brandId,
+          ...FLOW_FILE_MIMES,
+        ),
+        // ¿La marca tiene un número real de WhatsApp activo? Sin él, una Plantilla de WhatsApp no tiene por dónde salir.
+        realWhatsApp: Boolean(one('SELECT 1 FROM wa_numbers WHERE brand_id=? AND enabled=1', brandId)),
       };
     },
   };

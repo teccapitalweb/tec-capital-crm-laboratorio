@@ -18,7 +18,8 @@ import { forBrand } from '../../lib/real-mode.mjs';
 import { isOpen } from '../../service-hours.mjs';
 import { templateValues } from '../../catalogue.mjs';
 import * as copy from '../../reply-copy.mjs';
-import { advance, input, makeEnv, newSession, route } from './engine.mjs';
+import { FLOW_FILE_MIMES } from '../../../public/kit/shared/flow-support.js';
+import { advance, input, makeEnv, newSession, numberedOptions, rememberChoice, route } from './engine.mjs';
 
 const SPEAKS = ['templates', 'autonomous'];
 const MAX_DEPTH = 5;
@@ -156,16 +157,32 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
           clock: clockIn(now(), policy.timezone),
         };
       },
-      send({ text, buttons = null, prepared = null, order = false }) {
+      // Todo sale por insertMessage (ventana, modo escucha, entrega). Un archivo viaja como la ficha del curso: en
+      // `flyer_snapshot` con `libraryFileId` (lo entienden el chat, la descarga con alcance por conversación y la
+      // salida a Meta); una lista guarda además `interactive` para WhatsApp real y su texto numerado para lo demás.
+      send({ text, buttons = null, prepared = null, order = false, list = null, file = null, template = null }) {
         const c = conv();
+        const prefix = `flow:${s.id}:${s.seq}:`;
+        const ref = prefix + repo.refsWithPrefix(prefix);
+        if (template) {
+          // Igual que la manda el equipo desde el chat (wa-templates.forConversation): su texto ya resuelto, su
+          // categoría de costo y su definición para Meta. Una plantilla sale aunque la ventana esté cerrada.
+          const id = host.insertMessage(c, null, template.text, 'automation', ref, null, null, null, {
+            category: template.category,
+            template: template.template,
+            buttons: template.buttons?.length ? template.buttons : undefined,
+            keepButtons: Boolean(template.buttons?.length),
+          });
+          ctx.sent.push({ id, text: template.text });
+          return id;
+        }
         let body = text;
         if (order) {
           const made = svc.payments.createOrder(c, { user: null, source: 'bot' });
           body = body.replace('{{pedido}}', svc.payments.linkMessage(made.order));
         }
+        if (list) body = body + '\n\n' + numberedOptions(list.options);
         body = forBrand(db, brandId, body); // modo real: sin avisos de prueba (docs/PLAN_MODO_REAL.md)
-        const prefix = `flow:${s.id}:${s.seq}:`;
-        const ref = prefix + repo.refsWithPrefix(prefix);
         const id = host.insertMessage(
           c,
           null,
@@ -173,12 +190,47 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
           'automation',
           ref,
           null,
-          prepared?.flyerSnapshot ? c.course_id : null,
-          prepared || null,
+          prepared?.flyerSnapshot || file ? c.course_id : null,
+          file ? null : prepared || null,
           { buttons: buttons || undefined, keepButtons: Boolean(buttons), category: 'service' },
         );
+        if (file) repo.attachFile(id, { libraryFileId: file.id, file: true });
+        if (list)
+          repo.setInteractive(id, {
+            type: 'list',
+            header: list.header,
+            body: forBrand(db, brandId, list.body),
+            footer: list.footer,
+            button: list.button,
+            sections: list.sections,
+          });
         ctx.sent.push({ id, text: body });
         return id;
+      },
+      // Un archivo de la biblioteca de ESTA marca y de un tipo que el recorrido puede enviar; si no, el motivo.
+      file(fileId) {
+        const f = repo.libraryFile(brandId, String(fileId || ''));
+        if (!f) return { reason: 'El archivo ya no está en la biblioteca de la marca' };
+        if (!FLOW_FILE_MIMES.includes(f.mime)) return { reason: 'El archivo no es una imagen JPG o PNG ni un PDF' };
+        return { id: f.id, name: f.filename, mime: f.mime };
+      },
+      // Una plantilla de WhatsApp para esta conversación, con las mismas reglas que el envío desde el chat.
+      template(templateId) {
+        const c = conv();
+        if (!c.wa_number)
+          return {
+            reason: 'Las plantillas de WhatsApp sólo salen por un número real; esta conversación es del laboratorio',
+          };
+        const verdict = svc.whatsapp?.canSendFrom?.(c.wa_number, { to: c.wa_peer || null });
+        if (verdict && !verdict.ok) return { reason: verdict.message || 'El número está en modo escucha' };
+        let api = null;
+        try {
+          api = host.module('wa-templates');
+        } catch {
+          api = null;
+        }
+        if (!api?.forConversation) return { reason: 'Las plantillas de WhatsApp no están disponibles en este momento' };
+        return api.forConversation(c, String(templateId || ''));
       },
       windowOpen() {
         const w = svc.channel.windowOf(conv());
@@ -509,7 +561,9 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
       const ctx = context(brandId, c, s, { trigger: m });
       ctx.flowName = flow.name;
       const env = makeEnv({ graph: flow.graph, settings: flow.settings, io: ctx.io, now: now() });
-      const labels = s.waiting?.options?.map(o => o.label) || null;
+      // Las opciones que se vuelven a ofrecer como botones tras un desvío. Una lista no cabe en 3 botones: no se
+      // decora la respuesta del asistente (la lista sigue en el chat y se acepta el número o el nombre).
+      const labels = s.waiting?.list ? null : s.waiting?.options?.map(o => o.label) || null;
       // Este mismo mensaje ya pasó por aquí y lo contestó el asistente (el trabajo se repitió): no se cuenta dos veces.
       if (s.lastInputMessageId === m.id)
         return {
@@ -534,6 +588,7 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
       }
       if (r.kind === 'intent') {
         ctx.log('input', { nodeId: s.nodeId, detail: 'intent ' + r.option.do.intent });
+        rememberChoice(s, s.waiting, r.option);
         if (!r.stay) {
           s.state = 'ended';
           s.outcome = 'assistant';
@@ -547,7 +602,7 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
         persist(ctx, readSeq);
         return {
           planOptions: { noFlow: true, forcedIntent: r.option.do.intent },
-          decorate: reoffer(labels),
+          decorate: labels ? reoffer(labels) : null,
           after: afterDetour(brandId, c.id),
         };
       }
@@ -725,7 +780,10 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
     } else if (kind === 'reminder') {
       if (s.state !== 'waiting' || !env.settings.reminder?.text) return { skipped: 'not_waiting' };
       if (!ctx.io.windowOpen()) return { skipped: 'window_closed' };
-      ctx.io.send({ text: env.settings.reminder.text, buttons: s.waiting?.options?.map(o => o.label) || null });
+      const options = s.waiting?.options || [];
+      if (s.waiting?.list) ctx.io.send({ text: env.settings.reminder.text + '\n\n' + numberedOptions(options) });
+      else
+        ctx.io.send({ text: env.settings.reminder.text, buttons: options.length ? options.map(o => o.label) : null });
     }
     persist(ctx, readSeq, finals);
     host.broadcast('conversation', c.id);
