@@ -3,14 +3,18 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import { backoff } from './automation.mjs';
 import { transaction } from './database.mjs';
+import { errorBody, fail } from './app/http.mjs';
+import { createRateLimiter } from './app/rate-limit.mjs';
 
-// API pública de lectura y webhooks salientes (docs/PLAN_API_PUBLICA.md).
-//  · API v1 (sólo lectura): llaves por marca con permisos (events, orders, contacts, editions), cabecera `Authorization: Bearer tcw_…`. Sólo se guarda el
-//    hash de la llave; el valor completo se muestra una vez. Límite de ritmo por llave y por IP ante llaves malas. Sin sesión ni Origin.
+// API pública y webhooks salientes (docs/PLAN_API_PUBLICA.md y docs/PLAN_API_ESCRITURA.md).
+//  · API v1: llaves por marca con permisos de lectura (events, orders, contacts, editions, templates) y de escritura (contacts_write,
+//    consent_write), cabecera `Authorization: Bearer tcw_…`. Sólo se guarda la huella de la llave (se compara en tiempo constante); el valor
+//    completo se muestra una vez. Caducidad (obligatoria si la llave escribe), rotación con 72 horas de convivencia y revocación. Límites por llave
+//    y por dirección real con cabeceras RateLimit-*, un solo formato de error con `code`, `status` y `requestId`. Las rutas de escritura las
+//    presta el módulo server/modules/api-write (useWriter), que guarda la idempotencia. Sin sesión ni Origin.
 //  · Webhooks salientes: administración registra direcciones HTTPS por marca; cada evento de dominio de esa marca que coincide con el filtro se encola
 //    (una fila por destino y evento, idempotente) y un temporizador lo envía FUERA de cualquier transacción, firmado con HMAC-SHA-256, con reintentos
 //    de espera creciente y desactivación automática del destino tras muchas fallas seguidas. Los destinos privados o internos se rechazan (SSRF).
-const fail = (status, message) => Object.assign(new Error(message), { status });
 const safeError = e =>
   String(e?.message || e)
     .replace(/[\x00-\x1f]+/g, ' ')
@@ -28,7 +32,30 @@ export const SCOPES = {
   conversations: 'Claude: ver conversaciones y mensajes (datos personales)',
   knowledge: 'Claude: leer el conocimiento del asistente y proponer borradores',
   catalog_write: 'Claude: MODIFICAR cursos y aperturas (fecha, docente, precio, cupo, temario)',
+  // API v1 ampliada (docs/PLAN_API_ESCRITURA.md).
+  templates: 'Plantillas de WhatsApp aprobadas y sus datos',
+  contacts_write: 'Escribir contactos: alta o cambio por teléfono, datos propios, etiquetas, listas y bajas',
+  consent_write: 'Registrar que una persona aceptó recibir mensajes (con el origen del permiso)',
 };
+// Lectura o escritura de cada permiso, para agruparlos en pantalla y en /api/v1/me.
+export const SCOPE_KINDS = Object.freeze({
+  events: 'read',
+  orders: 'read',
+  contacts: 'read',
+  editions: 'read',
+  conversations: 'read',
+  knowledge: 'read',
+  catalog_write: 'write',
+  templates: 'read',
+  contacts_write: 'write',
+  consent_write: 'write',
+});
+// Permisos de escritura de la API v1: la llave que tenga alguno caduca siempre (180 días por omisión, 365 como máximo).
+export const API_WRITE_SCOPES = Object.freeze(['contacts_write', 'consent_write']);
+// Declarados y todavía sin ruta: no se pueden dar a una llave hasta que exista su ruta (envío de plantillas, I-8).
+export const PLANNED_SCOPES = Object.freeze({
+  messages_send_template: 'Enviar plantillas aprobadas (llegará con el envío por API)',
+});
 // Qué permiso (además de `events`) hace falta para ver el CONTENIDO de cada tipo de evento por la API de lectura. Sin él se entrega el sobre (tipo, marca, entidad,
 // fecha) con `data` vacío y `redacted: true`. Un tipo sin clasificar se trata como restringido. Los webhooks no se filtran así: los registra administración y es ella
 // quien decide qué eventos manda a qué destino.
@@ -81,7 +108,14 @@ export const LIMITS = {
   batch: 10,
   page: 200,
   perKeyPerMinute: 120,
+  writePerKeyPerMinute: 300,
+  perAddressPerMinute: 600,
+  bodyBytes: 256 * 1024,
+  writeKeyDays: 180,
+  maxKeyDays: 365,
+  rotateGraceMs: 72 * 3600e3,
 };
+const DAY = 86400e3;
 
 // Firma de cada envío: `TC-Signature: t=<unix>,v1=<hex(hmac-sha256(secreto, t + "." + cuerpo))>`. La verificación del lado receptor usa la misma regla.
 export function signWebhook(secret, t, raw) {
@@ -216,6 +250,12 @@ export function createIntegrations({
       return d;
     }
   };
+  // Estado visible de una llave: activa, en convivencia (ya se rotó y caduca pronto), caducada o revocada.
+  const keyState = r => {
+    if (r.status !== 'active') return 'revoked';
+    if (r.expires_at !== null && r.expires_at !== undefined && r.expires_at <= now()) return 'expired';
+    return db.prepare('SELECT 1 FROM api_keys WHERE rotated_from=?').get(r.id) ? 'grace' : 'active';
+  };
   const keyView = r => ({
     id: r.id,
     brandId: r.brand_id,
@@ -223,8 +263,12 @@ export function createIntegrations({
     name: r.name,
     prefix: r.prefix,
     scopes: parse(r.scopes, []),
+    kind: parse(r.scopes, []).some(s => SCOPE_KINDS[s] === 'write') ? 'write' : 'read',
     status: r.status,
+    state: keyState(r),
     createdAt: r.created_at,
+    expiresAt: r.expires_at ?? null,
+    rotatedFrom: r.rotated_from ?? null,
     lastUsedAt: r.last_used_at || null,
     revokedAt: r.revoked_at || null,
   });
@@ -274,7 +318,7 @@ export function createIntegrations({
     for (const [type, scope] of Object.entries(map)) {
       if (!events.hasType(type)) throw fail(400, 'Tipo de evento no registrado: ' + type);
       if (Object.hasOwn(needs, type)) throw fail(409, 'El tipo de evento ' + type + ' ya tiene su permiso de lectura.');
-      if (typeof scope !== 'string' || scope === 'events' || !Object.hasOwn(SCOPES, scope))
+      if (typeof scope !== 'string' || scope === 'events' || SCOPE_KINDS[scope] !== 'read')
         throw fail(400, 'Permiso de la API no válido para ' + type + ': ' + scope);
     }
     Object.assign(needs, map);
@@ -287,19 +331,89 @@ export function createIntegrations({
       name = text(input.name, 60);
     if (name.length < 2) throw fail(400, 'Ponle un nombre a la llave (para quién o para qué es).');
     const scopes = [...new Set(Array.isArray(input.scopes) ? input.scopes : [])];
-    if (!scopes.length || scopes.some(s => !SCOPES[s])) throw fail(400, 'Elige al menos un permiso válido.');
+    if (!scopes.length || scopes.some(s => !Object.hasOwn(SCOPES, s)))
+      throw fail(400, 'Elige al menos un permiso válido.');
+    const t = now();
     if (
-      db.prepare("SELECT count(*) n FROM api_keys WHERE brand_id=? AND status='active'").get(brandId).n >=
-      LIMITS.maxKeys
+      db
+        .prepare(
+          "SELECT count(*) n FROM api_keys WHERE brand_id=? AND status='active' AND (expires_at IS NULL OR expires_at>?)",
+        )
+        .get(brandId, t).n >= LIMITS.maxKeys
     )
       throw fail(409, 'Esta marca ya tiene ' + LIMITS.maxKeys + ' llaves activas. Revoca alguna.');
+    // Caducidad: obligatoria si la llave escribe por la API (180 días si no se dice), opcional si sólo lee.
+    let days = input.expiresInDays;
+    if (days === undefined || days === null || days === '')
+      days = scopes.some(s => API_WRITE_SCOPES.includes(s)) ? LIMITS.writeKeyDays : null;
+    else {
+      days = Number(days);
+      if (!Number.isInteger(days) || days < 1 || days > LIMITS.maxKeyDays)
+        throw fail(400, 'La caducidad va de 1 a ' + LIMITS.maxKeyDays + ' días.', {
+          code: 'invalid_request',
+          field: 'expiresInDays',
+        });
+    }
+    const out = insertKey({ brandId, name, scopes, actorId: user.id, at: t, expiresAt: days ? t + days * DAY : null });
+    return { key: keyView(db.prepare('SELECT * FROM api_keys WHERE id=?').get(out.id)), token: out.token };
+  }
+  function insertKey({ brandId, name, scopes, actorId, at, expiresAt, rotatedFrom = null }) {
     const token = 'tcw_' + randomBytes(24).toString('base64url'),
-      id = randomUUID(),
-      t = now();
+      id = randomUUID();
     db.prepare(
-      'INSERT INTO api_keys(id,brand_id,name,prefix,key_hash,scopes,created_by,created_at) VALUES(?,?,?,?,?,?,?,?)',
-    ).run(id, brandId, name, token.slice(0, 10), sha(token), JSON.stringify(scopes), user.id, t);
-    return { key: keyView(db.prepare('SELECT * FROM api_keys WHERE id=?').get(id)), token };
+      'INSERT INTO api_keys(id,brand_id,name,prefix,key_hash,scopes,created_by,created_at,expires_at,rotated_from) VALUES(?,?,?,?,?,?,?,?,?,?)',
+    ).run(
+      id,
+      brandId,
+      name,
+      token.slice(0, 10),
+      sha(token),
+      JSON.stringify(scopes),
+      actorId,
+      at,
+      expiresAt,
+      rotatedFrom,
+    );
+    return { id, token };
+  }
+  // Rotar: llave nueva con los mismos permisos (a nombre de quien rota) y la anterior sigue sirviendo 72 horas como
+  // máximo, para cambiarla en el otro sistema sin cortar el servicio. El valor nuevo se muestra una sola vez.
+  function rotateKey(user, id) {
+    const k = db.prepare('SELECT * FROM api_keys WHERE id=?').get(id);
+    if (!k) throw fail(404, 'Llave no disponible.', { code: 'not_found' });
+    crm.requireBrand(user, k.brand_id);
+    const t = now();
+    if (k.status !== 'active' || (k.expires_at !== null && k.expires_at <= t))
+      throw fail(409, 'Sólo se rota una llave activa.', { code: 'key_inactive' });
+    if (db.prepare('SELECT 1 FROM api_keys WHERE rotated_from=?').get(k.id))
+      throw fail(409, 'Esta llave ya se rotó: usa la nueva.', { code: 'already_rotated' });
+    const scopes = parse(k.scopes, []).filter(s => Object.hasOwn(SCOPES, s));
+    const life = scopes.some(s => API_WRITE_SCOPES.includes(s))
+      ? LIMITS.writeKeyDays * DAY
+      : k.expires_at !== null
+        ? Math.max(DAY, k.expires_at - k.created_at)
+        : null;
+    const out = transaction(db, () => {
+      const created = insertKey({
+        brandId: k.brand_id,
+        name: k.name,
+        scopes,
+        actorId: user.id,
+        at: t,
+        expiresAt: life ? t + life : null,
+        rotatedFrom: k.id,
+      });
+      db.prepare('UPDATE api_keys SET expires_at=? WHERE id=?').run(
+        Math.min(k.expires_at ?? Infinity, t + LIMITS.rotateGraceMs),
+        k.id,
+      );
+      return created;
+    });
+    return {
+      key: keyView(db.prepare('SELECT * FROM api_keys WHERE id=?').get(out.id)),
+      token: out.token,
+      previous: keyView(db.prepare('SELECT * FROM api_keys WHERE id=?').get(k.id)),
+    };
   }
   function revokeKey(user, id) {
     const k = db.prepare('SELECT * FROM api_keys WHERE id=?').get(id);
@@ -588,38 +702,268 @@ export function createIntegrations({
   };
   const limitOf = v => Math.min(LIMITS.page, Math.max(1, Number(v) || 100));
   const need = (key, scope) => {
-    if (!parse(key.scopes, []).includes(scope)) throw fail(403, 'Esta llave no tiene el permiso «' + scope + '».');
+    if (!parse(key.scopes, []).includes(scope))
+      throw fail(403, 'Esta llave no tiene el permiso «' + scope + '».', { code: 'scope_missing', details: { scope } });
   };
-  // Llave de la cabecera Authorization: la usan la API v1 y el conector de Claude. Los intentos con llaves falsas se frenan por IP.
-  function authenticate(req, ip) {
+  // Busca la llave por su prefijo y compara la huella en tiempo constante.
+  function findKey(token) {
+    const digest = Buffer.from(sha(token), 'hex');
+    let found = null;
+    for (const row of db.prepare('SELECT * FROM api_keys WHERE prefix=?').all(token.slice(0, 10))) {
+      const stored = Buffer.from(String(row.key_hash), 'hex');
+      if (stored.length === digest.length && timingSafeEqual(stored, digest)) found = row;
+    }
+    return found;
+  }
+  // Llave de la cabecera Authorization. Los intentos con llaves falsas se frenan por IP. Una llave caducada (también
+  // la anterior de una rotación, pasada su convivencia) responde 401 `key_expired`.
+  function identify(req, ip) {
     const m = String(req.headers.authorization || '').match(/^Bearer\s+(tcw_[A-Za-z0-9_-]{20,64})$/);
     if (!m) {
       rate('apibad:' + ip, 30);
-      throw fail(401, 'Falta la llave de la API (Authorization: Bearer tcw_…).');
+      throw fail(401, 'Falta la llave de la API (Authorization: Bearer tcw_…).', { code: 'unauthorized' });
     }
-    const key = db.prepare("SELECT * FROM api_keys WHERE key_hash=? AND status='active'").get(sha(m[1]));
-    if (!key) {
+    const key = findKey(m[1]);
+    if (!key || key.status !== 'active') {
       rate('apibad:' + ip, 30);
-      throw fail(401, 'Llave no válida o revocada.');
+      throw fail(401, 'Llave no válida o revocada.', { code: 'unauthorized' });
     }
-    rate('api:' + key.id, LIMITS.perKeyPerMinute);
+    if (key.expires_at !== null && key.expires_at <= now())
+      throw fail(401, 'Esta llave caducó. Crea o rota una llave en Operación → Sistema → API y webhooks.', {
+        code: 'key_expired',
+      });
     if (!key.last_used_at || now() - key.last_used_at > 60000)
       db.prepare('UPDATE api_keys SET last_used_at=? WHERE id=?').run(now(), key.id);
     return key;
   }
+  // La usa el conector de Claude (POST /mcp), con su límite de siempre.
+  function authenticate(req, ip) {
+    const key = identify(req, ip);
+    rate('api:' + key.id, LIMITS.perKeyPerMinute);
+    return key;
+  }
+  // Escribir es actuar a nombre de quien creó (o rotó) la llave, que debe seguir administrando su marca.
+  function actorOf(key) {
+    const u = key.created_by ? db.prepare('SELECT * FROM users WHERE id=?').get(key.created_by) : null;
+    if (!u || u.disabled || u.role !== 'admin' || !crm.canBrand(u, key.brand_id))
+      throw fail(403, 'Quien creó esta llave ya no administra la marca: crea una llave nueva.', {
+        code: 'actor_inactive',
+      });
+    return u;
+  }
+
+  // ---- API v1: rutas, límites y errores. Las rutas de escritura (y las de lectura que llegaron con ellas) las presta
+  // el módulo server/modules/api-write con useWriter({ routes, dispatch, limits }).
+  const limiter = createRateLimiter({ fail, now });
+  const perMinute = {
+    read: Number(env.API_READ_PER_MINUTE) || LIMITS.perKeyPerMinute,
+    write: Number(env.API_WRITE_PER_MINUTE) || LIMITS.writePerKeyPerMinute,
+  };
+  const compile = r => ({ ...r, regex: new RegExp('^' + r.pattern.replace(/\{id\}/g, '([a-f0-9-]{36})') + '$') });
+  const CORE = [
+    { method: 'GET', pattern: '/api/v1/me', scope: null, core: 'me' },
+    { method: 'GET', pattern: '/api/v1/events', scope: 'events', core: 'events' },
+    { method: 'GET', pattern: '/api/v1/orders', scope: 'orders', core: 'orders' },
+    { method: 'GET', pattern: '/api/v1/contacts', scope: 'contacts', core: 'contacts' },
+    { method: 'GET', pattern: '/api/v1/editions', scope: 'editions', core: 'editions' },
+  ].map(r => compile({ ...r, kind: 'read' }));
+  let writer = null,
+    routes = CORE;
+  function useWriter(api) {
+    if (writer) throw new Error('La API v1 ya tiene sus rutas de escritura.');
+    const extra = api.routes.map(compile);
+    for (const r of extra) {
+      if (!['read', 'write'].includes(r.kind) || (r.scope && !Object.hasOwn(SCOPES, r.scope)))
+        throw new Error('Ruta de la API mal declarada: ' + r.method + ' ' + r.pattern);
+      if (routes.some(o => o.method === r.method && o.pattern === r.pattern))
+        throw new Error('Ruta de la API repetida: ' + r.method + ' ' + r.pattern);
+    }
+    writer = api;
+    routes = [...CORE, ...extra];
+  }
+  // Cabecera de la respuesta (las pruebas de registros llaman al manejador con una respuesta mínima, sin cabeceras).
+  const setHeader = (res, name, value) => {
+    if (typeof res.setHeader === 'function') res.setHeader(name, value);
+  };
+  const DEFAULT_CODE = {
+    400: 'invalid_request',
+    401: 'unauthorized',
+    403: 'scope_missing',
+    404: 'not_found',
+    405: 'method_not_allowed',
+    409: 'conflict',
+    413: 'payload_too_large',
+    415: 'unsupported_media_type',
+    422: 'invalid_request',
+    429: 'rate_limited',
+  };
+  // Formato único de error de la API: { error, code, status, requestId, field?, details? }.
+  function sendError(res, error, requestId) {
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
+    const status = error?.status || 500;
+    if (!error?.status) log.error('API v1 failed:', error?.name);
+    if (status === 429) setHeader(res, 'Retry-After', String(error.retryAfter || 60));
+    if (status === 405 && error.allow) setHeader(res, 'Allow', error.allow);
+    json(res, status, {
+      ...errorBody(error),
+      code: (error?.status && error.code) || DEFAULT_CODE[status] || 'internal_error',
+      status,
+      requestId,
+    });
+  }
+  const resetIn = at => Math.max(1, Math.ceil((at - now()) / 1000));
+  function limits(res, key, route, ip) {
+    const own = limiter.consume('api-' + route.kind + ':' + key.id, perMinute[route.kind]);
+    const address = limiter.consume('api-ip:' + ip, LIMITS.perAddressPerMinute);
+    setHeader(res, 'RateLimit-Limit', String(own.limit));
+    setHeader(res, 'RateLimit-Remaining', String(own.remaining));
+    setHeader(res, 'RateLimit-Reset', String(resetIn(own.resetAt)));
+    const over = !own.allowed ? own : !address.allowed ? address : null;
+    if (over)
+      throw Object.assign(
+        fail(429, 'Demasiadas peticiones. Espera un momento y vuelve a intentarlo.', {
+          code: 'rate_limited',
+          details: { limit: over.limit, scope: over === own ? 'key' : 'address' },
+        }),
+        { retryAfter: resetIn(over.resetAt) },
+      );
+  }
+  async function readJson(req, res) {
+    const type = String(req.headers['content-type'] || '')
+      .split(';')[0]
+      .trim()
+      .toLowerCase();
+    if (type !== 'application/json')
+      throw fail(415, 'Manda el cuerpo como JSON (Content-Type: application/json).', {
+        code: 'unsupported_media_type',
+      });
+    const tooBig = () => {
+      setHeader(res, 'Connection', 'close');
+      return fail(413, 'El cuerpo pasa del máximo de ' + LIMITS.bodyBytes / 1024 + ' KB.', {
+        code: 'payload_too_large',
+        details: { maxBytes: LIMITS.bodyBytes },
+      });
+    };
+    if (Number(req.headers['content-length']) > LIMITS.bodyBytes) throw tooBig();
+    let size = 0;
+    const chunks = [];
+    for await (const chunk of req) {
+      size += chunk.length;
+      if (size > LIMITS.bodyBytes) throw tooBig();
+      chunks.push(chunk);
+    }
+    const raw = Buffer.concat(chunks).toString('utf8');
+    let input;
+    try {
+      input = JSON.parse(raw);
+    } catch {
+      throw fail(400, 'El cuerpo no es JSON válido.', { code: 'invalid_json' });
+    }
+    if (!input || typeof input !== 'object' || Array.isArray(input))
+      throw fail(400, 'El cuerpo debe ser un objeto JSON.', { code: 'invalid_json' });
+    return { input, raw };
+  }
+  const IDEM = /^[A-Za-z0-9._:-]{8,128}$/;
+  function idempotencyKey(req, route) {
+    if (route.kind !== 'write') return null;
+    const value = req.headers['idempotency-key'];
+    if (value === undefined) {
+      if (route.idem === 'required')
+        throw fail(400, 'Esta ruta exige la cabecera Idempotency-Key.', {
+          code: 'idempotency_key_required',
+          field: 'Idempotency-Key',
+        });
+      return null;
+    }
+    if (!IDEM.test(value))
+      throw fail(400, 'Idempotency-Key admite de 8 a 128 caracteres: letras, números y . _ : -', {
+        code: 'invalid_request',
+        field: 'Idempotency-Key',
+      });
+    return value;
+  }
+
   async function handlePublic(req, res, path, url, ip) {
-    if (!path.startsWith('/api/v1/')) return false;
-    if (req.method !== 'GET') throw fail(405, 'La API v1 es de sólo lectura por ahora.');
-    const key = authenticate(req, ip);
+    if (path !== '/api/v1' && !path.startsWith('/api/v1/')) return false;
+    const requestId = 'req_' + randomBytes(12).toString('hex');
+    setHeader(res, 'X-Request-Id', requestId);
+    try {
+      await serve(req, res, path, url, ip, requestId);
+    } catch (error) {
+      if (error?.legacyRead) throw error;
+      sendError(res, error, requestId);
+    }
+    return true;
+  }
+  async function serve(req, res, path, url, ip, requestId) {
+    const key = identify(req, ip);
+    const matching = routes.filter(r => r.regex.test(path));
+    if (!matching.length) throw fail(404, 'Ruta de la API no encontrada.', { code: 'not_found' });
+    const route = matching.find(r => r.method === req.method);
+    if (!route)
+      throw Object.assign(fail(405, 'Esta ruta no admite ' + req.method + '.', { code: 'method_not_allowed' }), {
+        allow: [...new Set(matching.map(r => r.method))].join(', '),
+      });
+    limits(res, key, route, ip);
+    if (key.expires_at !== null) setHeader(res, 'X-Key-Expires', new Date(key.expires_at).toISOString());
+    if (route.scope) need(key, route.scope);
+    // Las validaciones propias de las rutas de lectura publicadas (filtros de /events y /orders) conservan la forma
+    // de error de siempre, { error }: se publicaron así y hay sistemas que ya las leen.
+    if (route.core)
+      try {
+        return core(route.core, key, res, url);
+      } catch (error) {
+        if (error?.status) error.legacyRead = true;
+        throw error;
+      }
+    const actor = route.kind === 'write' ? actorOf(key) : null;
+    const idemKey = idempotencyKey(req, route);
+    const { input, raw } = req.method === 'GET' ? { input: {}, raw: '' } : await readJson(req, res);
+    const out = writer.dispatch({
+      route,
+      params: path.match(route.regex).slice(1),
+      key,
+      actor,
+      input,
+      query: url.searchParams,
+      method: req.method,
+      idemKey,
+      hash: sha(req.method + ' ' + path + '\n' + raw),
+      requestId,
+    });
+    if (out.replayed) setHeader(res, 'Idempotent-Replayed', 'true');
+    json(res, out.status, out.body);
+  }
+  function core(name, key, res, url) {
     const q = url.searchParams,
       limit = limitOf(q.get('limit')),
-      brand = key.brand_id;
-    if (path === '/api/v1/me') {
+      brand = key.brand_id,
+      path = '/api/v1/' + name;
+    if (name === 'me') {
+      let actorActive = true;
+      try {
+        actorOf(key);
+      } catch {
+        actorActive = false;
+      }
+      const scopes = parse(key.scopes, []);
       json(res, 200, {
         apiVersion: API_VERSION,
         brand: { id: brand, name: brandName(brand) },
-        key: { name: key.name, prefix: key.prefix },
-        scopes: parse(key.scopes, []),
+        key: { name: key.name, prefix: key.prefix, expiresAt: key.expires_at ?? null },
+        scopes,
+        permissions: scopes.map(s => ({ name: s, kind: SCOPE_KINDS[s] || 'read' })),
+        limits: {
+          readPerMinute: perMinute.read,
+          writePerMinute: perMinute.write,
+          perAddressPerMinute: LIMITS.perAddressPerMinute,
+          bodyBytes: LIMITS.bodyBytes,
+          ...(writer?.limits ?? {}),
+        },
+        actorActive,
         eventTypes: events.types().map(t => t.type),
         eventScopes: needs,
       });
@@ -765,6 +1109,14 @@ export function createIntegrations({
         keys,
         endpoints,
         scopes: SCOPES,
+        scopeKinds: SCOPE_KINDS,
+        plannedScopes: PLANNED_SCOPES,
+        keyPolicy: {
+          writeScopes: API_WRITE_SCOPES,
+          writeKeyDays: LIMITS.writeKeyDays,
+          maxKeyDays: LIMITS.maxKeyDays,
+          rotateGraceHours: LIMITS.rotateGraceMs / 3600e3,
+        },
         eventTypes: events.types().map(t => ({ type: t.type, title: t.title, entity: t.entity })),
         apiVersion: API_VERSION,
       });
@@ -781,6 +1133,13 @@ export function createIntegrations({
       const k = revokeKey(user, x[1]);
       audit(user, 'apikey.revoke', x[1]);
       json(res, 200, { key: k });
+      return true;
+    }
+    if ((x = path.match(/^\/api\/integrations\/keys\/([a-f0-9-]+)\/rotate$/)) && req.method === 'POST') {
+      rate('integ:' + user.id, 30);
+      const out = rotateKey(user, x[1]);
+      audit(user, 'apikey.rotate', out.key.id);
+      json(res, 201, out);
       return true;
     }
     if (path === '/api/integrations/webhooks' && req.method === 'POST') {
@@ -835,7 +1194,10 @@ export function createIntegrations({
     tick,
     enqueue,
     createKey,
+    rotateKey,
     registerNeeds,
+    useWriter,
+    actorOf,
     test,
     authenticate,
     scopesOf: key => parse(key.scopes, []),
