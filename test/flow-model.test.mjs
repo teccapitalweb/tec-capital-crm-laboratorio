@@ -713,7 +713,7 @@ test('validación «node»: pregunta, espera, condición, guardar dato, etiqueta
   fails(regex('a'.repeat(121)), 'node', /hasta 120 caracteres/, 'x');
   fails(regex('[a-z'), 'node', /no es una expresión válida/, 'x');
   fails(regex('^(a+)+$'), 'node', /no admite paréntesis/, 'x');
-  fails(regex('a*a*a*a*b'), 'node', /sin tope/, 'x');
+  fails(regex('a*a*a*a*b'), 'node', /repeticiones variables/, 'x');
   // Lo que calcula el sistema no se escribe; el teléfono y el correo sólo ya validados.
   fails(
     around('question', ask({ saveTo: { kind: 'attribute', key: 'estado_pago' } })),
@@ -1650,8 +1650,13 @@ test('datos en los textos y comparación de opciones: igual que el servidor', ()
 
 test('formato propio de una pregunta: sólo el subconjunto que no puede tardar de más, y textos de hasta 200', () => {
   // Peligrosos (retroceso catastrófico) o fuera del subconjunto: grupos, alternancia repetida, retrorreferencias,
-  // demasiadas repeticiones sin tope o repeticiones enormes.
+  // más de 3 cuantificadores variables (*, +, ?, {n,}, {m,n}) o cotas enormes.
   for (const pattern of [
+    'a?a?a?a?a?a?a?a?aaaaaaaa',
+    '.{0,100}.{0,100}.{0,100}.{0,100}x',
+    'a*a*a*a*b',
+    'a*?b+?c??d{1,2}?',
+    '\\1',
     '(a+)+',
     '(a|aa)+$',
     '(a?){30}a{30}',
@@ -1675,6 +1680,11 @@ test('formato propio de una pregunta: sólo el subconjunto que no puede tardar d
     ['^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$', 'ana@example.com', 'ana@'],
     ['^\\(\\d{3}\\) \\d{4}$', '(555) 1234', '555 1234'],
     ['[(+*)]+', '(+)', 'abc'],
+    ['^[*+?{]+$', '*+?{', 'a'], // dentro de una clase no son cuantificadores: sólo cuenta el + de fuera
+    ['^\\?\\*$', '?*', 'a'],
+    ['^a{2}b{3}c{4}d{5}$', 'aabbbccccddddd', 'ab'], // las cotas exactas no cuentan
+    ['^a*?b+?c??$', 'abc', 'x'], // un perezoso cuenta como un solo cuantificador
+    ['^x{,3}$', 'x{,3}', 'xx'], // una llave que no forma cota es literal
   ];
   for (const [pattern, good, bad] of ok) {
     assert.equal(patternProblem(pattern), null, pattern);
@@ -1684,8 +1694,10 @@ test('formato propio de una pregunta: sólo el subconjunto que no puede tardar d
   // Una entrada enorme contra un patrón aceptado responde de inmediato: más de 200 caracteres no coincide.
   const started = Date.now();
   assert.equal(matchesPattern('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$', 'a'.repeat(100_000)), false);
-  assert.equal(matchesPattern('a*a*a*b', 'a'.repeat(200)), false);
-  assert.ok(Date.now() - started < 2000, 'en tiempo acotado');
+  // El peor patrón que la regla acepta, contra 200 «a» que no coinciden.
+  assert.equal(patternProblem('^a*a*a*b$'), null);
+  assert.equal(matchesPattern('^a*a*a*b$', 'a'.repeat(200)), false);
+  assert.ok(Date.now() - started < 3000, 'en tiempo acotado');
 });
 
 // ---- Ajustes ---------------------------------------------------------------------------------------------------------

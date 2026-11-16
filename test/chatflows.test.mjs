@@ -152,7 +152,12 @@ async function lab(t) {
     for (const s of steps)
       db.prepare('UPDATE automation_steps SET scheduled_at=?,next_attempt_at=? WHERE id=?').run(past, past, s.id);
     await until(
-      () => steps.every(s => db.prepare('SELECT state FROM automation_steps WHERE id=?').get(s.id).state !== 'pending'),
+      () =>
+        steps.every(s =>
+          ['completed', 'cancelled', 'failed'].includes(
+            db.prepare('SELECT state FROM automation_steps WHERE id=?').get(s.id).state,
+          ),
+        ),
       'el paso del recorrido corrió',
       { logs: () => state.server.logs() },
     );

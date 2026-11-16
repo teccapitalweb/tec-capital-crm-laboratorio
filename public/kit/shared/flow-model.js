@@ -675,51 +675,80 @@ function optionProblems(options, { field, noun, max }) {
 
 // Formato propio de una Pregunta: corre en el servidor (un solo hilo) con lo que escribe cualquiera, así que sólo se
 // admite un SUBCONJUNTO de expresiones que no puede tardar de más, en lugar de adivinar cuáles explotan:
-//   - hasta LIMITS.regex caracteres y que la expresión sea válida;
-//   - sin paréntesis sin escapar (ni grupos, ni miradas adelante o atrás): sin grupos no hay repeticiones anidadas ni
-//     alternancias repetidas; un paréntesis escrito con barra delante sí se admite;
-//   - sin retrorreferencias (barra y un dígito, o barra, k y «<»);
-//   - como mucho PATTERN_LIMITS.unbounded repeticiones sin tope (*, + o {n,}) en todo el patrón, y en {n} o {n,m}
-//     como mucho PATTERN_LIMITS.bounded.
-// Además el texto se compara sólo si mide hasta PATTERN_LIMITS.input caracteres (si es más largo, no coincide). Con eso
-// el trabajo crece como mucho como un polinomio de grado 3 sobre 200 caracteres. Es la única regla: la usan el editor,
-// publicar, el simulador y el motor del servidor.
-export const PATTERN_LIMITS = Object.freeze({ unbounded: 3, bounded: 100, input: 200 });
-const REPEAT_RE = /^\{(\d+)(,(\d*))?\}/;
+//   - hasta LIMITS.regex caracteres y que la expresión compile;
+//   - sin paréntesis sin escapar (ni grupos, ni miradas adelante o atrás); un paréntesis escrito con barra delante sí;
+//   - sin retrorreferencias (barra y un dígito del 1 al 9, o barra, k y «<»);
+//   - como mucho PATTERN_LIMITS.variable cuantificadores VARIABLES en todo el patrón: cada *, +, ?, {n,} y {m,n} con
+//     m distinto de n cuenta uno (el ? que sigue a un cuantificador lo vuelve perezoso: es parte de él, no otro); la
+//     cota exacta {n} no cuenta; toda cota llega como mucho a PATTERN_LIMITS.bounded;
+//   - el texto se compara sólo si mide hasta PATTERN_LIMITS.input caracteres (si es más largo, no coincide).
+// Por qué alcanza: sin paréntesis cada cuantificador se aplica a UN solo átomo (un carácter, una clase o un escape),
+// así que el motor de expresiones sólo puede retroceder eligiendo cuántas veces repite cada uno de esos k átomos. Con
+// k ≤ 3 y un texto de n ≤ 200 caracteres el peor caso queda en torno a n^3 (unos 8 millones de pasos), que se resuelve
+// en milisegundos; con un cuarto cuantificador variable, o con grupos que repiten algo que ya repite, el trabajo crece
+// sin control y el hilo único del servidor se cuelga para todos. No relajes ningún punto de esta regla sin rehacer esa
+// cuenta. Es la única regla: la usan el editor, publicar, el simulador y el motor del servidor.
+export const PATTERN_LIMITS = Object.freeze({ variable: 3, bounded: 100, input: 200 });
+
+// Lee, carácter a carácter, una cota {m}, {m,} o {m,n} que empieza en `at`. null si no forma una cota (entonces la
+// llave es un carácter literal).
+function readBound(pattern, at) {
+  const digits = from => {
+    let to = from;
+    while (to < pattern.length && pattern[to] >= '0' && pattern[to] <= '9') to += 1;
+    return to;
+  };
+  let i = digits(at + 1);
+  if (i === at + 1) return null;
+  const low = Number(pattern.slice(at + 1, i));
+  let high = low;
+  if (pattern[i] === ',') {
+    const from = i + 1;
+    i = digits(from);
+    high = i === from ? null : Number(pattern.slice(from, i));
+  }
+  return pattern[i] === '}' ? { low, high, end: i } : null;
+}
 
 // Motivo por el que un patrón no se admite, en palabras de quien arma el recorrido; null si se admite.
 export function patternProblem(pattern) {
   if (typeof pattern !== 'string' || !pattern) return 'Escribe el formato que debe cumplir la respuesta.';
   if (pattern.length > LIMITS.regex)
     return `El formato admite hasta ${LIMITS.regex} caracteres (tiene ${pattern.length}).`;
-  let unbounded = 0;
+  let variable = 0;
   let inClass = false;
+  let afterQuantifier = false; // el carácter anterior cerró un cuantificador: un ? aquí lo vuelve perezoso
   for (let i = 0; i < pattern.length; i += 1) {
     const ch = pattern[i];
+    const lazy = afterQuantifier && ch === '?';
+    afterQuantifier = false;
     if (ch === '\\') {
       const next = pattern[i + 1] ?? '';
-      if (!inClass && (/[1-9]/.test(next) || (next === 'k' && pattern[i + 2] === '<')))
+      if (!inClass && ((next >= '1' && next <= '9') || (next === 'k' && pattern[i + 2] === '<')))
         return 'El formato no puede repetir lo que ya encontró (retrorreferencias).';
-      i += 1;
+      i += 1; // lo escapado es un carácter literal o una clase como \d, nunca un cuantificador
     } else if (inClass) {
-      if (ch === ']') inClass = false;
+      if (ch === ']') inClass = false; // dentro de [ ] nada es cuantificador
     } else if (ch === '[') inClass = true;
     else if (ch === '(' || ch === ')')
       return 'El formato no admite paréntesis (grupos); para buscar un paréntesis escrito, pon una barra \\ delante.';
-    else if (ch === '*' || ch === '+') unbounded += 1;
-    else if (ch === '{') {
-      const m = REPEAT_RE.exec(pattern.slice(i));
-      if (!m) continue;
-      const low = Number(m[1]);
-      const high = m[2] === undefined ? low : m[3] === '' ? null : Number(m[3]);
-      if (high === null) unbounded += 1;
-      if (low > PATTERN_LIMITS.bounded || (high !== null && high > PATTERN_LIMITS.bounded))
+    else if (lazy) {
+      // perezoso: parte del cuantificador anterior, no cuenta otra vez
+    } else if (ch === '*' || ch === '+' || ch === '?') {
+      variable += 1;
+      afterQuantifier = true;
+    } else if (ch === '{') {
+      const bound = readBound(pattern, i);
+      if (!bound) continue; // llave literal
+      if (bound.low > PATTERN_LIMITS.bounded || (bound.high !== null && bound.high > PATTERN_LIMITS.bounded))
         return `El formato admite repeticiones de hasta ${PATTERN_LIMITS.bounded}, como {1,${PATTERN_LIMITS.bounded}}.`;
-      i += m[0].length - 1;
+      if (bound.high !== bound.low) variable += 1;
+      i = bound.end;
+      afterQuantifier = true;
     }
   }
-  if (unbounded > PATTERN_LIMITS.unbounded)
-    return `El formato admite como mucho ${PATTERN_LIMITS.unbounded} repeticiones sin tope (*, + o {n,}): más pueden tardar demasiado.`;
+  if (variable > PATTERN_LIMITS.variable)
+    return `El formato admite como mucho ${PATTERN_LIMITS.variable} repeticiones variables (*, +, ?, {n,} o {m,n}): más pueden tardar demasiado.`;
   try {
     new RegExp(pattern);
   } catch {
