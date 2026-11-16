@@ -2,7 +2,7 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { SURVEY_MODES } from './surveys.mjs';
 import { publishSeatChange } from './catalogue-events.mjs';
-import { forBrand } from './lib/real-mode.mjs';
+import { forBrand, isRealBrand } from './lib/real-mode.mjs';
 
 // Coordinación académica (Fase 2 · bloque 2.3, arranque). La «apertura» del panel IPCIL y la «cohorte» de la Academia
 // son la misma edición del catálogo: mínimo de alumnos, inscritos (desde enrollments, que nacen del pago confirmado),
@@ -87,6 +87,22 @@ export function createCoordination({
   const useCalendar = fn => {
     calendarOf = fn;
   };
+  // Modo real (docs/PLAN_MODO_REAL.md): una marca con clientes de verdad no recibe enlaces del calendario simulado
+  // (nunca resuelven). No se generan para ella y, si una sesión ya traía uno de antes de encender el modo, el
+  // recordatorio no lo manda: dice que el enlace se enviará por el chat.
+  const simulatedFor = brandId => calendarOf().name === 'simulated' && isRealBrand(db, brandId);
+  const refuseSimulatedMeet = brandId => {
+    if (simulatedFor(brandId))
+      throw Object.assign(
+        fail(
+          409,
+          'Esta marca atiende clientes reales y no hay un calendario conectado: pega el enlace real de la videollamada en la sesión.',
+        ),
+        { code: 'real_mode' },
+      );
+  };
+  const meetLinkFor = (s, brandId) =>
+    s.meet_url && !(s.meet_provider === 'simulated' && isRealBrand(db, brandId)) ? s.meet_url : '';
   const defaults = b => ({
     brand_id: b,
     enabled: 0,
@@ -568,6 +584,7 @@ export function createCoordination({
       c = courseOf(e);
     let meet = { url: url(input.meetUrl), provider: 'manual' };
     if (!meet.url && input.createMeet) {
+      refuseSimulatedMeet(e.brand_id);
       const cal = calendarOf();
       const r = await cal.createEvent({
         title: c.title + ' · ' + title,
@@ -641,6 +658,7 @@ export function createCoordination({
     requireStaff(user);
     crm.requireBrand(user, e.brand_id);
     if (s.status !== 'scheduled') throw fail(409, 'La sesión ya no está programada.');
+    refuseSimulatedMeet(e.brand_id);
     const cal = calendarOf(),
       c = courseOf(e),
       r = await cal.createEvent({
@@ -1076,6 +1094,7 @@ export function createCoordination({
         "SELECT en.id enrollment_id,o.conversation_id,(SELECT status FROM contact_consent k WHERE k.contact_id=en.contact_id) consent FROM enrollments en JOIN orders o ON o.id=en.order_id WHERE en.edition_id=? AND en.status='enrolled'",
       )
       .all(e.id);
+    const link = meetLinkFor(s, e.brand_id);
     let sent = 0,
       skipped = 0;
     for (const r of rows) {
@@ -1095,7 +1114,7 @@ export function createCoordination({
         extra: {
           sesion: s.number + '. ' + s.title,
           fecha_sesion: stamp(s.starts_at, e.timezone) + ' (' + s.duration_min + ' min)',
-          enlace_sesion: s.meet_url || '',
+          enlace_sesion: link,
           grupo: e.group_url || '',
         },
       });
@@ -1104,7 +1123,7 @@ export function createCoordination({
         : forBrand(
             db,
             e.brand_id,
-            `Recordatorio de clase · ${c.title} · ${e.name}\nSesión ${s.number}: ${s.title}\n${stamp(s.starts_at, e.timezone)} (${s.duration_min} min)\n${s.meet_url ? 'Enlace: ' + s.meet_url : 'El enlace de la videollamada se enviará por aquí.'}${e.group_url ? '\nGrupo del curso: ' + e.group_url : ''}\nLaboratorio: aviso de práctica.`,
+            `Recordatorio de clase · ${c.title} · ${e.name}\nSesión ${s.number}: ${s.title}\n${stamp(s.starts_at, e.timezone)} (${s.duration_min} min)\n${link ? 'Enlace: ' + link : 'El enlace de la videollamada se enviará por aquí.'}${e.group_url ? '\nGrupo del curso: ' + e.group_url : ''}\nLaboratorio: aviso de práctica.`,
           );
       try {
         transaction(db, () =>
