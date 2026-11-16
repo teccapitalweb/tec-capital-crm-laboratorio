@@ -80,9 +80,10 @@ export function createRepo(db) {
       'SELECT e.kind,e.details,e.created_at,u.name actor_name FROM campaign_events e LEFT JOIN users u ON u.id=e.actor_id WHERE e.campaign_id=? ORDER BY e.seq DESC LIMIT 100',
     ),
 
-    // ---- destinatarios
+    // ---- destinatarios. `wa_to`: teléfono (clave canónica); `wa_recipient`: identificador de usuario de WhatsApp de
+    // quien no comparte su número (identidad I-2). Se usa uno u otro, nunca los dos.
     insertRecipient: run(
-      'INSERT INTO campaign_recipients(id,campaign_id,contact_id,enrolled,state,position,batch_no,wa_to,wa_recipient,next_at,skip_reason,client_ref,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,NULL,?,?,?,?,?)',
+      'INSERT INTO campaign_recipients(id,campaign_id,contact_id,enrolled,state,position,batch_no,wa_to,wa_recipient,next_at,skip_reason,client_ref,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     ),
     recipient: one('SELECT * FROM campaign_recipients WHERE id=?'),
     recipientOf: one(
@@ -173,7 +174,7 @@ export function createRepo(db) {
     },
     // personas distintas a las que el número escribió con plantilla (difusiones reales) en las últimas 24 h
     usedToday: one(
-      `SELECT count(DISTINCT r.wa_to) n FROM campaign_recipients r JOIN campaigns c ON c.id=r.campaign_id WHERE c.wa_number=? AND r.sent_at>=? AND ${LIVE}`,
+      `SELECT count(DISTINCT COALESCE(r.wa_to,r.wa_recipient)) n FROM campaign_recipients r JOIN campaigns c ON c.id=r.campaign_id WHERE c.wa_number=? AND r.sent_at>=? AND ${LIVE}`,
     ),
     recentCampaign: one(
       `SELECT 1 FROM campaign_recipients r JOIN campaigns c ON c.id=r.campaign_id WHERE r.contact_id=? AND c.brand_id=? AND r.campaign_id!=? AND r.sent_at>=? AND ${LIVE} LIMIT 1`,
@@ -181,7 +182,7 @@ export function createRepo(db) {
 
     // ---- atribución de la respuesta (fila 25)
     lastSentTo: one(
-      `SELECT r.* FROM campaign_recipients r JOIN campaigns c ON c.id=r.campaign_id WHERE (r.wa_to=? OR r.wa_id=?) AND c.wa_number=? AND r.sent_at>=? AND r.replied_at IS NULL AND r.state IN ('sent','delivered','read') AND ${LIVE} ORDER BY r.sent_at DESC LIMIT 1`,
+      `SELECT r.* FROM campaign_recipients r JOIN campaigns c ON c.id=r.campaign_id WHERE (r.wa_to=? OR r.wa_id=? OR r.wa_recipient=?) AND c.wa_number=? AND r.sent_at>=? AND r.replied_at IS NULL AND r.state IN ('sent','delivered','read') AND ${LIVE} ORDER BY r.sent_at DESC LIMIT 1`,
     ),
     attributionDays() {
       try {
