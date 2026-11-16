@@ -43,7 +43,9 @@ export function realText(text) {
   for (const [lab, real] of LAB_SWAPS) out = out.split(lab).join(real);
   out = out
     .replace(/precio de ejemplo\s*:/gi, m => (m[0] === 'P' ? 'Precio:' : 'precio:'))
-    .replace(/\s*\((?:simulad[oa]|laboratorio)\)/gi, '');
+    .replace(/\s*\((?:simulad[oa]|laboratorio)\)/gi, '')
+    // fecha heredada de los cursos de demostración («Fecha de práctica por confirmar»): se dice sin «de práctica»
+    .replace(/(fecha) de práctica (por confirmar)/gi, '$1 $2');
   if (!LAB_WORDING.test(out)) return out;
   const lines = out.split('\n').map(line => {
     if (!LAB_WORDING.test(line)) return line;
