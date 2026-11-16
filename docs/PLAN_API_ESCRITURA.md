@@ -4,6 +4,8 @@ Estado: **publicado en `main`** (15 nov 2026). Incrementos I-6 e I-7a del plan m
 
 Para qué: que un sistema de la empresa (inscripciones, recordatorios) **cree o actualice contactos** de una marca sin entrar al CRM, sin duplicar y sin saltarse las reglas de consentimiento.
 
+> **Envío de plantillas (I-8):** el permiso `messages_send_template` ya se puede dar, con su tope diario y su número por omisión, y llegan `POST /api/v1/messages/template`, su estado y la capa de compatibilidad con el proveedor anterior. Está en la rama de integración, sin publicar: [PLAN_API_ENVIO.md](PLAN_API_ENVIO.md). Lo que abajo dice «declarado» o «fuera» sobre el envío queda sustituido por ese plan.
+
 ## Llaves y permisos
 
 Se administran donde siempre: *Operación → Sistema → API y webhooks → Llaves de la API* (`public/integrations.js`, cambio mínimo: permisos en dos grupos, caducidad, estado y botón «Rotar»). La llave se muestra una sola vez; sólo se guarda su huella, que se compara en tiempo constante.
@@ -14,7 +16,8 @@ Se administran donde siempre: *Operación → Sistema → API y webhooks → Lla
 | `templates` | lectura | Plantillas de WhatsApp aprobadas de la marca y sus datos. |
 | `contacts_write` | escritura | Alta o cambio de contactos, datos propios, etiquetas, añadir a listas y registrar bajas. |
 | `consent_write` | escritura | Registrar que una persona **aceptó** mensajes, siempre con su origen. |
-| `messages_send_template` | declarado | Todavía no se puede dar: llega con el envío de plantillas por API (I-8). |
+| `messages_send_template` | escritura | Enviar plantillas aprobadas (I-8, [PLAN_API_ENVIO.md](PLAN_API_ENVIO.md)), con tope diario y número por omisión. |
+| `compat` | escritura | Usar la capa de compatibilidad con el proveedor anterior (además, `API_COMPAT=1`). |
 
 - **Caducidad** (`expires_at`): obligatoria si la llave escribe (180 días si no se dice, 365 como máximo); opcional si sólo lee. Vencida responde 401 `key_expired`. Cada respuesta lleva `X-Key-Expires`.
 - **Rotar** crea una llave nueva con los mismos permisos (a nombre de quien rota, `rotated_from` apunta a la anterior) y deja la anterior **72 horas** en convivencia; después caduca. Una llave se rota una sola vez.
