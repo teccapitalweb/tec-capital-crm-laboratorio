@@ -7,6 +7,7 @@
 //   import contacts from './named/contacts/index.mjs';
 //   export const NAMED = defineRegistry([...contacts, ...perf]);
 import { defineRegistry } from './named.mjs';
+import api from './named/api/index.mjs';
 import attributes from './named/attributes/index.mjs';
 import audiences from './named/audiences/index.mjs';
 import broadcasts from './named/broadcasts/index.mjs';
@@ -25,6 +26,7 @@ import queues from './named/queues/index.mjs';
 // «jobs» y «contact-import» van al final: la importación usa la clave de teléfono (identity) y la cola de trabajos.
 // «audiences» va después de todas: usa la búsqueda de contactos y la importación la llena.
 // «channel-health» va al final: añade columnas a wa_account (broadcasts) y llegó después de todas las publicadas.
+// «api» va después de todas: añade columnas a api_keys y webhook_endpoints (escalera) y llegó después de las publicadas.
 export const NAMED = defineRegistry([
   ...attributes,
   ...broadcasts,
@@ -37,4 +39,5 @@ export const NAMED = defineRegistry([
   ...contactImport,
   ...audiences,
   ...channelHealth,
+  ...api,
 ]);
