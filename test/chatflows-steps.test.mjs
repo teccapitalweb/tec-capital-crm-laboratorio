@@ -339,16 +339,19 @@ test('WhatsApp real (Meta de mentira): plantilla con su categoría, lista intera
   const listed = lists.waTemplates.find(x => x.id === templateId);
   assert.deepEqual(listed.buttons, ['Sí, apártalo', 'Ahora no']);
   assert.equal(listed.status, 'approved');
+  const file = (await upload(api)).file;
   const graph = graphOf(
     [
       node('t', 'template', { waTemplateId: templateId, wait: true, buttons: listed.buttons }),
+      node('f', 'message', { parts: [{ kind: 'media', fileId: file.id, caption: 'El temario' }] }),
       node('l', 'list', COURSES),
       node('e', 'end', { text: 'Anotado: {{var.curso}}.' }),
       node('x', 'end', { text: 'Cuando quieras.' }),
     ],
     [
       ['n1', 'next', 't'],
-      ['t', 'opt:1', 'l'],
+      ['t', 'opt:1', 'f'],
+      ['f', 'next', 'l'],
       ['t', 'opt:2', 'x'],
       ...['r1', 'r2', 'r3', 'r4', 'r5'].map(r => ['l', 'opt:' + r, 'e']),
     ],
@@ -370,9 +373,16 @@ test('WhatsApp real (Meta de mentira): plantilla con su categoría, lista intera
     .get(conv);
   assert.equal(saved.category, 'marketing');
   assert.match(saved.client_ref, /^flow:/);
-  // Pulsa «Sí, apártalo» en la plantilla: llega como botón de plantilla y sale la lista interactiva.
+  // Pulsa «Sí, apártalo» en la plantilla: llega como botón de plantilla; sale el archivo (imagen con su pie) y la
+  // lista interactiva.
   const button = { type: 'button', button: { text: 'Sí, apártalo', payload: 'tpl:x:0' } };
   await metaInbound(origin, from, 'wamid.pasos.2', button);
+  const imageSent = await until(() => W.meta.sent.find(m => m.type === 'image'), 'el archivo salió a Meta');
+  assert.equal(imageSent.image.caption, 'El temario');
+  assert.ok(
+    W.meta.uploads.some(u => u.kind === 'media'),
+    'el archivo se subió a Meta',
+  );
   const listSent = await until(
     () => W.meta.sent.find(m => m.type === 'interactive' && m.interactive?.type === 'list'),
     'la lista salió a Meta',
@@ -406,5 +416,65 @@ test('WhatsApp real (Meta de mentira): plantilla con su categoría, lista intera
     'Gatos',
   );
   assert.equal(W.meta.sent.filter(m => m.type === 'template').length, 1, 'una sola plantilla');
+
+  // La misma versión en una conversación del LABORATORIO (sin número real): la plantilla no sale ni se cambia por
+  // otra cosa; queda anotado el motivo y pasa a una persona.
+  const u = await call(origin, '/api/auth/register', {
+    body: { username: 'pasos.lab', name: 'Ceci Ruiz', password: PASSWORD },
+  });
+  const labConv = (
+    await call(origin, '/api/conversations', { cookie: u.cookie, body: { courseId: 'aves', channel: 'whatsapp' } })
+  ).conversation.id;
+  await call(origin, '/api/conversations/' + labConv + '/messages', {
+    cookie: u.cookie,
+    body: { text: 'Hola', clientRef: ref() },
+    expected: 201,
+  });
+  await until(
+    () => W.db.prepare('SELECT state FROM chatflow_sessions WHERE conversation_id=?').get(labConv)?.state === 'ended',
+    'la sesión del laboratorio terminó',
+  );
+  const labSession = W.db.prepare('SELECT * FROM chatflow_sessions WHERE conversation_id=?').get(labConv);
+  assert.equal(labSession.outcome, 'handoff');
+  assert.equal(
+    W.db
+      .prepare(
+        "SELECT count(*) n FROM messages WHERE conversation_id=? AND (wa_template IS NOT NULL OR text LIKE 'Hola Ceci%')",
+      )
+      .get(labConv).n,
+    0,
+  );
+  assert.ok(
+    W.db
+      .prepare("SELECT 1 FROM chatflow_events WHERE session_id=? AND event='error' AND detail LIKE '%número real%'")
+      .get(labSession.id),
+  );
+  assert.equal(W.meta.sent.filter(m => m.type === 'template').length, 1, 'nada más salió a Meta');
   assert.ok(NUMBER);
+});
+
+test('subir archivos: sólo quien administra recorridos en la marca', async t => {
+  const L = await lab(t);
+  const agent = await call(L.server.origin, '/api/auth/register', {
+    body: { username: 'cliente.subir', name: 'Persona Cliente', password: PASSWORD },
+  });
+  await call(L.server.origin, '/api/chatflows/files', {
+    cookie: agent.cookie,
+    body: {
+      brandId: 'globalvet',
+      clientRef: ref(),
+      file: { name: 'x.png', type: 'image/png', base64: PNG.toString('base64') },
+    },
+    expected: 403,
+  });
+  // Un tipo que el recorrido no envía (un PDF declarado como imagen) no se acepta.
+  await L.api('/api/chatflows/files', {
+    body: {
+      brandId: 'globalvet',
+      clientRef: ref(),
+      file: { name: 'x.png', type: 'image/png', base64: Buffer.from('%PDF-1.4 hola').toString('base64') },
+    },
+    expected: 400,
+  });
+  assert.equal(L.db.prepare('SELECT count(*) n FROM library_files WHERE created_by IS NOT NULL').get().n, 0);
 });
