@@ -43,7 +43,7 @@ export function conversationPage(db, user, options = {}, online = () => false) {
     AND (@brand='all' OR c.brand_id=@brand) AND (@channel='all' OR c.channel=@channel)
     AND (@tag='' OR EXISTS(SELECT 1 FROM contact_tag_links tl JOIN contact_tags tt ON tt.id=tl.tag_id WHERE tl.contact_id=o.contact_id AND tl.tag_id=@tag AND tt.brand_id=c.brand_id))
     AND (@filter='all' OR (@filter='waiting' AND c.status='waiting') OR (@filter='mine' AND c.assigned_to=@user) OR (@filter='open' AND c.status!='resolved') OR (@filter='resolved' AND c.status='resolved'))
-    AND (@query='' OR instr(search_text(u.name||' '||u.test_number||' '||b.name||' '||k.title||' '||COALESCE(e.name,'')||' '||CASE WHEN @staff=1 THEN COALESCE(c.wa_peer,'') ELSE '' END),search_text(@query))>0
+    AND (@query='' OR instr(search_text(u.name||' '||u.test_number||' '||b.name||' '||k.title||' '||COALESCE(e.name,'')||' '||CASE WHEN @staff=1 THEN COALESCE(c.wa_peer,'')||' '||COALESCE((SELECT group_concat(i.value||' '||i.username||' @'||i.username,' ') FROM identity_keys i WHERE i.user_id=c.customer_id AND i.kind='wa_bsuid'),'') ELSE '' END),search_text(@query))>0
       OR EXISTS(SELECT 1 FROM messages sm WHERE sm.conversation_id=c.id AND instr(search_text(sm.text),search_text(@query))>0))
     AND (@hasCursor=0 OR c.updated_at<@cursorTime OR (c.updated_at=@cursorTime AND c.id<@cursorId))
     ORDER BY c.updated_at DESC,c.id DESC LIMIT @limit OFFSET @offset`,

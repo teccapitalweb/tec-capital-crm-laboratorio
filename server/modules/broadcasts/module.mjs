@@ -118,6 +118,10 @@ export default {
       }
     };
     const templates = () => optional('wa-templates');
+    // Destinatario por identificador de usuario (identidad I-2; conciliación, fila 37): a quien no tiene teléfono pero
+    // escribió por WhatsApp se le escribe por su identificador en el ámbito del número de la campaña.
+    const recipientOf = (contactId, numberId) =>
+      services.whatsapp?.identity?.recipientForContact(contactId, numberId) ?? null;
     const audiences = () => optional('audiences');
     const costs = () => optional('wa-costs');
     const meta = () => services.connectors.adapters.channel.meta;
@@ -438,7 +442,7 @@ export default {
     }
     // Reglas que el motor añade a las de la audiencia, iguales en la vista previa y antes de cada envío.
     function judge(c, ctx, contact, set, t, overrides) {
-      if (!contact.phone_key) return { reason: 'no_address' };
+      if (!contact.phone_key && !contact.wa_recipient) return { reason: 'no_address' };
       if (ctx.category === 'marketing' && set.minGapHours > 0)
         if (repo.recentCampaign(contact.id, c.brand_id, c.id, t - set.minGapHours * 3_600_000))
           return { reason: 'recent_campaign' };
@@ -484,12 +488,19 @@ export default {
           add('duplicate');
           continue;
         }
-        const verdict = judge(c, ctx, { id: row.contactId, name: row.name, phone_key: row.phoneKey }, set, t);
+        const recipient = row.phoneKey ? null : recipientOf(row.contactId, c.wa_number);
+        const verdict = judge(
+          c,
+          ctx,
+          { id: row.contactId, name: row.name, phone_key: row.phoneKey, wa_recipient: recipient },
+          set,
+          t,
+        );
         if (verdict.reason) {
           add(verdict.reason);
           continue;
         }
-        seen.add(row.phoneKey);
+        seen.add(row.phoneKey || 'u:' + recipient);
         eligible++;
         const market = marketOf(row.phoneKey);
         markets[market] = (markets[market] ?? 0) + 1;
@@ -736,17 +747,41 @@ export default {
         let position = 0;
         for (const row of rows) {
           let reason = row.reason ? (AUDIENCE_REASON[row.reason] ?? 'excluded') : null;
-          if (!reason && (!row.phoneKey || seen.has(row.phoneKey))) reason = row.phoneKey ? 'duplicate' : 'no_address';
+          // sin teléfono, el identificador de usuario de WhatsApp en el ámbito del número de la campaña (I-2)
+          const recipient = !reason && !row.phoneKey ? recipientOf(row.contactId, c.wa_number) : null;
+          const address = row.phoneKey || (recipient ? 'u:' + recipient : '');
+          if (!reason && (!address || seen.has(address))) reason = address ? 'duplicate' : 'no_address';
           if (!reason)
             reason =
-              judge(c, ctx, { id: row.contactId, name: row.name, phone_key: row.phoneKey }, set, t).reason ?? null;
+              judge(
+                c,
+                ctx,
+                { id: row.contactId, name: row.name, phone_key: row.phoneKey, wa_recipient: recipient },
+                set,
+                t,
+              ).reason ?? null;
           if (!reason && position >= set.maxAudience) reason = 'over_limit';
           if (repo.recipientOfContact(c.id, row.contactId)) continue;
           if (reason) {
-            repo.insertRecipient(newId(), c.id, row.contactId, 0, 'skipped', null, 0, null, null, reason, null, t, t);
+            repo.insertRecipient(
+              newId(),
+              c.id,
+              row.contactId,
+              0,
+              'skipped',
+              null,
+              0,
+              null,
+              null,
+              null,
+              reason,
+              null,
+              t,
+              t,
+            );
             continue;
           }
-          seen.add(row.phoneKey);
+          seen.add(address);
           const batch = opts.batchSize ? Math.floor(position / opts.batchSize) : 0;
           repo.insertRecipient(
             newId(),
@@ -756,7 +791,8 @@ export default {
             'queued',
             position,
             batch,
-            row.phoneKey,
+            row.phoneKey || null,
+            row.phoneKey ? null : recipient,
             t,
             null,
             null,
@@ -838,13 +874,13 @@ export default {
         if (!current || !['queued', 'deferred'].includes(current.state)) return null;
         const contact = repo.contact(c.brand_id, current.contact_id);
         const skip = reason => (repo.skip(reason, t, current.id), touched(c), null);
-        if (!contact || !current.wa_to) return skip('no_address');
+        if (!contact || (!current.wa_to && !current.wa_recipient)) return skip('no_address');
         const consent = repo.consent(contact.id)?.status ?? 'unknown';
         if (consent === 'opted_out') return skip('opted_out'); // pidió la baja mientras la campaña corría
         if (c.require_consent && consent !== 'opted_in') return skip('no_consent');
         if (audiences()?.suppressed(c.brand_id, contact.id)) return skip('suppressed');
         const overrides = json(current.params).overrides ?? {};
-        const verdict = judge(c, ctx, contact, set, t, overrides);
+        const verdict = judge(c, ctx, { ...contact, wa_recipient: current.wa_recipient }, set, t, overrides);
         if (verdict.reason) return skip(verdict.reason);
         const r = render(ctx, contact, current.id, overrides);
         if (r.reason) return skip(r.reason);
@@ -862,6 +898,7 @@ export default {
           id: current.id,
           attempt: current.attempts + 1,
           to: current.wa_to,
+          recipient: current.wa_to ? null : current.wa_recipient,
           template: r.template,
           campaign: c,
           ctx,
@@ -883,6 +920,7 @@ export default {
         const res = await withTimeout(
           meta().send({
             to: job.to,
+            recipient: job.recipient,
             from: job.campaign.wa_number,
             template,
             callback: callbackOf(job.id, job.attempt),
@@ -1092,14 +1130,22 @@ export default {
 
     // ---- respuesta a una difusión (fila 25: manda attribute). Todo síncrono y sin transacción propia: lo llama el
     // entrante de WhatsApp dentro de la suya, antes de buscar o crear la conversación.
-    function attribute({ waId, numberId, contextRef = null, payload = null, at = now() } = {}) {
+    function attribute({ waId, userId = null, numberId, contextRef = null, payload = null, at = now() } = {}) {
       const days = Number(repo.attributionDays()) || 7;
       const sender = String(waId || '');
       const key = canonicalPhone(sender, { international: true }).key ?? sender;
+      const bsuid = String(userId || '');
       // Sólo cuenta una difusión real, del número por el que entró el mensaje (y por tanto de su marca), y un
-      // destinatario que ES quien escribe (su teléfono canónico o el wa_id que Meta devolvió). Una carga de botón o una
-      // cita de otra persona no se atribuye: así nadie puede marcar respuestas, clics ni conversaciones ajenas.
-      const own = r => Boolean(r && ((r.wa_to && r.wa_to === key) || (r.wa_id && r.wa_id === sender)));
+      // destinatario que ES quien escribe (su teléfono canónico, el wa_id que Meta devolvió o, sin teléfono, su
+      // identificador de usuario). Una carga de botón o una cita de otra persona no se atribuye: así nadie puede marcar
+      // respuestas, clics ni conversaciones ajenas.
+      const own = r =>
+        Boolean(
+          r &&
+          ((r.wa_to && r.wa_to === key) ||
+            (r.wa_id && r.wa_id === sender) ||
+            (r.wa_recipient && bsuid && r.wa_recipient === bsuid)),
+        );
       const hit = (r, exact, button = null) => {
         const c = r ? repo.campaignAny(r.campaign_id) : null;
         const usable = c && json(c.options).mode !== 'rehearsal' && c.wa_number === numberId;
@@ -1116,7 +1162,7 @@ export default {
         const found = hit(repo.recipientByRef(String(contextRef).slice(0, 200)), true);
         if (found) return found;
       }
-      return hit(repo.lastSentTo(key, sender, numberId, at - days * DAY), false);
+      return hit(repo.lastSentTo(key, sender, bsuid || null, numberId, at - days * DAY), false);
     }
     // El contacto de la lista pasa a ser el de la persona que respondió (un solo contacto por persona y marca).
     function adopt(hit, userId) {
@@ -1274,17 +1320,20 @@ export default {
           throw fail(409, 'Ese contacto ya tiene este envío hoy.', { code: 'already_sent_today' });
         const rid = newId();
         const position = repo.pendingCount(c.id);
+        const recipient = contact.phone_key ? null : recipientOf(contact.id, c.wa_number);
+        const reachable = Boolean(contact.phone_key || recipient);
         repo.insertRecipient(
           rid,
           c.id,
           contact.id,
-          contact.phone_key ? 1 : 0,
-          contact.phone_key ? 'queued' : 'skipped',
+          reachable ? 1 : 0,
+          reachable ? 'queued' : 'skipped',
           (position.queued ?? 0) + (position.sending ?? 0),
           0,
           contact.phone_key || null,
+          recipient,
           t,
-          contact.phone_key ? null : 'no_address',
+          reachable ? null : 'no_address',
           scoped,
           t,
           t,
@@ -1395,7 +1444,16 @@ export default {
           id: r.id,
           contactId: r.contact_id,
           name: r.contact_name,
-          phone: full ? (r.wa_to ? '+' + r.wa_to : '') : maskDigits(r.wa_to),
+          // sin teléfono: «Número oculto» y los cuatro últimos del identificador de usuario, nunca el identificador
+          phone: r.wa_to
+            ? full
+              ? '+' + r.wa_to
+              : maskDigits(r.wa_to)
+            : r.wa_recipient
+              ? 'Número oculto ··' + String(r.wa_recipient).slice(-4)
+              : full
+                ? ''
+                : maskDigits(r.wa_to),
           state: r.state,
           stateLabel: RECIPIENT_STATES[r.state] ?? r.state,
           reason: r.skip_reason,

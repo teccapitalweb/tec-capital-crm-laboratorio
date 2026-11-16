@@ -5,7 +5,7 @@ import { transaction } from './database.mjs';
 import { artworkAsset } from './demo-catalog.mjs';
 import * as copy from './reply-copy.mjs';
 import { brandCourses, matchCourse } from './course-match.mjs';
-import { canonicalPhone } from './lib/identity-keys.mjs';
+import { createIdentity, peerOf } from './lib/identity.mjs';
 
 // WhatsApp real (Meta · Cloud API). docs/PLAN_WHATSAPP_REAL.md
 // Convierte un mensaje que llega a un número real en cliente, conversación y mensaje del CRM —el mismo camino que sigue un
@@ -20,7 +20,6 @@ const text = (v, max) =>
         .trim()
         .slice(0, max)
     : '';
-const digits = v => String(v || '').replace(/\D/g, '');
 const INBOUND_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'application/pdf']);
 const OUTBOUND_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf']);
 const MEDIA_LABEL = {
@@ -75,6 +74,10 @@ export function createWhatsApp({
     if (!u || u.disabled || u.role !== 'admin') throw fail(403, 'WhatsApp real lo configura un administrador.');
   };
   const numberRow = id => db.prepare('SELECT * FROM wa_numbers WHERE phone_number_id=?').get(String(id || ''));
+  // Identidad por teléfono e identificador de usuario (I-2, docs/PLAN_IDENTIDAD_SIN_TELEFONO.md): quién escribe, a
+  // quién se le contesta y la ventana de 24 h por persona y número (channel.windowOf la lee por usePeer).
+  const identity = createIdentity({ db, crm, now });
+  channel.usePeer?.({ lastInboundAt: identity.lastInboundAt, display: identity.displayFor });
 
   // ---- Contrato de canal 1.1 (docs/PLAN_CONTRATO_CANAL.md): lo que el entrante trae además del texto queda en las
   // columnas canónicas del mensaje ya guardado. Paso con nombre del camino del entrante (conciliación, fila 33): corre
@@ -157,16 +160,13 @@ export function createWhatsApp({
       null
     );
   }
-  const displayName = (name, waId) => {
-    const n = text(name, 60).replace(/[<>]/g, '');
-    return n.length >= 2 ? n : 'WhatsApp ··' + waId.slice(-4);
-  };
-
   // Paso con nombre del entrante (fila 33): la difusión a la que responde, o null. Síncrono, dentro de la transacción.
-  function attributionOf(d, waId, number, at) {
+  // Quien escribe sin teléfono se reconoce por su identificador de usuario (`userId`).
+  function attributionOf(d, waId, bsuid, number, at) {
     if (!broadcasts) return null;
     return broadcasts.attribute({
       waId,
+      userId: bsuid || null,
       numberId: number.phone_number_id,
       contextRef: d.replyTo?.providerRef ? String(d.replyTo.providerRef) : null,
       payload: d.interaction?.payload ?? d.interaction?.id ?? null,
@@ -176,10 +176,12 @@ export function createWhatsApp({
 
   // ---- Entrante: devuelve un texto legible para la bitácora de conectores. Lanza sólo ante un fallo inesperado (Meta lo reintentará).
   async function inbound(d, adapter) {
-    const waId = digits(d?.from),
+    // Quién escribe: teléfono, identificador de usuario (BSUID) o los dos (contrato de canal 1.1, peer.ids).
+    const who = peerOf(d),
+      waId = who.phone,
       numberId = String(d?.to || ''),
       ref = 'meta:' + String(d?.providerRef || '');
-    if (!/^\d{7,20}$/.test(waId) || !d?.providerRef) return 'ignorado: entrante sin remitente o sin referencia';
+    if ((!waId && !who.bsuid) || !d?.providerRef) return 'ignorado: entrante sin remitente o sin referencia';
     const number = numberRow(numberId);
     if (!number)
       return (
@@ -193,8 +195,13 @@ export function createWhatsApp({
     if (db.prepare('SELECT 1 FROM messages WHERE client_ref=?').get(ref))
       return 'duplicado: el mensaje ya estaba en la conversación';
     // 1) fuera de transacción: contraseña inutilizable para una persona nueva (nadie la conoce: ese cliente no inicia sesión) y descarga del archivo
-    const known = db.prepare('SELECT user_id FROM wa_identities WHERE wa_id=?').get(waId),
-      hash = known ? null : await passwordHash(randomBytes(32).toString('hex'));
+    const hash = identity.needsUser({
+      scope: identity.scopeFor(number, d.account),
+      phone: waId,
+      bsuid: who.bsuid,
+    })
+      ? await passwordHash(randomBytes(32).toString('hex'))
+      : null;
     let file = null,
       note = '',
       unsupported = false;
@@ -227,27 +234,22 @@ export function createWhatsApp({
       out = transaction(db, () => {
         if (db.prepare('SELECT 1 FROM messages WHERE client_ref=?').get(ref)) return { duplicate: true };
         const t = now();
-        // 2) persona → cliente
-        let identity = db.prepare('SELECT * FROM wa_identities WHERE wa_id=?').get(waId),
-          userId = identity?.user_id;
-        if (!identity) {
-          if (!hash) throw fail(503, 'Identidad en creación; reintentar.');
-          userId = randomUUID();
-          const n = db.prepare('SELECT COALESCE(MAX(test_number),100000)+1 n FROM users').get().n;
-          db.prepare(
-            'INSERT INTO users(id,username,name,password_hash,role,test_number,created_at,last_seen) VALUES(?,?,?,?,?,?,?,?)',
-          ).run(userId, 'wa-' + randomBytes(8).toString('hex'), displayName(d.name, waId), hash, 'customer', n, t, t);
-          db.prepare(
-            'INSERT INTO wa_identities(wa_id,user_id,profile_name,created_at,last_seen) VALUES(?,?,?,?,?)',
-          ).run(waId, userId, text(d.name, 60), t, t);
-        } else
-          db.prepare(
-            "UPDATE wa_identities SET last_seen=?,profile_name=CASE WHEN ?!='' THEN ? ELSE profile_name END WHERE wa_id=?",
-          ).run(t, text(d.name, 60), text(d.name, 60), waId);
-        db.prepare('UPDATE users SET last_seen=? WHERE id=?').run(t, userId);
+        // 2) persona → cliente (identity.resolve, diseño §3.4): por identificador, por teléfono o por los dos; nace
+        // si no existe; si el identificador y el teléfono son de dos clientes, se fusionan si es seguro.
+        const me = identity.resolve({
+            number,
+            account: d.account,
+            phone: waId,
+            bsuid: who.bsuid,
+            parent: who.parent,
+            username: who.username,
+            name: who.name,
+            hash,
+          }),
+          userId = me.userId;
         // 2b) ¿responde a una difusión? (botón, mensaje citado o la última recibida en los días de atribución). El
         // contacto de la lista pasa a ser el de esta persona, y con atribución exacta la conversación va a su curso.
-        const hit = attributionOf(d, waId, number, t);
+        const hit = attributionOf(d, waId, who.bsuid, number, t);
         if (hit) broadcasts.adopt(hit, userId);
         const fromCampaign = hit ? broadcasts.courseOf(hit) : null;
         // 3) conversación abierta con ese número; si no hay, una nueva en el curso que toca
@@ -301,9 +303,9 @@ export function createWhatsApp({
               )
               .get(userId, p.courseId)?.id || null;
           if (id)
-            db.prepare('UPDATE conversations SET wa_number=?,wa_peer=? WHERE id=?').run(
+            db.prepare('UPDATE conversations SET wa_number=?,wa_peer=COALESCE(?,wa_peer) WHERE id=?').run(
               number.phone_number_id,
-              waId,
+              me.phone || null,
               id,
             ); // ya tenía una abierta de ese curso (escribió a otro número): continúa ahí
           else {
@@ -321,30 +323,22 @@ export function createWhatsApp({
               p.editionId,
               refJson,
               number.phone_number_id,
-              waId,
+              me.phone || null,
               pending,
             );
             created = true;
           }
           c = db.prepare('SELECT * FROM conversations WHERE id=?').get(id);
-          crm.syncConversation(c);
-          const contact = db
-            .prepare("SELECT id FROM contacts WHERE source_user_id=? AND brand_id=? AND phone=''")
-            .get(userId, c.brand_id);
-          if (contact) {
-            // El contacto guarda el teléfono canónico («+52» más diez dígitos, sin el 1 que Meta pone en «521…») y su
-            // clave: así es el mismo número que el capturado a mano o importado. `wa_peer` conserva el identificador
-            // tal como llegó, que es al que se le contesta. Si no se reconoce como teléfono, se guarda tal cual.
-            const phone = canonicalPhone(waId, { international: true });
-            db.prepare("UPDATE contacts SET phone=?,phone_key=?,source='whatsapp',updated_at=? WHERE id=?").run(
-              phone.e164 ?? '+' + waId,
-              phone.key ?? '',
-              t,
-              contact.id,
-            );
-            crm.contactChanged(contact.id);
-          } // identidad única de persona por teléfono
+          // adopción (diseño §3.5): si la persona todavía no tiene contacto en la marca y hay uno sin dueño con su
+          // teléfono (importado, capturado a mano o por la API), ése es su contacto
+          crm.syncConversation(c, { adoptContactId: identity.adoptable(c.brand_id, userId, me.phone) });
         }
+        // El contacto guarda el teléfono canónico («+52» más diez dígitos, sin el 1 que Meta pone en «521…») y su clave;
+        // `wa_peer` conserva el identificador tal como llegó, que es al que se le contesta. Si el teléfono aparece
+        // después (la persona escribía sin él), se completa aquí y se fusiona con el contacto de la marca que ya lo
+        // tenía, si es seguro. Sólo en la marca del número.
+        identity.completeContacts(userId, c.brand_id, me.phone);
+        if (me.phone && !c.wa_peer) c = db.prepare('SELECT * FROM conversations WHERE id=?').get(c.id);
         // 3b) la difusión a la que responde queda escrita en la conversación antes de su mensaje (y la marca como respondida)
         if (hit) broadcasts.onReply(hit, c, { at: t });
         // 4) mensaje, igual que el de un perfil de prueba: comprobante si hay pedido vigente, y si no, el asistente responde
@@ -366,6 +360,8 @@ export function createWhatsApp({
         const messageId = insertMessage(c, { id: userId, role: 'customer' }, content, 'customer', ref, attachmentId);
         db.prepare('UPDATE messages SET provider_ref=? WHERE id=?').run(String(d.providerRef).slice(0, 200), messageId);
         recordChannelFacts(messageId, c.id, d);
+        // ventana de 24 h por persona y número (conciliación, fila 41: channel.windowOf la lee)
+        identity.touchPeer(number.phone_number_id, userId, t);
         const fresh = db.prepare('SELECT * FROM conversations WHERE id=?').get(c.id),
           receiptId = attachmentId ? payments.attachReceipt(fresh, messageId, attachmentId) : null,
           botOn = Boolean(fresh.bot_enabled && !fresh.assigned_to && fresh.status === 'open');
@@ -429,10 +425,18 @@ export function createWhatsApp({
   async function outbound(row, { closed = false } = {}) {
     const m = db
       .prepare(
-        'SELECT m.id,m.text,m.buttons,m.attachment_id,m.flyer_snapshot,m.conversation_id,m.category,m.wa_template,c.brand_id,c.wa_number,c.wa_peer FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=?',
+        'SELECT m.id,m.text,m.buttons,m.attachment_id,m.flyer_snapshot,m.conversation_id,m.category,m.wa_template,c.brand_id,c.wa_number,c.wa_peer,c.customer_id FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=?',
       )
       .get(row.id);
-    if (!m || !m.wa_peer || !m.wa_number) throw fail(409, 'La conversación no tiene un número de WhatsApp de destino.');
+    if (!m || !m.wa_number) throw fail(409, 'La conversación no tiene un número de WhatsApp de destino.');
+    // Destinatario (diseño §3.6): por teléfono si se conoce; por identificador de usuario sólo si no hay teléfono.
+    const bsuid = m.wa_peer ? null : identity.bsuidFor(m.customer_id, m.wa_number);
+    if (!m.wa_peer && !bsuid)
+      throw fail(
+        409,
+        'La conversación no tiene destinatario: la persona no comparte su número y no hay un identificador de WhatsApp para este número.',
+      );
+    const target = m.wa_peer ? { to: m.wa_peer } : { recipient: bsuid };
     if (m.wa_template) {
       let tpl = null;
       try {
@@ -443,7 +447,7 @@ export function createWhatsApp({
         id: m.id,
         conversationId: m.conversation_id,
         brandId: m.brand_id,
-        to: m.wa_peer,
+        ...target,
         from: m.wa_number,
         text: m.text || '',
         // con encabezado y botones si la plantilla los lleva: el módulo de plantillas lee el archivo del encabezado
@@ -516,7 +520,7 @@ export function createWhatsApp({
       id: m.id,
       conversationId: m.conversation_id,
       brandId: m.brand_id,
-      to: m.wa_peer,
+      ...target,
       from: m.wa_number,
       text: body,
       buttons,
@@ -584,7 +588,12 @@ export function createWhatsApp({
       numbers: numbers.map(numberView),
       brands: db.prepare('SELECT id,name FROM brands ORDER BY name').all(),
       courses: db.prepare('SELECT id,brand_id,title FROM courses WHERE active=1 ORDER BY title').all(),
-      people: db.prepare('SELECT count(*) n FROM wa_identities').get().n,
+      // personas que escribieron por WhatsApp real: con teléfono o sólo con identificador de usuario
+      people: db
+        .prepare(
+          "SELECT count(*) n FROM (SELECT user_id FROM wa_identities UNION SELECT user_id FROM identity_keys WHERE kind IN ('wa_phone','wa_bsuid'))",
+        )
+        .get().n,
       ads: db
         .prepare(
           'SELECT a.*,b.name brand_name,k.title course_title FROM wa_ads a JOIN brands b ON b.id=a.brand_id LEFT JOIN courses k ON k.id=a.course_id ORDER BY a.last_seen DESC LIMIT 100',
@@ -751,5 +760,5 @@ export function createWhatsApp({
     }
     throw fail(404, 'Ruta de WhatsApp no encontrada.');
   }
-  return { handle, inbound, outbound, status, pick, useTemplates, useBroadcasts };
+  return { handle, inbound, outbound, status, pick, useTemplates, useBroadcasts, identity };
 }

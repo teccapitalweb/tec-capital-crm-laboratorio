@@ -97,7 +97,8 @@ test('con espera 0 el webhook responde «en cola» y el mensaje entra después; 
   });
   await until(() => meta.waiting('download') === 1, 'la descarga del archivo de María sigue en curso');
   assert.equal(mine('maria').length, 0, 'ningún mensaje de María entra antes que el primero');
-  assert.equal(inboxRow('wamid.luis-1').state, 'done');
+  // el mensaje se guarda un instante antes de que la fila quede «done»: se espera, no se supone
+  await until(() => inboxRow('wamid.luis-1').state === 'done', 'el evento de Luis termina');
   assert.equal(inboxRow('wamid.maria-1').state, 'reserved');
   assert.equal(inboxRow('wamid.maria-2').state, 'pending', 'el segundo espera al primero de su carril');
   assert.equal(inboxRow('wamid.maria-1').lane, inboxRow('wamid.maria-2').lane);

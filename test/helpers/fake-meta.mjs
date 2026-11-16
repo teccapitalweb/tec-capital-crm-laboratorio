@@ -170,8 +170,12 @@ export async function startFakeMeta() {
       }
       if ((match = url.pathname.match(/^\/v25\.0\/(\d+)\/messages$/)) && req.method === 'POST') {
         const body = JSON.parse(Buffer.concat(chunks).toString());
+        // Destinatario: `to` (teléfono) o, para quien no comparte su número, `recipient` (identificador de usuario). Si
+        // vienen los dos, manda `to`, como en Meta. La respuesta devuelve el `wa_id` o el `user_id` del destinatario.
+        const target = body.to ?? body.recipient;
+        const contact = body.to ? { wa_id: body.to } : { user_id: body.recipient };
         // rechazo de Meta para un destinatario (difusiones): {code, message, status?}; se anota igual que un envío
-        const refusal = refuse.get(body.to) ?? refuse.get('*');
+        const refusal = refuse.get(target) ?? refuse.get('*');
         if (refusal) {
           sent.push({ from: match[1], refused: refusal.code, ...body });
           return send(refusal.status ?? 400, {
@@ -182,7 +186,7 @@ export async function startFakeMeta() {
         const id = 'wamid.out' + ++n;
         return gate('send', () =>
           setTimeout(
-            () => send(200, { messaging_product: 'whatsapp', contacts: [{ wa_id: body.to }], messages: [{ id }] }),
+            () => send(200, { messaging_product: 'whatsapp', contacts: [contact], messages: [{ id }] }),
             delays.send,
           ),
         );

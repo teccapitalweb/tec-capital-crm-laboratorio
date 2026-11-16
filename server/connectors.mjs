@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual, randomBytes, randomUUID } from 'node:crypt
 import { transaction } from './database.mjs';
 import { createWebhookInbox } from './app/webhook-inbox.mjs';
 import { createPeerHash, loadPeerKey } from './lib/peer-key.mjs';
+import { isBsuid } from './lib/identity.mjs';
 
 // Contrato de conectores (Fase 1 · bloque 6). Define la interfaz que tendrán los proveedores reales de canal (Meta:
 // WhatsApp Cloud API, Instagram, Messenger) y de pago (Stripe, Conekta), y la cumple hoy con adaptadores simulados.
@@ -337,6 +338,7 @@ const META_ERRORS = {
   131053: 'WhatsApp no aceptó el archivo (formato o tamaño).',
   131056: 'Se enviaron demasiados mensajes seguidos a este número. Espera un momento.',
   131057: 'La cuenta de WhatsApp Business está en mantenimiento.',
+  131062: 'Esta plantilla no se puede enviar a una persona sin número visible (sólo con su identificador de WhatsApp).',
   133010: 'El número de WhatsApp no está registrado en la API de la nube.',
   132000: 'La plantilla espera otra cantidad de datos de la que se envió: revisa sus variables.',
   132001: 'Meta no tiene esa plantilla aprobada con ese nombre e idioma. Sincroniza las plantillas y revisa su estado.',
@@ -687,11 +689,17 @@ export function metaChannel({
       .slice(0, 200) || '—'; // Meta no admite saltos de línea ni datos vacíos en una variable
   // México: el webhook entrega 521XXXXXXXXXX, pero la lista de destinatarios de un número de prueba suele tener 52XXXXXXXXXX.
   // Se envía tal como llegó y, sólo si Meta dice «no está en la lista» (131030), se reintenta una vez sin el 1.
+  // `to` son los dígitos del teléfono o {recipient}: el identificador de usuario de quien no comparte su número (I-2).
   async function post(from, to, message) {
     const send = dest =>
       graph('/' + from + '/messages', {
         method: 'POST',
-        payload: { messaging_product: 'whatsapp', recipient_type: 'individual', to: dest, ...message },
+        payload: {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          ...(typeof dest === 'string' ? { to: dest } : { recipient: dest.recipient }),
+          ...message,
+        },
       });
     // Se reintenta sin el 1 ante cualquier rechazo de Meta que no sea del token, de límites o de la ventana de 24 h (131030 es el habitual,
     // pero Meta no siempre usa ese código). Si el reintento también falla, se informa el PRIMER motivo.
@@ -699,7 +707,7 @@ export function metaChannel({
     try {
       return await send(to);
     } catch (e) {
-      if (!e.metaCode || SKIP.has(e.metaCode) || !/^521\d{10}$/.test(to)) throw e;
+      if (!e.metaCode || SKIP.has(e.metaCode) || typeof to !== 'string' || !/^521\d{10}$/.test(to)) throw e;
       try {
         return await send('52' + to.slice(3));
       } catch {
@@ -823,9 +831,11 @@ export function metaChannel({
     // m: {to, from?, text, buttons?, media?:{buffer,mime,filename}, template?:{name,language,params}}. Devuelve la referencia de Meta (wamid); el estado «entregado»/«leído» llega después por webhook.
     async send(m) {
       if (missing.length) throw fail(503, 'Conector de Meta sin configurar: faltan ' + missing.join(', ') + '.');
-      const to = digits(m.to),
+      // Por teléfono si se conoce; por identificador de usuario (`recipient`) sólo si no hay teléfono (diseño §3.6).
+      const phone = digits(m.to),
         from = numberId(m.from);
-      if (!/^\d{7,20}$/.test(to)) throw fail(400, 'La conversación no tiene un número de WhatsApp de destino.');
+      const to = /^\d{7,20}$/.test(phone) ? phone : isBsuid(m.recipient) ? { recipient: m.recipient } : null;
+      if (!to) throw fail(400, 'La conversación no tiene un número de WhatsApp de destino.');
       if (m.template) {
         // plantilla aprobada: lo único que Meta deja salir con la ventana de 24 h cerrada. Con encabezado (texto o
         // archivo) y botones (enlace con dato, respuesta rápida con carga) si la plantilla los lleva (D-3).
@@ -885,11 +895,13 @@ export function metaChannel({
         const ref = r.messages?.[0]?.id;
         if (!ref) throw fail(502, 'Meta aceptó la petición pero no devolvió la referencia del mensaje.');
         const waId = typeof r.contacts?.[0]?.wa_id === 'string' ? r.contacts[0].wa_id.slice(0, 40) : null;
+        const userId = typeof r.contacts?.[0]?.user_id === 'string' ? r.contacts[0].user_id.slice(0, 140) : null;
         return {
           providerRef: ref,
           state: 'sent',
           reason: null,
           ...(waId ? { waId } : {}),
+          ...(userId ? { userId } : {}),
           ...(mediaId ? { mediaId } : {}),
         };
       }
@@ -1447,7 +1459,10 @@ export function createConnectors({
       );
     },
   };
-  channel.useConnector(m => (m && m.to ? (metaLive() ? adapters.channel.meta : metaOff) : adapters.channel.simulated));
+  // Un saliente real lleva `to` (teléfono) o `recipient` (identificador de usuario, si la persona no comparte su número).
+  channel.useConnector(m =>
+    m && (m.to || m.recipient) ? (metaLive() ? adapters.channel.meta : metaOff) : adapters.channel.simulated,
+  );
   payments.useConnector(() => effective('payment'));
   let inbound = null;
   const useInbound = fn => {
@@ -1629,7 +1644,7 @@ export function createConnectors({
       type: ev.type,
       data: {
         to: ev.data?.to || null,
-        from: '…' + String(ev.data?.from || '').slice(-4),
+        from: '…' + peerIdentifier(ev.data).slice(-4), // teléfono o identificador de usuario: sólo sus cuatro últimos
         kind: ev.data?.kind || 'text',
         media: Boolean(ev.data?.media),
       },
@@ -1669,10 +1684,9 @@ export function createConnectors({
       if (inbound && metaLive()) {
         // Sin teléfono ni identificador de usuario no se sabe quién escribe: el entrante queda en cuarentena (fila
         // fallida con su carga), sin anotarse como procesado, para reprocesarlo cuando se sepa leer su identificador.
+        // Quien escribe sólo con identificador de usuario (BSUID) ya entra (identidad I-2); lo que quedó en cuarentena
+        // «no_phone» con la versión anterior se reprocesa (server/modules/identity).
         if (!peerIdentifier(ev.data)) throw permanentError('no_identifier');
-        // Sólo con identificador de usuario (BSUID), sin teléfono: el CRM todavía identifica por número. Queda en
-        // cuarentena con su carga 1.1 completa, para reprocesarlo cuando la identidad por BSUID exista.
-        if (!String(ev.data.from ?? '').trim()) throw permanentError('no_phone');
         return (await applyInbound(row.provider, ev)).result;
       }
     }

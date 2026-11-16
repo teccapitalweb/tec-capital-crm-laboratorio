@@ -29,6 +29,11 @@ export const REASONS = Object.freeze({
   duplicate: 'Repetido: otro contacto con el mismo teléfono ya está',
 });
 
+// A quién se le puede escribir por WhatsApp: a quien tiene teléfono o, sin él, a quien escribió con su identificador de
+// usuario (identidad I-2, docs/PLAN_IDENTIDAD_SIN_TELEFONO.md). Quien no tiene ninguno de los dos queda «sin teléfono».
+const reachable = alias =>
+  `(${alias}.phone_key <> '' OR EXISTS (SELECT 1 FROM identity_keys ik WHERE ik.user_id = ${alias}.source_user_id AND ik.kind = 'wa_bsuid'))`;
+
 // Lo que toda consulta de contactos de un segmento lee: los alias son los de la lista de contactos (directory), así
 // que sus campos se reutilizan tal cual: `c` contacts, `s` contact_search y `k` contact_consent.
 const CONTACT_FROM = `FROM contacts c
@@ -173,20 +178,21 @@ export function createRepo(db) {
     const sql = `WITH m AS (
         SELECT c.id, c.phone_key, COALESCE(k.status, 'unknown') consent,
           ${exclude ? `c.id IN (${exclude.sql})` : '0'} excluded,
-          c.id IN (${suppressed.sql}) suppressed
+          c.id IN (${suppressed.sql}) suppressed, ${reachable('c')} reachable
         FROM contacts c LEFT JOIN contact_consent k ON k.contact_id = c.id
         WHERE c.brand_id = ? AND c.id IN (${include.sql})
       ), r AS (
         SELECT id, phone_key, consent,
           CASE WHEN excluded THEN 'excluded'
-               WHEN phone_key = '' THEN 'no_phone'
+               WHEN NOT reachable THEN 'no_phone'
                WHEN suppressed THEN 'suppressed'
                WHEN consent = 'opted_out' THEN 'opted_out'
                WHEN ? AND consent <> 'opted_in' THEN 'no_consent' END reason0
         FROM m
       ), x AS (
         SELECT id, consent, COALESCE(reason0,
-          CASE WHEN ROW_NUMBER() OVER (PARTITION BY reason0 IS NULL, phone_key ORDER BY id) > 1 THEN 'duplicate' END) reason
+          CASE WHEN ROW_NUMBER() OVER (PARTITION BY reason0 IS NULL,
+            CASE WHEN phone_key = '' THEN 'id:' || id ELSE phone_key END ORDER BY id) > 1 THEN 'duplicate' END) reason
         FROM r
       )`;
     return {
@@ -226,7 +232,8 @@ export function createRepo(db) {
     };
     const consent = alias => `COALESCE(${alias}.status, 'unknown')`;
     const required = requireConsent ? 1 : 0;
-    // Lo que deja a un contacto sin motivo propio (antes de mirar si se repite).
+    // Lo que deja a un contacto con teléfono sin motivo propio (antes de mirar si se repite). Sólo se repite quien
+    // tiene teléfono: el que sólo tiene identificador de usuario nunca es «repetido».
     const clean = (c, k) =>
       [
         exclude ? add(`${c}.id NOT IN (${exclude.sql})`, exclude.args) : '1',
@@ -238,11 +245,11 @@ export function createRepo(db) {
     const reasonSql = [
       'CASE',
       exclude ? add(`WHEN c.id IN (${exclude.sql}) THEN 'excluded'`, exclude.args) : '',
-      "WHEN c.phone_key = '' THEN 'no_phone'",
+      `WHEN NOT ${reachable('c')} THEN 'no_phone'`,
       add(`WHEN c.id IN (${suppressed.sql}) THEN 'suppressed'`, suppressed.args),
       `WHEN ${consent('k')} = 'opted_out' THEN 'opted_out'`,
       add(`WHEN ? AND ${consent('k')} <> 'opted_in' THEN 'no_consent'`, [required]),
-      'WHEN EXISTS (SELECT 1 FROM contacts d LEFT JOIN contact_consent dk ON dk.contact_id = d.id',
+      "WHEN c.phone_key <> '' AND EXISTS (SELECT 1 FROM contacts d LEFT JOIN contact_consent dk ON dk.contact_id = d.id",
       add('WHERE d.brand_id = ? AND d.phone_key = c.phone_key AND d.id < c.id', [brandId]),
       add(`AND d.id IN (${include.sql})`, include.args),
       `AND ${clean('d', 'dk')}) THEN 'duplicate'`,

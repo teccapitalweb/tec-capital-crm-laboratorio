@@ -613,9 +613,13 @@ test('WhatsApp real de punta a punta con un Meta de mentira: entra un mensaje, s
     'el reintento vuelve a salir',
   );
 
-  // 11) ventana de 24 h: si la persona no ha escrito en un día, el CRM no deja escribirle (Meta lo rechazaría)
+  // 11) ventana de 24 h: si la persona no ha escrito en un día, el CRM no deja escribirle (Meta lo rechazaría). La
+  // ventana es por persona y número (identidad I-2): también se atrasa su último mensaje en el estado del par.
   db.prepare(
     "UPDATE messages SET created_at=created_at-25*3600000 WHERE conversation_id=? AND sender_kind='customer'",
+  ).run(conv.id);
+  db.prepare(
+    'UPDATE wa_peer_state SET last_inbound_at=last_inbound_at-25*3600000 WHERE user_id=(SELECT customer_id FROM conversations WHERE id=?)',
   ).run(conv.id);
   const closed = await call(
     '/api/conversations/' + conv.id + '/messages',
@@ -723,6 +727,9 @@ test('WhatsApp real de punta a punta con un Meta de mentira: entra un mensaje, s
   db.prepare(
     "UPDATE messages SET created_at=created_at-25*3600000 WHERE conversation_id=? AND sender_kind='customer'",
   ).run(rosa.id);
+  db.prepare(
+    'UPDATE wa_peer_state SET last_inbound_at=last_inbound_at-25*3600000 WHERE user_id=(SELECT customer_id FROM conversations WHERE id=?)',
+  ).run(rosa.id); // la ventana es por persona y número (identidad I-2)
   const toRosa = sent.filter(m => m.to === '5215500000002').length;
   assert.equal(
     (await anon('/api/pay/' + rosaOrder + '/pay', { method: 'card', outcome: 'approved' })).body.order.status,
