@@ -33,7 +33,7 @@ window.createIntegrationsUI = function ({ state, api, esc, icon, showModal, toas
   }
   function keysHtml() {
     return `<section class="crm-panel"><div class="ops-card-top"><h2>Llaves de la API</h2>${chip('Sólo administración')}${btn('key-new', icon('plus') + ' Nueva llave')}</div>
-      ${note('Una llave da acceso a los datos de <strong>una marca</strong>, sólo con los permisos que elijas. Se manda como <code>Authorization: Bearer tcw_…</code> a <code>' + esc(base()) + '</code> (otros sistemas, sólo lectura) o al conector de Claude, <code>' + esc(location.origin + '/mcp') + '</code>. Sólo guardamos su huella: el valor completo se muestra <strong>una sola vez</strong> al crearla.')}
+      ${note('Una llave da acceso a los datos de <strong>una marca</strong>, sólo con los permisos que elijas. Se manda como <code>Authorization: Bearer tcw_…</code> a <code>' + esc(base()) + '</code> (otros sistemas: leen y, si la llave lo permite, escriben contactos) o al conector de Claude, <code>' + esc(location.origin + '/mcp') + '</code>. Sólo guardamos su huella: el valor completo se muestra <strong>una sola vez</strong> al crearla.')}
       ${note('Los permisos que empiezan con «Claude:» son para conectar el CRM con Claude. El de <strong>MODIFICAR</strong> deja cambiar cursos y aperturas a nombre de quien crea la llave: dalo sólo cuando haga falta y revoca la llave al terminar.')}
       <div class="ops-queue">${data.keys.map(keyRow).join('') || `<div class="crm-empty">${icon('key-round')}<h3>Sin llaves</h3><p>Crea una para que otro sistema consulte tus datos.</p></div>`}</div></section>`;
   }
