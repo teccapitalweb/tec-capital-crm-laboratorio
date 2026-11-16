@@ -101,6 +101,8 @@ La referencia vigente es **663 pruebas aprobadas** más 39 de navegador con `npm
 
 ## Lo siguiente
 
+**16 nov 2026 (recorridos):** la décima tanda (recorridos de conversación: módulo `chatflows` con versiones y motor, despachador del entrante, y la pantalla «Automatización» conectada con revisión, simulador, rendimiento por paso y sugerencias) está en la rama `chore/f0-01-codificacion`, **sin publicar**; esquema `41+19.ed0a28d7`. Planes: [PLAN_RECORRIDOS.md](docs/PLAN_RECORRIDOS.md) y [GUIA_RECORRIDOS.md](docs/GUIA_RECORRIDOS.md).
+
 **16 nov 2026 (menú):** el menú lateral conserva su desplazamiento al cambiar de pantalla y queda en seis grupos plegables (Atención, Contactos, Ventas, WhatsApp, Resultados, Ajustes); cada pantalla nueva declara su grupo en `nav.group`. Se **publicó** en `main` (commit `1dcad3c`).
 
 **16 nov 2026 (pantallas):** ocho pantallas nuevas pasan a visibles (`live`) para presentar el avance; siguen en vista previa Ejemplo, Automatización y Cambio de número. Se **publicó** en `main` (commit `f4ecabd`): ver [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md).
