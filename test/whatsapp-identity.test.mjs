@@ -484,7 +484,7 @@ test('identificador y teléfono de dos clientes: fusión segura o revisión; dos
   );
 });
 
-test('cuarentena «no_phone» de la versión anterior: se reprocesa con el botón y al arrancar, y entra', async t => {
+test('cuarentena «no_phone» de la versión anterior: se reprocesa con el botón y entra; al arrancar no se toca', async t => {
   const lab = await whatsappLab(t);
   const { db } = lab;
   const parse = metaChannel({ env: {} }).parseWebhook;
@@ -511,11 +511,15 @@ test('cuarentena «no_phone» de la versión anterior: se reprocesa con el botó
   assert.equal(lab.inboxRow('wamid.q-2').error, 'no_identifier');
   assert.equal(entered('wamid.q-1').text, 'Escribí sin número');
 
-  // al arrancar con WhatsApp real activo, lo que quedó «no_phone» se reprocesa solo
+  // al arrancar no se reprocesa solo (el asistente no contesta mensajes viejos por un despliegue): espera al botón
   await lab.state.server.stop();
   park('wamid.q-3', text('', 'wamid.q-3', 'Otra vez sin número', { bsuid: 'MX.1001000000000009' }));
   await lab.start();
-  await until(() => entered('wamid.q-3'), 'se reprocesa al arrancar');
+  assert.equal((await api('/api/identity')).identity.quarantine.held, 2);
+  assert.equal(lab.inboxRow('wamid.q-3').state, 'failed');
+  assert.equal(entered('wamid.q-3'), undefined);
+  assert.equal((await api('/api/identity/quarantine/retry', { body: {} })).retried, 2);
+  await until(() => entered('wamid.q-3'), 'entra al reprocesarlo a mano');
   assert.equal(userOf(db, 'MX.1001000000000009'), entered('wamid.q-3').sender_id);
 });
 

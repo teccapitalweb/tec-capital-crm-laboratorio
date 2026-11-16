@@ -41,7 +41,7 @@ Fusión de clientes **segura** = sin dos conversaciones abiertas del mismo curso
 ## Relleno y cuarentena
 
 - **Relleno** (§3.9): trabajo `identity.backfill` de la cola de trabajos, encolado una sola vez (`clientRef` fijo) al crear el módulo; por trozos copia `wa_identities` → `identity_keys` (dos clientes con el mismo teléfono: se queda el más antiguo, evento `conflict`) y llena `wa_peer_state`. Idempotente. Las identidades de persona `+521…` ya las corrigió `identity/0001`.
-- **Cuarentena**: no hay tabla nueva (fila 5): es la fila `failed` de `webhook_inbox`. Lo `no_phone` de la versión anterior se reprocesa **solo al arrancar** si WhatsApp real está activo, y con `POST /api/identity/quarantine/retry` (administración; también `no_identifier`). La ruta de siempre `POST /api/connectors/inbox/:seq/retry` sigue sirviendo.
+- **Cuarentena**: no hay tabla nueva (fila 5): es la fila `failed` de `webhook_inbox`. Lo `no_phone` de la versión anterior **no se reprocesa solo**: pasar por el entrante un mensaje viejo puede hacer que el asistente conteste días después, así que lo decide administración con `POST /api/identity/quarantine/retry` (también `no_identifier`; responde 409 `channel_off` si WhatsApp real no está conectado). La ruta de siempre `POST /api/connectors/inbox/:seq/retry` sigue sirviendo.
 
 ## Rutas
 

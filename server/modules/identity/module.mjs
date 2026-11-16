@@ -4,8 +4,9 @@
 //   - le presta la fusión interna de contactos (para «el teléfono apareció» y la fusión segura de clientes);
 //   - rellena por trozos lo que ya existe (trabajo `identity.backfill`: teléfonos de wa_identities → identity_keys y
 //     el último mensaje de cada persona → wa_peer_state), sin detener el arranque;
-//   - al arrancar con WhatsApp real activo, vuelve a pasar por el entrante lo que la versión anterior dejó en
-//     cuarentena «no_phone» (personas que escribieron sólo con su identificador de usuario);
+//   - deja reprocesar a mano lo que la versión anterior dejó en cuarentena «no_phone» (personas que escribieron sólo
+//     con su identificador de usuario). No se reprocesa solo al arrancar: pasar por el entrante un mensaje viejo puede
+//     hacer que el asistente le conteste a esa persona días después, y eso lo decide administración;
 //   - y estas rutas:
 //
 //   GET  /api/identity                       administración: personas con y sin teléfono, vínculos, conflictos y
@@ -56,8 +57,7 @@ export default {
       }
       return retried;
     }
-    // Sólo con WhatsApp real activo: si no, el entrante se anotaría como «apagado» y se perdería.
-    if (services.connectors.metaLive()) retryHeld(['no_phone']);
+    // Reprocesar sólo sirve con WhatsApp real activo: si no, el entrante se anotaría como «apagado» y se perdería.
 
     function contactView(user, id) {
       const c = db.prepare('SELECT id,brand_id,phone,source_user_id FROM contacts WHERE id=?').get(id);
@@ -95,6 +95,10 @@ export default {
       if (path === '/api/identity/quarantine/retry' && req.method === 'POST') {
         host.requireAdmin(user);
         host.rate('identity-retry:' + user.id, 12);
+        if (!services.connectors.metaLive())
+          throw fail(409, 'WhatsApp real no está conectado: reprocesar ahora perdería esos mensajes.', {
+            code: 'channel_off',
+          });
         const retried = retryHeld(['no_phone', 'no_identifier']);
         host.audit(user, 'identity.quarantine.retry', String(retried));
         host.json(res, 200, {
