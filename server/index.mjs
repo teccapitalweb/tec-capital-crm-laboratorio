@@ -69,6 +69,7 @@ import { createCoupons } from './coupons.mjs';
 import { createIntegrations } from './integrations.mjs';
 import { createAiStatus } from './ai-status.mjs';
 import { createQuickReplies } from './quickreplies.mjs';
+import { findThread } from './lib/conversation-thread.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = resolve(process.env.DATA_DIR || resolve(root, 'data'));
@@ -461,6 +462,9 @@ const statics = createStatic({
 // Primitivas de los módulos nuevos (docs/PLAN_ACCESO_TIEMPO_REAL.md): permisos con alcance por marca y tiempo real v2.
 const access = createAccess({ db, crm });
 const realtime = createRealtime({ db, crm, sessions, canSee });
+// Ciclo de vida de la conversación (server/modules/lifecycle): lo registra el módulo al crearse; insertMessage y la
+// acción «resolve» de siempre lo llaman.
+let lifecycle = null;
 // Módulos nuevos (server/modules/<nombre>/module.mjs): se descubren y se montan solos después de los actuales.
 const modules = await loadModules({
   dir: resolve(root, 'server', 'modules'),
@@ -490,6 +494,7 @@ const modules = await loadModules({
     canSee,
     insertMessage,
     takeOver,
+    useLifecycle: api => (lifecycle = api),
     selfOrigin: () => 'http://127.0.0.1:' + server.address().port,
     services: {
       crm,
@@ -694,6 +699,14 @@ function insertMessage(c, user, text, kind, ref, attachmentId = null, flyer = nu
   if (options.template)
     db.prepare('UPDATE messages SET wa_template=? WHERE id=?').run(JSON.stringify(options.template), id); // sale como plantilla aprobada de WhatsApp
   db.prepare('UPDATE conversations SET updated_at=? WHERE id=?').run(now, c.id);
+  // estado y ciclo de atención antes del objetivo de respuesta (conciliación, fila 33)
+  lifecycle?.onMessage(c, {
+    id,
+    kind,
+    at: now,
+    origin: options.origin,
+    campaignId: options.campaignId ?? options.template?.campaignId ?? null,
+  });
   operations.message(c, kind, user);
   if (kind === 'customer') contacts.recordInbound(c, text);
   return id;
@@ -1117,11 +1130,13 @@ const server = http.createServer(async (req, res) => {
         const editionId = clean(input.editionId, 100) || defaultEditionId(course.id),
           context = catalogue.info(course.id, editionId);
         if (context.reason) throw fail(409, context.reason + '. Elige otra edición.');
-        let c = db
-          .prepare(
-            "SELECT * FROM conversations WHERE customer_id=? AND course_id=? AND edition_id=? AND channel=? AND status!='resolved'",
-          )
-          .get(user.id, course.id, editionId, input.channel);
+        let c = findThread(db, {
+          customerId: user.id,
+          brandId: course.brand_id,
+          courseId: course.id,
+          editionId,
+          channel: input.channel,
+        }).conversation; // hilo del laboratorio (lifecycle.threadFor, comportamiento de hoy)
         if (!c) {
           const id = randomUUID(),
             now = Date.now();
@@ -1306,12 +1321,13 @@ const server = http.createServer(async (req, res) => {
             db.prepare(
               "UPDATE conversations SET assigned_to=NULL,bot_enabled=1,status='open',updated_at=? WHERE id=?",
             ).run(Date.now(), c.id);
-          else if (input.action === 'resolve')
+          else if (input.action === 'resolve') {
             db.prepare("UPDATE conversations SET bot_enabled=0,status='resolved',updated_at=? WHERE id=?").run(
               Date.now(),
               c.id,
             );
-          else if (
+            lifecycle?.resolve(c, user, { by: 'agent', reason: 'manual' }); // Resuelta y ciclo cerrado
+          } else if (
             input.action === 'stage' &&
             ['nuevo', 'interesado', 'inscripcion', 'inscrito', 'ganada', 'perdida'].includes(input.stage)
           ) {

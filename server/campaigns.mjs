@@ -607,7 +607,7 @@ export function createCampaigns({
         null,
         prepared.flyerSnapshot ? c.course_id : null,
         prepared,
-        { category: 'marketing' },
+        { category: 'marketing', campaignId }, // el ciclo de vida atribuye la respuesta a la campaña
       );
       return { messageId };
     },
