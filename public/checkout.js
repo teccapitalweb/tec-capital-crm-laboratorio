@@ -30,6 +30,26 @@ window.simCheckout = (() => {
       return `<details class="pg-coupon pg-coupon-entry"><summary>${icon('ticket-percent')} ¿Tienes un cupón?</summary><div class="pg-coupon-row"><input id="pg-coupon" maxlength="24" autocomplete="off" autocapitalize="characters" placeholder="Escribe tu código" aria-label="Código de cupón"><button type="button" class="btn" data-action="pay-coupon-apply" data-id="${esc(o.id)}">Aplicar</button></div><p id="pg-coupon-msg" role="alert"></p></details>`;
     return '';
   }
+  // Marca en modo real (docs/PLAN_MODO_REAL.md): sin pasarela ni métodos simulados. Se muestran el pedido y cómo pagar según lo que
+  // escribió la marca; si no escribió nada, que un asesor dará los datos. Nunca hay botón de pagar ni pantalla de «aprobado»: el pago
+  // lo confirma una persona del equipo y el aviso llega por el chat.
+  function real(o, { esc, icon, preview = false, line, until }) {
+    const how = o.paymentInstructions
+      ? `<p class="pg-howto-text">${esc(o.paymentInstructions)}</p>`
+      : `<p class="pg-howto-text">Un asesor de ${esc(o.brand || 'la marca')} te dará por el chat los datos para pagar.</p>`;
+    return `<div class="pg pg-real">
+      ${preview ? '<div class="info-box"><strong>Vista previa para el equipo.</strong> Así verá el cliente su pantalla de pago en modo real.</div>' : ''}
+      <section class="pg-summary" aria-label="Resumen del pedido">
+        <span class="pg-brand">${esc(o.brand)}</span>
+        <h3>${esc(o.course)} · ${esc(o.edition)}</h3>
+        ${line ? `<p>${line}</p>` : ''}
+        <div class="pg-amount">${esc(o.amountLabel)}</div>
+        <small>${o.promotion ? esc(o.promotion) + ' · ' : ''}${o.coupon ? 'Cupón ' + esc(o.coupon.code) + ' (−' + esc(o.coupon.discountLabel) + ') · ' : ''}Referencia ${esc(o.reference)} · vigente hasta ${esc(until)}</small>
+      </section>
+      <section class="pg-howto" aria-label="Cómo pagar"><h4>${icon('landmark')} Cómo pagar</h4>${how}<p class="pg-cards-hint">Usa la referencia ${esc(o.reference)} como concepto. Cuando hayas pagado, envía tu comprobante por el chat: una persona del equipo confirma tu pago y te avisa por ahí.</p></section>
+      <button type="button" class="btn primary wide" data-action="close-modal">${icon('message-circle')} Enviaré mi comprobante por el chat</button>
+    </div>`;
+  }
   function html(o, { esc, icon, preview = false }) {
     const line =
       o.kind === 'session' && o.session
@@ -38,6 +58,7 @@ window.simCheckout = (() => {
           ? 'Plan por sesión · este pago cubre tu primera sesión'
           : '';
     const until = new Date(o.expiresAt).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
+    if (o.realMode) return real(o, { esc, icon, preview, line, until });
     return `<div class="pg">
       <div class="info-box pg-sim">${preview ? '<strong>Vista previa para el equipo.</strong> Así verá el cliente su pantalla de pago. Aquí los botones de pagar no hacen nada.' : '<strong>Simulación.</strong> No se cobra nada y no se guarda ninguna tarjeta. Así se verá el pago cuando haya una pasarela real.'}</div>
       <section class="pg-summary" aria-label="Resumen del pedido">

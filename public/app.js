@@ -912,13 +912,20 @@
     } catch {
       return false;
     }
-    const msg =
-      o.status === 'paid'
-        ? 'Tu pago de prueba quedó registrado. Vuelve a WhatsApp: ahí te llega la confirmación.'
-        : o.status === 'pending'
-          ? 'Abre el pago de prueba para terminar tu inscripción. No se cobra nada real.'
-          : 'Este pedido ya no admite pago (' + o.statusLabel.toLowerCase() + '). Pide uno nuevo por WhatsApp.';
-    app.innerHTML = `<div class="boot pay-public"><span class="brand-mark">tc</span><strong>${esc(o.brand || '')}</strong><p>${esc(o.course)} · ${esc(o.edition)}<br>${esc(o.amountLabel)} · ${esc(o.reference)}</p><p class="pay-public-msg">${icon(o.status === 'paid' ? 'check-circle' : 'info')} ${esc(msg)}</p>${o.status === 'pending' ? `<button class="btn primary" data-action="public-pay-open">${icon('credit-card')} Abrir pago de prueba</button>` : ''}</div>`;
+    const real = Boolean(o.realMode), // modo real por marca (docs/PLAN_MODO_REAL.md): sin «de prueba»
+      msg =
+        o.status === 'paid'
+          ? real
+            ? 'Tu pago quedó confirmado. Vuelve a WhatsApp: ahí te llega la confirmación.'
+            : 'Tu pago de prueba quedó registrado. Vuelve a WhatsApp: ahí te llega la confirmación.'
+          : o.status === 'pending'
+            ? real
+              ? 'Abre las instrucciones de pago para terminar tu inscripción.'
+              : 'Abre el pago de prueba para terminar tu inscripción. No se cobra nada real.'
+            : real && o.status === 'review'
+              ? 'Recibimos tu comprobante: una persona del equipo lo revisa y te avisa por WhatsApp.'
+              : 'Este pedido ya no admite pago (' + o.statusLabel.toLowerCase() + '). Pide uno nuevo por WhatsApp.';
+    app.innerHTML = `<div class="boot pay-public"><span class="brand-mark">tc</span><strong>${esc(o.brand || '')}</strong><p>${esc(o.course)} · ${esc(o.edition)}<br>${esc(o.amountLabel)} · ${esc(o.reference)}</p><p class="pay-public-msg">${icon(o.status === 'paid' ? 'check-circle' : 'info')} ${esc(msg)}</p>${o.status === 'pending' ? `<button class="btn primary" data-action="public-pay-open">${icon(real ? 'landmark' : 'credit-card')} ${real ? 'Ver cómo pagar' : 'Abrir pago de prueba'}</button>` : ''}</div>`;
     icons();
     if (open && o.status === 'pending') await openPayment(id);
     return true;
@@ -941,7 +948,7 @@
       payOrder = o;
       modal.classList.toggle('pay-page', o.status === 'pending' && Boolean(window.simCheckout));
       showModal(
-        'Pago de prueba · ' + o.reference,
+        (o.realMode ? 'Pago · ' : 'Pago de prueba · ') + o.reference,
         o.status === 'pending' && window.simCheckout
           ? window.simCheckout.html(o, { esc, icon })
           : `<span class="pill">${esc(o.brand)} · ${esc(o.statusLabel)}</span><dl class="summary-grid"><div><dt>Curso</dt><dd>${esc(o.course)} · ${esc(o.edition)}</dd></div>${o.kind === 'session' && o.session ? `<div><dt>Sesión</dt><dd>${o.session.number}. ${esc(o.session.title)} · ${new Date(o.session.startsAt).toLocaleString('es-MX')}</dd></div>` : o.plan === 'per_session' ? '<div><dt>Plan</dt><dd>Por sesión · este pago cubre tu primera sesión</dd></div>' : ''}<div><dt>Importe</dt><dd>${esc(o.amountLabel)}${o.promotion ? ' · ' + esc(o.promotion) : ''}</dd></div><div><dt>Vigente hasta</dt><dd>${new Date(o.expiresAt).toLocaleString('es-MX')}</dd></div></dl>${o.status === 'pending' ? `<div class="info-box">Simulación: ningún método cobra de verdad. Elige cómo quieres probar el pago.</div><div class="actions pay-actions"><button class="btn primary" data-action="pay-sim" data-id="${o.id}" data-method="card">${icon('credit-card')} Pagar con tarjeta (simulado)</button><button class="btn" data-action="pay-sim" data-id="${o.id}" data-method="oxxo">Pagar en OXXO (simulado)</button><button class="btn" data-action="pay-sim" data-id="${o.id}" data-method="card" data-outcome="declined">Simular pago rechazado</button><button class="btn" data-action="close-modal">Enviaré mi comprobante por el chat</button></div>` : `<div class="info-box">${o.status === 'paid' ? 'Este pedido ya está pagado y tu inscripción de práctica quedó registrada.' : o.status === 'review' ? 'Tu comprobante está en revisión; te confirmamos por el chat.' : 'Este pedido ya no admite pago (' + esc(o.statusLabel.toLowerCase()) + '). Pide uno nuevo por el chat.'}</div>`}`,
