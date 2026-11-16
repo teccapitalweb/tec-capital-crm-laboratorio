@@ -494,7 +494,7 @@ export function createWhatsApp({
   async function outbound(row, { closed = false } = {}) {
     const m = db
       .prepare(
-        'SELECT m.id,m.text,m.buttons,m.attachment_id,m.flyer_snapshot,m.conversation_id,m.category,m.wa_template,c.brand_id,c.wa_number,c.wa_peer,c.customer_id FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=?',
+        'SELECT m.id,m.text,m.buttons,m.attachment_id,m.flyer_snapshot,m.conversation_id,m.category,m.wa_template,m.interactive,c.brand_id,c.wa_number,c.wa_peer,c.customer_id FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=?',
       )
       .get(row.id);
     if (!m || !m.wa_number) throw fail(409, 'La conversación no tiene un número de WhatsApp de destino.');
@@ -585,6 +585,13 @@ export function createWhatsApp({
     try {
       buttons = m.buttons ? JSON.parse(m.buttons) : null;
     } catch {}
+    // Lista interactiva (la Lista de un recorrido, columna `interactive` de chatflows/0002): sale como lista de
+    // WhatsApp; el texto del mensaje, con las filas numeradas, queda para el CRM y para lo que no muestra listas.
+    let list = null;
+    try {
+      const x = m.interactive ? JSON.parse(m.interactive) : null;
+      if (x?.type === 'list' && Array.isArray(x.sections)) list = x;
+    } catch {}
     return {
       id: m.id,
       conversationId: m.conversation_id,
@@ -594,6 +601,7 @@ export function createWhatsApp({
       text: body,
       buttons,
       media,
+      ...(list && !media ? { list } : {}),
     };
   }
   channel.useOutbound(outbound);

@@ -921,14 +921,56 @@ export default {
           }),
       };
     }
+    // La plantilla que se puede mandar en esta conversación: de su marca, aprobada (o marcada), sin archivar y con
+    // todos sus datos al alcance del chat. La misma regla para el equipo (sendTemplate) y para un recorrido.
+    const usableFor = (c, templateId) => {
+      const t = UUID.test(String(templateId || '')) ? repo.byId(String(templateId)) : null;
+      return t && t.brand_id === c.brand_id && SENDABLE.includes(t.status) && !t.archived_at && chatUsable(t)
+        ? t
+        : null;
+    };
+    // Para un recorrido (server/modules/chatflows): lo que se guarda en el mensaje, sin escribir nada. Síncrono y sin
+    // red: corre dentro de la transacción del motor. → {text, category, template, buttons, name} | {reason}.
+    function forConversation(c, templateId) {
+      if (!c?.wa_number) return { reason: 'Las plantillas de WhatsApp sólo salen por un número real' };
+      const t = usableFor(c, templateId);
+      if (!t) return { reason: 'La plantilla de WhatsApp ya no está aprobada para esta marca' };
+      const r = resolve(t, { conversation: c });
+      return {
+        name: t.name,
+        text: r.text,
+        category: t.category,
+        template: templateJson(t, r),
+        buttons: r.quickReplies,
+      };
+    }
+    // Las plantillas de la marca para el editor de recorridos: las que se pueden mandar salen «approved»; las demás,
+    // con su estado (el editor las muestra como «no está aprobada»). `buttons` son los títulos de sus respuestas
+    // rápidas, que son las salidas del paso cuando espera a que la persona pulse uno.
+    function flowTemplates(brandId) {
+      const usable = new Set(
+        repo
+          .sendable(brandId, waba())
+          .filter(chatUsable)
+          .map(t => t.id),
+      );
+      return repo.sendable(brandId, waba()).map(t => ({
+        id: t.id,
+        name: t.name + (t.language ? ' · ' + t.language : ''),
+        status: usable.has(t.id) ? 'approved' : 'not_usable',
+        category: t.category,
+        buttons: definitionOf(t)
+          .buttons.filter(b => b.type === 'quick_reply')
+          .map(b => b.text),
+      }));
+    }
     function sendTemplate(c, input, user) {
       crm.requireBrand(user, c.brand_id);
       if (!c.wa_number) throw fail(409, 'Las plantillas de WhatsApp son para conversaciones de un número real.');
       const clientRef = String(input.clientRef || '');
       if (!REF.test(clientRef)) throw fail(400, 'Referencia no válida.');
-      const t = UUID.test(String(input.templateId || '')) ? repo.byId(String(input.templateId)) : null;
-      if (!t || t.brand_id !== c.brand_id || !SENDABLE.includes(t.status) || t.archived_at || !chatUsable(t))
-        throw fail(404, 'Esa plantilla no está aprobada para esta marca.');
+      const t = usableFor(c, input.templateId);
+      if (!t) throw fail(404, 'Esa plantilla no está aprobada para esta marca.');
       const ref = user.id + ':' + clientRef;
       const existing = repo.messageByRef(ref);
       if (existing) {
@@ -1108,7 +1150,19 @@ export default {
       throw fail(404, 'Ruta de plantillas no encontrada.', { code: 'not_found' });
     }
 
-    const api = { handle, resolve, forSend, noticeFor, ensureNotice, applyWebhook, sync, adopt: adoptBatch, view };
+    const api = {
+      handle,
+      resolve,
+      forSend,
+      noticeFor,
+      ensureNotice,
+      applyWebhook,
+      sync,
+      adopt: adoptBatch,
+      view,
+      forConversation,
+      flowTemplates,
+    };
     whatsapp.useTemplates(api);
     return api;
   },
