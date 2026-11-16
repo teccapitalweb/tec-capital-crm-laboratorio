@@ -31,6 +31,9 @@ test('modo real: interruptor con confirmación y página de pago sin métodos si
   page.once('dialog', dialog => dialog.accept());
   await form.locator('button[type="submit"]').click();
   await expect(page.locator('#pay-realmode-globalvet')).toContainText('Modo real');
+  // los textos del equipo para la marca real no dicen «práctica»
+  await expect(page.locator('.ops-stat[data-id="all"]')).toContainText('Cobrado');
+  await expect(page.locator('.ops-stat[data-id="all"]')).not.toContainText('práctica');
   await settled(page);
   await expectNiebla(page, 'modo-real-pagos', testInfo);
 
