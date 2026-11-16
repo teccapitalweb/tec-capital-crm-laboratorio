@@ -93,8 +93,16 @@ test('vistas del sistema, contadores, filtros, orden, paginación y búsqueda, s
     );
   };
   const t0 = Date.now() - 3600_000;
+  // Todo en una transacción: el reparto de fondo (operations.reconcile) nunca ve un estado a medias. Y coherente con
+  // él: una conversación fuera del asistente cuyo último mensaje de la persona no tiene respuesta de alguien del equipo
+  // vuelve a quedar «esperando», así que todas menos `g.espera` llevan una respuesta del equipo.
+  db.exec('BEGIN IMMEDIATE');
   // Todas fuera del asistente y sin responsable, con actividad en orden conocido (la más reciente, la primera).
   all.forEach((c, i) => set(c, { bot_enabled: 0, assigned_to: null, updated_at: t0 + (all.length - i) * 1000 }));
+  for (const c of all.filter(c => c !== g.espera))
+    db.prepare(
+      "INSERT INTO messages(id,conversation_id,sender_kind,text,client_ref,created_at,read_at) VALUES(?,?,'agent','Con gusto te ayudo',?,?,?)",
+    ).run(randomUUID(), c, randomUUID(), t0, t0);
   db.prepare("UPDATE messages SET read_at=? WHERE sender_kind='customer'").run(t0);
   db.prepare('UPDATE service_state SET waiting_since=NULL,due_at=NULL').run();
   set(g.mia, { assigned_to: ana.id });
@@ -110,6 +118,7 @@ test('vistas del sistema, contadores, filtros, orden, paginación y búsqueda, s
     g.perdida,
   );
   set(o.dos, { state: 'solved', status: 'resolved' });
+  db.exec('COMMIT');
 
   const list = async (cookie, params, expected) =>
     (await get(cookie, '/api/inbox/conversations', { brand: 'all', ...params }, expected)).conversations;

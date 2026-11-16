@@ -17,6 +17,8 @@ import { PASSWORD, call, openDb, until, whatsappLab } from './helpers/crm.mjs';
 import { NUMBER, metaInbound } from './helpers/fake-meta.mjs';
 
 const MIGRATION = 'lifecycle/0001-lifecycle';
+// Ella y lo que la declara en «after» (los índices de la bandeja nueva): en una base anterior llegan juntas.
+const WITH_DEPENDENTS = NAMED.filter(m => m.name === MIGRATION || (m.after ?? []).includes(MIGRATION)).map(m => m.name);
 const DAY = 24 * 3600000;
 
 // Mueve hacia atrás `ms` todo lo que tiene fecha en una conversación: mensajes, columnas de la ventana, ciclo abierto,
@@ -110,7 +112,7 @@ test('migración lifecycle/0001 sobre una base ya publicada: estado y origen al 
   const dir = await mkdtemp(join(tmpdir(), 'crm-ciclo-mig-'));
   t.after(() => rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   let db = openDatabase(dir);
-  migrate(db, { backup: false, registry: defineRegistry(NAMED.filter(m => m.name !== MIGRATION)) });
+  migrate(db, { backup: false, registry: defineRegistry(NAMED.filter(m => !WITH_DEPENDENTS.includes(m.name))) });
   const t0 = Date.now() - 3 * DAY;
   db.prepare(
     "INSERT INTO users(id,username,name,password_hash,role,test_number,created_at,last_seen) VALUES('u-mig','cliente.mig','Cliente','x','customer',990101,?,?)",
@@ -136,7 +138,7 @@ test('migración lifecycle/0001 sobre una base ya publicada: estado y origen al 
   db.prepare(
     "INSERT INTO operation_events(brand_id,conversation_id,actor_id,kind,details,created_at) VALUES('globalvet','cv-resuelta',NULL,'resolved','{}',?)",
   ).run(t0 + 6000);
-  assert.deepEqual(migrate(db, { backup: false }).applied, [MIGRATION]);
+  assert.deepEqual(migrate(db, { backup: false }).applied, WITH_DEPENDENTS);
   assertSchemaCurrent(db);
   const row = id =>
     db.prepare('SELECT state,origin,origin_ref,resolved_by,cycle_count FROM conversations WHERE id=?').get(id);
