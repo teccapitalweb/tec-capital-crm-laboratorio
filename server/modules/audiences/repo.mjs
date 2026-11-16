@@ -232,11 +232,12 @@ export function createRepo(db) {
     };
     const consent = alias => `COALESCE(${alias}.status, 'unknown')`;
     const required = requireConsent ? 1 : 0;
-    // Lo que deja a un contacto sin motivo propio (antes de mirar si se repite).
+    // Lo que deja a un contacto con teléfono sin motivo propio (antes de mirar si se repite). Sólo se repite quien
+    // tiene teléfono: el que sólo tiene identificador de usuario nunca es «repetido».
     const clean = (c, k) =>
       [
         exclude ? add(`${c}.id NOT IN (${exclude.sql})`, exclude.args) : '1',
-        reachable(c),
+        `${c}.phone_key <> ''`,
         add(`${c}.id NOT IN (${suppressed.sql})`, suppressed.args),
         `${consent(k)} <> 'opted_out'`,
         add(`(? = 0 OR ${consent(k)} = 'opted_in')`, [required]),
