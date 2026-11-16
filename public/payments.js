@@ -146,7 +146,7 @@ window.createPaymentsUI = function ({ state, api, esc, icon, showModal, toast })
         ['review', 'Comprobantes por revisar', s.review],
         ['pending', 'Pendientes de pago', s.pending],
         ['paid', 'Pagados', s.paid],
-        ['all', 'Cobrado (práctica)', s.paidAmountLabel],
+        ['all', realOf(brandId())?.enabled ? 'Cobrado' : 'Cobrado (práctica)', s.paidAmountLabel],
       ];
     return `${settingsBox()}${realModeBox()}${couponsBox()}<div class="ops-stats">${tiles.map(([id, t, v]) => `<button data-action="pay-filter" data-id="${id}" class="ops-stat ${filter === id ? 'active' : ''}"><strong>${esc(String(v))}</strong><span>${t}</span></button>`).join('')}</div><div class="crm-toolbar"><p>${filter === 'all' ? 'Todos los pedidos' : 'Filtro: ' + ({ review: 'comprobantes por revisar', pending: 'pendientes de pago', paid: 'pagados' }[filter] || filter)} · cobrado hoy ${esc(s.paidTodayLabel)}</p>${btn('preview', icon('eye') + ' Ver cómo paga el cliente')}${btn('reload', icon('refresh-cw') + ' Actualizar')}</div><div class="ops-queue">${data.orders.map(row).join('') || `<div class="crm-empty">${icon('credit-card')}<h3>Sin pedidos</h3><p>Genera uno desde el chat con «Cobrar» o deja que el motor lo haga cuando un cliente pida inscribirse.</p></div>`}</div>${note('Los importes salen del catálogo al crear el pedido y no cambian después. Un comprobante nunca se valida solo: lo acepta o rechaza una persona con acceso a la marca.')}`;
   }

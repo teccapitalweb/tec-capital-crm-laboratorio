@@ -3,6 +3,7 @@ import { transaction } from './database.mjs';
 import { createFollowup } from './followup.mjs';
 import { defaultEditionId } from './catalogue-schema.mjs';
 import { phoneKey } from './lib/identity-keys.mjs';
+import { realBrandIds } from './lib/real-mode.mjs';
 
 const tokenHash = value => createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -50,11 +51,16 @@ export function createCRM({ db, body, json, audit, passwordHash, checkPassword, 
   const requireBrand = (u, id) => {
     if (!canBrand(u, id)) throw fail(404, 'Marca o registro no disponible.');
   };
-  const brandsFor = u =>
-    db
+  // Una marca en modo real (docs/PLAN_MODO_REAL.md) lleva realMode: true para que la pantalla no diga «de prueba»;
+  // las de laboratorio salen igual que siempre.
+  const brandsFor = u => {
+    const real = realBrandIds(db);
+    return db
       .prepare('SELECT * FROM brands ORDER BY created_at')
       .all()
-      .filter(b => u.role === 'customer' || canBrand(u, b.id));
+      .filter(b => u.role === 'customer' || canBrand(u, b.id))
+      .map(b => (real.has(b.id) ? { ...b, realMode: true } : b));
+  };
   const validOwner = (id, brand) => {
     if (!id) return null;
     const u = db.prepare('SELECT * FROM users WHERE id=?').get(id);
