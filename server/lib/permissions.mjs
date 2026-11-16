@@ -50,6 +50,7 @@ export const PERMISSIONS = Object.freeze(
     ...define('Ventas', {
       'sales.opportunities': 'Gestionar oportunidades y tareas',
       'sales.charge': 'Crear pedidos con el botón Cobrar',
+      'sales.payments.confirm': 'Marcar como pagado un pedido de una marca en modo real',
     }),
     ...define('Equipo', {
       'team.view': 'Ver integrantes, equipos y disponibilidad',
@@ -65,6 +66,7 @@ export const PERMISSIONS = Object.freeze(
       'settings.quickreplies': 'Administrar las respuestas rápidas compartidas',
       'settings.library': 'Administrar la biblioteca de archivos',
       'settings.costs': 'Ver los importes de mensajería',
+      'settings.real_mode': 'Encender o apagar el modo real de una marca con clientes de verdad',
     }),
     ...define('Seguridad', {
       'security.manage': 'Definir la política de acceso y la verificación en dos pasos',

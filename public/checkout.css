@@ -374,6 +374,67 @@ dialog.pay-page .pg {
   line-height: 1.5;
   color: var(--text-2);
 }
+/* Modo real (docs/PLAN_MODO_REAL.md): cómo pagar según la marca, sin pasarela ni métodos simulados. */
+.pg-howto {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  background: #fff;
+  display: grid;
+  gap: 8px;
+}
+.pg-howto h4 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pg-howto h4 svg {
+  width: 16px;
+  height: 16px;
+}
+/* Operación → Pagos: interruptor del modo real por marca (public/payments.js). */
+.real-mode-brand {
+  flex-direction: column;
+  align-items: stretch;
+}
+.real-mode-brand small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.real-mode-fields {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.real-mode-fields .checkbox-field {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.real-mode-fields .field {
+  margin: 0;
+  width: 100%;
+  font-size: 12px;
+}
+.real-mode-fields textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+}
+.pg-howto-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 420px) {
   .pg-cards {
     grid-template-columns: 1fr;

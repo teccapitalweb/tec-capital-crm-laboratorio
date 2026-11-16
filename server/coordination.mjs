@@ -2,6 +2,7 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { SURVEY_MODES } from './surveys.mjs';
 import { publishSeatChange } from './catalogue-events.mjs';
+import { forBrand } from './lib/real-mode.mjs';
 
 // Coordinación académica (Fase 2 · bloque 2.3, arranque). La «apertura» del panel IPCIL y la «cohorte» de la Academia
 // son la misma edición del catálogo: mínimo de alumnos, inscritos (desde enrollments, que nacen del pago confirmado),
@@ -1100,7 +1101,11 @@ export function createCoordination({
       });
       const body = tpl
         ? tpl.text
-        : `Recordatorio de clase · ${c.title} · ${e.name}\nSesión ${s.number}: ${s.title}\n${stamp(s.starts_at, e.timezone)} (${s.duration_min} min)\n${s.meet_url ? 'Enlace: ' + s.meet_url : 'El enlace de la videollamada se enviará por aquí.'}${e.group_url ? '\nGrupo del curso: ' + e.group_url : ''}\nLaboratorio: aviso de práctica.`;
+        : forBrand(
+            db,
+            e.brand_id,
+            `Recordatorio de clase · ${c.title} · ${e.name}\nSesión ${s.number}: ${s.title}\n${stamp(s.starts_at, e.timezone)} (${s.duration_min} min)\n${s.meet_url ? 'Enlace: ' + s.meet_url : 'El enlace de la videollamada se enviará por aquí.'}${e.group_url ? '\nGrupo del curso: ' + e.group_url : ''}\nLaboratorio: aviso de práctica.`,
+          );
       try {
         transaction(db, () =>
           insertMessage(conv, null, body, 'automation', ref, null, null, null, { category: 'utility' }),

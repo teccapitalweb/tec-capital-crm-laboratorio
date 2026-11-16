@@ -6,6 +6,7 @@ import { isOpen, openingLabel } from './service-hours.mjs';
 import { rankKnowledge } from './retrieval.mjs';
 import { customerMemory } from './memory.mjs';
 import * as copy from './reply-copy.mjs';
+import { forBrand, isRealBrand } from './lib/real-mode.mjs';
 import { brandCourses, matchCourse, byNumber, candidates } from './course-match.mjs';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -1085,6 +1086,8 @@ export function createReplies({
         for (const id of v.usedIds) sources.push({ type: 'knowledge', id });
       } else reason += ' Proveedor descartado: ' + v.reason + (draft.text ? '' : ' (' + draft.reason + ')');
     }
+    reply = forBrand(db, c.brand_id, reply); // modo real (docs/PLAN_MODO_REAL.md): sin avisos de prueba
+    // lo que se registra, se sugiere y se envía es el mismo texto
     const log = (action, replyMessageId = null) => {
       const id = randomUUID();
       db.prepare(
@@ -1254,7 +1257,12 @@ export function createReplies({
     }
     const v = draft ? validateDraft(draft, p.knowledge) : null,
       answered = Boolean(v?.ok && p.ifAnswered),
-      reply = (v?.ok ? v.text : p.reply).replace('{{pedido}}', '[aquí iría el pedido con su enlace de pago de prueba]');
+      reply = forBrand(db, brandId, v?.ok ? v.text : p.reply).replace(
+        '{{pedido}}',
+        isRealBrand(db, brandId)
+          ? '[aquí iría el pedido con su enlace de pago]'
+          : '[aquí iría el pedido con su enlace de pago de prueba]',
+      );
     return {
       context: {
         retrieval: p.retrieval || null,
