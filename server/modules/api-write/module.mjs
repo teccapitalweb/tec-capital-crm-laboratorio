@@ -33,6 +33,10 @@ const norm = v =>
     .replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, ' ');
 
+// `also`: permiso que la ruta pide ADEMÁS de `scope`. El alta por teléfono, el lote y el PATCH (que puede añadir un
+// teléfono) piden también leer contactos (`contacts`): sus respuestas dicen si el teléfono ya era de un contacto (201
+// o 200, el id, `phone_kept`, `phone_in_use`) y una llave que sólo escribe no debe poder sondear la lista de clientes
+// número por número. Etiquetas, consentimiento y listas van por id de contacto, que no se puede adivinar.
 const ROUTES = [
   { name: 'templates', method: 'GET', pattern: '/api/v1/templates', scope: 'templates', kind: 'read' },
   { name: 'lists', method: 'GET', pattern: '/api/v1/lists', scope: 'contacts', kind: 'read' },
@@ -47,6 +51,7 @@ const ROUTES = [
     kind: 'write',
     idem: 'optional',
     action: 'api.contact.upsert',
+    also: 'contacts',
   },
   {
     name: 'batch',
@@ -56,6 +61,7 @@ const ROUTES = [
     kind: 'write',
     idem: 'required',
     action: 'api.contact.batch',
+    also: 'contacts',
   },
   {
     name: 'patch',
@@ -65,6 +71,7 @@ const ROUTES = [
     kind: 'write',
     idem: 'optional',
     action: 'api.contact.update',
+    also: 'contacts',
   },
   {
     name: 'tags',

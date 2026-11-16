@@ -32,9 +32,11 @@ Se administran donde siempre: *Operación → Sistema → API y webhooks → Lla
 | `GET /api/v1/contacts/{id}` | `contacts` | — | Un contacto con etiquetas, datos propios y consentimiento. |
 | `POST /api/v1/contacts/lookup` | `contacts` | — | `{phone, countryCode?}` o `{email}` → `{contact}` o 404. Es POST para que el dato no viaje en la dirección. |
 | `GET /api/v1/lists` | `contacts` | — | Listas (no segmentos) de la marca. |
-| `POST /api/v1/contacts` | `contacts_write` | opcional | **Alta o actualización por teléfono** en una llamada: `{phone, countryCode?, name?, email?, attributes?, tags?, consent?, overwriteName?}` → 201 o 200 `{contact:{id, created, updatedAt}, result, consent, warnings}`. |
-| `POST /api/v1/contacts/batch` | `contacts_write` | **obligatoria** | `{contacts:[… hasta 100]}` → `{results:[{index, id, created, result} o {index, error}]}`. Cada fila es independiente. |
-| `PATCH /api/v1/contacts/{id}` | `contacts_write` | opcional | `{name?, email?, phone?, attributes?, expectedUpdatedAt?}`; 409 `stale_revision` si la fecha no coincide. |
+| `POST /api/v1/contacts` | `contacts_write` + `contacts` | opcional | **Alta o actualización por teléfono** en una llamada: `{phone, countryCode?, name?, email?, attributes?, tags?, consent?, overwriteName?}` → 201 o 200 `{contact:{id, created, updatedAt}, result, consent, warnings}`. |
+| `POST /api/v1/contacts/batch` | `contacts_write` + `contacts` | **obligatoria** | `{contacts:[… hasta 100]}` → `{results:[{index, id, created, result} o {index, error}]}`. Cada fila es independiente. |
+| `PATCH /api/v1/contacts/{id}` | `contacts_write` + `contacts` | opcional | `{name?, email?, phone?, attributes?, expectedUpdatedAt?}`; 409 `stale_revision` si la fecha no coincide. |
+
+Las tres rutas de arriba piden **también** el permiso de lectura `contacts`: sus respuestas dicen si el teléfono ya era de un contacto (201 o 200, el id, `phone_kept`, `phone_in_use`), y una llave que sólo escribe no debe poder sondear la lista de clientes número por número. Con sólo `contacts_write` se escribe por id (etiquetas, consentimiento, listas), que no se puede adivinar.
 | `POST /api/v1/contacts/{id}/tags` | `contacts_write` | opcional | `{add:[nombres], remove:[nombres]}` → `{tags}`. Una etiqueta que no existe se crea (100 por marca, 12 por contacto, 30 caracteres). |
 | `PUT /api/v1/contacts/{id}/consent` | `contacts_write` (baja) o `consent_write` (aceptación) | opcional | `{status:'opted_in'\|'opted_out', source, evidence?}` → `{consent}`. |
 | `POST /api/v1/lists/{id}/contacts` | `contacts_write` | opcional | `{contactIds:[… hasta 100]}` → `{added, refused, unknown}`. |

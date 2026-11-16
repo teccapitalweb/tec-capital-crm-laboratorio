@@ -34,7 +34,8 @@ export const SCOPES = {
   catalog_write: 'Claude: MODIFICAR cursos y aperturas (fecha, docente, precio, cupo, temario)',
   // API v1 ampliada (docs/PLAN_API_ESCRITURA.md).
   templates: 'Plantillas de WhatsApp aprobadas y sus datos',
-  contacts_write: 'Escribir contactos: alta o cambio por teléfono, datos propios, etiquetas, listas y bajas',
+  contacts_write:
+    'Escribir contactos: etiquetas, listas y bajas; junto con «Contactos», también alta o cambio por teléfono y datos propios',
   consent_write: 'Registrar que una persona aceptó recibir mensajes (con el origen del permiso)',
 };
 // Lectura o escritura de cada permiso, para agruparlos en pantalla y en /api/v1/me.
@@ -773,7 +774,7 @@ export function createIntegrations({
     if (writer) throw new Error('La API v1 ya tiene sus rutas de escritura.');
     const extra = api.routes.map(compile);
     for (const r of extra) {
-      if (!['read', 'write'].includes(r.kind) || (r.scope && !Object.hasOwn(SCOPES, r.scope)))
+      if (!['read', 'write'].includes(r.kind) || [r.scope, r.also].some(s => s && !Object.hasOwn(SCOPES, s)))
         throw new Error('Ruta de la API mal declarada: ' + r.method + ' ' + r.pattern);
       if (routes.some(o => o.method === r.method && o.pattern === r.pattern))
         throw new Error('Ruta de la API repetida: ' + r.method + ' ' + r.pattern);
@@ -910,6 +911,7 @@ export function createIntegrations({
     limits(res, key, route, ip);
     if (key.expires_at !== null) setHeader(res, 'X-Key-Expires', new Date(key.expires_at).toISOString());
     if (route.scope) need(key, route.scope);
+    if (route.also) need(key, route.also);
     // Las validaciones propias de las rutas de lectura publicadas (filtros de /events y /orders) conservan la forma
     // de error de siempre, { error }: se publicaron así y hay sistemas que ya las leen.
     if (route.core)

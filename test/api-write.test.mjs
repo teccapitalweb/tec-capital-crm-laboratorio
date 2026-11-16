@@ -228,6 +228,35 @@ test('servidor real: llaves de escritura, idempotencia, errores, consentimiento 
   assert.equal(view.name, 'Nombre Corregido');
   // Leer pide el permiso «contacts» (la llave sólo de escritura no ve teléfonos)
   assertError(await api('GET', '/api/v1/contacts/' + id, writeOnly.token), 403, 'scope_missing');
+  // Una llave que sólo escribe no sondea si un teléfono ya es contacto: alta, lote y PATCH piden también «contacts»
+  // y la respuesta para un número dado de alta y para uno nuevo es la misma (con los dos permisos, sí informa: arriba).
+  const probe = async phone => {
+    const r = await api('POST', '/api/v1/contacts', writeOnly.token, { body: { phone } });
+    assertError(r, 403, 'scope_missing');
+    return { status: r.status, body: { ...r.body, requestId: null } };
+  };
+  assert.deepEqual(await probe('5512345678'), await probe('5591112233'));
+  assertError(
+    await api('POST', '/api/v1/contacts/batch', writeOnly.token, {
+      idem: 'sondeo-0001',
+      body: { contacts: [{ phone: '5512345678' }] },
+    }),
+    403,
+    'scope_missing',
+  );
+  assertError(
+    await api('PATCH', '/api/v1/contacts/' + id, writeOnly.token, { body: { phone: '5591112233' } }),
+    403,
+    'scope_missing',
+  );
+  assert.equal(db().prepare("SELECT count(*) n FROM contacts WHERE phone='+525591112233'").get().n, 0);
+  assert.deepEqual(
+    (await api('POST', `/api/v1/contacts/${id}/tags`, writeOnly.token, { body: { add: ['Por id'] }, expected: 200 }))
+      .body.tags,
+    ['Por id'],
+    'por id (que no se adivina) sí escribe',
+  );
+  await api('POST', `/api/v1/contacts/${id}/tags`, write.token, { body: { remove: ['Por id'] }, expected: 200 });
   assert.equal(
     (await api('POST', '/api/v1/contacts/lookup', read.token, { body: { phone: '+52 55 1234 5678' }, expected: 200 }))
       .body.contact.id,
@@ -444,13 +473,13 @@ test('servidor real: llaves de escritura, idempotencia, errores, consentimiento 
     422,
     'attribute_read_only',
   );
-  // Un dato personal no lo escribe quien no puede verlo
+  // Un dato personal no lo escribe quien no puede verlo (sin «contacts» ni siquiera llega a la ruta)
   assertError(
     await api('PATCH', '/api/v1/contacts/' + id, writeOnly.token, {
       body: { attributes: { curp_prueba: 'XAXX010101' } },
     }),
     403,
-    'permission_denied',
+    'scope_missing',
   );
   await api('PATCH', '/api/v1/contacts/' + id, write.token, {
     body: { attributes: { curp_prueba: 'XAXX010101' } },
