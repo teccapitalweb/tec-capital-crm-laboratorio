@@ -3,7 +3,7 @@
   "title": "Difusiones",
   "visibility": "live",
   "nav": { "group": "Gestión", "icon": "megaphone", "label": "Difusiones", "order": 50 },
-  "roles": ["admin", "agent"],
+  "roles": ["admin"],
   "permission": "campaigns.view",
   "entry": "index.js",
   "styles": ["screen.css"]
