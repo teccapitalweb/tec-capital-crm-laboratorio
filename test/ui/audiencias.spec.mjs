@@ -82,7 +82,9 @@ test('Audiencias: prediseñados, crear un segmento con conteo en vivo y ver sus 
   expect(descarga.suggestedFilename()).toMatch(/^audiencia-[a-z0-9-]+-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(descarga.url()).not.toContain('renata');
   const csv = await readFile(await descarga.path(), 'utf8');
-  expect(csv.replace(/^﻿/, '').split('\r\n')[0]).toBe('nombre,telefono,correo,consentimiento,estado');
+  expect((csv.charCodeAt(0) === 0xfeff ? csv.slice(1) : csv).split('\r\n')[0]).toBe(
+    'nombre,telefono,correo,consentimiento,estado',
+  );
   expect(csv).toContain('Mateo Audiencia Prueba');
   await miembros.getByRole('button', { name: 'Cerrar' }).first().click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
