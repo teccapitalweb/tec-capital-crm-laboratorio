@@ -101,7 +101,7 @@ La referencia vigente es **663 pruebas aprobadas** más 37 de navegador con `npm
 
 ## Lo siguiente
 
-**16 nov 2026 (pantallas):** ocho pantallas nuevas pasan a visibles (`live`) para presentar el avance; siguen en vista previa Ejemplo, Automatización y Cambio de número. En la rama `chore/f0-01-codificacion`, **sin publicar**: ver [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md).
+**16 nov 2026 (pantallas):** ocho pantallas nuevas pasan a visibles (`live`) para presentar el avance; siguen en vista previa Ejemplo, Automatización y Cambio de número. Se **publicó** en `main` (commit `f4ecabd`): ver [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md).
 
 **16 nov 2026:** la novena tanda (ciclo de vida de la conversación: estado propio, ciclos, pendiente, resolver, reabrir y expiración por marca apagada; y cierre del modo real) se **publicó** en `main` (commit `6070d59`; esquema `41+18.44773066`). Plan: [PLAN_CICLO_DE_VIDA.md](docs/PLAN_CICLO_DE_VIDA.md).
 
