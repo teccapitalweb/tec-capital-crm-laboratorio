@@ -62,11 +62,28 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   const pageEl = page.locator('#page');
   const dialog = page.locator('dialog.k-dialog[open]');
 
+  // La automatización de las marcas, apagada (así nace; si otra prueba la encendió, se apaga y se restaura al final):
+  // un recorrido activo no atenderá y la pantalla debe decirlo.
+  const headers = { Origin: baseURL };
+  const automation = async () => (await (await page.request.get('/api/automation')).json()).brands;
+  const wereOn = (await automation()).filter(b => b.enabled).map(b => b.id);
+  const setAutomation = async (id, enabled) => {
+    const current = (await automation()).find(b => b.id === id);
+    await page.request.patch(`/api/automation/brands/${id}`, {
+      headers,
+      data: { enabled, expectedRevision: current.revision },
+    });
+  };
+  for (const id of wereOn) await setAutomation(id, false);
+
   await page.goto('/crm');
   await expect(page.locator('#breadcrumb-title')).toHaveText('Mi día');
   await page.locator('.nav [data-view="automatizacion"]').click();
   await expect(page.locator('#breadcrumb-title')).toHaveText('Automatización');
   await expect(pageEl.locator('h1')).toHaveText('Recorridos');
+  const notAttending = pageEl.locator('.au-atencion');
+  await expect(notAttending).toContainText('La marca no está atendiendo con recorridos');
+  await expect(notAttending).toContainText('Operación → Ventas y cobro → Seguimientos → Automatización');
   await settled(page);
   await expectNiebla(page, 'automatizacion-lista', testInfo);
 
@@ -139,8 +156,14 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   await dialog.getByRole('button', { name: 'Publicar' }).click();
   await expect(pageEl.locator('h1')).toContainText('Publicado, sin activar');
   await pageEl.locator('[data-do="activar"]').click();
-  await dialog.getByRole('button', { name: 'Activar' }).click();
-  await expect(pageEl.locator('h1')).toContainText('Publicado y activo');
+  // con la marca apagada, la ventana lo dice antes de confirmar y el estado es honesto
+  await expect(dialog).toContainText('Ahora mismo no atenderá a nadie');
+  await dialog.getByRole('button', { name: 'Activar de todos modos' }).click();
+  await expect(pageEl.locator('h1')).toContainText('Activo, pero la marca no está atendiendo');
+  await expect(notAttending).toContainText('La automatización de la marca está apagada');
+  await expect(notAttending).toContainText('Operación → Ventas y cobro → Seguimientos');
+  await settled(page);
+  await expectNiebla(page, 'automatizacion-activo', testInfo);
 
   // Probar con el servidor: el mensaje sale con el curso real y no se envía nada
   await editor.locator('.lz-bar [data-do="probar"]').click();
@@ -172,7 +195,7 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   // De vuelta a la lista: el estado a la vista; archivar para dejar limpio
   await pageEl.locator('[data-do="volver"]').click();
   const row = pageEl.locator(`[data-key="fila-${flowId}"]`);
-  await expect(row).toContainText('Publicado y activo');
+  await expect(row).toContainText('Activo, pero la marca no está atendiendo');
   await row.locator('[data-do="archivar"]').click();
   await dialog.getByRole('button', { name: 'Archivar' }).click();
   await expect(pageEl.locator('[data-do="abrir"]', { hasText: name })).toHaveCount(0);
@@ -183,5 +206,6 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   await expect(page.locator('#page .lz')).toHaveCount(0);
   await settled(page);
   await expect(page.locator('#page')).toContainText('Hola,');
+  for (const id of wereOn) await setAutomation(id, true);
   watcher.done();
 });

@@ -48,8 +48,11 @@ function estado(flow) {
   if (flow.status === 'archived') return { text: 'Archivado', tone: '' };
   return flow.publishedVersion ? { text: 'Publicado, sin activar', tone: '' } : { text: 'Borrador', tone: '' };
 }
-const chip = flow => {
-  const s = estado(flow);
+const chip = (flow, atencion = null) => {
+  const s =
+    flow.status === 'active' && atencion && !atencion.ok
+      ? { text: 'Activo, pero la marca no está atendiendo', tone: 'warn' }
+      : estado(flow);
   return html`<span class="${['k-chip', s.tone && 'k-chip--' + s.tone]}">${s.text}</span>`;
 };
 const START_FALLBACK = {
@@ -62,6 +65,14 @@ function comoEmpieza(start, types = START_FALLBACK) {
   const label = types[start?.type] || START_FALLBACK.manual;
   return start?.type === 'keyword' && start.keywords?.length ? `${label}: ${start.keywords.join(', ')}` : label;
 }
+// La marca no atiende con recorridos (automatización apagada, en pausa o asistente que no responde solo): qué pasa,
+// por qué y dónde se enciende. Sin esto, un recorrido «activo» parece roto.
+const avisoAtencion = a =>
+  html`<div class="k-notice k-notice--warn au-aviso au-atencion" role="status">
+    <strong>La marca no está atendiendo con recorridos.</strong> ${a.label} Los recorridos activos no contestarán
+    (contesta el asistente de siempre) hasta que se encienda en <strong>${a.where}</strong>.
+  </div>`;
+
 function resultado(m) {
   if (!m || !m.sessions) return 'Sin conversaciones todavía';
   const base = m.completed + m.handoff + m.left + m.dropped;
@@ -84,6 +95,7 @@ export default {
     const vista = root.querySelector('[data-slot="vista"]');
     const marcaActual = () => meta?.brands.find(b => b.id === marca) ?? null;
     const puedeEditar = () => Boolean(marcaActual()?.canManage);
+    const atencion = () => marcaActual()?.attending ?? null;
     const fallo = error => {
       if (!isAbort(error)) ctx.toast(error?.message || 'No se pudo completar la acción.');
     };
@@ -145,6 +157,7 @@ export default {
               <input type="checkbox" data-do="archivados" ${attrs({ checked: archivados })} />
               <span>Ver también los archivados</span>
             </label>
+            ${when(atencion() && !atencion().ok, () => avisoAtencion(atencion()))}
             ${when(
               meta && !puedeEditar(),
               () =>
@@ -169,7 +182,7 @@ export default {
                 () => html` <span class="k-chip k-chip--warn">Cambios sin guardar</span>`,
               )}`,
           },
-          { id: 'status', label: 'Estado', cell: f => chip(f) },
+          { id: 'status', label: 'Estado', cell: f => chip(f, atencion()) },
           { id: 'start', label: 'Cómo empieza', cell: f => comoEmpieza(f.start, meta?.startTypes) },
           {
             id: 'published',
@@ -209,7 +222,7 @@ export default {
             meta = { brands: datos.brands, startTypes: datos.startTypes, unavailable: datos.unavailable };
             marca = datos.brands.find(b => b.id === ctx.brand)?.id ?? datos.brands[0]?.id ?? null;
             keep.set('marca', marca);
-          } else if (!meta || meta.brands.length < datos.brands.length) {
+          } else {
             meta = { brands: datos.brands, startTypes: datos.startTypes, unavailable: datos.unavailable };
           }
           keep.set('meta', meta);
@@ -269,12 +282,26 @@ export default {
       const actual = flow ?? (await api.get(`/api/chatflows/${id}`)).flow;
       let stopSessions = false;
       if (accion === 'activate') {
-        const ok = await confirm({
+        const a = atencion();
+        const choice = await dialog({
           title: 'Activar el recorrido',
-          message: `«${actual.name}» empezará a atender a quien escriba (${comoEmpieza(actual.start, meta?.startTypes).toLowerCase()}) con la versión ${actual.publishedVersion}, siempre que la automatización de la marca esté encendida.`,
-          confirmLabel: 'Activar',
+          content: html`<p>
+              «${actual.name}» empezará a atender a quien escriba
+              (${comoEmpieza(actual.start, meta?.startTypes).toLowerCase()}) con la versión ${actual.publishedVersion}.
+            </p>
+            ${when(
+              a && !a.ok,
+              () => html`<p class="k-notice k-notice--warn" role="alert">
+                <strong>Ahora mismo no atenderá a nadie.</strong> ${a.label} Puedes activarlo igual, pero no contestará
+                hasta que se encienda en <strong>${a.where}</strong>.
+              </p>`,
+            )}`,
+          actions: [
+            { id: 'no', label: 'Cancelar' },
+            { id: 'si', label: a && !a.ok ? 'Activar de todos modos' : 'Activar', primary: true, autofocus: true },
+          ],
         });
-        if (!ok) return null;
+        if (choice !== 'si') return null;
       } else if (accion === 'pause') {
         const choice = await dialog({
           title: 'Pausar el recorrido',
@@ -405,6 +432,7 @@ export default {
           if (!vivo) return;
           record = uno.flow;
           versions = uno.versions;
+          guardarAtencion(uno.attending);
           esqueleto(uno.canManage);
         },
         error => {
@@ -515,9 +543,13 @@ export default {
       }
 
       const manage = () => puedeEditar();
+      function guardarAtencion(a) {
+        const b = meta?.brands.find(x => x.id === marca);
+        if (b && a) b.attending = a;
+      }
 
       function pintarCabeza() {
-        render(vista.querySelector('[data-slot="nombre"]'), html`${record.name} ${chip(record)}`);
+        render(vista.querySelector('[data-slot="nombre"]'), html`${record.name} ${chip(record, atencion())}`);
         render(
           vista.querySelector('[data-slot="meta"]'),
           html`Empieza: ${comoEmpieza(record.start, meta?.startTypes)} ·
@@ -547,7 +579,10 @@ export default {
         if (!caja) return;
         render(
           caja,
-          html`${when(
+          html`${when(atencion() && !atencion().ok, () => avisoAtencion(atencion()))}${when(
+            atencion()?.info,
+            () => html`<p class="k-hint au-aviso">${atencion().info}</p>`,
+          )}${when(
             !manage(),
             () =>
               html`<p class="k-notice au-aviso" role="status">Puedes ver y probar este recorrido, pero no editarlo ni publicarlo.</p>`,
@@ -623,6 +658,7 @@ export default {
         const cambio = uno.flow.revision !== record.revision;
         record = uno.flow;
         versions = uno.versions;
+        guardarAtencion(uno.attending);
         if (descartar || (cambio && !canvas.isDirty())) {
           canvas.setGraph(record.graph);
           canvas.markSaved();
