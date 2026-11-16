@@ -310,7 +310,8 @@ test('¿atiende la marca con recorridos?: la misma regla que el motor, con su mo
   assert.equal(a.ok, false);
   assert.equal(a.reason, 'automation_off');
   assert.match(a.where, /Operación → Ventas y cobro → Seguimientos → Automatización/);
-  assert.match(a.info, /WhatsApp real está apagado/, 'sólo información: en el laboratorio sí atiende');
+  assert.match(a.info, /modo real de esta marca está apagado.*avisos de prueba/, 'sólo información: sí atiende');
+  assert.doesNotMatch(a.info, /WhatsApp real está apagado/, 'no dice que el canal esté apagado');
   assert.deepEqual((await L.api('/api/chatflows/' + flow.id)).attending, a, 'el detalle dice lo mismo');
   // encendida
   const current = (await L.api('/api/automation')).brands.find(b => b.id === 'globalvet');

@@ -217,7 +217,7 @@ export default {
       const ok = runtime.brandSpeaks(brandId);
       const info = isRealBrand(db, brandId)
         ? null
-        : 'WhatsApp real está apagado en esta marca: los recorridos atienden las conversaciones del laboratorio.';
+        : 'El modo real de esta marca está apagado: lo que envían los recorridos lleva los avisos de prueba («Chat de prueba…», «Pago de prueba…»), también por WhatsApp real. Se enciende en Operación → Ventas y cobro → Pagos → Modo real.';
       if (ok) return { ok, reason: null, label: 'La marca está atendiendo con recorridos.', where: null, info };
       const [reason, label] = repo.globalPaused()
         ? ['automation_paused', 'La automatización está en pausa para todas las marcas.']

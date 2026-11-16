@@ -43,7 +43,7 @@ Un recorrido activo sólo atiende si **la marca está atendiendo con recorridos*
 - **La automatización está en pausa para todas las marcas:** en esa misma sección, quita la pausa global.
 - **El asistente no responde solo:** en «Respuestas automáticas a clientes», cambia el «Nivel de respuestas» de la marca a «Responder con plantillas» o «Autónomo con IA» («Apagado» y «Sugerir al asesor» no contestan solos).
 
-Si además ves «WhatsApp real está apagado en esta marca», es sólo información: los recorridos atienden las conversaciones del laboratorio.
+Si además ves «El modo real de esta marca está apagado», es sólo información: los recorridos atienden igual, también por WhatsApp real, pero sus mensajes llevan los avisos de prueba («Chat de prueba…», «Pago de prueba…»). Para atender clientes de verdad sin esos avisos, enciende el modo real de la marca en Operación → Ventas y cobro → Pagos ([PLAN_MODO_REAL.md](PLAN_MODO_REAL.md)).
 
 ## 6. Leer su rendimiento
 
