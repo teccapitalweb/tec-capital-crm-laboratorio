@@ -350,6 +350,17 @@ export function createRepo(db) {
     },
 
     // ---- listas de la marca para validar al publicar (flow-model.js, contexto de validación)
+    brandName: brandId => one('SELECT name FROM brands WHERE id=?', brandId)?.name ?? brandId,
+    // Cuándo se publicó la versión que está en servicio (para la lista de recorridos).
+    publishedAt: (brandId, flowId, version) =>
+      version === null || version === undefined
+        ? null
+        : (one(
+            'SELECT published_at FROM chatflow_versions WHERE brand_id=? AND flow_id=? AND version=?',
+            brandId,
+            flowId,
+            version,
+          )?.published_at ?? null),
     validationLists(brandId) {
       return {
         tags: all('SELECT id,name FROM contact_tags WHERE brand_id=?', brandId),
