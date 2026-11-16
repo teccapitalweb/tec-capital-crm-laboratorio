@@ -2,7 +2,12 @@
   "id": "contactos",
   "title": "Contactos",
   "visibility": "live",
-  "nav": { "group": "Atención", "icon": "contact-round", "label": "Lista de contactos", "order": 30 },
+  "nav": {
+    "group": "Contactos",
+    "icon": "contact-round",
+    "label": "Lista de contactos",
+    "order": 30
+  },
   "roles": ["admin", "agent"],
   "permission": "contacts.view",
   "entry": "index.js",

@@ -12,6 +12,19 @@ const BASELINE = resolve(here, 'niebla-baseline.json');
 export const INVITE = 'codigo-de-prueba-ui-0001';
 export const ADMIN = { username: 'direccion.ui', name: 'Dirección de prueba', password: 'Password-ui-2026!' };
 export const AUTH = { admin: resolve(here, '.auth', 'admin.json') };
+// Todos los grupos del menú abiertos (public/app.js los recuerda en `tc-nav-groups`).
+export const NAV_GROUPS_OPEN = {
+  name: 'tc-nav-groups',
+  value: JSON.stringify({
+    Atención: true,
+    Contactos: true,
+    Ventas: true,
+    WhatsApp: true,
+    Resultados: true,
+    Gestión: true,
+    Ajustes: true,
+  }),
+};
 
 // Registra a la persona por la API (o inicia sesión si ya existe) y deja la cookie en ese contexto de peticiones.
 export async function ensureUser(request, baseURL, user, { inviteCode } = {}) {

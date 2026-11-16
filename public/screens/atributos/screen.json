@@ -2,7 +2,12 @@
   "id": "atributos",
   "title": "Datos de contacto",
   "visibility": "live",
-  "nav": { "group": "Gestión", "icon": "list-plus", "label": "Datos de contacto", "order": 60 },
+  "nav": {
+    "group": "Contactos",
+    "icon": "list-plus",
+    "label": "Datos de contacto",
+    "order": 60
+  },
   "roles": ["admin"],
   "permission": "contacts.attributes.manage",
   "entry": "index.js",

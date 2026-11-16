@@ -1561,3 +1561,51 @@ dialog {
     min-height: 40px;
   }
 }
+
+/* Menú por grupos plegables (nov 2026): el título de cada grupo es un botón que lo abre o lo cierra. En pantallas
+   angostas el menú es una fila y los títulos no se muestran, así que ahí nada se pliega. */
+.sidebar .nav button.nav-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  box-shadow: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  cursor: pointer;
+}
+.sidebar .nav button.nav-group-title:hover,
+.sidebar .nav button.nav-group-title:focus-visible {
+  color: var(--text-2);
+}
+.sidebar .nav button.nav-group-title::after {
+  content: none;
+}
+.sidebar .nav button.nav-group-title svg {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+.nav-group.collapsed .nav-group-title svg {
+  transform: rotate(-90deg);
+}
+@media (min-width: 851px) {
+  .nav-group.collapsed > button:not(.nav-group-title) {
+    display: none;
+  }
+}
+@media (max-width: 850px) {
+  .sidebar .nav button.nav-group-title {
+    display: none;
+  }
+}

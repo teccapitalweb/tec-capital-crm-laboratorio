@@ -275,7 +275,33 @@
         app.innerHTML = `<div class="boot"><span class="brand-mark">tc</span><p>No pudimos conectar con el laboratorio.</p><button class="btn" data-action="reload">Volver a intentar</button></div>`;
     }
   }
-  // Barra lateral del equipo agrupada por tarea (Atención · Gestión · Resultados · Cuenta). Cada módulo sigue aportando sus botones; aquí sólo se ordenan.
+  // Grupos del menú plegables: cada persona ve abierto «Atención» y el grupo de la pantalla en la que está; lo que abra
+  // o cierre a mano se recuerda en este navegador.
+  const NAV_KEY = 'tc-nav-groups';
+  let navGroups = {};
+  try {
+    const saved = JSON.parse(localStorage.getItem(NAV_KEY) || '{}');
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) navGroups = saved;
+  } catch {
+    navGroups = {}; // sin almacenamiento o con un valor roto: los grupos por omisión
+  }
+  const navOpen = (title, ids) =>
+    ids.includes(state.view) || (Object.hasOwn(navGroups, title) ? navGroups[title] === true : title === 'Atención');
+  function toggleNavGroup(button) {
+    const group = button.closest('.nav-group');
+    if (!group) return;
+    const open = group.classList.contains('collapsed');
+    group.classList.toggle('collapsed', !open);
+    button.setAttribute('aria-expanded', String(open));
+    navGroups[button.dataset.navGroup] = open;
+    try {
+      localStorage.setItem(NAV_KEY, JSON.stringify(navGroups));
+    } catch {
+      // sin almacenamiento: vale para esta visita
+    }
+  }
+  // Barra lateral del equipo agrupada por lo que la persona va a hacer (Atención · Contactos · Ventas · WhatsApp ·
+  // Resultados · Ajustes). Cada módulo sigue aportando sus botones; aquí sólo se ordenan.
   function sideNav(team) {
     const btn = (view, symbol, label, short) =>
       `<button data-view="${view}" class="${state.view === view ? 'active' : ''}" aria-label="${label}" title="${label}">${icon(symbol)}<span class="nav-label-text">${short || label}</span></button>`;
@@ -293,23 +319,26 @@
         }),
     );
     const groups = [
-      ['Atención', ['day', 'inbox', 'contacts', 'opportunities', 'tasks', 'agenda']],
-      ['Gestión', ['courses', 'operations', 'team']],
+      ['Atención', ['day', 'inbox', 'operations', 'tasks', 'agenda']],
+      ['Contactos', ['contacts']],
+      ['Ventas', ['opportunities', 'courses']],
+      ['WhatsApp', []],
       ['Resultados', ['results', 'analytics', 'activity', 'presentation']],
-      ['Cuenta', ['settings']],
+      ['Ajustes', ['team']],
     ];
     for (const screen of window.TC?.screens.menu(state.user.role) ?? []) {
       by[screen.id] = btn(screen.id, esc(screen.nav.icon), esc(screen.nav.label)); // el nombre del menú es el que se lee y se ve
       const group = groups.find(([title]) => title === screen.nav.group);
       if (group) group[1].push(screen.id);
-      else groups.splice(groups.length - 1, 0, [esc(screen.nav.group), [screen.id]]); // un grupo nuevo va antes de Cuenta
+      else groups.splice(groups.length - 1, 0, [esc(screen.nav.group), [screen.id]]); // un grupo nuevo va antes de Ajustes
     }
+    groups.find(([title]) => title === 'Ajustes')[1].push('settings'); // la configuración propia, siempre al final
     return groups
       .map(([title, ids]) => {
         const items = ids.map(id => by[id] || '').join('');
-        return items
-          ? `<div class="nav-group" role="group" aria-label="${title}"><div class="nav-group-title">${title}</div>${items}</div>`
-          : '';
+        if (!items) return '';
+        const open = navOpen(title, ids);
+        return `<div class="nav-group${open ? '' : ' collapsed'}" role="group" aria-label="${title}"><button type="button" class="nav-group-title" data-nav-group="${title}" aria-expanded="${open}"><span>${title}</span>${icon('chevron-down')}</button>${items}</div>`;
       })
       .join('');
   }
@@ -320,7 +349,19 @@
       state.brands
         .map(b => `<option value="${esc(b.id)}" ${state.brand === b.id ? 'selected' : ''}>${esc(b.name)}</option>`)
         .join('');
+    // El menú se vuelve a dibujar al cambiar de pantalla: se conserva hasta dónde estaba desplazado.
+    const navNow = () => app.querySelector('.sidebar .nav');
+    const scrollOf = el => (el ? [el.scrollTop, el.scrollLeft] : [0, 0]);
+    const navScroll = [scrollOf(navNow()), scrollOf(navNow()?.parentElement)];
     app.innerHTML = `<div class="workspace ${state.mobileChat ? 'mobile-chat' : ''} ${team ? '' : 'customer-skin'}"><aside class="sidebar"><div class="brand"><span class="brand-mark">tc</span><div class="brand-copy"><strong>TEC CAPITAL</strong><small>Laboratorio CRM</small></div></div><div class="workspace-picker">${icon('building-2')}<select aria-label="Filtrar por marca" id="brand-picker">${brandOptions}</select></div><div>${team ? '' : '<div class="nav-label">Tu espacio</div>'}<nav class="nav ${team ? 'nav-grouped' : ''}" aria-label="Navegación principal">${sideNav(team)}</nav></div><div class="sidebar-bottom">${!isStaff() ? '<a class="customer-team-link" href="/crm">Entrar al CRM</a>' : ''}${isStaff() ? `<div class="mode-picker" aria-label="Cambiar experiencia"><button data-mode="customer" class="${!team ? 'active' : ''}">Cliente</button><button data-mode="agent" class="${team ? 'active' : ''}">Equipo</button></div>` : ''}<div class="lab-note"><strong>${team ? 'Un equipo. Un espacio.' : 'Tu número de prueba: ' + state.user.testNumber}</strong>${team ? 'Mensajes, cursos y atención en tiempo real.' : 'Este perfil identifica tus mensajes. No es un número de WhatsApp.'}</div><div class="user-card"><button data-action="profile" aria-label="Mi perfil"><span class="avatar">${esc(initials(state.user.name))}</span><span class="user-copy"><strong title="${esc(state.user.name)}">${esc(state.user.name)}</strong><small>${state.user.role === 'admin' ? 'Administrador' : state.user.role === 'agent' ? 'Asesor' : 'Cliente de prueba'}</small></span></button><button class="icon-btn" data-action="logout" aria-label="Cerrar sesión">${icon('log-out')}</button></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb"><span>Laboratorio</span>${icon('chevron-right')}<strong id="breadcrumb-title">${pageTitle()}</strong></div><div class="top-status"><span id="connection" class="connection">Conectando</span><span class="lab-label">DATOS Y PAGOS DE PRUEBA</span>${!team ? `<button class="btn" data-action="new-chat">${icon('plus')}<span>Nueva conversación</span></button>` : ''}<button class="icon-btn mobile-profile" data-action="profile" aria-label="Mi perfil">${icon('user-round')}</button></div></header><div class="notice" id="notice"></div><div class="page-slot" id="page"></div></main></div>`;
+    for (const [el, [top, left]] of [
+      [navNow(), navScroll[0]],
+      [navNow()?.parentElement, navScroll[1]],
+    ])
+      if (el && (top || left)) {
+        el.scrollTop = top;
+        el.scrollLeft = left;
+      }
     renderPage();
     updateConnection();
     icons();
@@ -1440,6 +1481,7 @@
     if (!button) return;
     try {
       if (button.dataset.action) return await action(button.dataset.action, button);
+      if (button.dataset.navGroup) return toggleNavGroup(button);
       if (button.dataset.view) return setView(button.dataset.view);
       if (button.dataset.mode) {
         state.mode = button.dataset.mode;

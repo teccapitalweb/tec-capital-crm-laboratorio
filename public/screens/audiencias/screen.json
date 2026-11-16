@@ -2,7 +2,12 @@
   "id": "audiencias",
   "title": "Audiencias",
   "visibility": "live",
-  "nav": { "group": "Gestión", "icon": "users-round", "label": "Audiencias", "order": 40 },
+  "nav": {
+    "group": "Contactos",
+    "icon": "users-round",
+    "label": "Audiencias",
+    "order": 40
+  },
   "roles": ["admin"],
   "permission": "campaigns.view",
   "entry": "index.js",

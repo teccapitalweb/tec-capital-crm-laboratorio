@@ -2,7 +2,12 @@
   "id": "difusiones",
   "title": "Difusiones",
   "visibility": "live",
-  "nav": { "group": "Gestión", "icon": "megaphone", "label": "Difusiones", "order": 50 },
+  "nav": {
+    "group": "WhatsApp",
+    "icon": "megaphone",
+    "label": "Difusiones",
+    "order": 44
+  },
   "roles": ["admin"],
   "permission": "campaigns.view",
   "entry": "index.js",
