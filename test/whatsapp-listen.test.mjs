@@ -344,7 +344,10 @@ test('escucha de punta a punta: cuenta sin guardar, nada sale salvo a la lista d
   assert.deepEqual([other.brandId, other.mode, other.listen.days[0].received], ['odonteck', 'live', 0]);
 
   // 6) a activo y «Abrir conversaciones recientes»: vista previa, sin duplicar, en espera, sin asistente y sin enviar
-  const sent1 = meta.sent.length;
+  // D escribió a la otra marca, que está activa: su asistente le contesta cuando puede, así que lo que va para D no
+  // cuenta aquí (la prueba no puede depender de cuándo llega esa respuesta).
+  const sentHere = () => meta.sent.filter(m => m.to !== PD);
+  const sent1 = sentHere().length;
   const live = (
     await api('/api/whatsapp/numbers/' + NUMBER + '/mode', {
       body: { mode: 'live', expectedRevision: (await cutover()).revision },
@@ -386,7 +389,14 @@ test('escucha de punta a punta: cuenta sin guardar, nada sale salvo a la lista d
   db.prepare("UPDATE conversations SET status='resolved' WHERE customer_id=?").run(userB);
   assert.equal((await api('/api/whatsapp/numbers/' + NUMBER + '/open-recent', { body: {} })).opened, 0);
   await new Promise(done => setTimeout(done, 1000));
-  assert.equal(meta.sent.length, sent1, 'abrir recientes no envía nada');
+  assert.deepEqual(
+    sentHere()
+      .slice(sent1)
+      .map(m => m.to),
+    [],
+    'abrir recientes no envía nada',
+  );
+  assert.equal(sentTo(PB).length + sentTo(PC).length, 0, 'a quienes se les abrió conversación no les llegó nada');
   assert.equal(count(db, "SELECT count(*) n FROM wa_number_log WHERE action='open_recent'"), 3);
 
   // 7) vuelta atrás: de activo otra vez a escucha
