@@ -415,15 +415,18 @@ export default {
     }
     function render(ctx, contact, recipientId, overrides = {}) {
       const api = templates();
-      if (!api || !ctx.tpl) return { reason: 'missing_variable' };
+      if (!api || !ctx.tpl) return { reason: 'missing_variable', missing: [] };
       const values = {
         nombre: copy.firstName(contact.name || '') || '',
         marca: ctx.brandName,
         curso: ctx.course?.title ?? '',
         edicion: ctx.edition?.name || ctx.course?.title || '',
       };
+      // El valor que manda quien llama (envío suelto por la API) tiene prioridad sobre la fuente declarada (§4.8).
+      for (const key of Object.keys(values))
+        if (typeof overrides?.[key] === 'string' && overrides[key].trim()) values[key] = overrides[key];
       const r = api.resolve(ctx.tpl, { values, fixed: ctx.fixed, overrides, coupon: ctx.coupon, strict: true });
-      if (r.missing.length) return { reason: 'missing_variable' };
+      if (r.missing.length) return { reason: 'missing_variable', missing: r.missing };
       if (r.text.length > BODY_MAX) return { reason: 'too_long' };
       const buttons = r.buttons.map(b =>
         b.subType === 'quick_reply' ? { ...b, payload: buttonPayload(recipientId, b.index) } : b,
@@ -1246,10 +1249,76 @@ export default {
       return { action: { type: 'default' }, messageId };
     }
 
-    // ---- envío suelto (fila 37): para la futura API de envío; sin rutas públicas aquí
-    // sendOne({brandId, contactId | phone, waTemplateId, waNumber?, values?, label?, clientRef, actorId?}) →
+    // ---- envío suelto (fila 37): lo usa la API de envío (server/modules/api-write, docs/PLAN_API_ENVIO.md)
+    // sendOne({brandId, contactId | phone, waTemplateId, waNumber?, values?, label?, clientRef, actorId?, strict?}) →
     //   {id, campaignId, state, …, duplicate}. Un envío por (etiqueta, plantilla, día local, contacto); la misma
     //   clientRef devuelve el mismo destinatario. Sale por el emisor con las mismas reglas que una difusión.
+    //   Con `strict` (la API) lo que el emisor juzgaría al enviar se juzga ya, para responder el motivo en lugar de
+    //   dejar un envío que se omitirá: WhatsApp real y las difusiones de la marca encendidos, salud y límite del
+    //   número, presupuesto, campaña de la API detenida, dirección, baja, lista de exclusión, consentimiento si es de
+    //   marketing y los valores de la plantilla. El emisor lo vuelve a mirar justo antes de enviar, como siempre.
+    const apiContext = (brandId, tpl) => ({
+      tpl,
+      category: tpl.category === 'utility' ? 'utility' : 'marketing',
+      brandName: repo.brand(brandId)?.name ?? '',
+      course: null,
+      edition: null,
+      fixed: {},
+      coupon: null,
+      options: {},
+      hasFile: ['image', 'document'].includes(definitionOf(tpl).header.type),
+    });
+    function precheckBrand(brandId, tpl, number, campaignRef) {
+      if (!['utility', 'marketing'].includes(tpl.category))
+        throw fail(422, 'Por la API sólo se envían plantillas de utilidad o de marketing.', {
+          code: 'template_category',
+        });
+      if (!services.connectors.metaLive())
+        throw fail(503, 'WhatsApp real está apagado: no sale ningún mensaje.', { code: 'whatsapp_off' });
+      if (!switchesOn(brandId))
+        throw fail(409, 'Las difusiones o la automatización de la marca están apagadas.', { code: 'broadcasts_off' });
+      const category = tpl.category === 'utility' ? 'utility' : 'marketing';
+      const g = gate.check(number.phone_number_id, category, brandId);
+      if (!g.ok)
+        throw fail(409, 'El número de WhatsApp no puede enviar ahora.', {
+          code: 'number_unavailable',
+          details: { reason: g.reason },
+        });
+      if (g.remaining <= 0)
+        throw fail(429, 'El número llegó a su límite de mensajes de 24 horas. Inténtalo más tarde.', {
+          code: 'messaging_limit_reached',
+        });
+      const set = settings(brandId);
+      const engine = costs();
+      if (set.monthlyBudgetCents > 0 && engine && engine.monthSpend(brandId).micros >= set.monthlyBudgetCents * 10_000)
+        throw fail(409, 'La marca agotó su presupuesto del mes para WhatsApp.', { code: 'budget_exceeded' });
+      const c = repo.apiCampaign(campaignRef);
+      if (c && ['stopped', 'paused', 'cancelled'].includes(c.status))
+        throw fail(409, 'Los envíos de hoy con esta etiqueta y plantilla están detenidos en Difusiones.', {
+          code: 'sending_stopped',
+          details: { reason: c.status_reason ?? c.status },
+        });
+    }
+    function precheckContact(brandId, tpl, number, contact, values) {
+      if (!contact.phone_key && !recipientOf(contact.id, number.phone_number_id))
+        throw fail(422, 'Este contacto no tiene WhatsApp al que escribirle.', { code: 'recipient_no_address' });
+      const consent = repo.consent(contact.id)?.status ?? 'unknown';
+      // Baja y lista de exclusión responden lo mismo: quien llama sabe que no se puede, no por qué.
+      if (consent === 'opted_out' || audiences()?.suppressed(brandId, contact.id))
+        throw fail(422, 'Esta persona no puede recibir mensajes de la marca.', { code: 'recipient_unavailable' });
+      if (tpl.category !== 'utility' && consent !== 'opted_in')
+        throw fail(422, 'Una plantilla de marketing sólo se envía a quien aceptó recibir mensajes.', {
+          code: 'consent_required',
+        });
+      const r = render(apiContext(brandId, tpl), contact, '0'.repeat(32), values);
+      if (r.reason === 'missing_variable')
+        throw fail(422, 'Faltan valores para la plantilla.', {
+          code: 'template_params',
+          details: { missing: r.missing },
+        });
+      if (r.reason === 'too_long')
+        throw fail(422, 'El mensaje pasa del máximo de Meta con esos valores.', { code: 'template_too_long' });
+    }
     function sendOne(input = {}) {
       const brandId = String(input.brandId || '');
       if (!repo.brand(brandId)) throw fail(400, 'Marca no válida.', { field: 'brandId' });
@@ -1285,6 +1354,10 @@ export default {
       const t = now();
       const day = new Intl.DateTimeFormat('en-CA', { timeZone: timezoneOf(brandId) }).format(new Date(t));
       const campaignRef = `api:${brandId}:${label}:${tpl.id}:${number.phone_number_id}:${day}`;
+      if (input.strict === true) {
+        precheckBrand(brandId, tpl, number, campaignRef);
+        precheckContact(brandId, tpl, number, contact, values);
+      }
       const id = atomic(db, () => {
         let c = repo.apiCampaign(campaignRef);
         if (!c) {
