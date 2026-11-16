@@ -151,6 +151,8 @@ export function createScreens({
         toast,
         /** Navega a otra vista de la aplicación. */
         go: view => app?.setView?.(view),
+        /** Abre una conversación existente en «Conversaciones» (el hilo y el compositor de siempre). */
+        openConversation: id => app?.openConversation?.(id),
         /** Ids para el DOM de esta pantalla: uid('nombre') → 'k-<pantalla>-nombre'. */
         uid: ids(id),
         /** Lo que debe sobrevivir a un remontaje (un borrador, el paso de un asistente). Nunca localStorage. */

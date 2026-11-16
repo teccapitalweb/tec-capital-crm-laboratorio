@@ -1,0 +1,15 @@
+{
+  "id": "bandeja",
+  "title": "Bandeja",
+  "visibility": "preview",
+  "nav": {
+    "group": "Atención",
+    "icon": "inbox",
+    "label": "Bandeja (nueva)",
+    "order": 15
+  },
+  "roles": ["admin", "agent"],
+  "permission": "inbox.view",
+  "entry": "index.js",
+  "styles": ["screen.css"]
+}
