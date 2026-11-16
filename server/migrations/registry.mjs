@@ -12,6 +12,7 @@ import attributes from './named/attributes/index.mjs';
 import audiences from './named/audiences/index.mjs';
 import broadcasts from './named/broadcasts/index.mjs';
 import channelHealth from './named/channel-health/index.mjs';
+import chatflows from './named/chatflows/index.mjs';
 import contactImport from './named/contact-import/index.mjs';
 import contacts from './named/contacts/index.mjs';
 import identity from './named/identity/index.mjs';
@@ -33,6 +34,7 @@ import waCutover from './named/wa-cutover/index.mjs';
 // «wa-cutover» va al final: añade columnas a wa_numbers (después de identity) y llegó después de las publicadas.
 // «real-mode» va al final: tabla propia (brand_real_mode) y llegó después de las publicadas.
 // «lifecycle» va al final: añade columnas a conversations y llegó después de todas las publicadas.
+// «chatflows» va al final: tablas propias (recorridos) y llegó después de todas las publicadas.
 export const NAMED = defineRegistry([
   ...attributes,
   ...broadcasts,
@@ -49,4 +51,5 @@ export const NAMED = defineRegistry([
   ...waCutover,
   ...realMode,
   ...lifecycle,
+  ...chatflows,
 ]);
