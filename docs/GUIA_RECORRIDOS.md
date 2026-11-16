@@ -35,6 +35,16 @@ Pulsa **Probar**. Es una conversación de ensayo con **el mismo motor que atende
 2. Las conversaciones que ya iban en el recorrido **siguen con la versión con la que empezaron**; las nuevas usan la recién publicada.
 3. **Activar** hace que empiece a atender, siempre que la automatización de la marca esté encendida y su asistente responda solo. **Pausar** deja de empezar con gente nueva (y, si lo eliges, detiene las conversaciones en curso). **Archivar** lo retira; su historial se conserva.
 
+### Si lo activaste y no contesta
+
+Un recorrido activo sólo atiende si **la marca está atendiendo con recorridos**. Si no, la lista y el recorrido lo dicen con un aviso amarillo, el estado aparece como «Activo, pero la marca no está atendiendo» y la ventana de «Activar» te lo advierte antes de confirmar. Mientras tanto contesta el asistente de siempre. Hay tres motivos, y los tres se arreglan en **Operación → Ventas y cobro → Seguimientos**:
+
+- **La automatización de la marca está apagada:** en la sección «Automatización», pulsa «Activar» en la marca.
+- **La automatización está en pausa para todas las marcas:** en esa misma sección, quita la pausa global.
+- **El asistente no responde solo:** en «Respuestas automáticas a clientes», cambia el «Nivel de respuestas» de la marca a «Responder con plantillas» o «Autónomo con IA» («Apagado» y «Sugerir al asesor» no contestan solos).
+
+Si además ves «WhatsApp real está apagado en esta marca», es sólo información: los recorridos atienden las conversaciones del laboratorio.
+
 ## 6. Leer su rendimiento
 
 En la pestaña **Rendimiento**, elige el periodo (7, 30 o 90 días) y la versión:

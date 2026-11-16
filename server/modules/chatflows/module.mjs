@@ -34,7 +34,7 @@ import { onConversationCancel } from '../../automation.mjs';
 import { isOpen } from '../../service-hours.mjs';
 import { templateValues } from '../../catalogue.mjs';
 import * as copy from '../../reply-copy.mjs';
-import { forBrand } from '../../lib/real-mode.mjs';
+import { forBrand, isRealBrand } from '../../lib/real-mode.mjs';
 import {
   LIMITS,
   VARIABLE_RE,
@@ -210,6 +210,31 @@ export default {
       createdAt: f.created_at,
       metrics: counts(f.brand_id, f.id),
     });
+    // ¿Atienden los recorridos de la marca? La misma regla que el motor (runtime.brandSpeaks); el motivo, en palabras,
+    // con dónde se enciende. «WhatsApp real apagado» es sólo información: en el laboratorio sí atiende.
+    const WHERE = 'Operación → Ventas y cobro → Seguimientos';
+    function attendingOf(brandId) {
+      const ok = runtime.brandSpeaks(brandId);
+      const info = isRealBrand(db, brandId)
+        ? null
+        : 'WhatsApp real está apagado en esta marca: los recorridos atienden las conversaciones del laboratorio.';
+      if (ok) return { ok, reason: null, label: 'La marca está atendiendo con recorridos.', where: null, info };
+      const [reason, label] = repo.globalPaused()
+        ? ['automation_paused', 'La automatización está en pausa para todas las marcas.']
+        : !repo.automationEnabled(brandId)
+          ? ['automation_off', 'La automatización de la marca está apagada.']
+          : [
+              'assistant_mode',
+              'El asistente de la marca no responde solo (su nivel es «Apagado» o «Sugerir al asesor»): debe ser «Responder con plantillas» o «Autónomo con IA».',
+            ];
+      const where =
+        reason === 'assistant_mode'
+          ? WHERE + ' → Respuestas automáticas a clientes → Nivel de respuestas'
+          : reason === 'automation_paused'
+            ? WHERE + ' → Automatización (quitar la pausa global)'
+            : WHERE + ' → Automatización (activar la marca)';
+      return { ok, reason, label, where, info };
+    }
     const full = f => ({ ...summary(f), graph: f.draft, settings: normalizeSettings(f.settings) });
     const sessionView = row =>
       row && {
@@ -652,6 +677,7 @@ export default {
             id: brandId,
             name: repo.brandName(brandId),
             canManage: access.can(user, 'automation.manage', brandId),
+            attending: attendingOf(brandId),
           })),
           unavailable: UNAVAILABLE_TYPES,
         });
@@ -737,6 +763,7 @@ export default {
           })),
           issues: issuesOf(f.brand_id, f.id, f.draft, f.settings, f.start),
           canManage: access.can(user, 'automation.manage', f.brand_id),
+          attending: attendingOf(f.brand_id),
         });
         return true;
       }
