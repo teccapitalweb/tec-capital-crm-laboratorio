@@ -101,6 +101,8 @@ La referencia vigente es **657 pruebas aprobadas** más 33 de navegador con `npm
 
 ## Lo siguiente
 
+**16 nov 2026:** la novena tanda (ciclo de vida de la conversación: estado propio, ciclos, pendiente, resolver, reabrir y expiración por marca apagada; y cierre del modo real) está en la rama `chore/f0-01-codificacion`, **sin publicar**; esquema `41+18.44773066`. Plan: [PLAN_CICLO_DE_VIDA.md](docs/PLAN_CICLO_DE_VIDA.md).
+
 **15 nov 2026 (octava):** la octava tanda (modo real por marca, apagado por omisión, y pulido de las pantallas nuevas: filtro «Sin teléfono», añadir a una lista, editar segmentos, buscar y exportar miembros, insignia «Difusión») se **publicó** en `main` (commit `dae4f05`; esquema `41+17.ddceed40`). Plan: [PLAN_MODO_REAL.md](docs/PLAN_MODO_REAL.md).
 
 **15 nov 2026 (séptima):** la séptima tanda (API de envío de plantillas con capa de compatibilidad apagada, y cambio de número: modo escucha, abrir conversaciones recientes y registrar el número) se **publicó** en `main` (commit `d405abb`; esquema `41+16.de0f23a7`). Con ella queda construido el conjunto mínimo del plan. Planes: [PLAN_API_ENVIO.md](docs/PLAN_API_ENVIO.md) y [PLAN_CAMBIO_DE_NUMERO.md](docs/PLAN_CAMBIO_DE_NUMERO.md).
