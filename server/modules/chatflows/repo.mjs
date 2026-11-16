@@ -350,6 +350,10 @@ export function createRepo(db) {
     },
 
     // ---- listas de la marca para validar al publicar (flow-model.js, contexto de validación)
+    // Interruptores que deciden si la marca habla sola (sólo para explicar el motivo; la regla es runtime.brandSpeaks).
+    globalPaused: () => Boolean(one('SELECT paused FROM automation_global WHERE id=1')?.paused),
+    automationEnabled: brandId =>
+      Boolean(one('SELECT enabled FROM automation_settings WHERE brand_id=?', brandId)?.enabled),
     brandName: brandId => one('SELECT name FROM brands WHERE id=?', brandId)?.name ?? brandId,
     // Cuándo se publicó la versión que está en servicio (para la lista de recorridos).
     publishedAt: (brandId, flowId, version) =>

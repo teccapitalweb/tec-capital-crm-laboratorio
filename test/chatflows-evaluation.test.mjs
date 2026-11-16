@@ -264,7 +264,9 @@ test('rendimiento por paso: llegaron, siguieron, dónde se fueron, cuánto tarda
   await call(L.origin, `/api/chatflows/${other.id}/analytics`, { cookie: gv, expected: 404 });
   // la lista dice que no puede editar, y las sugerencias (que gastan) son de quien edita
   const list = await call(L.origin, '/api/chatflows', { cookie: gv });
-  assert.deepEqual(list.brands, [{ id: 'globalvet', name: list.brands[0].name, canManage: false }]);
+  assert.deepEqual(list.brands, [
+    { id: 'globalvet', name: list.brands[0].name, canManage: false, attending: list.brands[0].attending },
+  ]);
   assert.ok(list.unavailable.list, 'la pantalla sabe qué tipos de paso no están disponibles');
   assert.equal(typeof list.flows[0].publishedAt, 'number');
   await call(L.origin, `/api/chatflows/${flow.id}/suggestions`, { cookie: gv, body: {}, expected: 403 });
@@ -284,6 +286,43 @@ test('rendimiento por paso: llegaron, siguieron, dónde se fueron, cuánto tarda
     0,
     'sin IA no se registra ninguna llamada',
   );
+});
+
+test('¿atiende la marca con recorridos?: la misma regla que el motor, con su motivo y dónde se enciende', async t => {
+  const L = await lab(t);
+  const flow = await L.published('globalvet');
+  const brand = async () => (await L.api('/api/chatflows?brand=globalvet')).brands[0].attending;
+  // apagada por omisión
+  let a = await brand();
+  assert.equal(a.ok, false);
+  assert.equal(a.reason, 'automation_off');
+  assert.match(a.where, /Operación → Ventas y cobro → Seguimientos → Automatización/);
+  assert.match(a.info, /WhatsApp real está apagado/, 'sólo información: en el laboratorio sí atiende');
+  assert.deepEqual((await L.api('/api/chatflows/' + flow.id)).attending, a, 'el detalle dice lo mismo');
+  // encendida
+  const current = (await L.api('/api/automation')).brands.find(b => b.id === 'globalvet');
+  await L.api('/api/automation/brands/globalvet', {
+    method: 'PATCH',
+    body: { enabled: true, expectedRevision: current.revision },
+  });
+  a = await brand();
+  assert.equal(a.ok, true);
+  assert.equal(a.reason, null);
+  // el asistente sólo sugiere: tampoco atiende
+  const setMode = async mode => {
+    const cur = (await L.api('/api/replies/settings')).settings.find(x => x.brand_id === 'globalvet');
+    await L.api('/api/replies/brands/globalvet', { method: 'PATCH', body: { mode, expectedRevision: cur.revision } });
+  };
+  await setMode('suggest');
+  a = await brand();
+  assert.equal(a.ok, false);
+  assert.equal(a.reason, 'assistant_mode');
+  assert.match(a.where, /Nivel de respuestas/);
+  // pausa global
+  await setMode('templates');
+  L.db.prepare('UPDATE automation_global SET paused=1 WHERE id=1').run();
+  a = await brand();
+  assert.equal(a.reason, 'automation_paused');
 });
 
 test('lo que se manda a la IA: sólo la estructura y cifras, con correos y teléfonos tapados', () => {
