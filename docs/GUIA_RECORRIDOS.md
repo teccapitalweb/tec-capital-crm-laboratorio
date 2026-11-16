@@ -12,7 +12,11 @@ Un **recorrido** es una conversación automática: saluda, manda la información
 
 - En computadora trabajas en el **lienzo** (cajas y flechas) o en el **esquema** (los pasos en orden). En celular se edita en el esquema.
 - Haz clic en un paso para cambiar su texto a la derecha. Para agregar uno, elígelo en la columna «Agregar paso»; si tienes un paso seleccionado, el nuevo queda conectado después de él. En el esquema, cada salida tiene una lista «a dónde lleva»: ahí puedes conectar con otro paso o crear uno nuevo en ese punto.
-- Los tipos que dicen **«Todavía no disponible»** (Lista, Plantilla de WhatsApp, Suscribir, Servicio externo, «¿Qué curso te interesa?») aún no se pueden publicar; algunas opciones de otros pasos tampoco, y el paso lo marca en rojo en cuanto la eliges.
+- Los tipos que dicen **«Todavía no disponible»** (Suscribir, Servicio externo, «¿Qué curso te interesa?») aún no se pueden publicar; algunas opciones de otros pasos tampoco (por ejemplo, «Material según el curso»), y el paso lo marca en rojo en cuanto la eliges.
+- **Más de tres opciones: Lista.** Hasta 10 filas, en secciones si quieres. En WhatsApp real la persona ve el botón (por ejemplo «Ver cursos») y elige una fila; en el chat de prueba ve las opciones numeradas. En los dos casos puede contestar con el número o escribiendo la opción.
+- **Guardar lo que eligió.** En Botones y en Lista, «Guardar la opción elegida en la variable» guarda el texto del botón o de la fila; lo usas después como `{{var.nombre}}` o en una Condición.
+- **Archivos.** En un Mensaje elige «Archivo» (o «Archivo» como encabezado de Botones) y escoge una imagen JPG o PNG o un PDF de la biblioteca de la marca, o pulsa **Subir archivo**. Sólo aparecen los archivos de esa marca.
+- **Plantilla de WhatsApp.** Elige una plantilla de la marca aprobada por Meta. Sale sólo por el número real de WhatsApp, con los datos de la persona, y es lo único que sale aunque hayan pasado más de 24 horas desde su último mensaje. Si la marca no tiene número real, o el recorrido también va por Instagram o Facebook, la revisión no deja publicarla. En una conversación de prueba no se envía: la conversación pasa a una persona.
 - **Ajustes** (arriba): el nombre, **cómo empieza** (a mano desde el chat, con el primer mensaje, con una palabra clave o con cualquier mensaje) y cuánto esperar antes de dar la conversación por abandonada.
 - Pulsa **Guardar** (o Ctrl+S). La barra dice «Sin guardar» mientras haya cambios. Si otra persona guardó el mismo recorrido mientras lo editabas, el CRM te avisa y **no pisa nada**: tus cambios siguen en pantalla y tú eliges.
 
@@ -27,7 +31,7 @@ Cada punto tiene **Ir al paso**, que te lleva directo a él.
 
 ## 4. Probar
 
-Pulsa **Probar**. Es una conversación de ensayo con **el mismo motor que atenderá de verdad** y el catálogo real de la marca. Elige el curso y el canal, pulsa los botones o escribe como si fueras la persona. **No se envía nada a nadie ni se guarda nada.** Se prueba lo que ves en pantalla, aunque no lo hayas guardado.
+Pulsa **Probar**. Es una conversación de ensayo con **el mismo motor que atenderá de verdad** y el catálogo real de la marca. Elige el curso y el canal, pulsa los botones o las filas de una lista, o escribe como si fueras la persona. Los archivos aparecen con su nombre y una plantilla de WhatsApp con datos de ejemplo. **No se envía nada a nadie ni se guarda nada.** Se prueba lo que ves en pantalla, aunque no lo hayas guardado.
 
 ## 5. Publicar y activar
 
