@@ -10,7 +10,7 @@ import { addColumn } from '../../named.mjs';
 
 export default {
   name: 'chatflows/0002-message-interactive',
-  after: ['messages/0001-channel-contract'],
+  after: [], // sólo añade una columna a messages (escalera)
   up(db) {
     addColumn(db, 'messages', 'interactive', 'TEXT');
   },
