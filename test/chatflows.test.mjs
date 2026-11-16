@@ -384,8 +384,15 @@ test('almacén: borrador, validación, versiones, activar y pausar, duplicar, ar
   // Una expresión con cuantificadores anidados no se publica, ni se prueba sin guardar.
   const risky = saleGraph();
   risky.nodes.find(x => x.id === 'n8').data.answer = { type: 'regex', pattern: evil };
-  const riskyCheck = await api('/api/chatflows/' + copy.flow.id + '/validate', { body: { graph: risky } });
-  assert.ok(riskyCheck.issues.errors.some(e => e.nodeId === 'n8'));
+  for (const pattern of [evil, '(a|aa)+$', '(a?){30}a{30}', '(\\w)\\1', 'a*a*a*a*a*a*b']) {
+    risky.nodes.find(x => x.id === 'n8').data.answer = { type: 'regex', pattern };
+    const riskyCheck = await api('/api/chatflows/' + copy.flow.id + '/validate', { body: { graph: risky } });
+    assert.ok(
+      riskyCheck.issues.errors.some(e => e.nodeId === 'n8'),
+      pattern,
+    );
+  }
+  risky.nodes.find(x => x.id === 'n8').data.answer = { type: 'regex', pattern: evil };
   await api('/api/chatflows/' + copy.flow.id + '/simulate', { body: { graph: risky }, expected: 422 });
   // Probar un grafo sin guardar es de quien edita recorridos.
   await call(L.origin(), '/api/chatflows/' + copy.flow.id + '/simulate', {

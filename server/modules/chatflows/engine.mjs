@@ -9,8 +9,8 @@
 // limpia con ese mismo archivo, no con una copia.
 import { defineFields, evaluate, normalizeText } from '../../lib/conditions.mjs';
 import {
-  LIMITS,
-  hasNestedQuantifier,
+  matchesPattern,
+  safePattern,
   normalizeGraph,
   normalizeSettings,
   tokensIn,
@@ -273,20 +273,9 @@ function parseTime(text) {
   if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
   return `${m[1].padStart(2, '0')}:${m[2]}`;
 }
-// Expresión de una Pregunta «formato propio»: la escribe quien arma el recorrido y corre con lo que escribe cualquiera,
-// así que el motor repite por sí mismo las comprobaciones de publicar (largo y cuantificadores anidados, que tardan un
-// tiempo exponencial) y sólo la prueba contra los primeros caracteres. Una expresión no válida o no segura nunca
-// coincide y nunca lanza.
-const REGEX_INPUT = 200;
-export function safePattern(pattern) {
-  if (typeof pattern !== 'string' || !pattern || pattern.length > LIMITS.regex || hasNestedQuantifier(pattern))
-    return null;
-  try {
-    return new RegExp(pattern);
-  } catch {
-    return null;
-  }
-}
+// Una Pregunta «formato propio» usa la regla única del modelo compartido (patternProblem / matchesPattern): un
+// subconjunto de expresiones que no puede tardar de más y sólo los primeros 200 caracteres. Nunca lanza.
+export { safePattern };
 
 // Devuelve el valor que se guarda o null si la respuesta no vale.
 export function checkAnswer(answer, raw) {
@@ -322,7 +311,7 @@ export function checkAnswer(answer, raw) {
       return !rest.length && date && time ? `${date} ${time}` : null;
     }
     case 'regex':
-      return safePattern(answer.pattern)?.test(text.slice(0, REGEX_INPUT)) ? text : null;
+      return matchesPattern(answer.pattern, text) ? text : null;
     default:
       return null;
   }

@@ -673,36 +673,72 @@ function optionProblems(options, { field, noun, max }) {
   return out;
 }
 
-// Detecta un grupo que contiene un cuantificador y a su vez se repite: «(a+)+», «(.*)*». Con un texto adverso esos
-// patrones tardan un tiempo exponencial, y el patrón de una Pregunta corre en el servidor con lo que escribe cualquiera.
-// Una repetición exacta («{2}») no cuenta: no puede crecer.
-export function hasNestedQuantifier(pattern) {
-  const open = [false];
-  const grows = at => {
-    const ch = pattern[at];
-    return ch === '+' || ch === '*' || (ch === '{' && /^\{\d+,\d*\}/.test(pattern.slice(at)));
-  };
+// Formato propio de una Pregunta: corre en el servidor (un solo hilo) con lo que escribe cualquiera, así que sólo se
+// admite un SUBCONJUNTO de expresiones que no puede tardar de más, en lugar de adivinar cuáles explotan:
+//   - hasta LIMITS.regex caracteres y que la expresión sea válida;
+//   - sin paréntesis sin escapar (ni grupos, ni miradas adelante o atrás): sin grupos no hay repeticiones anidadas ni
+//     alternancias repetidas; un paréntesis escrito con barra delante sí se admite;
+//   - sin retrorreferencias (barra y un dígito, o barra, k y «<»);
+//   - como mucho PATTERN_LIMITS.unbounded repeticiones sin tope (*, + o {n,}) en todo el patrón, y en {n} o {n,m}
+//     como mucho PATTERN_LIMITS.bounded.
+// Además el texto se compara sólo si mide hasta PATTERN_LIMITS.input caracteres (si es más largo, no coincide). Con eso
+// el trabajo crece como mucho como un polinomio de grado 3 sobre 200 caracteres. Es la única regla: la usan el editor,
+// publicar, el simulador y el motor del servidor.
+export const PATTERN_LIMITS = Object.freeze({ unbounded: 3, bounded: 100, input: 200 });
+const REPEAT_RE = /^\{(\d+)(,(\d*))?\}/;
+
+// Motivo por el que un patrón no se admite, en palabras de quien arma el recorrido; null si se admite.
+export function patternProblem(pattern) {
+  if (typeof pattern !== 'string' || !pattern) return 'Escribe el formato que debe cumplir la respuesta.';
+  if (pattern.length > LIMITS.regex)
+    return `El formato admite hasta ${LIMITS.regex} caracteres (tiene ${pattern.length}).`;
+  let unbounded = 0;
   let inClass = false;
   for (let i = 0; i < pattern.length; i += 1) {
     const ch = pattern[i];
     if (ch === '\\') {
+      const next = pattern[i + 1] ?? '';
+      if (!inClass && (/[1-9]/.test(next) || (next === 'k' && pattern[i + 2] === '<')))
+        return 'El formato no puede repetir lo que ya encontró (retrorreferencias).';
       i += 1;
     } else if (inClass) {
       if (ch === ']') inClass = false;
-    } else if (ch === '[') {
-      inClass = true;
-    } else if (ch === '(') {
-      open.push(false);
-    } else if (ch === ')') {
-      const inner = open.length > 1 ? open.pop() : false;
-      const repeated = grows(i + 1);
-      if (inner && repeated) return true;
-      if (inner || repeated) open[open.length - 1] = true;
-    } else if (grows(i)) {
-      open[open.length - 1] = true;
+    } else if (ch === '[') inClass = true;
+    else if (ch === '(' || ch === ')')
+      return 'El formato no admite paréntesis (grupos); para buscar un paréntesis escrito, pon una barra \\ delante.';
+    else if (ch === '*' || ch === '+') unbounded += 1;
+    else if (ch === '{') {
+      const m = REPEAT_RE.exec(pattern.slice(i));
+      if (!m) continue;
+      const low = Number(m[1]);
+      const high = m[2] === undefined ? low : m[3] === '' ? null : Number(m[3]);
+      if (high === null) unbounded += 1;
+      if (low > PATTERN_LIMITS.bounded || (high !== null && high > PATTERN_LIMITS.bounded))
+        return `El formato admite repeticiones de hasta ${PATTERN_LIMITS.bounded}, como {1,${PATTERN_LIMITS.bounded}}.`;
+      i += m[0].length - 1;
     }
   }
-  return false;
+  if (unbounded > PATTERN_LIMITS.unbounded)
+    return `El formato admite como mucho ${PATTERN_LIMITS.unbounded} repeticiones sin tope (*, + o {n,}): más pueden tardar demasiado.`;
+  try {
+    new RegExp(pattern);
+  } catch {
+    return 'El formato no es una expresión válida.';
+  }
+  return null;
+}
+
+// La expresión lista para usar, o null si el patrón no se admite.
+export function safePattern(pattern) {
+  return patternProblem(pattern) === null ? new RegExp(pattern) : null;
+}
+
+// ¿La respuesta cumple el formato? Un patrón que no se admite o un texto demasiado largo nunca coinciden; nunca lanza.
+export function matchesPattern(pattern, text) {
+  const value = String(text ?? '');
+  if (value.length > PATTERN_LIMITS.input) return false;
+  const re = safePattern(pattern);
+  return re ? re.test(value) : false;
 }
 
 function urlProblems(value, field) {
@@ -1220,29 +1256,8 @@ const TYPES = {
         out.push({ field: 'answer.min', message: `El largo de la respuesta va de 0 a ${LIMITS.text} caracteres.` });
       }
       if (a.type === 'regex') {
-        if (!a.pattern)
-          out.push({ field: 'answer.pattern', message: 'Escribe el formato que debe cumplir la respuesta.' });
-        else if (a.pattern.length > LIMITS.regex) {
-          out.push({
-            field: 'answer.pattern',
-            message: `El formato admite hasta ${LIMITS.regex} caracteres (tiene ${a.pattern.length}).`,
-          });
-        } else {
-          let valid = true;
-          try {
-            new RegExp(a.pattern);
-          } catch {
-            valid = false;
-          }
-          if (!valid) out.push({ field: 'answer.pattern', message: 'El formato no es una expresión válida.' });
-          else if (hasNestedQuantifier(a.pattern)) {
-            const why = 'una repetición dentro de otra puede tardar demasiado';
-            out.push({
-              field: 'answer.pattern',
-              message: `El formato no puede repetir un grupo que ya repite algo, como (a+)+: ${why}.`,
-            });
-          }
-        }
+        const problem = patternProblem(a.pattern);
+        if (problem) out.push({ field: 'answer.pattern', message: problem });
       }
       const mode = a.type === 'phone' || a.type === 'email' ? a.type : 'any';
       out.push(...saveToProblems(d.saveTo, { field: 'saveTo', mode }, env));
