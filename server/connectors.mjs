@@ -600,6 +600,43 @@ function metaNoticeEvents(entry, field, v, account, peerHash) {
 }
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png']),
   MEDIA_HOSTS = ['fbsbx.com', 'facebook.com', 'fbcdn.net', 'whatsapp.net', 'whatsapp.com'];
+// Una lista interactiva de WhatsApp (la Lista de un recorrido) dentro de los límites de Meta: cuerpo hasta 1 024,
+// encabezado y pie hasta 60, botón hasta 20, hasta 10 secciones y 10 filas en total, título de fila hasta 24 y
+// descripción hasta 72. Fuera de eso (o sin filas) devuelve null y el mensaje sale como su texto, que trae las filas
+// numeradas: nunca se manda a Meta algo que va a rechazar.
+function listOf(list) {
+  if (!list || typeof list !== 'object' || !Array.isArray(list.sections)) return null;
+  const cut = (v, n) =>
+    String(v ?? '')
+      .trim()
+      .slice(0, n);
+  const body = cut(list.body, 1024);
+  const button = cut(list.button, 20);
+  const sections = list.sections
+    .slice(0, 10)
+    .map(s => ({
+      ...(cut(s?.title, 24) ? { title: cut(s.title, 24) } : {}),
+      rows: (Array.isArray(s?.rows) ? s.rows : [])
+        .map(r => ({
+          id: cut(r?.id, 200),
+          title: cut(r?.title, 24),
+          ...(cut(r?.description, 72) ? { description: cut(r.description, 72) } : {}),
+        }))
+        .filter(r => r.id && r.title),
+    }))
+    .filter(s => s.rows.length);
+  const rows = sections.reduce((n, s) => n + s.rows.length, 0);
+  if (!body || !button || !rows || rows > 10) return null;
+  // Con más de una sección, Meta exige título en cada una.
+  if (sections.length > 1 && sections.some(s => !s.title)) return null;
+  return {
+    type: 'list',
+    ...(cut(list.header, 60) ? { header: { type: 'text', text: cut(list.header, 60) } } : {}),
+    body: { text: body },
+    ...(cut(list.footer, 60) ? { footer: { text: cut(list.footer, 60) } } : {}),
+    action: { button, sections },
+  };
+}
 // peerHash: huella con llave de la instalación (server/lib/peer-key.mjs) para los ids que dependen de una persona. Sin
 // ella (un adaptador suelto en una prueba), la de PEER_HASH_KEY o una llave al azar de este proceso.
 // Grupos de campos ampliados de la salud (X3). Los nombres no están todos confirmados contra la versión de Graph en
@@ -959,6 +996,7 @@ export function metaChannel({
           });
         else if (text && !caption) parts.push({ type: 'text', text: { body: text, preview_url: false } });
       } else if (!text) throw fail(422, 'Este mensaje no tiene texto ni un archivo que WhatsApp admita.');
+      else if (listOf(m.list)) parts.push({ type: 'interactive', interactive: listOf(m.list) });
       else if (buttons.length && text.length <= 1024)
         parts.push({
           type: 'interactive',

@@ -44,11 +44,22 @@ import {
   validateGraph,
   validateSettings,
 } from '../../../public/kit/shared/flow-model.js';
-import { CAPS, advance, input as feed, makeEnv, newSession, route, unsupportedProblems, waitOf } from './engine.mjs';
+import {
+  CAPS,
+  advance,
+  input as feed,
+  makeEnv,
+  newSession,
+  rememberChoice,
+  route,
+  unsupportedProblems,
+  waitOf,
+} from './engine.mjs';
 import { createRepo } from './repo.mjs';
 import { createAnalytics, periodOf } from './analytics.mjs';
 import { REVIEW_KINDS, cleanSuggestions, outlineOf, ruleSuggestions } from './review.mjs';
-import { UNAVAILABLE_TYPES } from '../../../public/kit/shared/flow-support.js';
+import { FLOW_FILE_MIMES, UNAVAILABLE_TYPES } from '../../../public/kit/shared/flow-support.js';
+import { discard, receive, store } from '../../lib/upload.mjs';
 import { createRuntime } from './runtime.mjs';
 
 const ID = '[A-Za-z0-9-]{1,64}';
@@ -141,8 +152,17 @@ export default {
 
     // Problemas del borrador: los del modelo compartido con las listas reales de la marca, más los tipos de paso que
     // este servidor todavía no ejecuta y el inicio.
+    // Las plantillas de WhatsApp de la marca (módulo wa-templates). Sin el módulo, ninguna: un paso de plantilla se
+    // rechaza al publicar como «no existe en esta marca» en lugar de pasar sin comprobar.
+    const waTemplatesOf = brandId => {
+      try {
+        return host.module('wa-templates').flowTemplates(brandId);
+      } catch {
+        return [];
+      }
+    };
     function issuesOf(brandId, flowId, graph, settings, start) {
-      const lists = repo.validationLists(brandId);
+      const lists = { ...repo.validationLists(brandId), waTemplates: waTemplatesOf(brandId) };
       let attributes = [];
       try {
         attributes = host
@@ -168,7 +188,7 @@ export default {
       const errors = [
         ...result.errors,
         ...validateSettings(settings, ctx),
-        ...unsupportedProblems(graph),
+        ...unsupportedProblems(graph, ctx),
         ...startProblems(start),
       ];
       return { errors, warnings: result.warnings };
@@ -447,7 +467,25 @@ export default {
             open: isOpen(now(), svc.operations.settings(brandId)),
             clock: null,
           }),
-          send({ text: body, buttons = null, prepared = null, order = false }) {
+          send({
+            text: body,
+            buttons = null,
+            prepared = null,
+            order = false,
+            list = null,
+            file = null,
+            template = null,
+          }) {
+            if (template) {
+              messages.push({
+                from: 'flow',
+                nodeId: s.nodeId,
+                text: template.text,
+                buttons: template.buttons?.length ? template.buttons : null,
+                template: template.name,
+              });
+              return null;
+            }
             const t = order ? body.replace('{{pedido}}', '[aquí iría el pedido con su enlace de pago]') : body;
             messages.push({
               from: 'flow',
@@ -455,8 +493,51 @@ export default {
               text: forBrand(db, brandId, t),
               buttons,
               flyer: Boolean(prepared?.flyerSnapshot),
+              ...(file ? { media: file.name } : {}),
+              ...(list
+                ? {
+                    list: {
+                      button: list.button,
+                      sections: list.sections.map(sec => ({
+                        title: sec.title,
+                        rows: sec.rows.map(r => ({ title: r.title, description: r.description })),
+                      })),
+                    },
+                  }
+                : {}),
             });
             return null;
+          },
+          // Los mismos archivos que el motor real: de la biblioteca de ESTA marca y de un tipo admitido.
+          file(fileId) {
+            const f = repo.libraryFile(brandId, String(fileId || ''));
+            if (!f) return { reason: 'El archivo ya no está en la biblioteca de la marca' };
+            if (!FLOW_FILE_MIMES.includes(f.mime)) return { reason: 'El archivo no es una imagen JPG o PNG ni un PDF' };
+            return { id: f.id, name: f.filename, mime: f.mime };
+          },
+          // Una plantilla sólo sale por WhatsApp real: en la prueba se muestra con datos de ejemplo y no se envía.
+          template(templateId) {
+            if (channel !== 'whatsapp')
+              return {
+                reason: 'Una plantilla de WhatsApp no sale por ' + (channel === 'instagram' ? 'Instagram' : 'Facebook'),
+              };
+            const found = waTemplatesOf(brandId).find(t => t.id === templateId && t.status === 'approved');
+            if (!found) return { reason: 'La plantilla de WhatsApp ya no está aprobada para esta marca' };
+            let text = '';
+            try {
+              const api = host.module('wa-templates');
+              const course = courses.find(k => k.id === courseId)?.title || '';
+              const r = api.resolve(repo.waTemplate(brandId, templateId), {
+                values: { nombre: 'Ana', curso: course, edicion: course, marca: repo.brandName(brandId) },
+              });
+              text = r.text;
+            } catch {
+              text = '';
+            }
+            notes.push(
+              `Saldría la plantilla de WhatsApp «${found.name}» (sólo por un número real; en la prueba no se envía).`,
+            );
+            return { name: found.name, text, buttons: found.buttons, category: found.category };
           },
           windowOpen: () => true,
           stop: () => null,
@@ -542,7 +623,11 @@ export default {
             text: message.text,
             channel,
           });
-          const reoffer = (r.kind === 'detour' && env.settings.reofferOnDetour) || (r.kind === 'intent' && r.stay);
+          // Una lista no se vuelve a ofrecer como botones (no caben): sigue a la vista en el chat, como en el motor.
+          const reoffer =
+            !s.waiting?.list &&
+            ((r.kind === 'detour' && env.settings.reofferOnDetour) || (r.kind === 'intent' && r.stay));
+          if (r.kind === 'intent') rememberChoice(s, s.waiting, r.option);
           messages.push({
             from: 'assistant',
             text: answer.reply,
@@ -578,7 +663,12 @@ export default {
         trace,
         waiting:
           s.state === 'waiting'
-            ? { kind: s.waiting.kind, nodeId: s.waiting.nodeId, options: s.waiting.options || null }
+            ? {
+                kind: s.waiting.kind,
+                nodeId: s.waiting.nodeId,
+                options: s.waiting.options || null,
+                ...(s.waiting.list ? { list: true } : {}),
+              }
             : null,
         ended: s.state === 'ended',
         outcome: s.outcome,
@@ -605,8 +695,49 @@ export default {
         tags: lists.tags,
         users: lists.users,
         flows: lists.flows,
+        files: lists.files,
+        waTemplates: waTemplatesOf(brandId),
+        realWhatsApp: lists.realWhatsApp,
         attributes,
       };
+    }
+
+    // ---- subir un archivo a la biblioteca de la marca desde el editor (la subida única: server/lib/upload.mjs).
+    // Fuera de transacción se comprueba, se guarda en el disco y después se registra; si el registro falla, el archivo
+    // se borra. Un mismo clientRef de la misma persona no sube dos veces.
+    const uploads = new Map();
+    async function uploadFile(user, input) {
+      const brandId = text(input.brandId, 64);
+      access.require(user, 'automation.manage', brandId);
+      const clientRef = input.clientRef;
+      if (typeof clientRef !== 'string' || !REF.test(clientRef))
+        throw fail(400, 'Falta clientRef.', { code: 'invalid_request', field: 'clientRef' });
+      const key = user.id + ':' + clientRef;
+      if (uploads.has(key)) return { file: uploads.get(key), duplicate: true };
+      const file = receive(input.file, { allow: ['image', 'document'], mimes: [...FLOW_FILE_MIMES] });
+      const storageName = await store(host.dataDir, { area: 'library', brandId }, file);
+      const id = randomUUID();
+      try {
+        host.transaction(db, () => {
+          access.require(user, 'automation.manage', brandId);
+          repo.insertFile(brandId, {
+            id,
+            filename: file.filename,
+            mime: file.mime,
+            size: file.size,
+            storageName,
+            userId: user.id,
+            at: now(),
+          });
+        });
+      } catch (error) {
+        await discard(host.dataDir, 'library', storageName);
+        throw error;
+      }
+      const out = { id, name: file.filename, mime: file.mime, size: file.size };
+      uploads.set(key, out);
+      if (uploads.size > 500) uploads.delete(uploads.keys().next().value);
+      return { file: out, duplicate: false };
     }
 
     // ---- rendimiento por paso (analytics.mjs): por versión (la publicada por omisión) y periodo
@@ -690,6 +821,13 @@ export default {
         const brandId = text(url.searchParams.get('brand'), 64);
         access.require(user, 'inbox.view', brandId);
         host.json(res, 200, { lists: editorLists(brandId) });
+        return true;
+      }
+      if (path === PREFIX + '/files' && method === 'POST') {
+        host.rate('chatflows.upload:' + user.id, 20);
+        const r = await uploadFile(user, (await host.body(req)) ?? {});
+        if (!r.duplicate) host.audit(user, 'chatflow.file', r.file.id);
+        host.json(res, r.duplicate ? 200 : 201, r);
         return true;
       }
       if (path === PREFIX && method === 'POST') {

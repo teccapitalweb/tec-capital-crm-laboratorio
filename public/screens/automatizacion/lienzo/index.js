@@ -238,6 +238,18 @@ export function mountCanvas(root, options = {}) {
     if (ui.narrow) openPanel();
   }
 
+  // Subir un archivo a la biblioteca de la marca desde el panel (sólo si la pantalla anfitriona lo permite). Lo subido
+  // entra en la lista de archivos al momento, para elegirlo sin recargar.
+  const uploadFile =
+    typeof options.uploadFile === 'function' && !options.readOnly
+      ? async file => {
+          const out = await options.uploadFile(file);
+          catalogue = { ...catalogue, files: [out, ...(catalogue.files || []).filter(f => f.id !== out.id)] };
+          store.setContext(context());
+          return out;
+        }
+      : null;
+
   const panel = createPanel(panelEl, store, {
     uid,
     catalogue: () => catalogue,
@@ -245,6 +257,9 @@ export function mountCanvas(root, options = {}) {
     onGo: goTo,
     onClose: () => setSheet(''),
     report,
+    flash,
+    announce,
+    uploadFile,
   });
 
   const outline = createOutline(outlineEl, store, {

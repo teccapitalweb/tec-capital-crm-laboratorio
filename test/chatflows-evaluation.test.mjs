@@ -267,7 +267,7 @@ test('rendimiento por paso: llegaron, siguieron, dónde se fueron, cuánto tarda
   assert.deepEqual(list.brands, [
     { id: 'globalvet', name: list.brands[0].name, canManage: false, attending: list.brands[0].attending },
   ]);
-  assert.ok(list.unavailable.list, 'la pantalla sabe qué tipos de paso no están disponibles');
+  assert.ok(list.unavailable.webhook, 'la pantalla sabe qué tipos de paso no están disponibles');
   assert.equal(typeof list.flows[0].publishedAt, 'number');
   await call(L.origin, `/api/chatflows/${flow.id}/suggestions`, { cookie: gv, body: {}, expected: 403 });
   // las listas de la marca para el editor

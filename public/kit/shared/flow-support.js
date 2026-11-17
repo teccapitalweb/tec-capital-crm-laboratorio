@@ -6,21 +6,33 @@
 import { typeOf } from './flow-model.js';
 
 // ---- Tipos de paso que el motor del servidor sabe ejecutar. Lo demás se rechaza al publicar con un motivo claro.
+//
+// `ctx` (opcional) es el contexto de validación del modelo: con `settings.channels` se avisa que una Plantilla de
+// WhatsApp no sale por otros canales, y con `realWhatsApp: false` (lo manda el servidor) que la marca no tiene un número
+// real de WhatsApp por donde enviarla. Sin `ctx` (el editor sin conexión) esas dos comprobaciones no se hacen.
 export const NOT_YET = 'todavía no lo ejecuta el servidor';
-export function unsupportedProblems(graph) {
+export function unsupportedProblems(graph, ctx = {}) {
   const out = [];
   const push = (node, message) => out.push({ code: 'unsupported', nodeId: node.id, message });
+  const channels = Array.isArray(ctx?.settings?.channels) ? ctx.settings.channels : [];
   for (const node of graph.nodes) {
     const def = typeOf(node.type);
     if (!def) continue;
     const d = def.clean(node.data);
     const name = node.title || def.label;
     switch (node.type) {
-      case 'list':
-        push(node, `«${name}»: la Lista ${NOT_YET}; usa Botones (hasta 3 opciones).`);
-        break;
       case 'template':
-        push(node, `«${name}»: la Plantilla de WhatsApp dentro de un recorrido ${NOT_YET}.`);
+        // Una plantilla sólo existe en WhatsApp real: en otro canal no se manda «otra cosa» en su lugar.
+        if (channels.some(c => c !== 'whatsapp'))
+          push(
+            node,
+            `«${name}»: una Plantilla de WhatsApp sólo sale por WhatsApp; quita Instagram y Facebook de los canales del recorrido o usa un Mensaje.`,
+          );
+        if (ctx?.realWhatsApp === false)
+          push(
+            node,
+            `«${name}»: la marca no tiene un número real de WhatsApp conectado, y una Plantilla de WhatsApp no se puede enviar en el laboratorio.`,
+          );
         break;
       case 'consent':
         push(node, `«${name}»: Suscribir o dar de baja ${NOT_YET}; la baja la registra el asistente cuando la piden.`);
@@ -47,16 +59,12 @@ export function unsupportedProblems(graph) {
         break;
       case 'message':
         d.parts.forEach((p, i) => {
-          if (p.kind === 'media' || p.kind === 'slot')
+          if (p.kind === 'slot')
             push(
               node,
-              `«${name}», parte ${i + 1}: los archivos y los materiales por espacio ${NOT_YET}; usa texto o un material aprobado.`,
+              `«${name}», parte ${i + 1}: el material por espacio ${NOT_YET} (los materiales todavía no tienen espacio); usa un material aprobado o un archivo.`,
             );
         });
-        break;
-      case 'buttons':
-        if (d.header.kind === 'media') push(node, `«${name}»: el encabezado con archivo ${NOT_YET}.`);
-        if (d.saveAs) push(node, `«${name}»: guardar el botón elegido en una variable ${NOT_YET}.`);
         break;
       case 'question':
         if (d.answer.type === 'media' || d.answer.type === 'location')
@@ -103,11 +111,14 @@ export const SYSTEM_KEYS = new Set([
   'cx_score_latest',
 ]);
 
+// Tipos de archivo que un recorrido puede enviar (Mensaje con archivo y encabezado de Botones): los que salen por
+// WhatsApp real y se ven en el chat del laboratorio. La misma lista filtra la biblioteca de la marca en el editor y se
+// vuelve a comprobar al enviar (server/modules/chatflows/runtime.mjs).
+export const FLOW_FILE_MIMES = Object.freeze(['image/jpeg', 'image/png', 'application/pdf']);
+
 // Tipos de paso que no se pueden publicar en ningún caso, con su motivo en palabras de quien arma el recorrido. Los
 // demás se pueden usar; algunas de sus opciones se rechazan y lo dice unsupportedProblems en cuanto se eligen.
 export const UNAVAILABLE_TYPES = Object.freeze({
-  list: 'La Lista todavía no está disponible en los recorridos; usa Botones (hasta 3 opciones).',
-  template: 'Las plantillas de WhatsApp todavía no están disponibles dentro de un recorrido.',
   consent: 'Suscribir o dar de baja todavía no está disponible; la baja la registra el asistente cuando la piden.',
   webhook: 'Un recorrido todavía no llama a servicios externos.',
   choose_course: '«¿Qué curso te interesa?» todavía no está disponible; el curso lo decide el anuncio o el asistente.',

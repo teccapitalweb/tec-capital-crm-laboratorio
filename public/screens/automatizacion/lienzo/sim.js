@@ -914,10 +914,16 @@ export function fromServer(previous, r) {
       transcript.push({
         who: 'out',
         nodeId: m.nodeId || null,
-        label: m.from === 'assistant' ? 'Contesta el asistente' : '',
+        label:
+          m.from === 'assistant' ? 'Contesta el asistente' : m.template ? 'Plantilla de WhatsApp: ' + m.template : '',
         text: m.text,
         flyer: Boolean(m.flyer),
-        options: (m.buttons || []).map(labelOf).filter(Boolean),
+        media: m.media || '',
+        // Una lista: el botón que la abre y sus filas, en orden.
+        listButton: m.list ? m.list.button : '',
+        options: m.list
+          ? (m.list.sections || []).flatMap(s => (s.rows || []).map(labelOf)).filter(Boolean)
+          : (m.buttons || []).map(labelOf).filter(Boolean),
       });
   }
   for (const text of r.notes || []) transcript.push({ who: 'note', nodeId: null, text });

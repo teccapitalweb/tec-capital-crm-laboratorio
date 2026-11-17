@@ -127,7 +127,7 @@ export function createStore(options = {}) {
       const result = validateGraph(graph, ctx);
       // Conectado al servidor (`serverRules` en el contexto), lo que el motor todavía no ejecuta es un error desde que
       // se elige: así nadie arma un recorrido que luego no se puede publicar sin enterarse antes.
-      if (ctx && ctx.serverRules) result.errors = [...result.errors, ...unsupportedProblems(graph)];
+      if (ctx && ctx.serverRules) result.errors = [...result.errors, ...unsupportedProblems(graph, ctx)];
       return { ...result, ...issuesByNode(result) };
     });
 

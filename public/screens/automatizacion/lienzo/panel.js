@@ -19,9 +19,19 @@ import {
   portsOf,
   typeOf,
 } from '../../../kit/shared/flow-model.js';
+import { FLOW_FILE_MIMES } from '../../../kit/shared/flow-support.js';
 import { attrs, html, render } from '../../../kit/html.js';
 import { icon } from './icons.js';
 import { targetOptions } from './outline.js';
+
+// Contenido de un archivo elegido, en base64 (lo que recibe la subida única del servidor).
+const readBase64 = file =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ''));
+    reader.onerror = () => reject(reader.error || new Error('No se pudo leer el archivo.'));
+    reader.readAsDataURL(file);
+  });
 
 const getIn = (value, path) =>
   String(path)
@@ -61,7 +71,8 @@ const SHORTCUTS = [
   ['Mayús + arrastrar', 'Marca varios pasos'],
 ];
 
-// `options`: {uid, catalogue(), onConnect(id, salida, valor), onGo(id), onClose(), report(resultado, texto)}.
+// `options`: {uid, catalogue(), onConnect(id, salida, valor), onGo(id), onClose(), report(resultado, texto), flash(texto),
+// announce(texto), uploadFile?({name, type, base64}) → promesa con {id, name, mime}}.
 export function createPanel(container, store, options) {
   const doc = container.ownerDocument;
   const uid = options.uid;
@@ -215,11 +226,24 @@ ${value ?? ''}</textarea>
             ${helpOf(field)}${errorSlot(path)}
           </div>`;
         }
+        // Archivos: además de elegir uno de la biblioteca de la marca, se puede subir uno nuevo (imagen o PDF).
+        const upload =
+          field.source === 'files' && options.uploadFile
+            ? html`<label class="lz-upload">
+                <input type="file" class="lz-sr" data-do="subir" data-f="${path}" accept="${FLOW_FILE_MIMES.join(',')}" aria-label="Subir un archivo para ${field.label}" />
+                <span aria-hidden="true">Subir archivo</span>
+              </label>`
+            : '';
+        const none =
+          field.source === 'files' && !items.length
+            ? html`<p class="lz-hint">La marca todavía no tiene imágenes ni PDF en su biblioteca.</p>`
+            : '';
         return html`<div class="lz-field">
           ${label}
           <select id="${id}" data-do="ref" data-f="${path}">
             ${optionsOf(items, value, field.empty)}
           </select>
+          ${none}${upload}
           ${helpOf(field)}${errorSlot(path)}
         </div>`;
       }
@@ -677,6 +701,27 @@ ${value ?? ''}</textarea>
         store.seal();
       },
       salida: (event, el) => options.onConnect(nodeId(), el.dataset.port, el.value),
+      // Sube el archivo elegido a la biblioteca de la marca y lo deja puesto en el campo.
+      async subir(event, el) {
+        const id = nodeId();
+        const path = el.dataset.f;
+        const chosen = el.files && el.files[0];
+        el.value = '';
+        if (!id || !chosen || !options.uploadFile) return;
+        if (!FLOW_FILE_MIMES.includes(chosen.type)) {
+          options.flash('Sólo se pueden subir imágenes JPG o PNG y documentos PDF.');
+          return;
+        }
+        options.announce('Subiendo «' + chosen.name + '»…');
+        try {
+          const base64 = await readBase64(chosen);
+          const file = await options.uploadFile({ name: chosen.name, type: chosen.type, base64 });
+          if (!store.node(id)) return;
+          options.report(store.setData(id, path, file.id), 'Archivo «' + file.name + '» subido y elegido.');
+        } catch (error) {
+          options.flash('No se pudo subir el archivo: ' + (error?.message || 'inténtalo de nuevo'));
+        }
+      },
     },
     click: {
       'lista-agregar'(event, el) {

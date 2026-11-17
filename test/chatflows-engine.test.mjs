@@ -78,10 +78,236 @@ test('al publicar se rechaza con su motivo cada tipo de paso que el servidor tod
     ],
     [],
   );
+  // La Lista, la Plantilla, los archivos y «guardar el botón elegido» ya los ejecuta el motor; el material por espacio
+  // sigue rechazado.
   const problems = unsupportedProblems(graph);
-  assert.deepEqual(problems.map(p => p.nodeId).sort(), ['b', 'c', 'd', 'e', 'f', 'g', 'i', 'k']);
+  assert.deepEqual(problems.map(p => p.nodeId).sort(), ['b', 'e', 'f', 'g', 'i', 'k']);
   assert.ok(problems.every(p => p.code === 'unsupported' && p.message.length > 20));
   assert.match(problems.find(p => p.nodeId === 'b').message, /servicios externos/);
+  assert.match(problems.find(p => p.nodeId === 'k').message, /material por espacio/);
+  // Una Plantilla de WhatsApp sólo pasa la revisión con un número real y sin otros canales.
+  const tpl = graphOf([['d', 'template', { waTemplateId: 'x' }]], []);
+  assert.deepEqual(unsupportedProblems(tpl, { realWhatsApp: true, settings: { channels: ['whatsapp'] } }), []);
+  assert.match(unsupportedProblems(tpl, { realWhatsApp: false })[0].message, /número real de WhatsApp/);
+  assert.match(
+    unsupportedProblems(tpl, { realWhatsApp: true, settings: { channels: ['whatsapp', 'instagram'] } })[0].message,
+    /sólo sale por WhatsApp/,
+  );
+  const media = graphOf(
+    [
+      ['m', 'message', { parts: [{ kind: 'media', fileId: 'f1' }] }],
+      ['b', 'buttons', { header: { kind: 'media', fileId: 'f1' }, text: 'Hola', saveAs: 'eleccion' }],
+    ],
+    [],
+  );
+  assert.deepEqual(unsupportedProblems(media), []);
+});
+
+// Una lista de seis cursos: tres secciones de dos filas.
+const sixRows = (extra = {}) => ({
+  header: 'Cursos',
+  text: 'Hola {{nombre}}, ¿cuál te interesa?',
+  footer: 'Elige uno',
+  button: 'Ver cursos',
+  sections: [
+    {
+      title: 'Aves',
+      rows: [
+        { id: 'r1', title: 'Aves de corral', description: 'Básico', do: { type: 'goto' } },
+        { id: 'r2', title: 'Aves exóticas', description: '', do: { type: 'goto' } },
+      ],
+    },
+    {
+      title: 'Perros',
+      rows: [
+        { id: 'r3', title: 'Cachorros', description: '', do: { type: 'goto' } },
+        { id: 'r4', title: 'Perros senior', description: '', do: { type: 'intent', intent: 'price', stay: true } },
+      ],
+    },
+    {
+      title: 'Gatos',
+      rows: [
+        { id: 'r5', title: 'Gatos', description: '', do: { type: 'goto' } },
+        { id: 'r6', title: 'Felinos salvajes', description: '', do: { type: 'goto' } },
+      ],
+    },
+  ],
+  saveAs: 'curso_elegido',
+  ...extra,
+});
+
+test('lista: más de tres opciones, se elige por el número, por el nombre o por la fila pulsada, y se guarda', () => {
+  const graph = graphOf(
+    [
+      ['l', 'list', sixRows()],
+      ['a', 'end', { text: 'Elegiste {{var.curso_elegido}}' }],
+      ['b', 'end', { text: 'Gatos' }],
+    ],
+    [
+      ['n1', 'next', 'l'],
+      ['l', 'opt:r2', 'a'],
+      ['l', 'opt:r5', 'b'],
+      ['l', 'opt:r6', 'a'],
+    ],
+  );
+  const f = fakeIo();
+  const env = makeEnv({ graph, settings: {}, io: f.io, now: NOW });
+  const s = session(env);
+  advance(s, env);
+  assert.equal(s.state, 'waiting');
+  assert.equal(s.waiting.list, true);
+  assert.equal(s.waiting.saveAs, 'curso_elegido');
+  assert.equal(s.waiting.options.length, 6);
+  const sent = f.sent[0];
+  assert.equal(sent.text, 'Cursos\n\nHola Ana, ¿cuál te interesa?\n\nElige uno');
+  assert.equal(sent.list.button, 'Ver cursos');
+  assert.equal(sent.list.sections.length, 3);
+  assert.equal(sent.list.sections[0].rows[0].id, 'l:r1', 'la fila lleva el id del paso');
+  assert.equal(sent.buttons, undefined, 'una lista no se manda como botones');
+  const kind = message => route(s, env, message, classify);
+  assert.equal(kind({ text: '5' }).option.id, 'r5');
+  assert.equal(kind({ text: 'aves EXÓTICAS' }).option.id, 'r2');
+  assert.equal(kind({ text: '4' }).kind, 'intent');
+  // La fila pulsada en WhatsApp llega en `reply` (columna JSON): se reconoce por su id aunque el texto no coincida.
+  const tap = { text: 'otra cosa', reply: JSON.stringify({ kind: 'list', id: 'l:r6', title: 'Felinos salvajes' }) };
+  assert.equal(kind(tap).option.id, 'r6');
+  // Una fila de OTRA lista (otro paso) no cuenta.
+  assert.equal(kind({ text: 'otra cosa', reply: { kind: 'list', id: 'zz:r6' } }).kind, 'detour');
+  input(s, env, kind(tap));
+  assert.equal(s.vars.curso_elegido, 'Felinos salvajes');
+  assert.equal(f.sent.at(-1).text, 'Elegiste Felinos salvajes');
+});
+
+test('lista con «repetir las opciones»: se vuelve a ofrecer como texto numerado, nunca como botones', () => {
+  const graph = graphOf([['l', 'list', sixRows({ onUnexpected: 'repeat' })]], [['n1', 'next', 'l']]);
+  const f = fakeIo();
+  const env = makeEnv({ graph, settings: { fallbackText: 'Elige una opción.' }, io: f.io, now: NOW });
+  const s = session(env);
+  advance(s, env);
+  input(s, env, route(s, env, { text: 'mmm' }, classify));
+  const again = f.sent.at(-1);
+  assert.equal(again.buttons, undefined);
+  assert.match(again.text, /^Elige una opción\.\n\n1\. Aves de corral\n2\. Aves exóticas\n3\. Cachorros/);
+});
+
+test('botones: «guardar la opción elegida» deja el texto del botón en la variable', () => {
+  const graph = graphOf(
+    [
+      [
+        'b',
+        'buttons',
+        {
+          text: '¿Horario?',
+          options: [
+            { id: 'm', label: 'Mañana', do: { type: 'goto' } },
+            { id: 't', label: 'Tarde', do: { type: 'goto' } },
+          ],
+          saveAs: 'horario',
+        },
+      ],
+      ['e', 'end', { text: 'Anotado: {{var.horario}}' }],
+    ],
+    [
+      ['n1', 'next', 'b'],
+      ['b', 'opt:t', 'e'],
+    ],
+  );
+  const f = fakeIo();
+  const env = makeEnv({ graph, settings: {}, io: f.io, now: NOW });
+  const s = session(env);
+  advance(s, env);
+  input(s, env, route(s, env, { text: '2' }, classify));
+  assert.equal(s.vars.horario, 'Tarde');
+  assert.equal(f.sent.at(-1).text, 'Anotado: Tarde');
+});
+
+test('archivos: el motor pide el archivo a su puerta de salida; si no está, no manda otra cosa y pasa a una persona', () => {
+  const graph = graphOf(
+    [
+      [
+        'm',
+        'message',
+        {
+          parts: [
+            { kind: 'text', text: 'Te comparto el temario' },
+            { kind: 'media', fileId: 'f1', caption: 'Temario de {{curso}}' },
+          ],
+        },
+      ],
+      [
+        'b',
+        'buttons',
+        {
+          header: { kind: 'media', fileId: 'f2' },
+          text: '¿Te sirve?',
+          options: [{ id: 'si', label: 'Sí', do: { type: 'goto' } }],
+        },
+      ],
+    ],
+    [
+      ['n1', 'next', 'm'],
+      ['m', 'next', 'b'],
+    ],
+  );
+  const files = {
+    f1: { id: 'f1', name: 'temario.pdf', mime: 'application/pdf' },
+    f2: { id: 'f2', name: 'flyer.png', mime: 'image/png' },
+  };
+  let f = fakeIo({ file: id => files[id] || { reason: 'No está' } });
+  let env = makeEnv({ graph, settings: {}, io: f.io, now: NOW });
+  let s = session(env);
+  advance(s, env);
+  assert.equal(s.state, 'waiting');
+  assert.deepEqual(f.sent[1].file, files.f1);
+  assert.equal(f.sent[1].text, 'Temario de Aves');
+  assert.deepEqual(f.sent[2].file, files.f2);
+  // De otra marca (la puerta de salida no lo encuentra): el mensaje se corta ahí y pasa a una persona con aviso.
+  f = fakeIo({ file: () => ({ reason: 'El archivo ya no está en la biblioteca de la marca' }) });
+  env = makeEnv({ graph, settings: {}, io: f.io, now: NOW });
+  s = session(env);
+  const finals = advance(s, env);
+  assert.equal(s.outcome, 'handoff');
+  assert.deepEqual(finals.handoff, { to: 'queue', notice: true });
+  assert.equal(f.sent.length, 1, 'sólo salió el texto anterior al archivo');
+  assert.ok(f.logs.some(([event, , , detail]) => event === 'error' && /biblioteca de la marca/.test(detail)));
+});
+
+test('plantilla: sale con la ventana cerrada, puede esperar sus botones y sin plantilla válida no manda nada', () => {
+  const graph = graphOf(
+    [
+      ['t', 'template', { waTemplateId: 'w1', wait: true, buttons: ['Sí, quiero', 'No, gracias'] }],
+      ['y', 'end', { text: 'Genial' }],
+    ],
+    [
+      ['n1', 'next', 't'],
+      ['t', 'opt:1', 'y'],
+    ],
+  );
+  const template = {
+    name: 'oferta',
+    text: 'Hola Ana, tenemos lugar.',
+    category: 'marketing',
+    template: {},
+    buttons: ['Sí, quiero', 'No, gracias'],
+  };
+  let f = fakeIo({ windowOpen: () => false, template: () => template });
+  let env = makeEnv({ graph, settings: {}, io: f.io, now: NOW });
+  let s = session(env);
+  advance(s, env);
+  assert.equal(s.state, 'waiting', 'la ventana cerrada no detiene a la plantilla');
+  assert.equal(f.sent[0].template, template);
+  assert.deepEqual(
+    s.waiting.options.map(o => o.label),
+    ['Sí, quiero', 'No, gracias'],
+  );
+  assert.equal(route(s, env, { text: 'Sí, quiero' }, classify).port, 'opt:1');
+  // Sin plantilla aprobada (o sin número real): termina y pasa a una persona; nada sale en su lugar.
+  f = fakeIo({ template: () => ({ reason: 'Las plantillas de WhatsApp sólo salen por un número real' }) });
+  env = makeEnv({ graph, settings: {}, io: f.io, now: NOW });
+  s = session(env);
+  advance(s, env);
+  assert.equal(s.outcome, 'handoff');
+  assert.equal(f.sent.length, 0);
 });
 
 test('respuestas de una Pregunta: formatos que se aceptan y valor que se guarda', () => {

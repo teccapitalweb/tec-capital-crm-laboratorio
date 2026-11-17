@@ -14,8 +14,10 @@ import { assertSchemaCurrent, schemaShape } from './helpers/schema.mjs';
 import { call, sleep, until, whatsappLab } from './helpers/crm.mjs';
 import { NUMBER, metaPricing, metaStatus, metaText } from './helpers/fake-meta.mjs';
 
-// lo que este encargo añade sobre lo publicado en main (y lo que depende de ello, como channel-health)
-const NEW = /^(broadcasts|messages|channel-health)\//;
+// lo que este encargo añade sobre lo publicado en main (y lo que depende de ello, como channel-health). También
+// chatflows/0002, que llegó después y añade una columna a messages: una base de antes de messages/0001 no puede
+// tenerla ya, y sin excluirla las columnas de messages quedarían en otro orden que en una base nueva.
+const NEW = /^(broadcasts|messages|channel-health)\/|^chatflows\/0002-/;
 
 async function workspace(t) {
   const dir = await mkdtemp(join(tmpdir(), 'crm-difusiones-'));
