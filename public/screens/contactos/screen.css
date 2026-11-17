@@ -1,15 +1,49 @@
 /*
  * Estilos propios de la pantalla «Contactos» (lista a escala). Sólo la composición que el kit no trae, con
- * el prefijo ct- y siempre con variables de public/tokens.css.
+ * el prefijo ct- y siempre con variables de public/tokens.css. Tinta: el total como cifra lima en la cabecera,
+ * buscador y filtros en píldora sobre la página, la tabla en su tarjeta blanca y el panel con piezas.
  */
 
-.ct-herramientas {
-  display: grid;
-  gap: var(--space-5);
+.ct-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-page);
 }
 
-.ct-buscar {
-  max-width: 440px;
+.ct-page > * {
+  flex-shrink: 0;
+}
+
+.ct-page > .k-head {
+  margin-bottom: 0;
+}
+
+.ct-total {
+  align-self: flex-start;
+  min-width: 180px;
+}
+
+/* Buscador en su fila; los filtros rápidos y «Más filtros» en la siguiente, todos en píldora. */
+.ct-herramientas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-5) var(--space-3);
+  min-width: 0;
+}
+
+.ct-herramientas > .ct-buscar,
+.ct-herramientas > .k-hint,
+.ct-filtros[open] {
+  flex-basis: 100%;
+}
+
+.ct-buscar .k-field {
+  flex: 0 1 460px;
+}
+
+.ct-buscar .k-input {
+  flex: 1 1 auto;
 }
 
 .ct-rapidos {
@@ -17,15 +51,8 @@
   gap: var(--space-3);
 }
 
-.ct-rapido {
-  border-radius: var(--radius-pill);
-  box-shadow: none;
-}
-
-.ct-rapido[aria-pressed='true'] {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+.ct-filtros {
+  min-width: 0;
 }
 
 .ct-filtros > summary {
@@ -39,12 +66,16 @@
 
 .ct-filtros[open] > summary {
   margin-bottom: var(--space-5);
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--ink);
+  color: var(--on-ink);
 }
 
 /* El resumen del filtro sólo ocupa sitio cuando dice algo. */
+.ct-herramientas > .k-hint {
+  color: var(--text-2);
+  font-size: var(--font-sm);
+}
+
 .ct-herramientas > .k-hint:empty {
   display: none;
 }
@@ -62,13 +93,22 @@
   gap: var(--space-2);
 }
 
+/* El panel del contacto: cada sección es una pieza con su rótulo en mayúsculas. */
 .ct-ficha {
-  gap: var(--space-8);
+  gap: var(--space-5);
 }
 
 .ct-seccion {
   display: grid;
   gap: var(--space-3);
+  padding: var(--space-6) var(--space-7);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  --k-fill: var(--surface);
+}
+
+.ct-seccion[data-key='ct-whatsapp'] {
+  background: var(--mint);
 }
 
 .ct-seccion p {
@@ -77,9 +117,11 @@
 
 .ct-subtitulo {
   margin: 0;
-  color: var(--text-2);
+  color: var(--ink);
   font-size: var(--font-sm);
-  font-weight: 600;
+  font-weight: var(--weight-black);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .ct-datos {
@@ -96,14 +138,20 @@
 }
 
 .ct-dato dt {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .ct-dato dd {
   min-width: 0;
   margin: 0;
   color: var(--ink);
+  font-weight: var(--weight-bold);
   overflow-wrap: anywhere;
+}
+
+.ct-seccion .k-muted,
+.ct-seccion .k-hint {
+  color: var(--text-2);
 }
 
 .ct-lista {
@@ -122,9 +170,17 @@
   overflow-wrap: anywhere;
 }
 
+.ct-seccion .k-chip--draft {
+  background: var(--line);
+}
+
 @media (max-width: 680px) {
-  .ct-buscar {
-    max-width: none;
+  .ct-total {
+    width: 100%;
+  }
+
+  .ct-buscar .k-field {
+    flex-basis: 100%;
   }
 
   .ct-dato {
