@@ -551,6 +551,20 @@ select.k-input {
 }
 
 /* Las hojas actuales esconden todo input de archivo; el del kit se ve. */
+/* El botón del selector de archivo, en píldora tinta como el resto. */
+.k-input[type='file']::file-selector-button {
+  min-height: 36px;
+  margin-right: var(--space-5);
+  padding: 0 var(--space-7);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--on-ink);
+  font: inherit;
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
 .k-field .k-input[type='file'] {
   display: block;
   padding: var(--space-3);
@@ -562,9 +576,10 @@ select.k-input {
   cursor: pointer;
 }
 
+/* Ayuda bajo un campo o una línea de apoyo: 12 px (11 px se perdía junto a los títulos grandes de Tinta). */
 .k-hint {
-  color: var(--text-3);
-  font-size: var(--font-min);
+  color: var(--text-2);
+  font-size: var(--font-sm);
   line-height: 1.6;
 }
 
@@ -1195,15 +1210,15 @@ th[aria-sort] > .k-table__sort {
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  min-height: var(--touch);
+  min-height: var(--control);
   margin: 0;
-  padding: var(--space-3) var(--space-6);
-  border: 1px solid transparent;
+  padding: var(--space-3) var(--space-6) var(--space-3) var(--space-3);
+  border: 0;
   border-radius: var(--radius-pill);
-  background: var(--soft);
-  color: var(--text-2);
+  background: var(--k-fill, var(--soft));
+  color: var(--ink);
   font: inherit;
-  font-size: var(--font-md);
+  font-size: var(--font-lg);
   font-weight: var(--weight-bold);
   text-align: left;
   cursor: pointer;
@@ -1212,6 +1227,7 @@ th[aria-sort] > .k-table__sort {
 .k-step__btn:disabled {
   opacity: 1;
   background: transparent;
+  color: var(--text-2);
   cursor: default;
 }
 
@@ -1219,12 +1235,13 @@ th[aria-sort] > .k-table__sort {
   display: inline-grid;
   flex: none;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--soft);
-  color: var(--text-2);
-  font-size: var(--font-min);
+  background: var(--line);
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1239,24 +1256,24 @@ th[aria-sort] > .k-table__sort {
   white-space: nowrap;
 }
 
+/* Paso actual en tinta con su número en lima; los hechos con el número en menta. */
 .k-step.is-current .k-step__btn {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--ink);
+  color: var(--on-ink);
 }
 
 .k-step.is-current .k-step__n {
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--lime);
+  color: var(--ink);
 }
 
 .k-step.is-done .k-step__btn {
-  color: var(--text-2);
+  color: var(--ink);
 }
 
 .k-step.is-done .k-step__n {
-  background: var(--ok-soft);
-  color: var(--ok);
+  background: var(--mint);
+  color: var(--ink);
 }
 
 .k-wizard__where {
@@ -1274,7 +1291,7 @@ th[aria-sort] > .k-table__sort {
 
 .k-wizard__title {
   color: var(--ink);
-  font-size: var(--font-xl);
+  font-size: var(--font-section);
   font-weight: var(--weight-black);
   letter-spacing: -0.02em;
 }
@@ -1323,13 +1340,15 @@ th[aria-sort] > .k-table__sort {
 }
 
 /* Cifras proporcionales en la tarjeta; tabular-nums se reserva para tablas y ejes. */
+/* La cifra es lo primero que se lee: en la escala del título de la vista (40 px; 30 px en celular). */
 .k-tile__value {
   overflow: hidden;
+  padding-block: var(--space-1);
   color: var(--ink);
-  font-size: var(--font-2xl);
+  font-size: var(--font-title);
   font-weight: var(--weight-black);
-  letter-spacing: -0.03em;
-  line-height: 1.25;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
