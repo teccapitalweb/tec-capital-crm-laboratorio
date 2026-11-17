@@ -90,20 +90,75 @@ test('hay archivos que revisar: el kit, la hoja de variables y la pantalla de ej
   assert.ok(JS.length >= 15 && CSS.length >= 2);
 });
 
-test('tokens.css tiene todas las variables de hoy, con los mismos valores', () => {
-  let vistas = 0;
-  for (const hoja of ['public/styles.css', 'public/polish.css']) {
-    for (const [nombre, valor] of variablesDeRaiz(leer(hoja))) {
-      vistas++;
-      assert.ok(TOKENS.has(nombre), `${nombre} (de ${hoja}) falta en public/tokens.css`);
-      assert.equal(
-        normal(TOKENS.get(nombre)),
-        normal(valor),
-        `${nombre} vale distinto en ${hoja} y en public/tokens.css`,
-      );
-    }
-  }
-  assert.ok(vistas >= 30, 'no se pudieron leer las variables de las hojas actuales');
+test('tokens.css es la única hoja que declara las variables de diseño', () => {
+  // Con Tinta (docs/DISENO_Y_AUDITORIA.md) las hojas de antes ya no repiten la paleta: si una volviera a declarar
+  // una variable en :root, pisaría el valor de tokens.css según el orden de carga.
+  const hojas = readdirSync(join(RAIZ, 'public'))
+    .filter(nombre => nombre.endsWith('.css') && nombre !== 'tokens.css')
+    .map(nombre => `public/${nombre}`);
+  assert.ok(hojas.length >= 8, 'no se encontraron las hojas de public/');
+  for (const hoja of [...hojas, ...CSS])
+    for (const [nombre] of variablesDeRaiz(leer(hoja)))
+      assert.fail(`${hoja} declara ${nombre} en :root; las variables de diseño sólo van en public/tokens.css`);
+  // Las variables de Niebla siguen existiendo (las usan las hojas de antes), ahora apuntando a Tinta.
+  for (const nombre of [
+    '--ink',
+    '--muted',
+    '--text-1',
+    '--text-2',
+    '--text-3',
+    '--line',
+    '--soft',
+    '--glass',
+    '--bg',
+    '--accent',
+    '--accent-strong',
+    '--accent-soft',
+    '--accent-tint',
+    '--accent-line',
+    '--ok',
+    '--ok-soft',
+    '--ok-line',
+    '--warn',
+    '--warn-soft',
+    '--warn-line',
+    '--bad',
+    '--bad-soft',
+    '--bad-line',
+    '--wa',
+    '--ig',
+    '--fb',
+    '--shadow-1',
+    '--shadow-2',
+    '--shadow-card',
+    '--shadow-lift',
+    '--ease',
+    '--ring',
+  ])
+    assert.ok(TOKENS.has(nombre), `${nombre} falta en public/tokens.css`);
+  // La paleta de Tinta, con los valores de los bocetos aprobados.
+  for (const [nombre, valor] of Object.entries({
+    '--ink': '#16181d',
+    '--ink-2': '#23262d',
+    '--ink-3': '#2a2d35',
+    '--page': '#eceef3',
+    '--surface': '#fff',
+    '--soft': '#f4f5f8',
+    '--line': '#e3e5ec',
+    '--text-2': '#3a3f4a',
+    '--on-ink-muted': '#aab0bc',
+    '--on-ink-soft': '#c5c9d3',
+    '--lime': '#d9f24f',
+    '--lilac': '#e3dcff',
+    '--mint': '#d3f4e2',
+    '--sky': '#d6ebff',
+    '--butter': '#fff0b8',
+    '--peach': '#ffe0cf',
+    '--radius-card': '28px',
+    '--radius-control': '16px',
+    '--radius-pill': '999px',
+  }))
+    assert.equal(normal(TOKENS.get(nombre) ?? ''), valor, `${nombre} no tiene el valor de Tinta`);
   // La hoja de variables no decide tipografía ni fondo de la página: eso sigue en styles.css.
   assert.ok(
     !/(?:^|[;{\s])(?:font-family|color|background)\s*:/.test(
