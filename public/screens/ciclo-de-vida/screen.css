@@ -1,55 +1,109 @@
-/* Ciclo de conversaciones: tarjetas de ajustes por marca (sólo variables de public/tokens.css). */
+/*
+ * Ciclo de conversaciones: tarjetas de ajustes por marca (sólo variables de public/tokens.css). Tinta: una tarjeta
+ * blanca por marca con su nombre grande; cada ajuste es una pieza redonda que se toca entera y el botón «Guardar»
+ * en tinta.
+ */
 .cv-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-5);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--gap-page);
 }
+
 .cv-card {
   display: grid;
-  gap: var(--space-4);
+  align-content: start;
+  gap: var(--space-3);
 }
+
 .cv-card h2 {
-  margin: 0;
-  font-size: var(--font-lg);
+  margin: 0 0 var(--space-3);
+  color: var(--ink);
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
 }
+
 .cv-row {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-4);
-  min-height: 40px;
+  gap: var(--space-5);
+  min-height: var(--control);
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-block);
+  background: var(--soft);
   cursor: pointer;
+  transition: background-color 0.16s var(--ease);
 }
+
+.cv-row:hover {
+  background: var(--line);
+}
+
+/* Encendido: la pieza pasa a lima, para ver de un vistazo qué marca tiene qué. */
+.cv-row:has(input:checked) {
+  background: var(--lime);
+}
+
 .cv-row input {
+  flex-shrink: 0;
   width: 20px;
   height: 20px;
-  margin-top: 2px;
-  flex-shrink: 0;
+  margin: 2px 0 0;
+  accent-color: var(--ink);
 }
+
 .cv-row span {
   display: grid;
   gap: 2px;
+  color: var(--ink);
 }
+
 .cv-row small {
   color: var(--text-2);
   font-size: var(--font-sm);
-  line-height: 1.4;
+  line-height: 1.45;
 }
+
+.cv-row:has(input:checked) small {
+  color: var(--ink);
+}
+
 .cv-days {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  color: var(--text-2);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-6);
+  border-radius: var(--radius-block);
+  background: var(--sky);
+  color: var(--ink);
   font-size: var(--font-md);
+  font-weight: var(--weight-bold);
 }
+
 .cv-days input {
-  width: 72px;
-  min-height: 40px;
+  width: 84px;
+  min-height: var(--control);
+  padding: 0 var(--space-5);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--font-lead);
+  font-weight: var(--weight-black);
+  text-align: center;
 }
+
 .cv-actions {
   display: flex;
   justify-content: flex-end;
+  padding-top: var(--space-3);
 }
-.cv-actions .k-btn {
-  min-height: 40px;
+
+@media (prefers-reduced-motion: reduce) {
+  .cv-row {
+    transition: none;
+  }
 }
