@@ -1,0 +1,9 @@
+{
+  "id": "reglas",
+  "title": "Reglas por mensaje",
+  "visibility": "preview",
+  "nav": { "group": "WhatsApp", "icon": "list-checks", "label": "Reglas", "order": 44.6 },
+  "roles": ["admin", "agent"],
+  "entry": "index.js",
+  "styles": ["screen.css"]
+}
