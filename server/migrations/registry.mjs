@@ -23,6 +23,7 @@ import lifecycle from './named/lifecycle/index.mjs';
 import messages from './named/messages/index.mjs';
 import queues from './named/queues/index.mjs';
 import realMode from './named/real-mode/index.mjs';
+import sequences from './named/sequences/index.mjs';
 import waCutover from './named/wa-cutover/index.mjs';
 
 // «contacts» va después de «identity» aunque el alfabeto diga otra cosa: su búsqueda usa la clave de teléfono.
@@ -37,6 +38,7 @@ import waCutover from './named/wa-cutover/index.mjs';
 // «lifecycle» va al final: añade columnas a conversations y llegó después de todas las publicadas.
 // «chatflows» va al final: tablas propias (recorridos) y llegó después de todas las publicadas.
 // «conversations» va al final: la bandeja nueva (vistas guardadas e índices); usa conversations.state de «lifecycle».
+// «sequences» va al final: tablas propias (secuencias de seguimiento) y llegó después de todas las publicadas.
 export const NAMED = defineRegistry([
   ...attributes,
   ...broadcasts,
@@ -55,4 +57,5 @@ export const NAMED = defineRegistry([
   ...lifecycle,
   ...chatflows,
   ...conversations,
+  ...sequences,
 ]);
