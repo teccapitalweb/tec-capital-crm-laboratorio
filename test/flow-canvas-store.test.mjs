@@ -353,12 +353,21 @@ test('mover: sobre la rejilla, en coordenadas enteras, y un arrastre es un solo 
 
 // ---- Eliminar y duplicar ---------------------------------------------------------------------------------------------
 
-test('eliminar: se van el paso y sus conexiones de entrada y de salida; el Inicio no se puede quitar', () => {
+test('eliminar: se van el paso y sus conexiones; lo que llegaba a él sigue a su único destino; el Inicio no se quita', () => {
   const store = open();
   store.select(['n3', 'n5']);
-  assert.deepEqual(store.deleteNodes(['n3']), { ok: true, removed: ['n3'] });
+  // n3 lleva sólo al Fin (n5): el botón que llevaba a n3 ahora lleva al Fin.
+  assert.deepEqual(store.deleteNodes(['n3']), {
+    ok: true,
+    removed: ['n3'],
+    reconnected: [{ from: 'n2', port: 'opt:o1', to: 'n5' }],
+  });
   assert.deepEqual(ids(store), ['n1', 'n2', 'n4', 'n5']);
-  assert.deepEqual(copyOf(store.graph.edges), [E('n1', 'next', 'n2'), E('n2', 'opt:o2', 'n4')]);
+  assert.deepEqual(copyOf(store.graph.edges), [
+    E('n1', 'next', 'n2'),
+    E('n2', 'opt:o2', 'n4'),
+    E('n2', 'opt:o1', 'n5'),
+  ]);
   assert.deepEqual(store.selection.nodes, ['n5'], 'lo eliminado sale de la selección');
   refused(store.deleteNodes(['n1']), 'start');
   refused(store.deleteNodes(['nadie']), 'missing');
@@ -381,6 +390,45 @@ test('eliminar: se van el paso y sus conexiones de entrada y de salida; el Inici
   other.select(['n3', 'n4']);
   assert.ok(other.deleteSelection().ok);
   assert.deepEqual(ids(other), ['n1', 'n2', 'n5']);
+});
+
+test('eliminar de en medio: A → X → B queda A → B; con salidas a sitios distintos no se adivina y se dice qué quedó sin camino', () => {
+  // Inicio → Saludo (m) → Espera (d) → Fin (f): quitar la espera une el saludo con el Fin, y deshacer lo devuelve todo.
+  const chain = createStore({
+    graph: {
+      v: 1,
+      start: 's',
+      variables: [],
+      nodes: [N('s', 'start'), N('m', 'message', say('Hola')), N('d', 'delay', { seconds: 3 }), N('f', 'end')],
+      edges: [E('s', 'next', 'm'), E('m', 'next', 'd'), E('d', 'next', 'f')],
+    },
+  });
+  const original = copyOf(chain.graph);
+  const result = chain.deleteNodes(['d']);
+  assert.deepEqual(result.reconnected, [{ from: 'm', port: 'next', to: 'f' }]);
+  assert.equal(result.stranded, undefined);
+  assert.equal(chain.edgeFrom('m', 'next'), 'f');
+  assert.deepEqual(chain.issues().warnings, [], 'nada quedó suelto');
+  chain.undo();
+  assert.deepEqual(copyOf(chain.graph), original, 'deshacer devuelve el grafo original en un paso');
+  // Quitar dos seguidos (m y d): el Inicio llega directo al Fin.
+  chain.deleteNodes(['m', 'd']);
+  assert.equal(chain.edgeFrom('s', 'next'), 'f');
+  chain.undo();
+  // Unos botones con todas sus opciones al mismo paso también se puentean.
+  const same = open();
+  same.connect('n2', 'opt:o2', 'n3');
+  assert.deepEqual(same.deleteNodes(['n2']).reconnected, [{ from: 'n1', port: 'next', to: 'n3' }]);
+
+  // Con salidas a sitios distintos (n2 lleva a n3 y a n4): se quita como antes y se dice lo que quedó sin camino.
+  const split = open();
+  const r = split.deleteNodes(['n2']);
+  assert.equal(r.reconnected, undefined);
+  assert.deepEqual(r.stranded, ['n3', 'n4', 'n5']);
+  assert.equal(split.edgeFrom('n1', 'next'), null);
+  split.undo();
+  assert.deepEqual(copyOf(split.graph), normalizeGraph(sample()));
+  assertInvariants(split);
 });
 
 test('duplicar: copias con ids nuevos, desplazadas, con las conexiones que había entre ellas', () => {
@@ -680,7 +728,11 @@ test('copiar y pegar: ids nuevos y cada pegado un poco más abajo y a la derecha
 test('cortar: copia y elimina en un solo paso del historial', () => {
   const store = open();
   store.select(['n3', 'n4']);
-  assert.deepEqual(store.cut(), { ok: true, removed: ['n3', 'n4'] });
+  assert.deepEqual(store.cut(), {
+    ok: true,
+    removed: ['n3', 'n4'],
+    reconnected: [{ from: 'n2', port: 'opt:o1', to: 'n5' }],
+  });
   assert.deepEqual(ids(store), ['n1', 'n2', 'n5']);
   assert.equal(store.historySize(), 1);
   const pasted = store.paste();

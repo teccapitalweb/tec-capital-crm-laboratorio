@@ -25,6 +25,7 @@ import {
   nextId,
   nodeSize,
   portsOf,
+  reachable,
   readingOrder,
   repairGraph,
   typeOf,
@@ -371,13 +372,47 @@ export function createStore(options = {}) {
     const found = [...new Set(ids)].map(node).filter(Boolean);
     const doomed = new Set(found.filter(n => n.type !== 'start').map(n => n.id));
     if (!doomed.size) return no(found.length ? 'start' : 'missing');
-    const next = {
+    // Un paso que se quita de en medio no deja varado lo que sigue: si lleva a un solo sitio (todas sus salidas
+    // obligatorias van al mismo paso, o tiene una sola), lo que llegaba a él pasa a llegar a ese sitio (A → X → B queda
+    // A → B). Si sus salidas iban a sitios distintos no se adivina: se quita como siempre y se dice qué pasos quedaron
+    // sin camino. Todo es un solo paso del historial.
+    const onlyTarget = (id, seen = new Set()) => {
+      if (seen.has(id)) return null;
+      seen.add(id);
+      const required = portsOf(node(id)).filter(p => !p.optional);
+      if (!required.length) return null;
+      const targets = new Set(required.map(p => edgeFrom(id, p.id)));
+      if (targets.size !== 1 || targets.has(null)) return null;
+      const [to] = targets;
+      return doomed.has(to) ? onlyTarget(to, seen) : to;
+    };
+    const before = reachable(graph);
+    let next = {
       ...graph,
       nodes: graph.nodes.filter(n => !doomed.has(n.id)),
       edges: graph.edges.filter(e => !doomed.has(e.from) && !doomed.has(e.to)),
     };
+    const reconnected = [];
+    for (const e of graph.edges) {
+      if (doomed.has(e.from) || !doomed.has(e.to)) continue;
+      const to = onlyTarget(e.to);
+      if (!to || to === e.from) continue;
+      const linked = link(next, e.from, e.port, to);
+      if (linked.ok) {
+        next = linked.graph;
+        reconnected.push({ from: e.from, port: e.port, to });
+      }
+    }
+    const after = reachable(next);
+    const stranded = graph.nodes
+      .filter(n => !doomed.has(n.id) && n.type !== 'note' && before.has(n.id) && !after.has(n.id))
+      .map(n => n.id);
     commit('Eliminar', next);
-    return ok({ removed: [...doomed] });
+    return ok({
+      removed: [...doomed],
+      ...(reconnected.length ? { reconnected } : {}),
+      ...(stranded.length ? { stranded } : {}),
+    });
   }
 
   function disconnect(from, port) {
