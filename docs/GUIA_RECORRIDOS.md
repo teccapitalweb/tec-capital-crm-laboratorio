@@ -64,4 +64,18 @@ Las cifras son conteos: no muestran nombres, teléfonos ni lo que escribió nadi
 
 En Rendimiento, **Pedir sugerencias** revisa el recorrido y sus cifras y propone mejoras ligadas a un paso: mensajes demasiado largos, preguntas sin salida, pasos donde se va la gente, falta de «pasar con una persona», tono. Hay dos fuentes: la **revisión automática** (siempre) y la **IA** (si está configurada y no se alcanzó el tope mensual de la IA; si no, lo dice). A la IA sólo se le manda la estructura del recorrido y las cifras por paso, **nunca** datos de personas ni conversaciones. Las sugerencias **no cambian nada**: tú decides qué aplicar.
 
+## 8. ¿Regla o recorrido?
+
+Para algo de un solo paso no hace falta dibujar un recorrido: basta una **regla** (menú WhatsApp → **Reglas**, en vista previa). Una regla dice «cuando un mensaje tiene esta palabra (y, si quieres, sólo en este canal, curso, horario, con esta etiqueta o en el primer mensaje), haz esto»: responder un texto, mandar un material aprobado, iniciar un recorrido, poner o quitar una etiqueta, pasar con una persona o cambiar el estado de la conversación.
+
+| Usa una regla cuando… | Usa un recorrido cuando… |
+| --- | --- |
+| La respuesta es una sola: «¿precio?» → el precio vigente; «¿temario?» → el material del temario. | Hay varios pasos: saludar, mandar la ficha, esperar, preguntar con botones, pedir el correo. |
+| Quieres etiquetar o pasar con una persona a quien escribe ciertas palabras («queja», «factura»). | Necesitas guardar lo que la persona contesta y decidir según su respuesta. |
+| Quieres decidir **cuál** recorrido empieza según lo que escribe la persona. | La conversación debe seguir aunque la persona tarde en contestar. |
+
+**Quién contesta primero.** La pantalla de Reglas muestra el **orden de atención** con el estado real de la marca: (1) una persona del equipo que tomó el chat, (2) un recorrido en curso, (3) las reglas, en el orden de su lista (la primera que coincide y responde gana; las etiquetas de las demás también se ponen), (4) un recorrido que arranca y (5) el asistente de la marca. Las reglas atienden con las mismas condiciones que los recorridos: la automatización de la marca encendida y su asistente respondiendo solo.
+
+**Probar.** «Probar con un mensaje» dice quién contestaría y qué haría cada regla, sin enviar ni guardar nada. Una regla nueva nace en **borrador**; enciéndela cuando esté lista. Detalle técnico: [PLAN_REGLAS.md](PLAN_REGLAS.md).
+
 Detalle técnico: [PLAN_RECORRIDOS.md](PLAN_RECORRIDOS.md).
