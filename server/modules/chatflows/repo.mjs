@@ -318,6 +318,26 @@ export function createRepo(db) {
     messageByRef: ref => one('SELECT id,conversation_id FROM messages WHERE client_ref=?', ref),
     refsWithPrefix: prefix =>
       one('SELECT count(*) n FROM messages WHERE client_ref >= ? AND client_ref < ?', prefix, prefix + '￿').n,
+    // Las plantillas de WhatsApp que esta atención del recorrido ya envió (sus ids), por la referencia de sus mensajes.
+    templatesOfSession(sessionId) {
+      const prefix = `flow:${sessionId}:`;
+      return all(
+        'SELECT wa_template FROM messages WHERE client_ref >= ? AND client_ref < ? AND wa_template IS NOT NULL',
+        prefix,
+        prefix + '￿',
+      ).map(row => {
+        try {
+          return JSON.parse(row.wa_template)?.templateId ?? '';
+        } catch {
+          return '';
+        }
+      });
+    },
+    consentOf: (brandId, contactId) =>
+      contactId
+        ? (one('SELECT status FROM contact_consent WHERE brand_id=? AND contact_id=?', brandId, contactId)?.status ??
+          'unknown')
+        : 'unknown',
     material: (brandId, id) =>
       one('SELECT id,title,status FROM content_templates WHERE brand_id=? AND id=?', brandId, id),
     // Archivos de la biblioteca: siempre con la marca. Uno de otra marca no existe para el recorrido.

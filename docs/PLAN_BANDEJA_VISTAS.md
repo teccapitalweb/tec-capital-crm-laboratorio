@@ -142,3 +142,7 @@ El módulo tiene un reloj (cada 2 s; 200 ms en pruebas) que lee los números de 
 2. ¿Los asesores deben poder compartir vistas con su equipo, o sólo administración (hoy)?
 3. ¿Qué vistas quieren ver primero en el menú de vistas? ¿Falta alguna que usen hoy en su herramienta actual?
 4. ¿«Sin respuesta» debe contar también las conversaciones que lleva el asistente cuando la persona pidió hablar con alguien? (Hoy sólo cuenta las que esperan a una persona del equipo.)
+
+## Tope de consultas (17 nov 2026, tras la revisión de seguridad)
+
+La lista y los contadores hacen varias consultas y SQLite las corre en el hilo del servidor. Llevan un tope de 120 por minuto por persona cada una (la búsqueda ya tenía 60): repetirlas en bucle responde 429 y no deja sin atender lo demás. El uso normal de la pantalla queda muy por debajo.

@@ -493,3 +493,14 @@ test('migración conversations/0001 y 0002 sobre una base ya publicada: una sola
   assert.equal(createRepo(db).viewByRef('u-ag', 'ref-persistente').id, viewId);
   db.close();
 });
+
+test('la lista y los contadores llevan tope por persona: repetirlos en bucle responde 429 y no afecta a otra persona', async t => {
+  const L = await lab(t);
+  const other = await L.staff('tope.otra', ['globalvet']);
+  for (const path of ['/api/inbox/counts', '/api/inbox/conversations']) {
+    for (let i = 0; i < 120; i++) await L.get(L.admin, path, { brand: 'all' });
+    const blocked = await fetch(L.origin + path + '?brand=all', { headers: { Cookie: L.admin, Origin: L.origin } });
+    assert.equal(blocked.status, 429, path + ' se limita');
+    await L.get(other.cookie, path, { brand: 'all' }); // el tope es de cada persona
+  }
+});

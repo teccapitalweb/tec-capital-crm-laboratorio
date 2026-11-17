@@ -158,8 +158,14 @@ export function createEngine({ db, repo, deps, now = Date.now, log = console }) 
     const msgs = repo.customerMessagesAfter(c.id, e.reply_seen_seq);
     if (!msgs.length) return null;
     out.seen = msgs.at(-1).seq;
-    if (e.last_sent_at == null) return null; // lo escrito antes del primer paso no es una respuesta
     const settings = settingsOf(seq);
+    if (e.last_sent_at == null) {
+      // Lo escrito antes del primer paso no es una respuesta a la secuencia, pero una baja o un «no» sí cuentan: a
+      // quien ya dijo que no, no se le manda ni el primer mensaje.
+      if (msgs.some(m => deps.isOptOutText(m.text))) return { stop: 'opt_out' };
+      if (msgs.some(m => classifyReply(m.text, settings) === 'no')) return { stop: 'said_no' };
+      return null;
+    }
     const step = e.last_step_index;
     out.events.push({ event: 'replied', stepIndex: step });
     if (msgs.some(m => deps.isOptOutText(m.text))) return { stop: 'opt_out' };
@@ -420,6 +426,11 @@ export function createEngine({ db, repo, deps, now = Date.now, log = console }) 
     transaction(() => {
       for (const e of repo.orphans(SWEEP_ROWS)) {
         if (!deps.speaks(e.brand_id)) continue;
+        if (repo.stepFailed(e)) {
+          finish(e, 'stopped', 'step_failed', t); // agotó sus intentos: se detiene y queda a la vista con su motivo
+          out.stopped++;
+          continue;
+        }
         arm(e, Math.max(e.next_due_at ?? t, t), t);
         out.rearmed++;
       }

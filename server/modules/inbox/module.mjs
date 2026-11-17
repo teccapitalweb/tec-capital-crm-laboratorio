@@ -256,7 +256,12 @@ export default {
       };
     }
 
+    // La lista y los contadores hacen varias consultas y SQLite las corre en el hilo del servidor: llevan tope por
+    // persona para que nadie pueda repetirlas en bucle y dejar sin atender lo demás (los avisos de WhatsApp, por
+    // ejemplo). El tope deja pasar de sobra el uso normal de la pantalla (se refresca cada pocos segundos).
+    const LIST_PER_MINUTE = 120;
     function listPage(user, url) {
+      host.rate('inbox-list:' + user.id, LIST_PER_MINUTE);
       const list = readList(user, url);
       const limitText = url.searchParams.get('limit');
       const limit = limitText === null ? PAGE_LIMIT : Number(limitText);
@@ -279,6 +284,7 @@ export default {
 
     // ---- Contadores: las vistas del sistema y las guardadas que se pidan (por omisión, todas las visibles).
     function counts(user, url) {
+      host.rate('inbox-counts:' + user.id, LIST_PER_MINUTE);
       const brand = url.searchParams.get('brand');
       const brandIds = brandsFor(user, brand);
       const raw = url.searchParams.get('views');

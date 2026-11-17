@@ -211,6 +211,7 @@ export function previewOf(message) {
     .replace(/\s+/g, ' ')
     .trim();
   if (text) return text.length > 200 ? text.slice(0, 199) + '…' : text;
+  if (message.flow_file) return 'Archivo'; // un archivo que mandó un recorrido viaja como la ficha, pero no lo es
   if (message.flyer_course_id) return 'Flyer del curso';
   if (message.wa_template) return 'Plantilla';
   if (KIND_LABEL[message.content_kind]) return KIND_LABEL[message.content_kind];
@@ -307,7 +308,7 @@ export function createRepo(db) {
       db
         .prepare(
           `SELECT m.conversation_id, m.text, m.sender_kind, m.content_kind, m.attachment_id, m.flyer_course_id,
-             m.wa_template, m.created_at FROM messages m
+             COALESCE(json_extract(m.flyer_snapshot,'$.file'),0) flow_file, m.wa_template, m.created_at FROM messages m
            WHERE m.seq IN (SELECT MAX(x.seq) FROM messages x WHERE x.conversation_id IN (${marks(ids.length)})
              AND x.sender_kind != 'system' GROUP BY x.conversation_id)`,
         )

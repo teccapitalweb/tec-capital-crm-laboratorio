@@ -23,6 +23,7 @@ import { advance, input, makeEnv, newSession, numberedOptions, rememberChoice, r
 
 const SPEAKS = ['templates', 'autonomous'];
 const MAX_DEPTH = 5;
+const MAX_TEMPLATES_PER_SESSION = 3; // plantillas de WhatsApp que una misma atención de un recorrido puede enviar
 const COPY = Object.freeze({
   ...copy,
   invalidAnswer: 'No logré entender tu respuesta. ¿Me la escribes de nuevo, por favor?',
@@ -230,7 +231,20 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
           api = null;
         }
         if (!api?.forConversation) return { reason: 'Las plantillas de WhatsApp no están disponibles en este momento' };
-        return api.forConversation(c, String(templateId || ''));
+        const tpl = api.forConversation(c, String(templateId || ''));
+        if (tpl.reason) return tpl;
+        // Una plantilla es lo único que sale con la ventana cerrada, y cuesta: en una misma atención cada plantilla
+        // sale una sola vez y hay un tope, aunque el recorrido vuelva al mismo paso (por ejemplo, por «no contestó»).
+        const sent = repo.templatesOfSession(s.id);
+        if (sent.includes(tpl.template.templateId))
+          return { reason: 'Esa plantilla ya se envió en este recorrido a esta persona' };
+        if (sent.length >= MAX_TEMPLATES_PER_SESSION)
+          return { reason: 'El recorrido ya envió el máximo de plantillas a esta persona' };
+        // Marketing con la ventana cerrada es un mensaje que inicia el negocio: sólo a quien aceptó recibirlo, la
+        // misma regla que las difusiones y las secuencias. Con la ventana abierta la persona acaba de escribir.
+        if (tpl.category === 'marketing' && !this.windowOpen() && repo.consentOf(brandId, contact()) !== 'opted_in')
+          return { reason: 'La persona no ha aceptado recibir promociones y la ventana de 24 horas está cerrada' };
+        return tpl;
       },
       windowOpen() {
         const w = svc.channel.windowOf(conv());

@@ -119,3 +119,9 @@ Para otros módulos: `host.module('sequences').enroll(conversation, sequenceId, 
 - La pausa al responder se ve en el barrido (cada 5 s) o al despertar el paso, no en el mismo instante del mensaje (sin gancho en el entrante, a propósito).
 - Sin probar contra WhatsApp real (plantillas por Meta).
 - `listen_only` detiene la inscripción; durante un cambio de número quizá convenga esperar en su lugar (pregunta abierta).
+
+## Ajustes tras la revisión de seguridad (17 nov 2026)
+
+- **Un «no» o una baja antes del primer paso también detienen:** a quien ya dijo que no, no se le manda ni el primer mensaje. Cualquier otra cosa escrita antes del primer paso sigue sin contar como respuesta.
+- **Un paso que agotó sus intentos detiene la inscripción** (motivo «un paso falló varias veces») en lugar de reprogramarse cada pocos segundos.
+- **«Recibió la ficha del curso» no incluye archivos sueltos** que mande un recorrido (un reglamento, un PDF): sólo la ficha de verdad.

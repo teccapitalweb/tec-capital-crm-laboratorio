@@ -935,3 +935,65 @@ test('el ejemplo de la guía: día siguiente, a los tres días, dos días antes 
     ],
   );
 });
+
+test('entrada automática: un archivo que mandó un recorrido no cuenta como ficha del curso', async t => {
+  const L = await lab(t);
+  const seq = L.sequence('globalvet', { steps: [text(1, 'days')], settings: { trigger: 'course_card' } });
+  const p = L.person();
+  const message = (label, snapshot) =>
+    L.db
+      .prepare(
+        "INSERT INTO messages(id,conversation_id,sender_kind,text,flyer_course_id,flyer_snapshot,client_ref,created_at) VALUES(?,?,'automation',?,'aves',?,?,?)",
+      )
+      .run(randomUUID(), p.conv, label, JSON.stringify(snapshot), 'f-' + randomUUID(), T0);
+  const enrolled = () => L.db.prepare('SELECT count(*) n FROM sequence_enrollments WHERE sequence_id=?').get(seq.id).n;
+  // Un PDF cualquiera de la biblioteca viaja en la misma columna que la ficha, con `file: true`.
+  message('El reglamento', { libraryFileId: randomUUID(), file: true });
+  assert.equal(L.sweep().enrolled, 0);
+  assert.equal(enrolled(), 0, 'no entra por un archivo');
+  assert.equal(L.engine.preview(seq).enter.count, 0, 'y la vista previa tampoco la cuenta');
+  // La ficha de verdad sí la inscribe.
+  message('Ficha', { courseId: 'aves', title: 'Plan sanitario para aves' });
+  assert.equal(L.sweep().enrolled, 1);
+  assert.equal(enrolled(), 1);
+});
+
+test('antes del primer paso: quien dice que no o pide la baja no recibe ni el primer mensaje', async t => {
+  const L = await lab(t);
+  const seq = L.sequence('globalvet', { steps: [text(1, 'hours'), text(1, 'days')] });
+  const [no, out, other] = [L.person(), L.person(), L.person()];
+  const rs = [no, out, other].map(p => L.enroll(p, seq));
+  L.says(no.conv, 'No, por el momento');
+  L.says(out.conv, 'Quiero la baja');
+  L.says(other.conv, '¿A qué hora es la clase?');
+  await L.at(T0 + HOUR);
+  assert.equal(L.messagesOf(no.conv).length, 0);
+  assert.equal(L.messagesOf(out.conv).length, 0);
+  assert.equal(L.messagesOf(other.conv).length, 1, 'una pregunta cualquiera no detiene nada');
+  assert.deepEqual(
+    rs.map(r => [L.enrollment(r).state, L.enrollment(r).reason]),
+    [
+      ['stopped', 'said_no'],
+      ['stopped', 'opt_out'],
+      ['active', null],
+    ],
+  );
+});
+
+test('un paso que agotó sus intentos detiene la inscripción en lugar de reprogramarse sin fin', async t => {
+  const L = await lab(t);
+  const seq = L.sequence('globalvet', { steps: [text(1, 'hours')] });
+  const r = L.enroll(L.person(), seq);
+  const e = L.enrollment(r);
+  const key = `seq:${e.id}:${e.next_index}:${e.schedule_seq}`;
+  const steps = () =>
+    L.db.prepare("SELECT count(*) n FROM automation_steps WHERE dedupe_key LIKE 'seq:' || ? || ':%'").get(e.id).n;
+  assert.equal(steps(), 1);
+  L.db.prepare("UPDATE automation_steps SET state='failed',error='prueba' WHERE dedupe_key=?").run(key);
+  assert.equal(L.sweep().stopped, 1);
+  assert.deepEqual([L.enrollment(r).state, L.enrollment(r).reason], ['stopped', 'step_failed']);
+  L.sweep();
+  L.sweep();
+  assert.equal(steps(), 1, 'no se programó ningún paso más');
+  assert.equal(L.sent.length, 0);
+});

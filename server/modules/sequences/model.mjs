@@ -80,6 +80,7 @@ export const REASONS = Object.freeze({
   window_closed: 'La ventana de 24 horas estaba cerrada',
   completed: 'Terminó todos sus pasos',
   manual: 'La detuvo una persona del equipo',
+  step_failed: 'Un paso falló varias veces y no se volvió a intentar',
   // pasos omitidos
   condition: 'No cumplía la condición del paso',
   too_late: 'Ya había pasado su momento',

@@ -97,3 +97,11 @@ Pruebas: `test/chatflows-evaluation.test.mjs` (cifras por paso, abandono, tiempo
 Reglas por palabra clave y su panel «Orden de atención» (N-3); materiales por espacio y materiales de tipo archivo (N-2); disparadores por evento o tiempo y secuencias (N-6); llamadas a servicios externos; restaurar una versión al borrador, exportar e importar; convertir el flujo de bienvenida (sigue igual y, sin sesión viva, sigue decorando al asistente); dibujar listas en el chat del cliente del laboratorio (exige tocar `public/app.js`; hoy se ven numeradas); video y audio en un recorrido; recordatorio, lista interactiva y plantilla **sin probar contra WhatsApp real** (sí contra el Meta de mentira).
 
 Pruebas: `test/chatflows-engine.test.mjs` (motor sin base, con lista, «guardar la opción», archivos y plantilla), `test/chatflows.test.mjs` (migración, almacén, venta de punta a punta, desvíos, tiempo límite, toma humana, baja, ventana cerrada, automatización apagada, fallo del motor, dos marcas, reinicio sin duplicar, inicio manual, webhook repetido y modo escucha con el Meta de mentira) y `test/chatflows-steps.test.mjs` (revisión al publicar de los pasos nuevos, simulador, laboratorio de punta a punta con archivo y lista, archivo que cambió de marca, plantilla y lista interactiva por el Meta de mentira con un webhook repetido, plantilla en una conversación del laboratorio y permisos de la subida).
+
+## Límites del paso Plantilla de WhatsApp (17 nov 2026, tras la revisión de seguridad)
+
+Una plantilla es lo único que un recorrido puede enviar con la ventana de 24 horas cerrada, y cuesta. Por eso:
+
+- **Cada plantilla sale una sola vez por atención**, y una atención envía como mucho tres plantillas, aunque el recorrido vuelva al mismo paso (por ejemplo, por la salida «no contestó»). La segunda vez no sale: se anota el motivo y la conversación pasa con una persona.
+- **Marketing con la ventana cerrada sólo a quien aceptó recibir promociones** (`contact_consent` en «opted_in»), la misma regla de las difusiones y las secuencias. Con la ventana abierta la persona acaba de escribir y la plantilla sale.
+- Un archivo que manda un recorrido viaja en la misma columna que la ficha del curso, con `file: true` en su foto: no cuenta como ficha (no inscribe en secuencias) y la bandeja lo muestra como «Archivo».

@@ -453,6 +453,114 @@ test('WhatsApp real (Meta de mentira): plantilla con su categoría, lista intera
   assert.ok(NUMBER);
 });
 
+test('plantilla en un recorrido: una sola vez por atención, y la de marketing no sale con la ventana cerrada a quien no la aceptó', async t => {
+  const W = await whatsappLab(t, { AI_PROVIDER: '' });
+  const origin = W.origin();
+  const api = (path, options = {}) => call(origin, path, { cookie: W.admin, ...options });
+  await enable(api);
+  const templateId = seedTemplate(W.db);
+  const BUTTONS = ['Sí, apártalo', 'Ahora no'];
+  const templates = () => W.meta.sent.filter(m => m.type === 'template');
+  const sessionOf = conv => W.db.prepare('SELECT * FROM chatflow_sessions WHERE conversation_id=?').get(conv);
+  const errorOf = (sessionId, like) =>
+    W.db
+      .prepare("SELECT 1 FROM chatflow_events WHERE session_id=? AND event='error' AND detail LIKE ?")
+      .get(sessionId, like);
+
+  // 1. El recorrido vuelve a pasar por la misma plantilla (aquí, dos pasos seguidos): sale una sola vez.
+  const twice = graphOf(
+    [
+      node('a', 'template', { waTemplateId: templateId, wait: false, buttons: BUTTONS }),
+      node('b', 'template', { waTemplateId: templateId, wait: false, buttons: BUTTONS }),
+      node('e', 'end', { text: 'Listo.' }),
+    ],
+    [
+      ['n1', 'next', 'a'],
+      ['a', 'next', 'b'],
+      ['b', 'next', 'e'],
+    ],
+  );
+  await publish(api, await createFlow(api, { graph: twice, start: { type: 'keyword', keywords: ['repite'] } }));
+  await metaText(origin, '5215511110001', 'wamid.tope.1', 'repite');
+  const first = await until(
+    () => W.db.prepare("SELECT conversation_id id FROM chatflow_sessions WHERE state='ended'").get()?.id,
+    'la primera atención terminó',
+  );
+  await until(() => templates().length === 1, 'la plantilla salió una vez');
+  assert.equal(sessionOf(first).outcome, 'handoff', 'la segunda vez no sale y pasa con una persona');
+  assert.ok(errorOf(sessionOf(first).id, '%ya se envió%'), 'queda anotado por qué no salió');
+  assert.equal(
+    W.db.prepare('SELECT count(*) n FROM messages WHERE conversation_id=? AND wa_template IS NOT NULL').get(first).n,
+    1,
+  );
+
+  // 2. Marketing con la ventana cerrada: sólo a quien aceptó recibir promociones.
+  const later = graphOf(
+    [
+      node('d', 'delay', { seconds: 5 }),
+      node('t', 'template', { waTemplateId: templateId, wait: false, buttons: BUTTONS }),
+      node('e', 'end', { text: '' }), // sin despedida: con la ventana cerrada un texto libre no saldría
+    ],
+    [
+      ['n1', 'next', 'd'],
+      ['d', 'next', 't'],
+      ['t', 'next', 'e'],
+    ],
+  );
+  await publish(api, await createFlow(api, { graph: later, start: { type: 'keyword', keywords: ['tarde'] } }));
+  const wake = async conv => {
+    const step = await until(
+      () =>
+        W.db
+          .prepare("SELECT id FROM automation_steps WHERE conversation_id=? AND kind='flow.wake' AND state='pending'")
+          .get(conv),
+      'la espera quedó programada',
+    );
+    // La ventana se cierra: pasaron 25 horas desde lo último que escribió la persona (en el chat y en el número).
+    W.db.prepare('UPDATE wa_peer_state SET last_inbound_at=last_inbound_at-?').run(25 * 3600_000);
+    W.db
+      .prepare("UPDATE messages SET created_at=created_at-? WHERE conversation_id=? AND sender_kind='customer'")
+      .run(25 * 3600_000, conv);
+    W.db
+      .prepare('UPDATE automation_steps SET scheduled_at=?,next_attempt_at=? WHERE id=?')
+      .run(Date.now() - 1000, Date.now() - 1000, step.id);
+    await until(() => sessionOf(conv).state === 'ended', 'la atención terminó');
+  };
+  const convOf = async wamid =>
+    until(
+      () =>
+        W.db
+          .prepare(
+            'SELECT m.conversation_id id FROM messages m JOIN chatflow_sessions s ON s.conversation_id=m.conversation_id WHERE m.provider_ref=?',
+          )
+          .get(wamid)?.id,
+      'el recorrido inició',
+    );
+  await metaText(origin, '5215511110002', 'wamid.tope.2', 'tarde');
+  const closed = await convOf('wamid.tope.2');
+  await wake(closed);
+  assert.equal(sessionOf(closed).outcome, 'handoff');
+  assert.ok(errorOf(sessionOf(closed).id, '%no ha aceptado%'));
+  assert.equal(templates().length, 1, 'no salió ninguna plantilla más');
+
+  // Con el consentimiento registrado, la misma plantilla sí sale con la ventana cerrada.
+  await metaText(origin, '5215511110003', 'wamid.tope.3', 'tarde');
+  const agreed = await convOf('wamid.tope.3');
+  const contact = W.db
+    .prepare(
+      'SELECT o.contact_id id FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id WHERE co.conversation_id=?',
+    )
+    .get(agreed).id;
+  W.db
+    .prepare(
+      "INSERT INTO contact_consent(contact_id,brand_id,status,source,updated_at) VALUES(?,'globalvet','opted_in','prueba',?) ON CONFLICT(contact_id) DO UPDATE SET status='opted_in'",
+    )
+    .run(contact, Date.now());
+  await wake(agreed);
+  await until(() => templates().length === 2, 'la plantilla salió para quien la aceptó');
+  assert.equal(sessionOf(agreed).outcome, 'completed');
+});
+
 test('subir archivos: sólo quien administra recorridos en la marca', async t => {
   const L = await lab(t);
   const agent = await call(L.server.origin, '/api/auth/register', {

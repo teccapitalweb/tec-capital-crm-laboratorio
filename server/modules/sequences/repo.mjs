@@ -13,6 +13,9 @@ const json = (text, fallback) => {
     return fallback;
   }
 };
+// Un archivo que manda un recorrido viaja como la ficha del curso (misma columna), pero no ES la ficha: su foto lleva
+// `file: true`. Sin esto, un PDF cualquiera inscribiría a la persona en las secuencias de «recibió la ficha».
+const NOT_FLOW_FILE = "COALESCE(json_extract(m.flyer_snapshot,'$.file'),0)=0";
 const LIVE_CAMPAIGN = "COALESCE(json_extract(k.options,'$.mode'),'live')='live'";
 // Conversaciones de la misma persona en la marca (o sólo ésta, si no tiene contacto).
 const PERSON_CONVERSATIONS = `SELECT co.conversation_id FROM conversation_opportunities co
@@ -248,6 +251,15 @@ export function createRepo(db) {
          LIMIT ?`,
         limit,
       ).map(enrRow),
+    // ¿El paso durable vigente de esta inscripción agotó sus intentos? Entonces no se vuelve a programar: reintentarlo
+    // cada pocos segundos para siempre sólo llenaría la cola.
+    stepFailed: e =>
+      Boolean(
+        one(
+          "SELECT 1 FROM automation_steps WHERE dedupe_key=? AND state='failed'",
+          `seq:${e.id}:${e.next_index}:${e.schedule_seq}`,
+        ),
+      ),
     pendingStepsOf: enrollmentId =>
       all(
         "SELECT id,brand_id FROM automation_steps WHERE dedupe_key>=? AND dedupe_key<? AND state IN ('pending','reserved')",
@@ -409,7 +421,7 @@ export function createRepo(db) {
       all(
         `SELECT m.seq, m.conversation_id FROM messages m JOIN conversations c ON c.id=m.conversation_id
          WHERE m.seq>? AND c.brand_id=? AND (? IS NULL OR c.course_id=?) AND m.sender_kind IN ('automation','agent')
-           AND m.flyer_course_id IS NOT NULL ORDER BY m.seq LIMIT ?`,
+           AND m.flyer_course_id IS NOT NULL AND ${NOT_FLOW_FILE} ORDER BY m.seq LIMIT ?`,
         after,
         brandId,
         courseId,
@@ -431,7 +443,7 @@ export function createRepo(db) {
     candidates(brandId, courseId, trigger, since, limit) {
       const byCard = `SELECT DISTINCT m.conversation_id id FROM messages m JOIN conversations c ON c.id=m.conversation_id
         WHERE c.brand_id=:brand AND (:course IS NULL OR c.course_id=:course) AND m.sender_kind IN ('automation','agent')
-          AND m.flyer_course_id IS NOT NULL AND m.created_at>=:since`;
+          AND m.flyer_course_id IS NOT NULL AND ${NOT_FLOW_FILE} AND m.created_at>=:since`;
       const byAsk = `SELECT DISTINCT r.conversation_id id FROM reply_log r JOIN conversations c ON c.id=r.conversation_id
         WHERE r.brand_id=:brand AND (:course IS NULL OR c.course_id=:course) AND r.intent='enroll' AND r.created_at>=:since`;
       const sql = trigger === 'enroll_interest' ? byAsk : byCard;
