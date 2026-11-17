@@ -25,6 +25,19 @@ const ACCION = {
 };
 const telefono = clave => '+' + clave;
 
+/** Un contador de la tarjeta: rótulo y cifra grande en un bloque de color. */
+const cifra = (rotulo, valor, tono) =>
+  html`<div class="k-figure" data-tone="${tono}">
+    <dt class="k-figure__label">${rotulo}</dt>
+    <dd class="k-figure__value">${String(valor)}</dd>
+  </div>`;
+/** Un dato de la tarjeta en su pieza. */
+const dato = (rotulo, valor) =>
+  html`<div class="k-piece">
+    <dt class="k-piece__label">${rotulo}</dt>
+    <dd class="k-piece__value">${valor}</dd>
+  </div>`;
+
 function tarjeta(numero, uid) {
   const escucha = numero.mode === 'listen';
   const hoy = numero.listen.days[0];
@@ -35,12 +48,12 @@ function tarjeta(numero, uid) {
       <span class="k-muted">${numero.brandName}</span>
     </div>
     <div class="k-row">
-      <span class="${['k-chip', escucha ? 'k-chip--warn' : 'k-chip--ok']}">${escucha ? 'En escucha' : 'Activo'}</span>
-      ${when(!numero.enabled, () => html`<span class="k-chip">En pausa en el CRM</span>`)}
+      <span class="${['k-chip', 'k-chip--lg', escucha ? 'k-chip--sky' : 'k-chip--ok']}">${escucha ? 'En escucha' : 'Activo'}</span>
+      ${when(!numero.enabled, () => html`<span class="k-chip k-chip--lg k-chip--warn">En pausa en el CRM</span>`)}
       ${when(
         escucha,
         () =>
-          html`<span class="${['k-chip', listo ? 'k-chip--ok' : 'k-chip--warn']}">
+          html`<span class="${['k-chip', 'k-chip--lg', listo ? 'k-chip--ok' : 'k-chip--accent']}">
             ${listo ? 'Tres días de escucha sin pendientes' : 'Escucha en curso'}
           </span>`,
       )}
@@ -52,20 +65,16 @@ function tarjeta(numero, uid) {
           : 'El CRM atiende este número: guarda las conversaciones, el asistente responde según la marca y todo lo que el equipo envía sale.'
       }
     </p>
+    <dl class="cn-cifras">
+      ${when(escucha, () => cifra('Días completos en escucha', numero.daysListening, 'sky'))}
+      ${cifra('Conversaciones abiertas', numero.openConversations, 'lime')}
+      ${cifra('En cuarentena ahora', numero.listen.quarantine, numero.listen.quarantine ? 'butter' : 'mint')}
+    </dl>
     <dl class="cn-datos">
-      <dt>En este modo desde</dt>
-      <dd>${fecha(numero.modeChangedAt)}</dd>
-      ${when(escucha, () => html`<dt>Días completos en escucha</dt><dd>${String(numero.daysListening)}</dd>`)}
-      <dt>Conversaciones abiertas</dt>
-      <dd>${String(numero.openConversations)}</dd>
-      <dt>Registrado en Meta</dt>
-      <dd>${fecha(numero.registeredAt)}</dd>
-      <dt>Vuelta atrás ensayada</dt>
-      <dd>${numero.rollbackRehearsedAt ? fecha(numero.rollbackRehearsedAt) : 'Todavía no'}</dd>
-      <dt>Lista de prueba</dt>
-      <dd>${numero.listenAllow.length ? numero.listenAllow.map(telefono).join(', ') : 'Sin teléfonos'}</dd>
-      <dt>En cuarentena ahora</dt>
-      <dd>${String(numero.listen.quarantine)}</dd>
+      ${dato('En este modo desde', fecha(numero.modeChangedAt))}
+      ${dato('Registrado en Meta', fecha(numero.registeredAt))}
+      ${dato('Vuelta atrás ensayada', numero.rollbackRehearsedAt ? fecha(numero.rollbackRehearsedAt) : 'Todavía no')}
+      ${dato('Lista de prueba', numero.listenAllow.length ? numero.listenAllow.map(telefono).join(', ') : 'Sin teléfonos')}
     </dl>
     <div class="k-data__wrap" tabindex="0" role="region" aria-label="${'Escucha de ' + numero.label + ' por día'}">
       <table class="k-data">
