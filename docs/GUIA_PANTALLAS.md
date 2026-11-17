@@ -77,6 +77,52 @@ Cada archivo empieza con un comentario que explica por qué existe y cómo se us
 8. **Nada en `localStorage`** ni en cookies desde una pantalla. Sin sintaxis que haya que compilar ni dependencias de npm en el navegador; las importaciones son relativas (`../../kit/…`).
 9. **Toda gráfica va con su tabla** (`figure` la pone detrás de «Ver tabla») y dentro de un panel blanco (`.k-card`). Un color nunca es la única forma de decir un estado: lleva texto.
 
+## Una pantalla en Tinta
+
+Desde el 17 nov 2026 las pantallas del kit siguen el diseño **Tinta** ([DISENO_Y_AUDITORIA.md](DISENO_Y_AUDITORIA.md)): bloques de color en lugar de tarjetas blancas con borde, esquinas muy redondas, píldoras, tinta con acento lima y cifras grandes. La pantalla `ejemplo` usa todas las piezas; estas son las que hay que conocer.
+
+### El orden de una vista
+
+1. **Cabecera** (`.k-head`): rótulo (`.k-eyebrow`), título (`h1`, en la escala de 40 px) y una línea de propósito (`.k-lead`), todo dentro de la cabecera. A la derecha, la acción principal con `k-btn--primary`: dentro de la cabecera sale **en tinta con letra lima y más alta** sin hacer nada más; los demás botones de la cabecera toman su misma altura. Si la vista tiene una cifra que la resume (los contactos de Contactos), va en la cabecera como `.k-figure` lima.
+2. **Filtros sobre la página, sin tarjeta**: `form.k-filterbar` con campos de `field()` (rótulo y control en una fila; el control es una píldora blanca). Los filtros que se encienden y se apagan son `button.k-filter` con `aria-pressed`; encendidos, en tinta. Un `<details>` de «Más filtros» lleva `summary.k-filter` y su contenido en una `.k-card`.
+3. **Cifras**: `.k-figures` con `.k-figure` (`data-tone="lime|sky|mint|lilac|butter|peach"`, `.k-figure__label`, `.k-figure__value`, `.k-figure__sub`); o `tile({ …, tone })` de `charts.js` dentro de `.k-tiles`. **Sólo cifras que la pantalla ya enseña** (una frase como «2 de 200 listas» puede pasar a cifra; un indicador nuevo, no). Si la frase se leía en voz alta (`role="status"`), se conserva para el lector de pantalla con `.k-sr` y la cifra visible va con `aria-hidden`.
+4. **Listas**: una tabla de muchas columnas se queda en `pagedTable` dentro de una `.k-card`; lo que es una ficha por elemento (recorridos, secuencias, números) va como tarjetas blancas redondas (`.k-cards` > `.k-item`, o la tarjeta propia de la pantalla) con su nombre grande y su estado en ficha.
+5. **Datos sueltos**: `.k-piece` (pieza redonda con `.k-piece__label` en mayúsculas y `.k-piece__value`), en una rejilla `.k-pieces`. Dentro de un `<dl>` la pieza es un `<div>` con su `dt` y su `dd`. El color de una pieza **nunca** dice si el dato es bueno o malo: eso lo dicen las fichas, con texto.
+6. **Avisos** (`.k-notice--warn|--bad|--ok`), **ventanas** (`dialog()`) y **paneles** (`detailPanel()`) ya vienen en Tinta.
+
+### El relleno de lo secundario: `--k-fill`
+
+Un botón secundario, una pestaña, un filtro o un campo de la barra toman su relleno de la caja donde están: **blanco sobre la página gris y sobre un pastel; `--soft` dentro de algo blanco**. Cada caja del kit declara su `--k-fill` y lo de dentro lo hereda. Una pantalla que pinta un bloque propio sólo tiene que declarar el suyo (`--k-fill: var(--surface)` en un bloque gris o de color; `--k-fill: var(--soft)` en uno blanco). Si una pantalla cambia el fondo de un `.k-btn` según su estado (un `<details>` abierto), que lo cambie también en `:hover`, porque el relleno al pasar el cursor tiene más prioridad.
+
+### Fichas de estado: un color, un significado
+
+El mismo color dice lo mismo en todas las pantallas. La ficha lleva siempre el estado en texto: el color nunca es la única pista.
+
+| Ficha | Color | Para |
+| --- | --- | --- |
+| `k-chip--ok` | menta | Bien o terminado: activa, encendida, aprobada, entregada, leída, completada, aceptó mensajes, ganada |
+| `k-chip--accent` | lima | En curso ahora: enviando, importando, escucha en curso, inscripción, la conversación abierta |
+| `k-chip--sky` | cielo | Programado, en camino o esperando a otro: programada, enviado, en revisión de Meta, en escucha, interesado |
+| `k-chip--warn` | mantequilla | Pausa o atención: en pausa, pendiente, omitido, la persona espera respuesta («Sin respuesta» de la bandeja), se reintentará, quedó fuera por un motivo |
+| `k-chip--bad` | durazno (letra `--bad`) | Mal: falló, rechazada, detenida, no quiere mensajes, perdida, expirada |
+| `k-chip--draft` | gris | Sin decidir o fuera de uso: borrador, archivada, cancelada, apagada, consentimiento sin respuesta, interés nuevo |
+| `k-chip--lilac` | lila | Tipo o categoría, no estado: segmento, prediseñado, silenciosa, ensayo, etiquetas |
+| `k-chip--wa` | punto verde de WhatsApp | Lo propio de WhatsApp: «Sin número» |
+
+`k-chip--lg` es la ficha suelta más grande (el estado de un número o de una secuencia en su tarjeta). Las fichas de la marca de un canal (`bj-canal`) y los puntos del menú siguen con sus colores de siempre.
+
+### Estados
+
+`loading()`, `empty()` y `failure()` de `components/feedback.js` ya tienen jerarquía: título en tinta de 19 px, explicación y acción; el vacío lleva un disco lima y lila, el fallo es un bloque durazno con «Volver a intentar». Un vacío que no está dentro de una tarjeta se envuelve en una `.k-card`. Una tabla vacía ya no dice «0 filas» encima de su estado vacío.
+
+### Lista de Tinta
+
+- [ ] El título, el rótulo y la línea de propósito van dentro de `.k-head`, y la página no cambia el relleno de `.k-page` (si lo cambia, el título queda más abajo o más a la izquierda que en las demás vistas).
+- [ ] Una acción principal por vista; ningún selector «Marca» dentro de una tarjeta suelta: va en `.k-filterbar`.
+- [ ] Ningún color de estado fuera de la tabla de fichas; ninguna cifra nueva.
+- [ ] Ningún botón secundario `--soft` sobre la página gris ni blanco sobre blanco (revisar `--k-fill` en los bloques propios).
+- [ ] Se miró a 1366 × 800 y a 375 × 812, con el menú oscuro y con el claro, con datos, vacía, con una ventana o panel abierto y con su aviso.
+
 ## Pintar y repintar
 
 `render()` no borra y vuelve a crear: **concilia** el marcado nuevo con lo que ya hay. Por eso un repintado conserva el foco, el cursor, el desplazamiento y los `<details>` abiertos, y no parpadea. Dos atributos lo guían:
