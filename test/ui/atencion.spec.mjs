@@ -20,11 +20,14 @@ test.describe('Mi día', () => {
     await expect(stats).toHaveCount(4);
     for (const label of ['Seguimientos para hoy', 'Esperando un asesor', 'Intereses sin asignar', 'Sin próxima tarea'])
       await expect(page.locator('.day-summary')).toContainText(label);
-    await expect(stats.first()).toHaveCSS('border-top-left-radius', '28px');
+    await expect(stats.first()).toHaveCSS(
+      'border-top-left-radius',
+      testInfo.project.name === 'celular' ? '22px' : '28px',
+    );
     const figure = stats.first().locator('strong');
     await expect(figure).toHaveCSS('font-size', testInfo.project.name === 'celular' ? '44px' : '56px');
     await expect(page.locator('.day-attend')).toHaveCSS('background-color', INK);
-    await expect(page.locator('.day-agenda h2')).toHaveText('Tu agenda de hoy');
+    await expect(page.locator('.day-agenda .panel-title h2')).toHaveText('Tu agenda de hoy');
     await expect(page.locator('.day-agenda [data-view="tasks"]')).toBeVisible();
     await expect(page.locator('.day-attend [data-view="inbox"]')).toBeVisible();
     await expectNiebla(page, 'day', testInfo);
@@ -37,7 +40,7 @@ test('Conversaciones: filtros, estado y herramientas del chat siguen todos a la 
 }, testInfo) => {
   const base = testInfo.project.use.baseURL;
   const tag = `${testInfo.project.name}${Date.now().toString(36)}`;
-  const name = `Cliente atencion ${tag}`;
+  const name = `Atención ${tag}`;
   const customerContext = await browser.newContext();
   const customer = customerContext.request;
   const headers = { Origin: base };
@@ -82,7 +85,8 @@ test('Conversaciones: filtros, estado y herramientas del chat siguen todos a la 
   await expect(page.locator('.lc-bar [data-lc-to="pending"]')).toBeVisible();
   await expect(page.locator('.lc-bar [data-lc-to="solved"]')).toBeVisible();
   // Quién atiende y las diez herramientas (en celular, la fila se desliza: cada una se alcanza).
-  await expect(page.locator('.assist-actions [data-chat-action]')).toBeVisible();
+  await expect(page.locator('.assist-actions .btn[data-chat-action]')).toBeVisible();
+  await expect(page.locator('.assist-actions [data-chat-action="resolve"]')).toBeVisible();
   const tools = [
     '[data-action="ops-detail"]',
     '[data-action="tg-open"]',
