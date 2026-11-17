@@ -1,11 +1,8 @@
 /*
  * Pantalla «Datos de contacto»: sólo la composición que el kit no trae, con el prefijo atr- y variables de
- * public/tokens.css.
+ * public/tokens.css. Tinta: la marca en la barra de filtros, la cifra de datos activos en lima, la tabla en su
+ * tarjeta y los datos del sistema (de sólo lectura) en un bloque lila con fichas blancas.
  */
-
-.atr-marca {
-  max-width: 320px;
-}
 
 .atr-acciones {
   display: flex;
@@ -16,15 +13,30 @@
 .atr-titulo {
   margin: 0 0 var(--space-2);
   color: var(--ink);
-  font-size: var(--font-xl);
-  font-weight: 600;
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.01em;
+}
+
+.atr-sistema-bloque {
+  background: var(--lilac);
+}
+
+.atr-sistema-bloque .k-hint {
+  color: var(--ink);
 }
 
 .atr-sistema {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
-  margin: 0;
+  margin: var(--space-5) 0 0;
   padding: 0;
   list-style: none;
+}
+
+.atr-sistema > .k-chip {
+  padding: var(--space-2) var(--space-5);
+  background: var(--surface);
+  white-space: normal;
 }
