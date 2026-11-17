@@ -18,16 +18,31 @@
 // el motor escribió se deshace con un SAVEPOINT, se llama a su `onError` (que pasa la conversación a una persona) y, si
 // también eso falla, contesta el asistente como hoy.
 //
+// Un motor que declara `passOnError: true` y no tiene `onError` cede el turno si falla: lo suyo se deshace y sigue el
+// siguiente motor del orden (no salta directo al asistente).
+//
 // Sin motores registrados (o sin recorridos publicados) devuelve siempre {} y el asistente contesta exactamente igual
 // que antes.
+//
+// ORDEN DE ATENCIÓN (diseño de automatización §3.3; conciliación, filas 33 y N-3). Antes del despachador ya se
+// resolvieron la baja, el comprobante con pedido vigente y «una persona atiende la conversación» (el trabajo ni
+// siquiera llega aquí). Después, en este orden:
+//   1. un recorrido en curso consume el mensaje            (chatflows; las reglas le ceden el turno)
+//   2. reglas por mensaje, en el orden de su lista          (rules, ORDER.rules)
+//   3. un recorrido publicado que arranca con el mensaje   (chatflows, ORDER.chatflows)
+//   4. el asistente de la marca                            (fuera del despachador: replies.plan)
+// Los pasos 1 y 3 los atiende el mismo motor (chatflows); las reglas van antes que él y le ceden el turno cuando hay
+// un recorrido en curso, para que el orden sea exactamente el de arriba.
+export const ORDER = Object.freeze({ rules: 30, chatflows: 40 });
+
 export function createDispatcher({ db, log = console } = {}) {
   const engines = [];
 
-  function register(name, { order = 100, inbound, onError = null } = {}) {
+  function register(name, { order = 100, inbound, onError = null, passOnError = false } = {}) {
     if (typeof name !== 'string' || !name) throw new TypeError('El motor necesita un nombre.');
     if (typeof inbound !== 'function') throw new TypeError(`El motor «${name}» necesita su función inbound.`);
     if (engines.some(e => e.name === name)) throw new TypeError(`El motor «${name}» ya está registrado.`);
-    engines.push({ name, order, inbound, onError });
+    engines.push({ name, order, inbound, onError, passOnError: passOnError === true });
     engines.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   }
 
@@ -57,7 +72,7 @@ export function createDispatcher({ db, log = console } = {}) {
       if (engine.onError) {
         const handled = guarded(engine.name + ' onError', () => engine.onError(c, m, run.error));
         if (handled.ok && handled.out) return { done: true, error: true };
-      }
+      } else if (engine.passOnError) continue; // cede el turno al siguiente motor del orden
       // Sin quién lo atienda: contesta el asistente de siempre (nunca se queda mudo).
       return { engineFailed: engine.name };
     }
