@@ -1,7 +1,8 @@
-// Auditoría de Niebla que se ejecuta DENTRO de la página (page.evaluate): por eso es una sola función sin
-// dependencias. Es la misma medición de docs/DISENO_Y_AUDITORIA.md, más las áreas táctiles y el desborde.
-export function nieblaAudit() {
-  const root = document.querySelector('#page') ?? document.body;
+// Auditoría de diseño (Tinta, antes Niebla) que se ejecuta DENTRO de la página (page.evaluate): por eso es una sola
+// función sin dependencias. Es la misma medición de docs/DISENO_Y_AUDITORIA.md, más las áreas táctiles y el desborde.
+// Mide la vista (#page) salvo que se le pase otra raíz, por ejemplo el menú lateral ('.sidebar').
+export function nieblaAudit(selector = '#page') {
+  const root = document.querySelector(selector) ?? document.body;
   const parse = color => {
     const match = color.match(/rgba?\(([^)]+)\)/);
     if (!match) return null;
