@@ -129,7 +129,7 @@ window.createCRMUI = function ({
       ? items
           .map(
             t =>
-              `<div class="crm-task ${t.status !== 'open' ? 'done' : ''}"><button class="task-check" data-action="crm-task-status" data-id="${t.id}" data-status="${t.status === 'open' ? 'done' : 'open'}" aria-label="${t.status === 'open' ? 'Completar' : 'Reabrir'} tarea ${esc(t.title)}" ${t.owner_id && t.owner_id !== state.user.id && state.user.role !== 'admin' ? 'disabled' : ''}>${icon(t.status === 'done' ? 'check' : 'circle')}</button><button class="task-main" data-action="crm-opportunity" data-id="${t.opportunity_id}"><strong>${esc(t.title)}</strong><span>${esc(t.contact_name)} · ${esc(t.course_title)}</span></button><div class="task-meta"><time class="${t.due_at < Date.now() && t.status === 'open' ? 'overdue' : ''}">${stamp(t.due_at)}</time><span>${esc(t.owner_name || 'Sin asignar')} · ${t.status === 'cancelled' ? 'Cancelada' : t.status === 'done' ? 'Completada' : 'Pendiente'}</span></div>${!t.owner_id || t.owner_id === state.user.id || state.user.role === 'admin' ? `<button class="icon-btn" data-action="crm-edit-task" data-id="${t.id}" aria-label="Editar tarea ${esc(t.title)}">${icon('pencil')}</button>` : ''}</div>`,
+              `<div class="crm-task ${t.status !== 'open' ? 'done' : ''}"><button class="task-check" data-action="crm-task-status" data-id="${t.id}" data-status="${t.status === 'open' ? 'done' : 'open'}" aria-label="${t.status === 'open' ? 'Completar' : 'Reabrir'} tarea ${esc(t.title)}" ${t.owner_id && t.owner_id !== state.user.id && state.user.role !== 'admin' ? 'disabled' : ''}>${icon(t.status === 'done' ? 'check' : 'circle')}</button><button class="task-main" data-action="crm-opportunity" data-id="${t.opportunity_id}"><strong>${esc(t.title)}</strong><span>${esc(t.contact_name)} · ${esc(t.course_title)}</span></button><div class="task-meta"><time class="${t.due_at < Date.now() && t.status === 'open' ? 'overdue' : ''}">${stamp(t.due_at)}</time><span>${esc(t.owner_name || 'Sin asignar')} · ${t.status === 'cancelled' ? 'Cancelada' : t.status === 'done' ? 'Completada' : 'Pendiente'}</span></div>${!t.owner_id || t.owner_id === state.user.id || state.user.role === 'admin' ? `<button class="icon-btn" data-action="crm-edit-task" data-id="${t.id}" aria-label="Editar tarea ${esc(t.title)}">${icon('pencil')}<span class="task-edit-text" aria-hidden="true">Editar</span></button>` : ''}</div>`,
           )
           .join('')
       : blank('Todo en orden', 'No hay tareas en esta vista.');
@@ -192,16 +192,20 @@ window.createCRMUI = function ({
         noNext = opps.filter(
           o => o.owner_id === state.user.id && !o.next_due && !['ganada', 'perdida'].includes(o.stage),
         );
+      // Tinta: cada cifra es un bloque de color; agenda, citas, «Por atender» (bloque en tinta) y mensajes
+      // programados comparten una rejilla (las citas y los programados sólo aparecen si hay algo).
       content = `<div class="day-summary">${[
-        [due.length, 'Seguimientos para hoy', 'clock-3'],
-        [pending.length, 'Esperando un asesor', 'messages-square'],
-        [unassigned.length, 'Intereses sin asignar', 'user-round-plus'],
-        [noNext.length, 'Sin próxima tarea', 'calendar-plus'],
+        [due.length, 'Seguimientos para hoy', 'clock-3', 't-butter'],
+        [pending.length, 'Esperando un asesor', 'messages-square', 't-peach'],
+        [unassigned.length, 'Intereses sin asignar', 'user-round-plus', 't-lilac'],
+        [noNext.length, 'Sin próxima tarea', 'calendar-plus', 't-sky'],
       ]
-        .map(([n, l, i]) => `<div class="day-stat">${icon(i)}<strong>${n}</strong><span>${l}</span></div>`)
+        .map(
+          ([n, l, i, tone]) => `<div class="day-stat ${tone}">${icon(i)}<strong>${n}</strong><span>${l}</span></div>`,
+        )
         .join(
           '',
-        )}</div><section class="crm-panel day-scheduled" id="day-appointments" hidden></section><section class="crm-panel day-scheduled" id="day-scheduled" hidden></section><div class="day-grid"><section class="crm-panel"><div class="panel-title"><h2>Tu agenda de hoy</h2><button class="text-link" data-view="tasks">Ver todas ${icon('arrow-up-right')}</button></div>${taskRows(due)}</section><section class="crm-panel"><div class="panel-title"><h2>Por atender</h2><button class="text-link" data-view="inbox">Ir a la bandeja ${icon('arrow-up-right')}</button></div>${
+        )}</div><div class="day-grid"><section class="crm-panel day-agenda"><div class="panel-title"><h2>Tu agenda de hoy</h2><button class="text-link" data-view="tasks">Ver todas ${icon('arrow-up-right')}</button></div>${taskRows(due)}</section><section class="crm-panel day-scheduled day-appointments" id="day-appointments" hidden></section><section class="crm-panel day-attend t-ink"><div class="panel-title"><h2>Por atender</h2><button class="text-link" data-view="inbox">Ir a la bandeja ${icon('arrow-up-right')}</button></div>${
         pending
           .slice(0, 6)
           .map(
@@ -209,9 +213,9 @@ window.createCRMUI = function ({
               `<button class="attention-row" data-action="crm-chat" data-id="${c.id}"><span class="avatar">${esc(c.customer_name.slice(0, 2).toUpperCase())}</span><span><strong>${esc(c.customer_name)}</strong><small>${esc(c.brand_name)} · ${esc(c.course_title)}</small></span><span class="channel-chip ${c.channel}">${c.channel === 'facebook' ? 'Facebook' : c.channel === 'instagram' ? 'Instagram' : 'WhatsApp'}</span></button>`,
           )
           .join('') || blank('La bandeja está al día', 'Aquí verás a quienes pidieron atención humana.')
-      }</section></div>${
+      }</section><section class="crm-panel day-scheduled day-outbox" id="day-scheduled" hidden></section></div>${
         unassigned.length || noNext.length
-          ? `<section class="crm-panel"><div class="panel-title"><h2>Que ningún interés se quede sin seguimiento</h2></div>${[
+          ? `<section class="crm-panel day-followup"><div class="panel-title"><h2>Que ningún interés se quede sin seguimiento</h2></div>${[
               ...unassigned,
               ...noNext,
             ]
