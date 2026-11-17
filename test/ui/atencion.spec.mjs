@@ -84,7 +84,43 @@ test('Conversaciones: filtros, estado y herramientas del chat siguen todos a la 
   await expect(page.locator('.lc-bar .lc-chip')).toHaveText('Abierta');
   await expect(page.locator('.lc-bar [data-lc-to="pending"]')).toBeVisible();
   await expect(page.locator('.lc-bar [data-lc-to="solved"]')).toBeVisible();
-  // Quién atiende y las diez herramientas (en celular, la fila se desliza: cada una se alcanza).
+  // La conversación es lo que más se ve: a 1366 × 800, con cabecera, interés, estado, resumen, herramientas y
+  // compositor a la vista, el historial visible mide 300 px o más y «Enviar» está en pantalla sin desplazarse.
+  if (testInfo.project.name === 'escritorio') {
+    await expect(page.locator('#conv-summary :is(.sum-empty, .sum-card)')).toBeVisible();
+    const seen = await page.evaluate(() => {
+      const chat = document.querySelector('#chat').getBoundingClientRect();
+      const hist = document.querySelector('#history').getBoundingClientRect();
+      const foot = document.querySelector('.chat-bottom').getBoundingClientRect();
+      const send = document.querySelector('#send-button').getBoundingClientRect();
+      return {
+        history: Math.min(hist.bottom, foot.top, chat.bottom) - Math.max(hist.top, chat.top),
+        sendInView: send.top >= chat.top && send.bottom <= Math.min(chat.bottom, innerHeight),
+      };
+    });
+    expect(seen.history, 'alto visible del historial a 1366 × 800').toBeGreaterThanOrEqual(300);
+    expect(seen.sendInView, '«Enviar» a la vista sin desplazarse').toBe(true);
+  }
+  // Una herramienta se alcanza si, tras deslizar su fila, queda entera dentro de su fila y de la ventana.
+  const reachable = async locator => {
+    await locator.scrollIntoViewIfNeeded();
+    await expect(locator).toBeVisible();
+    const inside = await locator.evaluate(el => {
+      const r = el.getBoundingClientRect();
+      const row = el.closest('.quick-replies, .compose-left, .compose') ?? el.parentElement;
+      const box = row.getBoundingClientRect();
+      return (
+        r.left >= box.left - 1 &&
+        r.right <= box.right + 1 &&
+        r.top >= 0 &&
+        r.bottom <= innerHeight + 1 &&
+        r.left >= 0 &&
+        r.right <= innerWidth + 1
+      );
+    });
+    expect(inside, 'la herramienta queda a la vista tras deslizar su fila').toBe(true);
+  };
+  // Quién atiende y las diez herramientas (la fila se desliza de lado cuando no caben: cada una se alcanza).
   await expect(page.locator('.assist-actions .btn[data-chat-action]')).toBeVisible();
   await expect(page.locator('.assist-actions [data-chat-action="resolve"]')).toBeVisible();
   const tools = [
@@ -99,22 +135,16 @@ test('Conversaciones: filtros, estado y herramientas del chat siguen todos a la 
     '[data-template="price"]',
     '[data-action="pay-new"]',
   ];
-  for (const selector of tools) {
-    const tool = page.locator(`.quick-replies ${selector}`);
-    await tool.scrollIntoViewIfNeeded();
-    await expect(tool).toBeVisible();
-  }
+  for (const selector of tools) await reachable(page.locator(`.quick-replies ${selector}`));
   // Compositor: adjuntar, ampliar, Programar, Agendar cita y Enviar (lima).
   for (const selector of [
     '[data-action="attach"]',
     '[data-action="compose-expand"]',
     '[data-action="sch-open"]',
     '[data-action="apt-open"]',
-  ]) {
-    const tool = page.locator(`.compose ${selector}`);
-    await tool.scrollIntoViewIfNeeded();
-    await expect(tool).toBeVisible();
-  }
+  ])
+    await reachable(page.locator(`.compose ${selector}`));
+  await reachable(page.locator('#send-button'));
   await expect(page.locator('#send-button')).toHaveCSS('background-color', LIME);
   await expectNiebla(page, 'inbox-chat', testInfo);
 
