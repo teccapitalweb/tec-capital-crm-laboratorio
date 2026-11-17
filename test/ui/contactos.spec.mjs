@@ -76,6 +76,37 @@ test('Contactos se monta desde el menú, busca, abre el panel, cumple Niebla y r
   watcher.done();
 });
 
+// Un nombre muy largo ensancha la tabla más que su caja. La tabla se desplaza dentro de la caja, pero los rótulos
+// ocultos (.k-sr, absolutos) de las cabeceras se escapaban del recorte y ensanchaban el documento 2 o 3 px a 1366 px:
+// fallaba de vez en cuando la medida de desbordamiento. Se comprueba la causa (cada .k-sr cuelga de una caja del kit)
+// además del efecto.
+const LARGO = 'Maximiliana Guadalupe de los Ángeles Fernández-Castellanos Larguísimo Prueba';
+test('Contactos: un nombre larguísimo no ensancha la página', async ({ page, baseURL }) => {
+  const headers = { Origin: baseURL };
+  const found = await page.request.get('/api/contacts?brand=globalvet&q=larguisimo', { headers });
+  if (!(await found.json()).contacts.length) {
+    const created = await page.request.post('/api/crm/contacts', {
+      headers,
+      data: { brandId: 'globalvet', name: LARGO, phone: '+52 55 4321 9899', email: 'larguisimo@correo.mx' },
+    });
+    expect(created.status(), await created.text()).toBe(201);
+  }
+  const watcher = watch(page);
+  await page.goto('/crm');
+  await page.locator('.nav [data-view="contactos"]').click();
+  await page.locator('#page [data-do="buscar"]').fill('larguisimo');
+  await expect(page.locator('#page .k-table__grid tbody tr')).toHaveCount(1);
+  await settled(page);
+  const medida = await page.evaluate(() => ({
+    sobra: document.documentElement.scrollWidth - window.innerWidth,
+    sueltos: [...document.querySelectorAll('#page .k-sr')]
+      .filter(el => el.getClientRects().length)
+      .filter(el => !el.offsetParent?.closest('.k-page')).length,
+  }));
+  expect(medida).toEqual({ sobra: 0, sueltos: 0 });
+  watcher.done();
+});
+
 // Alguien que conversa por WhatsApp real sólo con su identificador de usuario (sin teléfono visible). Se escribe en la
 // base de la prueba: un cliente, su contacto, una conversación con número real y su identificador (inventado).
 const SIN_NUMERO = 'Julián Sin Número Prueba';

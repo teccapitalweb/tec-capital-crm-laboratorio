@@ -28,8 +28,16 @@
   box-sizing: border-box;
 }
 
-/* La página ocupa el hueco de #page y es la que se desplaza, como .content-page en las pantallas actuales. */
+/*
+ * La página ocupa el hueco de #page y es la que se desplaza, como .content-page en las pantallas actuales.
+ *
+ * position: relative no es decoración: las piezas «sólo para lectores de pantalla» (.k-sr) son absolutas, y una
+ * pieza absoluta sin antecesor posicionado se coloca respecto a la ventana y se escapa del recorte de las cajas que
+ * se desplazan. Dentro de una tabla ancha (los rótulos de orden de Contactos con un nombre largo) eso ensanchaba el
+ * documento unos píxeles a 1366 px. Toda caja del kit que se desplaza es, por eso, su propio bloque contenedor.
+ */
 .k-page {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -725,6 +733,7 @@ select.k-input {
 }
 
 .k-table__scroll {
+  position: relative; /* bloque contenedor de los .k-sr de la tabla: ver .k-page */
   overflow-x: auto;
   border: 0;
   border-radius: var(--radius-block-lg);
@@ -932,6 +941,7 @@ th[aria-sort] > .k-table__sort {
 }
 
 .k-dialog__body {
+  position: relative;
   overflow-y: auto;
   min-height: 0;
   padding: var(--space-7) 24px 24px;
@@ -1046,6 +1056,7 @@ th[aria-sort] > .k-table__sort {
 }
 
 .k-side__body {
+  position: relative;
   display: grid;
   align-content: start;
   gap: var(--space-7);
