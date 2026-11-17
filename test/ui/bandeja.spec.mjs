@@ -62,7 +62,7 @@ test.describe('bandeja nueva', () => {
     baseURL,
   }, testInfo) => {
     const tag = `${testInfo.project.name}${Date.now().toString(36)}`;
-    const nombre = `Bandeja ${tag} Prueba`;
+    const nombre = `Bandeja ${tag} Cliente`; // sin «Prueba»: contactos.spec cuenta esos nombres
     const palabra = `zafiro${tag}`;
     // Una persona escribe a GlobalVet por el laboratorio.
     const cliente = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL } });
