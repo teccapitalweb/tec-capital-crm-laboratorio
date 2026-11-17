@@ -490,3 +490,156 @@
     flex-basis: 720px;
   }
 }
+
+/* ---- Editor compacto: cabecera en un bloque, avisos en tiras y el editor con el alto que queda ------------------- */
+
+.au-page:has(> .au-head--editor) {
+  gap: var(--space-4);
+}
+
+.au-head--editor {
+  align-items: center;
+  gap: var(--space-2) var(--space-7);
+}
+
+.au-head--editor .au-titulo {
+  gap: 0;
+}
+
+.au-migas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.au-head--editor .au-volver {
+  min-height: var(--touch);
+  margin-left: calc(var(--space-4) * -1);
+  padding: 0 var(--space-4);
+}
+
+.au-head--editor h1 {
+  margin: 0 0 0 var(--space-2);
+  line-height: 1.2;
+}
+
+.au-head--editor .au-meta {
+  margin: 2px 0 0;
+}
+
+/* Las tiras van en un renglón cuando caben (la de atención ocupa lo que sobra); los demás avisos, a todo lo ancho. */
+.au-avisos-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.au-avisos-editor > * {
+  flex: 1 1 100%;
+}
+
+.au-avisos-editor > .au-tira {
+  flex: 1 1 320px;
+}
+
+.au-avisos-editor > .au-tira--info {
+  flex: 0 1 auto;
+}
+
+.au-avisos-editor:empty {
+  display: none;
+}
+
+.au-avisos-editor .k-notice {
+  padding: var(--space-4) var(--space-7);
+  font-size: var(--font-md);
+}
+
+/* Una tira: lo esencial en un renglón; lo demás al desplegarla. */
+.au-tira {
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: var(--font-md);
+  line-height: 1.4;
+}
+
+.au-tira--warn {
+  background: var(--butter);
+  color: var(--ink);
+}
+
+.au-tira summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+  min-height: var(--touch);
+  padding: var(--space-2) var(--space-7);
+  list-style: none;
+  cursor: pointer;
+}
+
+.au-tira summary::-webkit-details-marker {
+  display: none;
+}
+
+.au-tira summary:focus-visible {
+  border-radius: var(--radius-control);
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.au-tira__texto {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.au-tira__mas {
+  flex: none;
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.au-tira[open] .au-tira__mas {
+  text-decoration: none;
+}
+
+.au-tira p {
+  margin: 0;
+  padding: 0 var(--space-7) var(--space-4);
+}
+
+/* Las pestañas dentro de la barra del editor, del tamaño de sus herramientas. */
+.au-pestanas--barra {
+  padding: 0;
+}
+
+.au-pestanas--barra .k-tab {
+  padding: 0 var(--space-7);
+  font-size: var(--font-md);
+}
+
+/* En computadora el editor toma el alto que queda en la ventana (lo mide index.js en --au-alto). */
+@media (min-width: 900px) {
+  .au-panel[data-slot='p-editar'] {
+    flex: none;
+  }
+
+  .au-editor {
+    --au-alto: 680px;
+
+    flex: none;
+    height: var(--au-alto);
+  }
+}
+
+@media (max-width: 680px) {
+  .au-head--editor h1 {
+    margin-left: 0;
+  }
+}

@@ -72,7 +72,9 @@ const palette = unavailable => html`<div class="lz-palette-head">
   )}
   <button type="button" class="lz-pal-all" data-do="paleta-todos" aria-expanded="false" data-slot="paleta-todos">Ver todos los tipos de paso</button>`;
 
-const shell = (hasSave, unavailable) => html`<div class="lz-bar" role="toolbar" aria-label="Herramientas del recorrido">
+const shell = (hasSave, unavailable) => html`<div class="lz-bar">
+    <div class="lz-bar-start" data-slot="barra-inicio"></div>
+    <div class="lz-tools-row" role="toolbar" aria-label="Herramientas del recorrido">
     <div class="lz-seg" role="group" aria-label="Cómo ver el recorrido">
       <button type="button" class="lz-tool" data-do="ver" data-pane="outline" aria-pressed="true">${icon('list')}<span>Pasos</span></button>
       <button type="button" class="lz-tool" data-do="ver" data-pane="canvas" aria-pressed="false">${icon('canvas')}<span>Lienzo</span></button>
@@ -95,6 +97,7 @@ const shell = (hasSave, unavailable) => html`<div class="lz-bar" role="toolbar" 
     <button type="button" class="lz-tool" data-do="probar" aria-pressed="false" title="Probar el recorrido sin enviar nada">${icon('test')}<span>Probar</span></button>
     <span class="lz-state" data-slot="estado" role="status"></span>
     ${hasSave ? html`<button type="button" class="lz-tool lz-primary" data-do="guardar">${icon('save')}<span>Guardar</span></button>` : ''}
+    </div>
   </div>
   <div class="lz-body">
     <div class="lz-left">
@@ -179,20 +182,42 @@ export function mountCanvas(root, options = {}) {
   }
 
   // A la vista de todos: por qué no se pudo hacer algo.
-  function flash(text) {
-    flashEl.textContent = text;
+  function flash(text, extra = null, ms = 6000) {
+    render(flashEl, html`<span>${text}</span>${extra || ''}`);
     flashEl.hidden = false;
     win.clearTimeout(ui.flashTimer);
     ui.flashTimer = win.setTimeout(() => {
       flashEl.hidden = true;
-    }, 6000);
+    }, ms);
   }
 
-  // Resultado de una petición al store: si se rechazó, se dice por qué; si cambió algo, se anuncia.
+  const named = id => `«${nodeName(store.node(id), store.context)}»`;
+
+  // Resultado de una petición al store: si se rechazó, se dice por qué; si cambió algo, se anuncia. Al eliminar, lo
+  // que se volvió a unir se anuncia y lo que quedó sin camino se dice a la vista, con «Ir al paso».
   function report(result, done) {
     if (!result) return;
-    if (result.ok === false) flash(result.message);
-    else if (done && result.changed !== false) announce(done);
+    if (result.ok === false) return flash(result.message);
+    if (done && result.changed !== false) {
+      const joined = (result.reconnected || []).filter(r => store.node(r.from) && store.node(r.to));
+      announce(
+        joined.length
+          ? `${done} Lo que llegaba a él ahora sigue a ${[...new Set(joined.map(r => named(r.to)))].join(', ')}.`
+          : done,
+      );
+    }
+    const stranded = (result.stranded || []).filter(id => store.node(id));
+    if (stranded.length) {
+      flash(
+        `${stranded.length === 1 ? 'Quedó sin camino' : 'Quedaron sin camino'}: ${stranded.map(named).join(', ')}. ${stranded.length === 1 ? 'Conéctalo desde otro paso o elimínalo.' : 'Conéctalos desde otro paso o elimínalos.'}`,
+        html`<span class="lz-flash-actions">
+          ${stranded.slice(0, 3).map(id => html`<button type="button" class="lz-flash-go" data-do="aviso-ir" data-node="${id}">Ir al paso ${named(id)}</button>`)}
+          <button type="button" class="lz-flash-go" data-do="aviso-cerrar">Cerrar</button>
+        </span>`,
+        20000,
+      );
+    }
+    return undefined;
   }
 
   // ---- Piezas -----------------------------------------------------------------------------------------------------------
@@ -585,6 +610,14 @@ export function mountCanvas(root, options = {}) {
         el.textContent = all ? 'Ver sólo los mensajes' : 'Ver todos los tipos de paso';
       },
       'vista-abrir': () => setSheet('vista'),
+      'aviso-ir'(event, el) {
+        flashEl.hidden = true;
+        goTo(el.dataset.node);
+        openPanel();
+      },
+      'aviso-cerrar': () => {
+        flashEl.hidden = true;
+      },
       'paleta-tipo': (event, el) => addFromPalette(el.dataset.type),
       deshacer: () => !off('deshacer') && undo(false),
       rehacer: () => !off('rehacer') && undo(true),
@@ -629,7 +662,9 @@ export function mountCanvas(root, options = {}) {
   };
 
   const merged = {};
-  for (const table of [own, panel.handlers, outline.handlers, sim.handlers, preview.handlers]) {
+  // `options.handlers`: verbos de la pantalla anfitriona para lo que pone en la barra (sus pestañas): los eventos no salen
+  // de la raíz del lienzo, así que se atienden aquí.
+  for (const table of [own, panel.handlers, outline.handlers, sim.handlers, preview.handlers, options.handlers || {}]) {
     for (const [type, verbs] of Object.entries(table)) merged[type] = { ...merged[type], ...verbs };
   }
   const unlisten = listen(root, merged);
@@ -679,8 +714,8 @@ export function mountCanvas(root, options = {}) {
     const width = root.getBoundingClientRect().width;
     const narrow = width < NARROW;
     // Con menos de este ancho la barra completa ya no cabe en un renglón: algunos botones quedan sólo con su icono.
-    // En Pasos la barra lleva menos herramientas (sin acomodo ni acercamiento): cabe completa con menos ancho.
-    root.dataset.bar = width < (ui.pane === 'canvas' ? 1320 : 980) ? 'tight' : 'full';
+    // En Pasos la barra lleva menos herramientas (sin acomodo ni acercamiento) pero también las pestañas de la pantalla.
+    root.dataset.bar = width < (ui.pane === 'canvas' ? 1320 : 1240) ? 'tight' : 'full';
     // La vista previa va en su propia columna si caben las tres; si no, es una hoja que se abre desde el paso.
     const previewMode = !narrow && width >= 1000 ? 'column' : 'sheet';
     if (root.dataset.preview !== previewMode) {
@@ -755,6 +790,9 @@ export function mountCanvas(root, options = {}) {
       store.setContext(context());
     },
     showPane: pane => setPane(pane === 'outline' ? 'outline' : 'canvas'),
+    // Hueco al principio de la barra para lo que pone la pantalla anfitriona (las pestañas Editar, Rendimiento y
+    // Versiones), así pestañas y herramientas van en un solo renglón cuando caben.
+    barStart: slot('barra-inicio'),
     get pane() {
       return ui.pane;
     },
