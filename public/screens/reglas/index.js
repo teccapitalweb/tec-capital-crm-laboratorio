@@ -20,7 +20,7 @@ import { failure, loading } from '../../kit/components/feedback.js';
 import { glyph } from '../../kit/glyphs.js';
 
 const ESTADO = { draft: 'Borrador', active: 'Encendida', paused: 'En pausa', archived: 'Archivada' };
-const TONO = { draft: '', active: 'k-chip--ok', paused: 'k-chip--warn', archived: '' };
+const TONO = { draft: 'k-chip--draft', active: 'k-chip--ok', paused: 'k-chip--warn', archived: 'k-chip--draft' };
 const RESULTADO = {
   executed: 'Hizo todo',
   partial: 'Hizo una parte',
@@ -495,7 +495,7 @@ function orden(datos) {
           <span class="rg-paso__num" aria-hidden="true">${i + 1}</span>
           <div class="rg-paso__texto">
             <strong>${p.label}</strong>
-            <span class="${['k-chip', p.on ? 'k-chip--ok' : '']}">${p.on ? 'En uso' : 'Sin efecto ahora'}</span>
+            <span class="${['k-chip', p.on ? 'k-chip--ok' : 'k-chip--draft']}">${p.on ? 'En uso' : 'Sin efecto ahora'}</span>
             <p class="k-hint">${p.detail}</p>
             ${when(
               p.items?.length,
@@ -524,7 +524,7 @@ function fila(r, i, total, puede) {
       <div class="rg-regla__titulo">
         <strong>${r.title}</strong>
         <span class="${['k-chip', TONO[r.status]]}">${ESTADO[r.status] ?? r.status}</span>
-        ${when(!r.speaks, () => html`<span class="k-chip">Silenciosa</span>`)}
+        ${when(!r.speaks, () => html`<span class="k-chip k-chip--lilac">Silenciosa</span>`)}
       </div>
       <p class="rg-regla__resumen">${r.summary.when} → ${r.summary.what}</p>
       <p class="k-hint">Hizo algo ${r.executions} ${r.executions === 1 ? 'vez' : 'veces'} · Última: ${fecha(r.lastRunAt)}</p>
@@ -604,7 +604,7 @@ function probar(datos, listas, uid, resultado) {
           <ol class="rg-traza">
             ${resultado.pipeline.map(
               p =>
-                html`<li><span class="${['k-chip', p.result === 'answers' ? 'k-chip--accent' : '']}">${PASO[p.result] ?? p.result}</span> ${p.label}: ${p.detail}</li>`,
+                html`<li><span class="${['k-chip', p.result === 'answers' ? 'k-chip--accent' : 'k-chip--draft']}">${PASO[p.result] ?? p.result}</span> ${p.label}: ${p.detail}</li>`,
             )}
           </ol>
           ${when(
@@ -716,7 +716,7 @@ export default {
         cuerpo,
         html`${when(
           datos.brands.length > 1,
-          () => html`<form class="k-card rg-marca" novalidate data-do="marca">
+          () => html`<form class="k-filterbar rg-marca" novalidate data-do="marca">
               ${field(
                 {
                   name: 'marca',
@@ -738,7 +738,7 @@ export default {
                   () => html`<ol class="rg-lista">
                     ${datos.rules.map((r, i) => fila(r, i, datos.rules.length, puede))}
                   </ol>`,
-                  () => html`<div class="k-state">
+                  () => html`<div class="k-state k-state--empty">
                     <p class="k-state__title">Esta marca todavía no tiene reglas</p>
                     <p>Crea la primera con «Nueva regla»: por ejemplo, responder «precio» con el precio vigente del catálogo.</p>
                   </div>`,
