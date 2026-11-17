@@ -142,6 +142,7 @@ export default {
       const archivados = keep.get('archivados') === true;
       let filas = [];
       let pedido = null;
+      let cargado = null; // la marca cuyas tarjetas están en pantalla
       render(
         vista,
         html`<header class="k-head au-head au-head--lista">
@@ -276,7 +277,9 @@ export default {
         pedido?.abort();
         const control = new AbortController();
         pedido = control;
-        render(caja, loading('Cargando los recorridos…'));
+        // Sólo la primera carga (o al cambiar de marca) dice «Cargando…»: una actualización en vivo no hace parpadear las
+        // tarjetas (movimiento sólo al navegar).
+        if (cargado !== marca) render(caja, loading('Cargando los recorridos…'));
         try {
           const datos = await api.get(
             '/api/chatflows',
@@ -294,6 +297,7 @@ export default {
           }
           keep.set('meta', meta);
           filas = datos.flows.filter(f => f.brandId === marca);
+          cargado = marca;
           pintarFiltros();
           pintarFilas();
         } catch (error) {
