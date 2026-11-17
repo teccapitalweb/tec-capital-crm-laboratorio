@@ -520,6 +520,20 @@
       }
     }
   }
+  // Quién atiende cada hilo, con una clase por estado para que la lista lo pinte con su color (Tinta).
+  function threadState(c) {
+    const [key, label] =
+      c.status === 'resolved'
+        ? ['resolved', 'Cerrada']
+        : c.status === 'waiting'
+          ? ['waiting', 'Espera asesor']
+          : c.bot_enabled
+            ? ['auto', 'Automática']
+            : c.agent_name
+              ? ['agent', 'Con asesor']
+              : ['open', 'Abierta'];
+    return `<span class="thread-state st-${key}">${label}</span>`;
+  }
   function renderThreads() {
     const target = $('#thread-list');
     if (!target) return;
@@ -529,7 +543,7 @@
       ? list
           .map(
             c =>
-              `<button class="thread ${c.id === state.selected ? 'active' : ''}" data-conversation="${c.id}" data-channel="${c.channel}" aria-pressed="${c.id === state.selected}">${avatar(agentMode() ? c.customer_name : c.brand_name, c.channel)}<div class="thread-copy"><div class="thread-name"><strong>${esc(agentMode() ? c.customer_name : c.brand_name)}</strong><time>${time(c.updated_at)}</time></div><div class="thread-brand">${esc(agentMode() ? c.brand_name + ' · ' + (c.wa_display || (c.wa_peer ? '+' + c.wa_peer : '#' + c.test_number)) : c.course_title)}</div>${agentMode() ? tagsUI.chips(c) : ''}<p class="thread-preview">${esc(c.match_text || c.last_text || 'Conversación lista para empezar')}</p><div class="thread-meta"><span>${c.match_text ? 'Coincide en mensaje · ' : ''}${channels[c.channel].name}${c.customer_online && agentMode() ? ' · En línea' : ''}</span>${agentMode() && lcListed.has(c.state) ? lcChip(c) : ''}${unread(c) ? `<span class="unread">${unread(c)}</span>` : `<span>${c.status === 'resolved' ? 'Cerrada' : c.status === 'waiting' ? 'Espera asesor' : c.bot_enabled ? 'Automática' : c.agent_name ? 'Con asesor' : 'Abierta'}</span>`}</div></div></button>`,
+              `<button class="thread ${c.id === state.selected ? 'active' : ''}" data-conversation="${c.id}" data-channel="${c.channel}" aria-pressed="${c.id === state.selected}">${avatar(agentMode() ? c.customer_name : c.brand_name, c.channel)}<div class="thread-copy"><div class="thread-name"><strong>${esc(agentMode() ? c.customer_name : c.brand_name)}</strong><time>${time(c.updated_at)}</time></div><div class="thread-brand">${esc(agentMode() ? c.brand_name + ' · ' + (c.wa_display || (c.wa_peer ? '+' + c.wa_peer : '#' + c.test_number)) : c.course_title)}</div>${agentMode() ? tagsUI.chips(c) : ''}<p class="thread-preview">${esc(c.match_text || c.last_text || 'Conversación lista para empezar')}</p><div class="thread-meta"><span>${c.match_text ? 'Coincide en mensaje · ' : ''}${channels[c.channel].name}${c.customer_online && agentMode() ? ' · En línea' : ''}</span>${agentMode() && lcListed.has(c.state) ? lcChip(c) : ''}${unread(c) ? `<span class="unread">${unread(c)}</span>` : threadState(c)}</div></div></button>`,
           )
           .join('')
       : `<div class="empty-list">${state.query ? 'No encontramos conversaciones con esa búsqueda.' : agentMode() ? 'Las conversaciones aparecerán aquí cuando los participantes escriban.' : 'Explora un curso para empezar tu primera conversación.'}</div>`;
@@ -578,7 +592,7 @@
     }
     const team = agentMode();
     const title = team ? c.customer_name : c.brand_name;
-    el.innerHTML = `<div class="chat-head" data-channel="${c.channel}"><div class="chat-person"><button class="icon-btn back-button" data-action="back" aria-label="Volver a conversaciones">${icon('arrow-left')}</button>${avatar(title, c.channel)}<div><strong>${esc(title)}</strong><small><span class="channel-name">${channels[c.channel].name}</span> · ${esc(team ? (c.real || c.wa_peer ? (c.wa_display || '+' + c.wa_peer) + ' · número real' : '#' + c.test_number) + ' · ' + c.brand_name : 'Canal de prueba')}</small></div></div><button class="icon-btn" data-action="search-messages" aria-label="Buscar en este chat">${icon('search')}</button><button class="icon-btn" data-action="contact-details" aria-label="Ver ficha de la conversación">${icon('panel-right')}</button></div><div class="chat-context"><span>${c.course_pending ? '<strong>Curso por elegir</strong> · el asistente se lo está preguntando' : 'Interés en <strong>' + esc(c.course_title) + '</strong>' + (c.edition_name ? ' · ' + esc(c.edition_name) : '')}${team ? tagsUI.inline(c) : ''}</span>${
+    el.innerHTML = `<div class="chat-head" data-channel="${c.channel}"><div class="chat-person"><button class="icon-btn back-button" data-action="back" aria-label="Volver a conversaciones">${icon('arrow-left')}</button>${avatar(title, c.channel)}<div><strong>${esc(title)}</strong><small><span class="channel-name">${channels[c.channel].name}</span> · ${esc(team ? (c.real || c.wa_peer ? (c.wa_display || '+' + c.wa_peer) + ' · número real' : '#' + c.test_number) + ' · ' + c.brand_name : 'Canal de prueba')}</small></div></div><div class="chat-head-tools"><button class="icon-btn" data-action="search-messages" aria-label="Buscar en este chat">${icon('search')}<span class="chat-head-label" aria-hidden="true">Buscar en este chat</span></button><button class="icon-btn" data-action="contact-details" aria-label="Ver ficha de la conversación">${icon('panel-right')}<span class="chat-head-label" aria-hidden="true">Ver ficha</span></button></div></div><div class="chat-context"><span>${c.course_pending ? '<strong>Curso por elegir</strong> · el asistente se lo está preguntando' : 'Interés en <strong>' + esc(c.course_title) + '</strong>' + (c.edition_name ? ' · ' + esc(c.edition_name) : '')}${team ? tagsUI.inline(c) : ''}</span>${
       team
         ? `<select id="stage-picker" aria-label="Etapa del interesado">${Object.entries(stages)
             .map(([id, name]) => `<option value="${id}" ${id === c.stage ? 'selected' : ''}>${name}</option>`)
@@ -726,7 +740,7 @@
           else
             attachment = `<a class="file-link" href="${esc(m.attachmentUrl)}" target="_blank" rel="noopener">${icon('file-text')}<span>${esc(m.filename)}</span>${icon('download')}</a>`;
         }
-        return `<article class="message ${outgoing ? 'outgoing' : ''}"><div class="bubble">${attachment}${esc(m.text)}${renderButtons(m, outgoing)}${payLink(m, outgoing)}${surveyLink(m, outgoing)}</div><div class="message-meta">${m.sender_kind === 'automation' ? icon(m.ai_drafted ? 'sparkles' : 'workflow') : ''}<span>${esc(name)} · ${time(m.created_at)}</span>${outgoing ? deliveryMark(m, c) : ''}${agentMode() && String(m.client_ref || '').startsWith('campaign:') ? `<span class="msg-tag">${esc('Difusión')}</span>` : ''}${m.receipt_status ? `<span class="msg-tag">${{ pending: 'Comprobante en revisión', accepted: 'Comprobante aceptado', rejected: 'Comprobante rechazado' }[m.receipt_status]}</span>` : ''}</div></article>`;
+        return `<article class="message ${outgoing ? 'outgoing' : ''}" data-sender="${esc(m.sender_kind)}"><div class="bubble">${attachment}${esc(m.text)}${renderButtons(m, outgoing)}${payLink(m, outgoing)}${surveyLink(m, outgoing)}</div><div class="message-meta">${m.sender_kind === 'automation' ? icon(m.ai_drafted ? 'sparkles' : 'workflow') : ''}<span>${esc(name)} · ${time(m.created_at)}</span>${outgoing ? deliveryMark(m, c) : ''}${agentMode() && String(m.client_ref || '').startsWith('campaign:') ? `<span class="msg-tag">${esc('Difusión')}</span>` : ''}${m.receipt_status ? `<span class="msg-tag">${{ pending: 'Comprobante en revisión', accepted: 'Comprobante aceptado', rejected: 'Comprobante rechazado' }[m.receipt_status]}</span>` : ''}</div></article>`;
       })
       .join(
         '',
