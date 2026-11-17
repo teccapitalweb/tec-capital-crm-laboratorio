@@ -24,8 +24,8 @@ const PASOS = [
 ];
 const ACCION = {
   created: ['Nuevo', 'k-chip--ok'],
-  updated: ['Actualizado', 'k-chip--accent'],
-  unchanged: ['Sin cambios', ''],
+  updated: ['Actualizado', 'k-chip--sky'],
+  unchanged: ['Sin cambios', 'k-chip--draft'],
   skipped: ['Omitido', 'k-chip--warn'],
   error: ['Con error', 'k-chip--bad'],
 };
@@ -37,6 +37,17 @@ const ESTADO = {
   done: 'Terminado',
   failed: 'Falló',
   cancelled: 'Cancelado',
+};
+// Color del estado de una importación (docs/GUIA_PANTALLAS.md): en curso lima, revisado cielo, terminado menta,
+// falló durazno, cancelado mantequilla, sin revisar gris.
+const TONO_ESTADO = {
+  uploaded: 'k-chip--draft',
+  validating: 'k-chip--accent',
+  validated: 'k-chip--sky',
+  applying: 'k-chip--accent',
+  done: 'k-chip--ok',
+  failed: 'k-chip--bad',
+  cancelled: 'k-chip--warn',
 };
 const EN_CURSO = new Set(['validating', 'applying']);
 const RESULTADO = new Set(['applying', 'done', 'failed', 'cancelled']);
@@ -172,7 +183,7 @@ export default {
                     item =>
                       html`<li class="imp-reciente" data-key="${item.id}">
                         <span class="imp-reciente__nombre">${item.filename}</span>
-                        <span class="k-chip">${ESTADO[item.state] ?? item.state}</span>
+                        <span class="${['k-chip', TONO_ESTADO[item.state]]}">${ESTADO[item.state] ?? item.state}</span>
                         <span class="k-muted">${fecha(item.createdAt)} · ${numero(item.rows)} filas</span>
                         <button type="button" class="k-btn" data-do="abrir" data-id="${item.id}">Abrir</button>
                       </li>`,
@@ -314,11 +325,16 @@ export default {
       const c = reporte?.consent ?? {};
       return html`<div class="k-tiles">
           ${[
-            tile({ label: 'Nuevos', value: t.created ?? 0 }),
-            tile({ label: 'Actualizados', value: t.updated ?? 0 }),
-            tile({ label: 'Sin cambios', value: t.unchanged ?? 0 }),
-            tile({ label: 'Omitidos', value: t.skipped ?? 0, hint: 'Repetidos en el archivo o ya existentes' }),
-            tile({ label: 'Con error', value: t.errors ?? 0 }),
+            tile({ label: 'Nuevos', value: t.created ?? 0, tone: 'mint' }),
+            tile({ label: 'Actualizados', value: t.updated ?? 0, tone: 'sky' }),
+            tile({ label: 'Sin cambios', value: t.unchanged ?? 0, tone: 'lilac' }),
+            tile({
+              label: 'Omitidos',
+              value: t.skipped ?? 0,
+              hint: 'Repetidos en el archivo o ya existentes',
+              tone: 'butter',
+            }),
+            tile({ label: 'Con error', value: t.errors ?? 0, tone: 'peach' }),
           ].map(item => item.html)}
         </div>
         <p class="k-hint">
