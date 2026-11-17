@@ -1,65 +1,106 @@
 /*
- * Niebla · variables de diseño para las pantallas nuevas (public/kit y public/screens).
+ * Tinta · variables de diseño de todo el CRM (docs/DISENO_Y_AUDITORIA.md).
  *
- * Es la única hoja donde se escriben colores, sombras y tamaños a mano. Se carga la primera; las hojas
- * actuales (styles.css, polish.css) siguen declarando sus variables después con los mismos valores, así
- * que las pantallas existentes no cambian. Si un valor cambia aquí hay que cambiarlo también allí y en las
- * páginas públicas sin guiones (docs/DISENO_Y_AUDITORIA.md). test/kit-static.test.mjs vigila que las dos
- * listas no se separen.
+ * Es la ÚNICA hoja donde se escriben colores, sombras, radios y tamaños con nombre. Se carga la primera y ninguna
+ * otra hoja vuelve a declarar estas variables (test/kit-static.test.mjs lo vigila). Las páginas públicas sin guiones
+ * (certificados, encuestas, aviso de privacidad, formulario de aliados) no cargan esta hoja: llevan su CSS en línea.
  *
  * A propósito no declara font-family, color ni background de :root: eso se queda en styles.css.
+ *
+ * Tinta sustituye a Niebla (16 nov 2026): bloques de color en lugar de tarjetas blancas con borde, esquinas muy
+ * redondas, botones en píldora, tinta negra como protagonista con un acento lima y cifras grandes. Las variables de
+ * Niebla siguen existiendo con los mismos nombres y ahora apuntan a Tinta, para que las pantallas que nadie ha
+ * rediseñado todavía hereden el sistema nuevo sin romperse.
  */
 :root {
-  /* 1. Las variables de hoy, tal cual (styles.css:2, polish.css:3 y polish.css:228). */
-  --ink: #242428;
-  --muted: #636977;
-  --text-3: #636977;
-  --text-2: #4b515c;
-  --line: #e1e6ea;
-  --soft: #f4f6f8;
-  --glass: #ffffffb8;
-  --bg: #f1f4f6;
-  --accent: #2f6f8f;
-  --accent-strong: #255a75;
-  --accent-soft: #e8f0f4;
-  --accent-tint: #f1f6f9;
-  --accent-line: #cddbe3;
-  --ok: #256b4e;
-  --ok-soft: #e7f4ed;
-  --ok-line: #cfe6d9;
+  /*
+   * 1. Paleta de Tinta. Son los colores de los bocetos aprobados; no se añaden otros sin medir su contraste
+   *    (tabla en docs/DISENO_Y_AUDITORIA.md).
+   */
+  --ink: #16181d; /* tinta: texto principal, botón principal, menú oscuro */
+  --ink-2: #23262d; /* superficie sobre tinta: selector de marca, filas del menú oscuro */
+  --ink-3: #2a2d35; /* línea y botón secundario sobre tinta */
+  --on-ink: #fff; /* texto sobre tinta */
+  --on-ink-text: #e6e8ee; /* texto de las filas del menú oscuro (14,5:1) */
+  --on-ink-soft: #c5c9d3; /* texto secundario sobre tinta (10,7:1; 8,3:1 sobre --ink-3) */
+  --on-ink-muted: #aab0bc; /* rótulos sobre tinta (8,2:1; 6,3:1 sobre --ink-3) */
+  --page: #eceef3; /* fondo de la página */
+  --surface: #fff; /* tarjeta blanca */
+  --soft: #f4f5f8; /* pieza hundida dentro de una tarjeta, botón secundario, campo de búsqueda */
+  --line: #e3e5ec; /* borde de los campos y separadores */
+  --text-2: #3a3f4a; /* texto secundario (8,0:1 sobre el pastel más oscuro) */
+  --text-3: #4a505c; /* apoyo y metadatos (6,15:1 sobre el pastel más oscuro) */
+  --lime: #d9f24f; /* acento: llamada a la acción, elemento activo sobre tinta, hilo abierto */
+  --lilac: #e3dcff;
+  --mint: #d3f4e2;
+  --sky: #d6ebff;
+  --butter: #fff0b8;
+  --peach: #ffe0cf;
+  --rose: #f6d9ec; /* el pastel de Instagram en los bocetos */
+
+  /* Puntos de color de los grupos del menú claro (sólo decoración: nunca llevan texto encima). */
+  --dot-attention: #f0a04b;
+  --dot-contacts: #8f7cf0;
+  --dot-sales: #e2b93b;
+  --dot-whatsapp: #2fa870;
+  --dot-results: #4b9be0;
+  --dot-settings: #8a909c;
+
+  /*
+   * 2. Las variables de Niebla, apuntando a Tinta. Las hojas de antes (styles.css, crm.css, operations.css…) las usan
+   *    por todas partes; así heredan el sistema nuevo.
+   */
+  --bg: var(--page);
+  --muted: var(--text-3);
+  --text-1: var(--ink);
+  --glass: #ffffffe0;
+  --accent: var(--ink); /* el «acento» de Niebla era el color de lo principal: en Tinta lo principal es tinta */
+  --accent-strong: var(--ink); /* texto del elemento activo */
+  --accent-soft: var(--lime); /* fondo del elemento activo o seleccionado */
+  --accent-tint: var(--soft); /* fondo al pasar el cursor */
+  --accent-line: #16181d2e; /* borde del elemento activo o enfocado: tinta translúcida */
+  --on-accent: var(--on-ink);
+  --ring: var(--ink); /* anillo de foco; el menú oscuro lo cambia a lima */
+  --ok: #256b4e; /* 4,84:1 sobre el pastel más oscuro */
+  --ok-soft: var(--mint);
+  --ok-line: #b4e3ca;
   --warn: #7d5710;
-  --warn-soft: #fcf3df;
-  --warn-line: #efdfb8;
+  --warn-soft: var(--butter);
+  --warn-line: #ecd889;
   --bad: #a7433a;
-  --bad-soft: #fcecea;
-  --bad-line: #f2d2ce;
-  --wa: #06985c;
+  --bad-soft: var(--peach);
+  --bad-line: #f5c3a8;
+  --info-soft: var(--sky);
+  --wa: #06985c; /* colores de canal: sin cambios, se reconocen igual */
   --ig: #bd2a88;
   --fb: #246be9;
-  --text-1: var(--ink);
-  --shadow-1: 0 1px 2px #1a1a2a0a, 0 1px 1px #1a1a2a05;
-  --shadow-2: 0 8px 20px -10px #1a1a2a2e, 0 2px 5px #1a1a2a0a;
+
+  /* 3. Profundidad. Tinta es plana: el color separa, no la sombra. Sólo flota lo que está encima de algo. */
+  --shadow-1: none;
+  --shadow-2: 0 12px 32px -16px #16181d40;
+  --shadow-card: none;
+  --shadow-lift: 0 16px 36px -22px #16181d59;
+  --shadow-dialog: 0 40px 90px -30px #16181d73;
+  --backdrop: #16181d66;
+  --page-glow: #eceef300; /* Niebla tenía un brillo en el fondo; Tinta no */
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --ring: var(--accent);
-  --shadow-card: 0 1px 2px #1d2e380a, 0 10px 28px -18px #1d2e3829;
-  --shadow-lift: 0 2px 4px #1d2e380d, 0 18px 36px -18px #1d2e3840;
 
-  /*
-   * 2. Valores que las hojas actuales escriben a mano y que el kit necesita con nombre. No son colores
-   *    nuevos: cada uno lleva la regla de la que sale.
-   */
-  --surface: #fff; /* fondo de botones, campos y paneles (.btn, input, .crm-panel) */
-  --on-accent: #fff; /* texto sobre --accent (.btn.primary) */
-  --page-glow: #d9e7ef66; /* brillo del fondo de página (.content-page) */
-  --backdrop: #1d2e3838; /* velo de las ventanas (dialog::backdrop) */
-  --shadow-dialog: 0 1px 2px #1d2e3814, 0 40px 90px -30px #1d2e3866; /* dialog */
-  --radius-dialog: 21px; /* dialog */
+  /* 4. Radios. */
+  --radius-card: 28px; /* tarjetas, paneles, menú, ventanas */
+  --radius-block-lg: 22px; /* pieza grande dentro de una tarjeta: hilo de la lista, área de mensajes */
+  --radius-block: 20px; /* pieza dentro de una tarjeta: dato, aviso, fila de agenda */
+  --radius-control: 16px; /* campos de texto y listas desplegables */
+  --radius-item: 14px; /* filas del menú, selector de marca */
+  --radius-pill: 999px; /* botones, fichas, pestañas, filtros */
+  --radius-dialog: var(--radius-card);
+  /* La escala pequeña de antes sigue para detalles (casillas, barras, miniaturas). */
+  --radius-1: 6px;
+  --radius-2: 8px;
+  --radius-3: 10px;
+  --radius-4: 12px;
+  --radius-5: 14px;
 
-  /*
-   * 3. Escala para lo nuevo. No se inventó: son los valores más usados hoy en las ocho hojas de public/
-   *    (recuento del 13 nov 2026; entre paréntesis, las veces que aparece cada uno).
-   */
-  /* Separaciones. gap: 8px (87), 10px (78), 6px (56), 12px (45), 4px (20), 14px (18). padding: 16px, 14px, 12px, 20px, 10px. */
+  /* 5. Separaciones. */
   --space-1: 4px;
   --space-2: 6px;
   --space-3: 8px;
@@ -68,29 +109,32 @@
   --space-6: 14px;
   --space-7: 16px;
   --space-8: 20px;
-  /* Radios: 12px (51), 10px (29), 14px (19), 6px (17), 8px (15), 999px (10). */
-  --radius-1: 6px;
-  --radius-2: 8px;
-  --radius-3: 10px;
-  --radius-4: 12px;
-  --radius-5: 14px;
-  --radius-pill: 999px;
-  /* Letra: 11px (236), 12px (153), 13px (85), 14px (20), 16px (17), 24px (8). 30px es el título de página de hoy. */
-  --font-min: 11px; /* mínimo de Niebla: nada por debajo */
+  --pad-card: 22px; /* relleno de una tarjeta */
+  --gap-page: 18px; /* entre bloques de una página */
+
+  /* 6. Letra: Manrope en todo. */
+  --font-min: 11px; /* mínimo: nada por debajo */
   --font-sm: 12px;
   --font-md: 13px;
-  --font-lg: 14px;
-  --font-xl: 16px; /* también el tamaño de los campos en celular: con menos, iOS amplía la página al enfocar */
-  --font-2xl: 24px;
-  --font-title: 30px;
-  /* Alto mínimo de lo que se toca con el dedo (docs/DISENO_Y_AUDITORIA.md). */
-  --touch: 40px;
+  --font-lg: 14px; /* cuerpo de botones y filas */
+  --font-lead: 15px; /* bajada bajo el título de la página */
+  --font-xl: 16px; /* también los campos en celular: con menos, iOS amplía la página al enfocar */
+  --font-section: 19px; /* título de una tarjeta */
+  --font-2xl: 24px; /* título de una tarjeta grande */
+  --font-title: 40px; /* título de la página */
+  --font-display: 56px; /* cifras grandes */
+  --weight-bold: 700;
+  --weight-black: 800;
+
+  /* 7. Lo que se toca. */
+  --touch: 40px; /* mínimo absoluto */
+  --control: 44px; /* alto de botones, filtros y campos de los bocetos */
+  --control-lg: 50px; /* llamada a la acción de la página */
 
   /*
-   * 4. Paleta de gráficas (diseño de estadísticas, §3.1). Validada el 13 nov 2026 sobre blanco: separación
-   *    para daltonismo entre vecinas y contraste de 3:1 o más. Por eso las gráficas van siempre dentro de
-   *    un panel blanco. Si se cambia un color hay que validar de nuevo. El color sigue a la entidad, no al
-   *    orden: «recibidos» es siempre --ch-1 aunque se filtre.
+   * 8. Paleta de gráficas (diseño de estadísticas, §3.1). Validada el 13 nov 2026 sobre blanco: separación para
+   *    daltonismo entre vecinas y contraste de 3:1 o más. Por eso las gráficas van siempre dentro de una tarjeta
+   *    blanca. Aquí sigue el azul petróleo de la marca (--ch-seq-4): Tinta no cambió las gráficas.
    */
   --ch-1: #1f78a3; /* recibidos · servicio · reglas · cerradas */
   --ch-2: #cf6b35; /* enviados · marketing · personas */
@@ -105,4 +149,47 @@
   --ch-seq-4: #2f6f8f;
   --ch-seq-5: #1d4a61;
   --ch-neutral: #c9ced6; /* periodo anterior, «otros» */
+}
+
+/*
+ * 9. La experiencia del cliente (el chat con aspecto de app de mensajería en «/», también cuando el equipo entra en
+ *    modo «Cliente») y la página de pago (#modal.pay-page) conservan los colores de Niebla a propósito: se
+ *    diseñaron aparte y no forman parte del rediseño.
+ */
+.customer-skin,
+.pay-page {
+  --ink: #242428;
+  --muted: #636977;
+  --text-3: #636977;
+  --text-2: #4b515c;
+  --line: #e1e6ea;
+  --soft: #f4f6f8;
+  --glass: #ffffffb8;
+  --bg: #f1f4f6;
+  --accent: #2f6f8f;
+  --accent-strong: #255a75;
+  --accent-soft: #e8f0f4;
+  --accent-tint: #f1f6f9;
+  --accent-line: #cddbe3;
+  --ok-soft: #e7f4ed;
+  --ok-line: #cfe6d9;
+  --warn-soft: #fcf3df;
+  --warn-line: #efdfb8;
+  --bad-soft: #fcecea;
+  --bad-line: #f2d2ce;
+  --ring: var(--accent);
+  --shadow-1: 0 1px 2px #1a1a2a0a, 0 1px 1px #1a1a2a05;
+  --shadow-2: 0 8px 20px -10px #1a1a2a2e, 0 2px 5px #1a1a2a0a;
+  --shadow-card: 0 1px 2px #1d2e380a, 0 10px 28px -18px #1d2e3829;
+  --shadow-lift: 0 2px 4px #1d2e380d, 0 18px 36px -18px #1d2e3840;
+  --page-glow: #d9e7ef66;
+}
+
+/* En celular el título de página baja de tamaño para que quepa una palabra larga en 375 px. */
+@media (max-width: 680px) {
+  :root {
+    --font-title: 30px;
+    --font-display: 44px;
+    --pad-card: 18px;
+  }
 }

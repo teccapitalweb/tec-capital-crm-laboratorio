@@ -118,7 +118,7 @@ Un SVG del kit **no se escala** (la letra bajaría de 11 px): se pinta al ancho 
 
 Lo que une el kit con la aplicación actual. Lo conecta quien integra; **las pantallas no tocan nada de esto**.
 
-**`public/index.html`, tres líneas:** `<link rel="stylesheet" href="/tokens.css">` antes de `/styles.css`; `<link rel="stylesheet" href="/kit/kit.css">` después de `/checkout.css`; y `<script type="module" src="/kit/boot.js"></script>` antes de `<script defer src="/app.js">`.
+**`public/index.html`, tres líneas:** `<link rel="stylesheet" href="/tokens.css">` antes de `/styles.css`; `<link rel="stylesheet" href="/kit/kit.css">` después de `/checkout.css`; y `<script type="module" src="/kit/boot.js"></script>` antes de `<script defer src="/app.js">`. Desde Tinta (17 nov 2026) hay una cuarta: `<link rel="stylesheet" href="/tinta.css">`, la última hoja, que reviste las pantallas de antes ([DISENO_Y_AUDITORIA.md](DISENO_Y_AUDITORIA.md)).
 
 **Lo que hace `boot.js`:** crea `window.TC = { host: null, screens }` (el único global nuevo) y pide `GET /screens/index.json`, que responde `{"screens":[…]}`. Importa cada pantalla de `/screens/<id>/<entry>` y añade sus hojas `/screens/<id>/<hoja>` una sola vez. No hace nada más: con la lista vacía, la aplicación no cambia.
 

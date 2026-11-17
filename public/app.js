@@ -286,6 +286,27 @@
   } catch {
     navGroups = {}; // sin almacenamiento o con un valor roto: los grupos por omisión
   }
+  // Menú lateral oscuro (por omisión) o claro, a elección de cada persona y recordado en este navegador
+  // (docs/DISENO_Y_AUDITORIA.md). Sólo cambia el aspecto del menú del equipo.
+  const MENU_THEME_KEY = 'tc-menu-theme';
+  let menuTheme = 'dark';
+  try {
+    if (localStorage.getItem(MENU_THEME_KEY) === 'light') menuTheme = 'light';
+  } catch {
+    // sin almacenamiento: el menú oscuro
+  }
+  const menuThemeLabel = () => (menuTheme === 'dark' ? 'Usar el menú claro' : 'Usar el menú oscuro');
+  function toggleMenuTheme(button) {
+    menuTheme = menuTheme === 'dark' ? 'light' : 'dark';
+    try {
+      localStorage.setItem(MENU_THEME_KEY, menuTheme);
+    } catch {
+      // sin almacenamiento: vale para esta visita
+    }
+    button.closest('.workspace')?.setAttribute('data-menu', menuTheme);
+    button.setAttribute('aria-pressed', String(menuTheme === 'light'));
+    button.title = menuThemeLabel();
+  }
   const navOpen = (title, ids) =>
     ids.includes(state.view) || (Object.hasOwn(navGroups, title) ? navGroups[title] === true : title === 'Atención');
   function toggleNavGroup(button) {
@@ -354,7 +375,10 @@
     const navNow = () => app.querySelector('.sidebar .nav');
     const scrollOf = el => (el ? [el.scrollTop, el.scrollLeft] : [0, 0]);
     const navScroll = [scrollOf(navNow()), scrollOf(navNow()?.parentElement)];
-    app.innerHTML = `<div class="workspace ${state.mobileChat ? 'mobile-chat' : ''} ${team ? '' : 'customer-skin'}"><aside class="sidebar"><div class="brand"><span class="brand-mark">tc</span><div class="brand-copy"><strong>TEC CAPITAL</strong><small>Laboratorio CRM</small></div></div><div class="workspace-picker">${icon('building-2')}<select aria-label="Filtrar por marca" id="brand-picker">${brandOptions}</select></div><div>${team ? '' : '<div class="nav-label">Tu espacio</div>'}<nav class="nav ${team ? 'nav-grouped' : ''}" aria-label="Navegación principal">${sideNav(team)}</nav></div><div class="sidebar-bottom">${!isStaff() ? '<a class="customer-team-link" href="/crm">Entrar al CRM</a>' : ''}${isStaff() ? `<div class="mode-picker" aria-label="Cambiar experiencia"><button data-mode="customer" class="${!team ? 'active' : ''}">Cliente</button><button data-mode="agent" class="${team ? 'active' : ''}">Equipo</button></div>` : ''}<div class="lab-note"><strong>${team ? 'Un equipo. Un espacio.' : 'Tu número de prueba: ' + state.user.testNumber}</strong>${team ? 'Mensajes, cursos y atención en tiempo real.' : 'Este perfil identifica tus mensajes. No es un número de WhatsApp.'}</div><div class="user-card"><button data-action="profile" aria-label="Mi perfil"><span class="avatar">${esc(initials(state.user.name))}</span><span class="user-copy"><strong title="${esc(state.user.name)}">${esc(state.user.name)}</strong><small>${state.user.role === 'admin' ? 'Administrador' : state.user.role === 'agent' ? 'Asesor' : 'Cliente de prueba'}</small></span></button><button class="icon-btn" data-action="logout" aria-label="Cerrar sesión">${icon('log-out')}</button></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb"><span>Laboratorio</span>${icon('chevron-right')}<strong id="breadcrumb-title">${pageTitle()}</strong></div><div class="top-status"><span id="connection" class="connection">Conectando</span><span class="lab-label">DATOS Y PAGOS DE PRUEBA</span>${!team ? `<button class="btn" data-action="new-chat">${icon('plus')}<span>Nueva conversación</span></button>` : ''}<button class="icon-btn mobile-profile" data-action="profile" aria-label="Mi perfil">${icon('user-round')}</button></div></header><div class="notice" id="notice"></div><div class="page-slot" id="page"></div></main></div>`;
+    const themeSwitch = team
+      ? `<button type="button" class="icon-btn menu-theme" data-menu-theme-toggle aria-label="Menú claro" aria-pressed="${menuTheme === 'light'}" title="${menuThemeLabel()}">${icon('sun-moon')}</button>`
+      : '';
+    app.innerHTML = `<div class="workspace ${state.mobileChat ? 'mobile-chat' : ''} ${team ? '' : 'customer-skin'}" data-menu="${menuTheme}"><aside class="sidebar"><div class="brand"><span class="brand-mark">tc</span><div class="brand-copy"><strong>TEC CAPITAL</strong><small>Laboratorio CRM</small></div></div><div class="workspace-picker">${icon('building-2')}<select aria-label="Filtrar por marca" id="brand-picker">${brandOptions}</select></div><div>${team ? '' : '<div class="nav-label">Tu espacio</div>'}<nav class="nav ${team ? 'nav-grouped' : ''}" aria-label="Navegación principal">${sideNav(team)}</nav></div><div class="sidebar-bottom">${!isStaff() ? '<a class="customer-team-link" href="/crm">Entrar al CRM</a>' : ''}${isStaff() ? `<div class="sidebar-switches"><div class="mode-picker" aria-label="Cambiar experiencia"><button data-mode="customer" class="${!team ? 'active' : ''}">Cliente</button><button data-mode="agent" class="${team ? 'active' : ''}">Equipo</button></div>${themeSwitch}</div>` : ''}<div class="lab-note"><strong>${team ? 'Un equipo. Un espacio.' : 'Tu número de prueba: ' + state.user.testNumber}</strong>${team ? 'Mensajes, cursos y atención en tiempo real.' : 'Este perfil identifica tus mensajes. No es un número de WhatsApp.'}</div><div class="user-card"><button data-action="profile" aria-label="Mi perfil"><span class="avatar">${esc(initials(state.user.name))}</span><span class="user-copy"><strong title="${esc(state.user.name)}">${esc(state.user.name)}</strong><small>${state.user.role === 'admin' ? 'Administrador' : state.user.role === 'agent' ? 'Asesor' : 'Cliente de prueba'}</small></span></button><button class="icon-btn" data-action="logout" aria-label="Cerrar sesión">${icon('log-out')}</button></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb"><span>Laboratorio</span>${icon('chevron-right')}<strong id="breadcrumb-title">${pageTitle()}</strong></div><div class="top-status"><span id="connection" class="connection">Conectando</span><span class="lab-label">DATOS Y PAGOS DE PRUEBA</span>${!team ? `<button class="btn" data-action="new-chat">${icon('plus')}<span>Nueva conversación</span></button>` : ''}<button class="icon-btn mobile-profile" data-action="profile" aria-label="Mi perfil">${icon('user-round')}</button></div></header><div class="notice" id="notice"></div><div class="page-slot" id="page"></div></main></div>`;
     for (const [el, [top, left]] of [
       [navNow(), navScroll[0]],
       [navNow()?.parentElement, navScroll[1]],
@@ -1488,6 +1512,7 @@
     try {
       if (button.dataset.action) return await action(button.dataset.action, button);
       if (button.dataset.navGroup) return toggleNavGroup(button);
+      if (button.hasAttribute('data-menu-theme-toggle')) return toggleMenuTheme(button);
       if (button.dataset.view) return setView(button.dataset.view);
       if (button.dataset.mode) {
         state.mode = button.dataset.mode;

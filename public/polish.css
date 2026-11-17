@@ -1,14 +1,6 @@
 /* Niebla · capa de pulido. Sólo refina (tipografía, movimiento, estados, escala de superficies): no cambia estructura,
    composición compacta ni colores de marca/canal. Se carga al final para poder afinar sin tocar cada hoja. */
-:root {
-  --text-1: var(--ink);
-  --text-2: #4b515c;
-  --text-3: #636977;
-  --shadow-1: 0 1px 2px #1a1a2a0a, 0 1px 1px #1a1a2a05;
-  --shadow-2: 0 8px 20px -10px #1a1a2a2e, 0 2px 5px #1a1a2a0a;
-  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --ring: var(--accent);
-}
+/* Las variables viven sólo en tokens.css. */
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -1182,11 +1174,7 @@ label.field input[type='file']::file-selector-button {
 /* ============ Pulido de diseño (12 nov 2026) · docs/DISENO_Y_AUDITORIA.md ============ */
 /* Niebla, con más oficio: profundidad suave en las superficies, color discreto por persona y por etapa, más aire para la conversación
    y respuesta inmediata al cursor. Sin movimiento propio: sólo cambian color, borde y sombra cuando la persona pasa el cursor o pulsa. */
-:root {
-  --shadow-card: 0 1px 2px #1d2e380a, 0 10px 28px -18px #1d2e3829;
-  --shadow-lift: 0 2px 4px #1d2e380d, 0 18px 36px -18px #1d2e3840;
-  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-}
+/* Sombras y curva de movimiento: en tokens.css. */
 ::selection {
   background: #cfe2ec;
   color: var(--ink);
