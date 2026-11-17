@@ -441,12 +441,13 @@ function vistaPrevia(datos, p) {
 }
 
 function resultados(r) {
-  const tile = (label, value) =>
-    html`<div class="k-tile"><span class="k-tile__label">${label}</span><span class="k-tile__value">${value}</span></div>`;
+  const tile = (label, value, tono) =>
+    html`<div class="${['k-tile', `k-tile--${tono}`]}"><span class="k-tile__label">${label}</span><span class="k-tile__value">${value}</span></div>`;
   return html`<div class="k-stack">
     <div class="k-tiles">
-      ${tile('Inscritas', r.enrolled)} ${tile('Enviados', r.sent)} ${tile('Respondieron', r.replied)}
-      ${tile('Dijeron sí', r.saidYes)} ${tile('Dijeron no', r.saidNo)}
+      ${tile('Inscritas', r.enrolled, 'lime')} ${tile('Enviados', r.sent, 'sky')}
+      ${tile('Respondieron', r.replied, 'lilac')} ${tile('Dijeron sí', r.saidYes, 'mint')}
+      ${tile('Dijeron no', r.saidNo, 'butter')}
     </div>
     <div class="k-data__wrap">
       <table class="k-data">
@@ -538,7 +539,7 @@ export default {
       );
       const selector = when(
         datos.brands.length > 1 && !borrador,
-        () => html`<form class="k-card" novalidate data-do="marca">
+        () => html`<form class="k-filterbar" novalidate data-do="marca">
           ${field(
             {
               name: 'marca',
@@ -572,7 +573,7 @@ export default {
                     s => html`<li class="k-card sq-tarjeta" data-key="${s.id}">
                       <div class="sq-tarjeta__head">
                         <h2 class="sq-titulo">${s.title}</h2>
-                        <span class="${['k-chip', s.enabled ? 'k-chip--ok' : '']}">
+                        <span class="${['k-chip', 'k-chip--lg', s.enabled && !s.archived ? 'k-chip--ok' : 'k-chip--draft']}">
                           ${s.archived ? 'Archivada' : s.enabled ? 'Encendida' : 'Apagada'}
                         </span>
                       </div>
@@ -600,12 +601,14 @@ export default {
                     </li>`,
                   )}
                 </ul>`
-              : empty({
-                  title: 'Esta marca todavía no tiene secuencias',
-                  text: puede()
-                    ? 'Crea la primera con «Nueva secuencia»: por ejemplo, un mensaje al día siguiente y otro dos días antes del curso.'
-                    : 'Administración las crea; aquí verás sus resultados.',
-                })
+              : html`<div class="k-card">
+                  ${empty({
+                    title: 'Esta marca todavía no tiene secuencias',
+                    text: puede()
+                      ? 'Crea la primera con «Nueva secuencia»: por ejemplo, un mensaje al día siguiente y otro dos días antes del curso.'
+                      : 'Administración las crea; aquí verás sus resultados.',
+                  })}
+                </div>`
           }`,
       );
     }

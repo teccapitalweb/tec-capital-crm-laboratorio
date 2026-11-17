@@ -1,22 +1,38 @@
-/* Secuencias de seguimiento: lista de tarjetas y editor de pasos en lista vertical (sólo variables de public/tokens.css). */
+/*
+ * Secuencias de seguimiento: lista de tarjetas y editor de pasos en lista vertical (sólo variables de
+ * public/tokens.css). Tinta: cada secuencia es una tarjeta blanca con su nombre grande y su estado en ficha, los
+ * pasos del resumen como filas numeradas en tinta y lima, y los resultados en bloques de color.
+ */
 .sq-titulo {
   margin: 0;
-  font-size: var(--font-lg);
+  color: var(--ink);
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.01em;
 }
+
+.sq-tarjeta .sq-titulo {
+  font-size: var(--font-2xl);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
 .sq-tarjetas,
 .sq-pasos {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--gap-page);
   margin: 0;
   padding: 0;
   list-style: none;
 }
+
 .sq-tarjeta,
 .sq-paso {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-5);
   min-width: 0;
 }
+
 .sq-tarjeta__head,
 .sq-paso__head {
   display: flex;
@@ -25,17 +41,21 @@
   justify-content: space-between;
   gap: var(--space-3);
 }
+
 .sq-paso__titulo {
   margin: 0;
-  font-size: var(--font-md);
+  color: var(--ink);
+  font-size: var(--font-lead);
+  font-weight: var(--weight-black);
 }
+
 .sq-paso__acciones,
 .sq-tarjeta__acciones {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
-.sq-resumen,
+
 .sq-lista,
 .sq-problemas {
   margin: 0;
@@ -44,17 +64,58 @@
   font-size: var(--font-sm);
   line-height: 1.5;
 }
+
 .sq-lista {
-  color: var(--text-1);
+  color: var(--ink);
 }
+
+/* Los pasos de una secuencia en su tarjeta: filas redondas con el número en tinta y lima. */
+.sq-resumen {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: sq-paso;
+}
+
+.sq-resumen > li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: 600;
+  counter-increment: sq-paso;
+}
+
+.sq-resumen > li::before {
+  content: counter(sq-paso);
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--lime);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+}
+
 .sq-fila {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-4);
 }
+
 .sq-paso__acciones .k-btn {
   min-width: var(--touch);
 }
+
 .sq-pie {
   justify-content: flex-end;
 }
