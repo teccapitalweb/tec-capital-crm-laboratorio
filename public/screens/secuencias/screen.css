@@ -1,0 +1,60 @@
+/* Secuencias de seguimiento: lista de tarjetas y editor de pasos en lista vertical (sólo variables de public/tokens.css). */
+.sq-titulo {
+  margin: 0;
+  font-size: var(--font-lg);
+}
+.sq-tarjetas,
+.sq-pasos {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sq-tarjeta,
+.sq-paso {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.sq-tarjeta__head,
+.sq-paso__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.sq-paso__titulo {
+  margin: 0;
+  font-size: var(--font-md);
+}
+.sq-paso__acciones,
+.sq-tarjeta__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.sq-resumen,
+.sq-lista,
+.sq-problemas {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  line-height: 1.5;
+}
+.sq-lista {
+  color: var(--text-1);
+}
+.sq-fila {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+.sq-paso__acciones .k-btn {
+  min-width: var(--touch);
+}
+.sq-pie {
+  justify-content: flex-end;
+}

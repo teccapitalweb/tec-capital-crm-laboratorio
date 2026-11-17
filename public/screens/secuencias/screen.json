@@ -1,0 +1,9 @@
+{
+  "id": "secuencias",
+  "title": "Secuencias de seguimiento",
+  "visibility": "preview",
+  "nav": { "group": "WhatsApp", "icon": "list-ordered", "label": "Secuencias", "order": 46 },
+  "roles": ["admin", "agent"],
+  "entry": "index.js",
+  "styles": ["screen.css"]
+}
