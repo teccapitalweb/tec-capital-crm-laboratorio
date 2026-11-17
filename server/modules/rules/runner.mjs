@@ -528,33 +528,36 @@ export function createRunner({ host, repo, now = () => Date.now() }) {
     let voice = null;
     const report = verdicts.map(v => {
       const def = v.rule.definition;
-      const actions = v.matched
-        ? ordered(def.actions).map(a => {
-            const kind = kindOf(a);
-            let would = true;
-            let reason = null;
-            if (answeredBy) [would, reason] = [false, 'Esta regla no se revisa: alguien antes en el orden atiende.'];
-            else if (kind !== 'silent' && voice && voice !== v.rule.id) [would, reason] = [false, REASONS.voice_taken];
-            else if (kind === 'voice' && block) [would, reason] = [false, REASONS[block]];
-            const preview =
-              a.type === 'send_text' || (a.type === 'handoff' && a.text)
-                ? renderText(
-                    a.text,
-                    c
-                      ? valuesFor(brandId, c, contactId, repo.customerName(brandId, c.id))
-                      : sampleValues(brandId, record),
-                  )
-                : null;
-            return { type: a.type, label: ACTIONS[a.type]?.label ?? a.type, kind, would, reason, preview };
-          })
-        : [];
+      const actions =
+        v.matched && !answeredBy
+          ? ordered(def.actions).map(a => {
+              const kind = kindOf(a);
+              let would = true;
+              let reason = null;
+              if (kind !== 'silent' && voice && voice !== v.rule.id) [would, reason] = [false, REASONS.voice_taken];
+              else if (kind === 'voice' && block) [would, reason] = [false, REASONS[block]];
+              const preview =
+                a.type === 'send_text' || (a.type === 'handoff' && a.text)
+                  ? renderText(
+                      a.text,
+                      c
+                        ? valuesFor(brandId, c, contactId, repo.customerName(brandId, c.id))
+                        : sampleValues(brandId, record),
+                    )
+                  : null;
+              return { type: a.type, label: ACTIONS[a.type]?.label ?? a.type, kind, would, reason, preview };
+            })
+          : [];
       if (!answeredBy && v.matched && !voice && actions.some(a => a.kind !== 'silent' && a.would)) voice = v.rule.id;
       return {
         ruleId: v.rule.id,
         title: v.rule.title,
         draft: Boolean(override && v.rule.id === override.id),
         matched: v.matched && !answeredBy,
-        reason: v.reason,
+        reason:
+          answeredBy && v.matched
+            ? `Coincidiría (${v.reason.replace(/\.$/, '')}), pero antes en el orden atiende otro.`
+            : v.reason,
         voice: voice === v.rule.id,
         actions,
       };
