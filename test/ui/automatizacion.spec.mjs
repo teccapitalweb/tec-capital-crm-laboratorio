@@ -217,7 +217,8 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   // Rendimiento con cifras
   const flowId = (await (await page.request.get('/api/chatflows')).json()).flows.find(f => f.name === name).id;
   await seedSessions(page, playwright, baseURL, flowId);
-  await pageEl.locator('[data-do="pestana"][data-id="rendimiento"]').click();
+  // En «Editar» las pestañas van en la barra del editor; en las otras partes, arriba: se pulsa la que se ve.
+  await pageEl.locator('[data-do="pestana"][data-id="rendimiento"]:visible').click();
   await pageEl.locator('[data-do="periodo"]').selectOption('7');
   const rend = pageEl.locator('[data-slot="p-rendimiento"]');
   await expect(rend.locator('.k-tile').first()).toContainText('2');
@@ -499,6 +500,33 @@ test('automatización: agregar una lista conectada después del saludo, publicar
   await expect(editor.locator('.lz-bar [data-do="ver"][data-pane="canvas"]')).toHaveAttribute('aria-pressed', 'true');
   await editor.locator('.lz-bar [data-do="ver"][data-pane="outline"]').click();
   await expect(editor.locator('.lz-outline .lz-row')).toHaveCount(4);
+
+  // Eliminar un paso de en medio con un solo destino: el saludo pasa a llevar al Fin; deshacer lo devuelve
+  const listRow = rows.nth(2);
+  const listId = await listRow.getAttribute('data-node');
+  await listRow.locator('[data-do="fila"]').click();
+  await panel.locator('[data-do="panel-eliminar"]').click();
+  await expect(rows).toHaveCount(3);
+  await expect(editor.locator('.lz-outline-title'), 'nada quedó suelto').toHaveCount(0);
+  if (phone) await panel.locator('[data-do="panel-cerrar"]').click();
+  await editor.locator('.lz-bar [data-do="deshacer"]').click();
+  await expect(rows).toHaveCount(4);
+  await expect(editor.locator(`.lz-outline [data-node="${listId}"]`)).toBeVisible();
+
+  // Con filas que llevan a sitios distintos no se adivina: se elimina y se dice qué quedó sin camino, con «Ir al paso»
+  await editor.locator(`.lz-outline [data-node="${listId}"] [data-do="fila"]`).click();
+  await panel.locator('.lz-exits select[data-do="salida"]').first().selectOption('g');
+  await panel.locator('[data-do="panel-eliminar"]').click();
+  const notice = editor.locator('.lz-flash');
+  await expect(notice).toContainText('sin camino');
+  await expect(notice).toContainText('«Fin»');
+  await notice.locator('[data-do="aviso-ir"]').first().click();
+  await expect(editor.locator('.lz-panel-title')).toHaveText('Fin');
+  if (phone) await panel.locator('[data-do="panel-cerrar"]').click();
+  await expect(editor.locator('.lz-outline-title')).toContainText('Pasos sueltos');
+  await editor.locator('.lz-bar [data-do="deshacer"]').click();
+  await expect(rows).toHaveCount(4);
+  await expect(editor.locator('.lz-outline-title')).toHaveCount(0);
 
   // Dejar limpio
   for (const id of [originalId, copyId]) {

@@ -71,6 +71,23 @@ const avisoAtencion = (a, nombre = '') =>
     <strong>${nombre ? nombre + ' no' : 'La marca no'} está atendiendo con recorridos.</strong> ${a.label} Los recorridos activos no contestarán
     (contesta el asistente de siempre) hasta que se encienda en <strong>${a.where}</strong>.
   </div>`;
+// En el editor el mismo aviso va en una tira compacta: lo que pasa en un renglón; el motivo, lo que hacen mientras tanto
+// los recorridos y dónde se enciende, al desplegarla. No se pierde nada: todo sigue en la página.
+const tiraAtencion = a =>
+  html`<details class="au-tira au-tira--warn au-atencion">
+    <summary><span class="au-tira__texto"><strong>La marca no está atendiendo con recorridos.</strong></span><span class="au-tira__mas">Por qué y dónde se enciende</span></summary>
+    <p>${a.label} Los recorridos activos no contestarán (contesta el asistente de siempre) hasta que se encienda en <strong>${a.where}</strong>.</p>
+  </details>`;
+// La nota del modo real: su primera frase en el renglón y el texto completo al desplegarla.
+const tiraInfo = info => {
+  const text = String(info);
+  const cut = text.search(/[:.]/);
+  const head = cut > 0 ? text.slice(0, cut) : text;
+  return html`<details class="au-tira au-tira--info">
+    <summary><span class="au-tira__texto">${head}.</span><span class="au-tira__mas">Más</span></summary>
+    <p>${text}</p>
+  </details>`;
+};
 // Y cuando sí atiende, también se dice (en la lista): así nadie se pregunta si está encendida.
 const avisoAtiende = nombre =>
   html`<p class="k-notice k-notice--ok au-aviso au-atiende" role="status"><strong>${nombre || 'La marca'} está atendiendo con recorridos.</strong></p>`;
@@ -529,16 +546,18 @@ export default {
       function esqueleto(canManage) {
         render(
           vista,
-          html`<header class="k-head au-head">
+          html`<header class="k-head au-head au-head--editor">
               <div class="au-titulo">
-                <button type="button" class="k-btn k-btn--ghost au-volver" data-do="volver">← Recorridos</button>
-                <span class="k-eyebrow">Recorrido</span>
-                <h1 data-slot="nombre"></h1>
+                <div class="au-migas">
+                  <button type="button" class="k-btn k-btn--ghost au-volver" data-do="volver">← Recorridos</button>
+                  <span class="k-eyebrow">Recorrido</span>
+                  <h1 data-slot="nombre"></h1>
+                </div>
                 <p class="au-meta" data-slot="meta"></p>
               </div>
               <div class="k-actions au-acciones" data-slot="acciones"></div>
             </header>
-            <div data-slot="avisos"></div>
+            <div class="au-avisos-editor" data-slot="avisos"></div>
             <div class="k-tabs au-pestanas" role="tablist" aria-label="Partes del recorrido" data-slot="pestanas"></div>
             <div class="au-panel" data-slot="p-editar" role="tabpanel" aria-label="Editar"><div class="au-editor" data-slot="editor"></div></div>
             <div class="au-panel" data-slot="p-rendimiento" role="tabpanel" aria-label="Rendimiento" hidden></div>
@@ -567,6 +586,9 @@ export default {
           onPane: pane => keep.set('vistaEditor', pane),
           startText: comoEmpieza(record.start, meta?.startTypes),
           onSave: canManage ? guardar : undefined,
+          // Las pestañas viven también al principio de la barra del editor (un solo renglón con las herramientas): sus
+          // clics no salen de la raíz del lienzo, así que se atienden aquí.
+          handlers: { click: { pestana: (e, el) => mostrar(el.dataset.id) }, keydown: { pestana: teclaPestana } },
           // Subir una imagen o un PDF a la biblioteca de la marca desde el paso (Mensaje con archivo, Botones).
           uploadFile: canManage
             ? async file => {
@@ -591,6 +613,16 @@ export default {
         pintarCabeza();
         pintarPestanas();
         mostrar(pestana());
+        // Cambiar el ancho (o el alto, que suele venir con él) vuelve a medir el alto del editor.
+        const win = vista.ownerDocument.defaultView;
+        if (typeof win.ResizeObserver === 'function') {
+          // En el siguiente cuadro: cambiar el alto dentro del aviso del observador lo volvería a disparar en el mismo.
+          const observer = new win.ResizeObserver(() =>
+            win.requestAnimationFrame(() => vivo && canvas && ajustarAlto()),
+          );
+          observer.observe(vista);
+          offs.push(() => observer.disconnect());
+        }
         cargarRendimiento();
         revisarAjustesPublicados();
         offs.push(
@@ -623,15 +655,7 @@ export default {
                   cargarRendimiento();
                 },
               },
-              keydown: {
-                pestana: (e, el) => {
-                  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-                  const orden = ['editar', 'rendimiento', 'versiones'];
-                  const i = (orden.indexOf(el.dataset.id) + (e.key === 'ArrowRight' ? 1 : 2)) % 3;
-                  mostrar(orden[i]);
-                  vista.querySelector(`[data-do="pestana"][data-id="${orden[i]}"]`)?.focus();
-                },
-              },
+              keydown: { pestana: teclaPestana },
             },
             { onError: fallo },
           ),
@@ -694,9 +718,8 @@ export default {
         if (!caja) return;
         render(
           caja,
-          html`${when(atencion() && !atencion().ok, () => avisoAtencion(atencion()))}${when(
-            atencion()?.info,
-            () => html`<p class="k-hint au-aviso">${atencion().info}</p>`,
+          html`${when(atencion() && !atencion().ok, () => tiraAtencion(atencion()))}${when(atencion()?.info, () =>
+            tiraInfo(atencion().info),
           )}${when(
             !manage(),
             () =>
@@ -717,6 +740,35 @@ export default {
             </p>`,
           )}`,
         );
+        ajustarAlto();
+      }
+
+      function teclaPestana(e, el) {
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        const orden = ['editar', 'rendimiento', 'versiones'];
+        const i = (orden.indexOf(el.dataset.id) + (e.key === 'ArrowRight' ? 1 : 2)) % 3;
+        mostrar(orden[i]);
+        // Hay dos filas de pestañas (la de la barra del editor y la de las otras partes): va a la que se ve.
+        [...vista.querySelectorAll(`[data-do="pestana"][data-id="${orden[i]}"]`)].find(b => b.offsetParent)?.focus();
+      }
+
+      // El editor ocupa lo que queda de la ventana (sin bajar de 520 px): así, en una pantalla de computadora, los
+      // primeros pasos, el paso elegido y la vista previa se ven sin desplazar la página.
+      function ajustarAlto() {
+        const caja = vista.querySelector('.au-editor');
+        if (!caja) return;
+        const win = caja.ownerDocument.defaultView;
+        if (win.innerWidth < 900) {
+          caja.style.removeProperty('--au-alto');
+          return;
+        }
+        let scroller = caja.parentElement;
+        while (scroller && !/(auto|scroll)/.test(win.getComputedStyle(scroller).overflowY))
+          scroller = scroller.parentElement;
+        // Dónde queda el editor con la página arriba del todo: su posición en la ventana más lo ya desplazado.
+        const top = caja.getBoundingClientRect().top + (scroller ? scroller.scrollTop : win.scrollY);
+        const alto = `${Math.max(520, Math.floor(win.innerHeight - top - 16))}px`;
+        if (caja.style.getPropertyValue('--au-alto') !== alto) caja.style.setProperty('--au-alto', alto);
       }
 
       function pintarPestanas() {
@@ -725,13 +777,20 @@ export default {
           ['rendimiento', 'Rendimiento'],
           ['versiones', 'Versiones'],
         ];
-        render(
-          vista.querySelector('[data-slot="pestanas"]'),
-          html`${items.map(
-            ([id, label]) =>
-              html`<button type="button" role="tab" class="k-tab" data-do="pestana" data-id="${id}" aria-selected="${id === pestana()}" tabindex="${id === pestana() ? 0 : -1}">${label}${id === 'versiones' ? html`<span class="k-tab__count">${versions.length}</span>` : ''}</button>`,
-          )}`,
-        );
+        const fila = html`${items.map(
+          ([id, label]) =>
+            html`<button type="button" role="tab" class="k-tab" data-do="pestana" data-id="${id}" aria-selected="${id === pestana()}" tabindex="${id === pestana() ? 0 : -1}">${label}${id === 'versiones' ? html`<span class="k-tab__count">${versions.length}</span>` : ''}</button>`,
+        )}`;
+        const fuera = vista.querySelector('[data-slot="pestanas"]');
+        render(fuera, fila);
+        // En «Editar» las pestañas van en la barra del editor, junto a las herramientas; en las otras partes, arriba.
+        const enBarra = Boolean(canvas?.barStart) && pestana() === 'editar';
+        fuera.hidden = enBarra;
+        if (canvas?.barStart)
+          render(
+            canvas.barStart,
+            html`<div class="k-tabs au-pestanas au-pestanas--barra" role="tablist" aria-label="Partes del recorrido">${fila}</div>`,
+          );
       }
 
       function mostrar(id) {
@@ -741,6 +800,7 @@ export default {
         pintarPestanas();
         if (id === 'versiones') pintarVersiones();
         if (id === 'rendimiento') pintarRendimiento();
+        if (id === 'editar') ajustarAlto();
       }
 
       // ---- guardar (lo llama el lienzo con «Guardar» o Ctrl+S)

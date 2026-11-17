@@ -421,6 +421,7 @@
 
 .lz:not([data-layout='narrow'])[data-pane='outline'] .lz-palette {
   flex: none;
+  width: auto;
   max-height: 55%;
   overflow-y: auto;
 }
@@ -1101,4 +1102,58 @@
 .lz[data-layout='narrow'] .lz-row-outs,
 .lz[data-layout='narrow'] .lz .lz-row-end {
   padding-left: var(--space-5);
+}
+
+/* ---- Barra: pestañas de la pantalla y herramientas en un renglón cuando caben --------------------------------------- */
+
+.lz-bar {
+  gap: var(--space-3) var(--space-6);
+}
+
+.lz-bar-start:empty {
+  display: none;
+}
+
+.lz-tools-row {
+  display: flex;
+  flex: 1 1 560px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.lz[data-layout='narrow'] .lz-tools-row {
+  flex-basis: 100%;
+}
+
+/* Aviso de pasos que quedaron sin camino al eliminar: con «Ir al paso». */
+.lz-flash {
+  --ring: var(--lime);
+}
+
+.lz-flash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.lz-flash-go {
+  min-height: var(--touch);
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--ink-3);
+  color: var(--on-ink);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+}
+
+.lz-flash-go:hover {
+  background: var(--ink-2);
+}
+
+/* Con la barra apretada, Rendimiento, Probar, Acomodar y Ajustar quedan sólo con su icono, del alto de las demás. */
+.lz[data-bar='tight'] :is([data-do='acomodar'], [data-do='ajustar'], [data-do='rendimiento'], [data-do='probar']) {
+  width: var(--control);
 }
