@@ -18,10 +18,9 @@
 import { attrs, html, render, when } from '../../kit/html.js';
 import { formValues, listen } from '../../kit/events.js';
 import { isAbort, isStale, newClientRef } from '../../kit/api.js';
-import { pagedTable } from '../../kit/components/table.js';
 import { field } from '../../kit/components/form.js';
 import { confirm, dialog } from '../../kit/components/dialog.js';
-import { failure, loading } from '../../kit/components/feedback.js';
+import { empty, failure, loading } from '../../kit/components/feedback.js';
 import { emptyGraph, nodeName, readingOrder } from '../../kit/shared/flow-model.js';
 import { mountCanvas } from './lienzo/index.js';
 import { createStore } from './lienzo/store.js';
@@ -46,7 +45,7 @@ function estado(flow) {
   if (flow.status === 'active') return { text: 'Publicado y activo', tone: 'ok' };
   if (flow.status === 'paused') return { text: 'En pausa', tone: 'warn' };
   if (flow.status === 'archived') return { text: 'Archivado', tone: '' };
-  return flow.publishedVersion ? { text: 'Publicado, sin activar', tone: '' } : { text: 'Borrador', tone: '' };
+  return flow.publishedVersion ? { text: 'Publicado, sin activar', tone: 'sky' } : { text: 'Borrador', tone: '' };
 }
 const chip = (flow, atencion = null) => {
   const s =
@@ -72,6 +71,9 @@ const avisoAtencion = (a, nombre = '') =>
     <strong>${nombre ? nombre + ' no' : 'La marca no'} está atendiendo con recorridos.</strong> ${a.label} Los recorridos activos no contestarán
     (contesta el asistente de siempre) hasta que se encienda en <strong>${a.where}</strong>.
   </div>`;
+// Y cuando sí atiende, también se dice (en la lista): así nadie se pregunta si está encendida.
+const avisoAtiende = nombre =>
+  html`<p class="k-notice k-notice--ok au-aviso au-atiende" role="status"><strong>${nombre || 'La marca'} está atendiendo con recorridos.</strong></p>`;
 
 function resultado(m) {
   if (!m || !m.sessions) return 'Sin conversaciones todavía';
@@ -80,6 +82,27 @@ function resultado(m) {
   if (base) parts.push(`${pct(m.completed, base)} % terminó`, `${pct(m.handoff, base)} % pasó con una persona`);
   return parts.join(' · ');
 }
+
+// El mismo resultado, en el bloque de la tarjeta: la cifra, una barra (terminó · pasó con una persona · el resto) y la
+// frase. La barra es decorativa: lo que dice está en el texto.
+function bloqueResultado(m) {
+  const base = m ? m.completed + m.handoff + m.left + m.dropped : 0;
+  if (!m || !m.sessions) return html`<span class="au-dato__valor">Sin conversaciones todavía</span>`;
+  if (!base) return html`<span class="au-dato__valor">Ninguna ha terminado todavía</span>`;
+  const done = pct(m.completed, base);
+  const person = pct(m.handoff, base);
+  return html`<span class="au-barra" aria-hidden="true"><span class="au-barra__fin" data-w="${done}"></span><span class="au-barra__persona" data-w="${person}"></span></span>
+    <span class="au-dato__valor au-dato__valor--chico">${done} % terminó · ${person} % pasó con una persona</span>`;
+}
+
+// Ancho de las barras de resultado: un atributo, no un estilo en línea (CSP y reglas del kit).
+function anchos(root) {
+  for (const el of root.querySelectorAll('[data-w]'))
+    el.style.width = `${Math.max(0, Math.min(100, Number(el.dataset.w) || 0))}%`;
+}
+
+// Con pocas marcas se eligen con píldoras (como en los bocetos); con muchas, con una lista desplegable.
+const MARCAS_EN_PILDORAS = 6;
 
 export default {
   mount(root, ctx) {
@@ -112,11 +135,16 @@ export default {
     }
 
     // ------------------------------------------------------------------------------------------------ lista
+    // Una tarjeta por recorrido con lo mismo que tenía la tabla (estado, cómo empieza, versión publicada y fecha, en
+    // curso y resultado) y las mismas acciones según su estado. La marca se elige con píldoras (o una lista si son
+    // muchas); «Ver también los archivados» y «Nuevo recorrido» siguen donde estaban.
     function lista() {
       const archivados = keep.get('archivados') === true;
+      let filas = [];
+      let pedido = null;
       render(
         vista,
-        html`<header class="k-head au-head">
+        html`<header class="k-head au-head au-head--lista">
             <div>
               <span class="k-eyebrow">Automatización</span>
               <h1>Recorridos</h1>
@@ -128,26 +156,37 @@ export default {
             <div class="k-actions" data-slot="acciones"></div>
           </header>
           <div class="au-filtros" data-slot="filtros"></div>
-          <div class="k-card" data-slot="tabla"></div>`,
+          <div class="au-avisos" data-slot="avisos"></div>
+          <div class="au-tarjetas" data-slot="tabla" aria-live="polite"></div>`,
       );
       const pintarFiltros = () => {
         render(
           vista.querySelector('[data-slot="acciones"]'),
           puedeEditar()
-            ? html`<button type="button" class="k-btn k-btn--primary" data-do="nuevo">Nuevo recorrido</button>`
+            ? html`<button type="button" class="k-btn k-btn--primary au-cta" data-do="nuevo">Nuevo recorrido</button>`
             : html``,
         );
+        const marcas = meta?.brands ?? [];
         render(
           vista.querySelector('[data-slot="filtros"]'),
           html`${when(
-            (meta?.brands.length ?? 0) > 1,
+            marcas.length > 1 && marcas.length <= MARCAS_EN_PILDORAS,
+            () => html`<div class="au-marcas" role="group" aria-labelledby="${ctx.uid('marca-rotulo')}">
+              <span class="au-marcas__rotulo" id="${ctx.uid('marca-rotulo')}">Marca</span>
+              ${marcas.map(
+                b =>
+                  html`<button type="button" class="au-marca-pildora" data-do="marca-pildora" data-id="${b.id}" aria-pressed="${b.id === marca ? 'true' : 'false'}">${b.name}</button>`,
+              )}
+            </div>`,
+          )}${when(
+            marcas.length > MARCAS_EN_PILDORAS,
             () => html`<form class="au-marca" novalidate data-do="marca">
                 ${field(
                   {
                     name: 'marca',
                     label: 'Marca',
                     type: 'select',
-                    options: meta.brands.map(b => ({ value: b.id, label: b.name })),
+                    options: marcas.map(b => ({ value: b.id, label: b.name })),
                   },
                   { id: ctx.uid('marca'), value: marca },
                 )}
@@ -156,88 +195,122 @@ export default {
             <label class="k-check au-archivados">
               <input type="checkbox" data-do="archivados" ${attrs({ checked: archivados })} />
               <span>Ver también los archivados</span>
-            </label>
-            ${when(atencion() && !atencion().ok, () => avisoAtencion(atencion(), marcaActual()?.name))}
-            ${when(
-              meta && !puedeEditar(),
-              () =>
-                html`<p class="k-notice au-aviso" role="status">Puedes ver y probar los recorridos de esta marca, pero no editarlos.</p>`,
-            )}`,
+            </label>`,
+        );
+        render(
+          vista.querySelector('[data-slot="avisos"]'),
+          html`${when(atencion() && !atencion().ok, () => avisoAtencion(atencion(), marcaActual()?.name))}${when(
+            atencion()?.ok,
+            () => avisoAtiende(marcaActual()?.name),
+          )}${when(
+            meta && !puedeEditar(),
+            () =>
+              html`<p class="k-notice au-aviso" role="status">Puedes ver y probar los recorridos de esta marca, pero no editarlos.</p>`,
+          )}`,
         );
       };
-      const tabla = pagedTable(vista.querySelector('[data-slot="tabla"]'), {
-        label: 'Recorridos',
-        rowKey: f => f.id,
-        rowLabel: f => f.name,
-        cards: true,
-        chooser: false,
-        columns: [
-          {
-            id: 'name',
-            label: 'Recorrido',
-            fixed: true,
-            cell: f =>
-              html`<button type="button" class="k-link au-nombre" data-do="abrir" data-id="${f.id}">${f.name}</button>${when(
-                keep.get('store:' + f.id)?.isDirty(),
-                () => html` <span class="k-chip k-chip--warn">Cambios sin guardar</span>`,
-              )}`,
-          },
-          { id: 'status', label: 'Estado', cell: f => chip(f, atencion()) },
-          { id: 'start', label: 'Cómo empieza', cell: f => comoEmpieza(f.start, meta?.startTypes) },
-          {
-            id: 'published',
-            label: 'Publicado',
-            cell: f =>
-              f.publishedVersion ? `Versión ${f.publishedVersion} · ${fecha(f.publishedAt)}` : 'Sin publicar',
-          },
-          { id: 'inProgress', label: 'En curso', numeric: true, cell: f => numero(f.metrics?.inProgress) },
-          { id: 'result', label: 'Resultado', cell: f => resultado(f.metrics) },
-          {
-            id: 'actions',
-            label: 'Acciones',
-            cell: f => html`<div class="au-fila-acciones">
-              <button type="button" class="k-btn" data-do="abrir" data-id="${f.id}">Abrir</button>
-              ${when(
-                puedeEditar() && f.status !== 'archived',
-                () => html`<button type="button" class="k-btn" data-do="duplicar" data-id="${f.id}">Duplicar</button>
-                  ${
-                    f.status === 'active'
-                      ? html`<button type="button" class="k-btn" data-do="pausar" data-id="${f.id}">Pausar</button>`
-                      : f.publishedVersion
-                        ? html`<button type="button" class="k-btn" data-do="activar" data-id="${f.id}">Activar</button>`
-                        : ''
-                  }
-                  <button type="button" class="k-btn k-btn--ghost" data-do="archivar" data-id="${f.id}">Archivar</button>`,
-              )}
-            </div>`,
-          },
-        ],
-        async load({ signal }) {
+
+      const dato = (rotulo, valor, tono) =>
+        html`<div class="au-dato" data-tone="${tono}"><span class="au-dato__rotulo">${rotulo}</span>${valor}</div>`;
+      const tarjeta =
+        f => html`<article class="au-tarjeta" data-key="fila-${f.id}" aria-labelledby="${ctx.uid('rec-' + f.id)}">
+        <div class="au-tarjeta__cabeza">
+          <div class="au-tarjeta__nombre">
+            <h2 id="${ctx.uid('rec-' + f.id)}">${f.name}</h2>
+            ${chip(f, atencion())}
+            ${when(keep.get('store:' + f.id)?.isDirty(), () => html`<span class="k-chip k-chip--warn">Cambios sin guardar</span>`)}
+          </div>
+          <div class="au-fila-acciones">
+            <button type="button" class="k-btn k-btn--primary" data-do="abrir" data-id="${f.id}" aria-label="Abrir «${f.name}»">Abrir</button>
+            ${when(
+              puedeEditar() && f.status !== 'archived',
+              () => html`<button type="button" class="k-btn" data-do="duplicar" data-id="${f.id}">Duplicar</button>
+                ${
+                  f.status === 'active'
+                    ? html`<button type="button" class="k-btn" data-do="pausar" data-id="${f.id}">Pausar</button>`
+                    : f.publishedVersion
+                      ? html`<button type="button" class="k-btn" data-do="activar" data-id="${f.id}">Activar</button>`
+                      : ''
+                }
+                <button type="button" class="k-btn" data-do="archivar" data-id="${f.id}">Archivar</button>`,
+            )}
+          </div>
+        </div>
+        ${when(f.description, () => html`<p class="au-tarjeta__descripcion">${f.description}</p>`)}
+        <div class="au-datos">
+          ${dato('Cómo empieza', html`<span class="au-dato__valor">${comoEmpieza(f.start, meta?.startTypes)}</span>`, 'lilac')}
+          ${dato(
+            'Publicado',
+            html`<span class="au-dato__valor">${f.publishedVersion ? `Versión ${f.publishedVersion} · ${fecha(f.publishedAt)}` : 'Sin publicar'}</span>`,
+            'sky',
+          )}
+          ${dato(
+            'En curso',
+            html`<span class="au-dato__valor">${numero(f.metrics?.inProgress)} ${f.metrics?.inProgress === 1 ? 'conversación' : 'conversaciones'}</span>`,
+            'butter',
+          )}
+          ${dato(
+            f.metrics?.sessions
+              ? `Resultado · ${numero(f.metrics.sessions)} ${f.metrics.sessions === 1 ? 'conversación' : 'conversaciones'}`
+              : 'Resultado',
+            html`<span class="k-sr">${resultado(f.metrics)}. </span><span aria-hidden="true" class="au-dato__pila">${bloqueResultado(f.metrics)}</span>`,
+            'soft',
+          )}
+        </div>
+      </article>`;
+
+      const caja = vista.querySelector('[data-slot="tabla"]');
+      const pintarFilas = () => {
+        render(
+          caja,
+          filas.length
+            ? html`${filas.map(tarjeta)}`
+            : html`<div class="k-card au-vacio">${empty({
+                title: 'Sin recorridos',
+                text: 'Arma el primero con «Nuevo recorrido»: en blanco o desde la plantilla «Venta de curso».',
+              })}</div>`,
+        );
+        anchos(caja);
+      };
+      async function recargar() {
+        pedido?.abort();
+        const control = new AbortController();
+        pedido = control;
+        render(caja, loading('Cargando los recorridos…'));
+        try {
           const datos = await api.get(
             '/api/chatflows',
-            { ...(marca ? { brand: marca } : {}), ...(archivados ? { archived: '1' } : {}) },
-            { signal },
+            {
+              ...(marca ? { brand: marca } : {}),
+              ...(archivados || keep.get('archivados') === true ? { archived: '1' } : {}),
+            },
+            { signal: control.signal },
           );
+          if (!vivo || pedido !== control) return;
+          meta = { brands: datos.brands, startTypes: datos.startTypes, unavailable: datos.unavailable };
           if (!marca || !datos.brands.some(b => b.id === marca)) {
-            meta = { brands: datos.brands, startTypes: datos.startTypes, unavailable: datos.unavailable };
             marca = datos.brands.find(b => b.id === ctx.brand)?.id ?? datos.brands[0]?.id ?? null;
             keep.set('marca', marca);
-          } else {
-            meta = { brands: datos.brands, startTypes: datos.startTypes, unavailable: datos.unavailable };
           }
           keep.set('meta', meta);
-          if (vivo) pintarFiltros();
-          return { rows: datos.flows.filter(f => f.brandId === marca), next: null };
-        },
-        empty: {
-          title: 'Sin recorridos',
-          text: 'Arma el primero con «Nuevo recorrido»: en blanco o desde la plantilla «Venta de curso».',
-        },
-      });
+          filas = datos.flows.filter(f => f.brandId === marca);
+          pintarFiltros();
+          pintarFilas();
+        } catch (error) {
+          if (isAbort(error) || !vivo || pedido !== control) return;
+          render(caja, failure({ title: 'No se pudieron cargar los recorridos', error, retry: 'reintentar-lista' }));
+        }
+      }
       // Primero la lista de todas las marcas que se ven; luego, sólo la elegida.
       if (meta) pintarFiltros();
-      const flowDe = id => tabla.rows().find(f => f.id === id) ?? null;
-      const recargar = () => tabla.reload();
+      recargar();
+      const flowDe = id => filas.find(f => f.id === id) ?? null;
+      const elegirMarca = id => {
+        marca = id;
+        keep.set('marca', marca);
+        pintarFiltros();
+        recargar();
+      };
       const off = listen(
         vista,
         {
@@ -252,17 +325,14 @@ export default {
             activar: (e, el) => cambiarEstado(el.dataset.id, 'activate', flowDe(el.dataset.id)).then(recargar),
             pausar: (e, el) => cambiarEstado(el.dataset.id, 'pause', flowDe(el.dataset.id)).then(recargar),
             archivar: (e, el) => cambiarEstado(el.dataset.id, 'archive', flowDe(el.dataset.id)).then(recargar),
+            'marca-pildora': (e, el) => elegirMarca(el.dataset.id),
+            'reintentar-lista': () => recargar(),
           },
           change: {
-            marca: (e, el) => {
-              marca = formValues(el).marca;
-              keep.set('marca', marca);
-              pintarFiltros();
-              recargar();
-            },
+            marca: (e, el) => elegirMarca(formValues(el).marca),
             archivados: (e, el) => {
               keep.set('archivados', el.checked);
-              recargar();
+              ir('lista');
             },
           },
         },
@@ -270,7 +340,7 @@ export default {
       );
       limpiar = () => {
         off();
-        tabla.destroy();
+        pedido?.abort();
       };
       alCambiar = evento => {
         if (evento.brandId === marca) recargar();
@@ -409,6 +479,9 @@ export default {
       let sugerencias = null;
       let pidiendo = false;
       let otroGuardo = false;
+      // ¿Cómo empieza o los ajustes del borrador son distintos de los de la versión publicada? Entonces lo que se
+      // cambió en «Ajustes» todavía no está en servicio: se dice hasta que se publique.
+      let ajustesPendientes = false;
       const prefs = keep.get('rend:' + flowId) ?? { days: 30, version: '' };
       const pestana = () => keep.get('pestana:' + flowId) ?? 'editar';
       const offs = [];
@@ -484,6 +557,11 @@ export default {
           readOnly: !canManage,
           unavailable: meta?.unavailable || {},
           uid: ctx.uid,
+          // La vista con que abre: «Pasos», salvo que la persona haya elegido el lienzo (se recuerda mientras la
+          // aplicación esté abierta; ctx.keep, nunca el almacenamiento del navegador).
+          pane: keep.get('vistaEditor') === 'canvas' ? 'canvas' : 'outline',
+          onPane: pane => keep.set('vistaEditor', pane),
+          startText: comoEmpieza(record.start, meta?.startTypes),
           onSave: canManage ? guardar : undefined,
           // Subir una imagen o un PDF a la biblioteca de la marca desde el paso (Mensaje con archivo, Botones).
           uploadFile: canManage
@@ -510,6 +588,7 @@ export default {
         pintarPestanas();
         mostrar(pestana());
         cargarRendimiento();
+        revisarAjustesPublicados();
         offs.push(
           listen(
             vista,
@@ -556,12 +635,31 @@ export default {
       }
 
       const manage = () => puedeEditar();
+      let publicadoStart = null;
+      const igual = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+      // Trae cómo empieza y los ajustes de la versión en servicio (una petición al abrir y al publicar, nunca al teclear).
+      async function revisarAjustesPublicados() {
+        if (!record?.publishedVersion) {
+          ajustesPendientes = false;
+          return;
+        }
+        try {
+          const { version } = await api.get(`/api/chatflows/${flowId}/versions/${record.publishedVersion}`);
+          if (!vivo || !canvas) return;
+          publicadoStart = version.start;
+          ajustesPendientes = !igual(version.start, record.start) || !igual(version.settings, record.settings);
+          pintarAvisos();
+        } catch {
+          // Sin la versión no se puede comparar: no se dice nada en lugar de decir algo que quizá no es cierto.
+        }
+      }
       function guardarAtencion(a) {
         const b = meta?.brands.find(x => x.id === marca);
         if (b && a) b.attending = a;
       }
 
       function pintarCabeza() {
+        canvas?.setStartText(comoEmpieza(record.start, meta?.startTypes));
         render(vista.querySelector('[data-slot="nombre"]'), html`${record.name} ${chip(record, atencion())}`);
         render(
           vista.querySelector('[data-slot="meta"]'),
@@ -574,7 +672,7 @@ export default {
             <button type="button" class="k-btn" data-do="revisar">Revisar</button>
             ${when(
               manage() && record.status !== 'archived',
-              () => html`<button type="button" class="k-btn k-btn--primary" data-do="publicar">Publicar</button>
+              () => html`<button type="button" class="k-btn k-btn--primary au-cta" data-do="publicar">Publicar</button>
                 ${
                   record.status === 'active'
                     ? html`<button type="button" class="k-btn" data-do="pausar">Pausar</button>`
@@ -599,6 +697,13 @@ export default {
             !manage(),
             () =>
               html`<p class="k-notice au-aviso" role="status">Puedes ver y probar este recorrido, pero no editarlo ni publicarlo.</p>`,
+          )}${when(
+            ajustesPendientes && record.publishedVersion,
+            () => html`<p class="k-notice k-notice--warn au-aviso au-ajustes-pendientes" role="status">
+              <span><strong>Los cambios de «Ajustes» todavía no están en servicio.</strong> La versión ${record.publishedVersion}
+              sigue empezando «${comoEmpieza(publicadoStart, meta?.startTypes).toLowerCase()}» con sus tiempos de siempre hasta que
+              pulses «Publicar».</span>
+            </p>`,
           )}${when(
             otroGuardo,
             () => html`<p class="k-notice k-notice--warn au-aviso" role="status">
@@ -825,10 +930,35 @@ export default {
           },
         });
         if (!hecho) return;
+        const antes = record;
         record = hecho;
         keep.set('rev:' + flowId, record.revision);
         canvas.setSettings(record.settings);
+        canvas.setStartText(comoEmpieza(record.start, meta?.startTypes));
         pintarCabeza();
+        const cambioInicio = !igual(antes.start, record.start) || !igual(antes.settings, record.settings);
+        if (record.publishedVersion && cambioInicio) {
+          // Lo que atiende es la versión publicada: el cambio no cuenta hasta publicar. Se dice claro, no sólo en un aviso
+          // que se va.
+          await revisarAjustesPublicados();
+          const choice = await dialog({
+            title: 'Ajustes guardados, pero todavía no en servicio',
+            content: html`<p>
+                Se guardaron en el borrador. Quien escriba ahora sigue entrando con la versión ${record.publishedVersion}
+                publicada, que empieza «${comoEmpieza(publicadoStart ?? antes.start, meta?.startTypes).toLowerCase()}».
+              </p>
+              <p>
+                El cambio (ahora: «${comoEmpieza(record.start, meta?.startTypes).toLowerCase()}») cuenta cuando pulses
+                <strong>Publicar</strong>.
+              </p>`,
+            actions: [
+              { id: 'luego', label: 'Publicar después' },
+              { id: 'publicar', label: 'Publicar ahora', primary: true, autofocus: true },
+            ],
+          });
+          if (choice === 'publicar') await publicar();
+          return;
+        }
         ctx.toast('Ajustes guardados.');
       }
 
@@ -908,12 +1038,39 @@ export default {
         if (!r.ok) return;
         const siguiente = (versions[0]?.version ?? 0) + 1;
         const nota = ctx.uid('pub-nota');
+        // Los avisos no impiden publicar (así lo decide el servidor), pero no se publican en silencio: se nombran uno
+        // por uno, cada uno con su paso, y hay que confirmarlo.
+        const avisos = r.issues?.warnings || [];
+        const grafo = canvas.getGraph();
+        const orden = readingOrder(grafo);
+        const pasoDe = id => {
+          const n = grafo.nodes.find(x => x.id === id);
+          return n ? `Paso ${orden.indexOf(id) + 1}, «${nodeName(n, lists)}»` : 'El recorrido';
+        };
         const valor = await dialog({
-          title: `Publicar la versión ${siguiente}`,
+          title: avisos.length
+            ? `Publicar la versión ${siguiente} con ${avisos.length} ${avisos.length === 1 ? 'aviso' : 'avisos'}`
+            : `Publicar la versión ${siguiente}`,
+          wide: avisos.length > 0,
           mount(body, close) {
             render(
               body,
               html`<form class="k-form" novalidate data-do="confirmar">
+                ${when(
+                  avisos.length,
+                  () => html`<div class="k-notice k-notice--warn au-pub-avisos" role="alert">
+                    <p><strong>${avisos.length === 1 ? 'Queda un aviso sin resolver' : `Quedan ${avisos.length} avisos sin resolver`}.</strong>
+                    No impiden publicar, pero así quedará lo que reciba la persona:</p>
+                    <ul class="au-problemas">
+                      ${avisos.map(
+                        a => html`<li class="au-problema" data-level="warn">
+                          <span class="au-problema__texto"><strong>${a.nodeId ? pasoDe(a.nodeId) : 'El recorrido'}:</strong> ${a.message}</span>
+                          ${when(a.nodeId, () => html`<button type="button" class="k-btn k-btn--ghost" data-do="pub-ir" data-node="${a.nodeId}">Ir al paso</button>`)}
+                        </li>`,
+                      )}
+                    </ul>
+                  </div>`,
+                )}
                 <p>
                   Lo que está guardado queda como la versión ${siguiente}. Las conversaciones que ya van en un recorrido
                   siguen con la versión con la que empezaron; las nuevas usan ésta
@@ -925,17 +1082,26 @@ export default {
                   { id: nota, value: '' },
                 )}
                 <div class="k-form__actions">
-                  <button type="button" class="k-btn" data-do="cancelar">Cancelar</button>
-                  <button type="submit" class="k-btn k-btn--primary">Publicar</button>
+                  <button type="button" class="k-btn" data-do="cancelar">${avisos.length ? 'Volver a corregir' : 'Cancelar'}</button>
+                  <button type="submit" class="k-btn k-btn--primary">${avisos.length ? 'Publicar de todos modos' : 'Publicar'}</button>
                 </div>
               </form>`,
             );
             return listen(body, {
-              click: { cancelar: () => close(null) },
+              click: {
+                cancelar: () => close(null),
+                'pub-ir': (e, el) => close({ ir: el.dataset.node }),
+              },
               submit: { confirmar: (e, form) => close({ note: formValues(form).note || '' }) },
             });
           },
         });
+        if (valor?.ir) {
+          mostrar('editar');
+          canvas.showStats(false);
+          canvas.openIssues(valor.ir);
+          return;
+        }
         if (!valor) return;
         try {
           const p = await api.post(`/api/chatflows/${flowId}/publish`, {
@@ -949,7 +1115,9 @@ export default {
               ? `Versión ${p.version} publicada: ya atiende.`
               : `Versión ${p.version} publicada. Actívala para que empiece a atender.`,
           );
+          ajustesPendientes = false;
           await recargarRecord();
+          revisarAjustesPublicados();
         } catch (error) {
           if (isStale(error)) conflicto();
           else fallo(error);
