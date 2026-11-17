@@ -545,7 +545,7 @@ test('pantalla «Automatización»: visible en el menú, con el lienzo y sus est
     nav: { group: 'WhatsApp', icon: 'workflow', label: 'Automatización', order: 44.5 },
     roles: ['admin', 'agent'],
     entry: 'index.js',
-    styles: ['lienzo.css', 'screen.css'],
+    styles: ['lienzo.css', 'pasos.css', 'screen.css'],
   });
   const module = await import(new URL(screen.entry, base).href);
   assert.equal(typeof module.default.mount, 'function');

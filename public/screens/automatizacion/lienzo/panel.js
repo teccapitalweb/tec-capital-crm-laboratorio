@@ -22,7 +22,8 @@ import {
 import { FLOW_FILE_MIMES } from '../../../kit/shared/flow-support.js';
 import { attrs, html, render } from '../../../kit/html.js';
 import { icon } from './icons.js';
-import { targetOptions } from './outline.js';
+import { intentText, optionsOf as choicesOf, targetOptions } from './outline.js';
+import { toneOf } from './tones.js';
 
 // Contenido de un archivo elegido, en base64 (lo que recibe la subida única del servidor).
 const readBase64 = file =>
@@ -308,6 +309,26 @@ ${value ?? ''}</textarea>
     return html`${issues.errors.map(i => item(i, 'error', 'Error'))}${issues.warnings.map(i => item(i, 'warn', 'Aviso'))}`;
   }
 
+  // Una salida en un renglón: su nombre y, al lado, a dónde lleva (con el color de la clase del paso de destino) y un
+  // botón para ir a ese paso. La lista de destinos permite también dejarla sin conectar o crear ahí un paso nuevo.
+  function portLine(node, port, label) {
+    const id = uid('salida-' + port.id);
+    const to = store.edgeFrom(node.id, port.id);
+    const target = to ? store.node(to) : null;
+    const missing = !to && !port.optional;
+    return html`<div class="lz-exit" data-linked="${to ? 'true' : 'false'}" data-level="${missing ? 'warn' : ''}">
+      <label class="lz-exit-label" for="${id}">${label}</label>
+      <div class="lz-exit-to" data-tone="${target ? toneOf(target.type) : 'none'}">
+        <select id="${id}" data-do="salida" data-port="${port.id}">
+          ${targetOptions(store.graph, store.context, to)}
+        </select>
+        ${target ? html`<button type="button" class="lz-icon-btn" data-do="panel-ir" data-node="${to}" aria-label="Ir al paso «${nodeName(target, store.context)}»" title="Ir a ese paso">${icon('jump')}</button>` : ''}
+      </div>
+      ${missing ? html`<p class="lz-exit-hint" data-level="warn">Sin conectar: si la persona llega aquí, el recorrido termina.</p>` : ''}
+      ${!to && UNLINKED[port.id] ? html`<p class="lz-exit-hint">${UNLINKED[port.id]}</p>` : ''}
+    </div>`;
+  }
+
   function portsHtml(node) {
     const ports = portsOf(node);
     if (!ports.length) {
@@ -315,19 +336,24 @@ ${value ?? ''}</textarea>
         ? html``
         : html`<p class="lz-row-end">${icon('flag')}<span>Aquí termina el recorrido: este paso no tiene salidas.</span></p>`;
     }
-    return html`<fieldset class="lz-group">
+    // En botones y listas: cada opción en su renglón, también las que contesta el asistente, y después las salidas
+    // para cuando no elige o no responde.
+    const choices = choicesOf(node);
+    if (choices.length) {
+      return html`<fieldset class="lz-group lz-exits">
+        <legend>${node.type === 'list' ? 'Filas, y a dónde sigue cada una' : 'Botones, y a dónde sigue cada uno'}</legend>
+        ${choices.map(c => {
+          const port = c.port && ports.find(p => p.id === c.port);
+          return port
+            ? portLine(node, port, c.label || (node.type === 'list' ? 'Fila sin texto' : 'Botón sin texto'))
+            : html`<div class="lz-exit"><span class="lz-exit-label">${c.label || 'Opción sin texto'}</span><span class="lz-exit-ai" data-tone="sky">${intentText(c)}</span></div>`;
+        })}
+        ${ports.filter(p => p.optional).map(p => portLine(node, p, p.label))}
+      </fieldset>`;
+    }
+    return html`<fieldset class="lz-group lz-exits">
       <legend>Salidas: a dónde sigue</legend>
-      ${ports.map(port => {
-        const id = uid('salida-' + port.id);
-        const to = store.edgeFrom(node.id, port.id);
-        return html`<div class="lz-field">
-          <label for="${id}">${port.label}</label>
-          <select id="${id}" data-do="salida" data-port="${port.id}">
-            ${targetOptions(store.graph, store.context, to)}
-          </select>
-          ${!to && UNLINKED[port.id] ? html`<p class="lz-hint">${UNLINKED[port.id]}</p>` : ''}
-        </div>`;
-      })}
+      ${ports.map(port => portLine(node, port, port.label))}
     </fieldset>`;
   }
 
@@ -349,12 +375,22 @@ ${value ?? ''}</textarea>
     const titleId = uid('titulo');
     lists = { variables: uid('lista-variables'), slots: uid('lista-espacios') };
     const slots = [...new Set((options.catalogue().materials || []).map(m => m.slot).filter(Boolean))];
+    const index = store.order().indexOf(node.id) + 1;
     return html`<div class="lz-panel-head">
-        <span class="lz-pill" data-group="${def.group}">${icon(def.icon)}</span>
+        <span class="lz-pill" data-group="${def.group}" data-tone="${toneOf(node.type)}">${icon(def.icon)}</span>
         <div class="lz-panel-names">
+          <p class="lz-panel-step" data-tone="${toneOf(node.type)}">Paso ${index} · ${def.label}</p>
           <h2 class="lz-panel-title">${def.label}</h2>
           <p class="lz-hint">${def.hint}</p>
         </div>
+        ${
+          node.type === 'start'
+            ? ''
+            : html`<fieldset class="lz-fs lz-head-actions" ${attrs({ disabled: store.readOnly })}>
+                <button type="button" class="lz-btn" data-do="panel-duplicar">${icon('copy')} Duplicar</button>
+                <button type="button" class="lz-btn lz-danger" data-do="panel-eliminar">${icon('trash')} Eliminar</button>
+              </fieldset>`
+        }
         ${closeButton()}
       </div>
       <ul class="lz-issues" data-slot="problemas" aria-label="Problemas de este paso"></ul>
@@ -379,14 +415,6 @@ ${value ?? ''}</textarea>
           ${slots.map(slot => html`<option value="${slot}"></option>`)}
         </datalist>
         <div data-slot="salidas"></div>
-        ${
-          node.type === 'start'
-            ? ''
-            : html`<div class="lz-actions">
-              <button type="button" class="lz-btn" data-do="panel-duplicar">${icon('copy')} Duplicar</button>
-              <button type="button" class="lz-btn lz-danger" data-do="panel-eliminar">${icon('trash')} Eliminar</button>
-            </div>`
-        }
       </fieldset>`;
   }
 
@@ -729,8 +757,13 @@ ${value ?? ''}</textarea>
         const path = el.dataset.f;
         const field = fieldByPath.get(path);
         const items = getIn(store.node(id).data, path) || [];
-        const added = store.setData(id, path, [...items, field.make(items)]);
-        options.report(added, `${field.item} ${items.length + 1} agregado.`);
+        // La opción nueva lleva a donde llevan las demás si todas van al mismo paso: no queda colgando.
+        const added = store.setData(id, path, [...items, field.make(items)], { inherit: true });
+        options.report(
+          added,
+          `${field.item} ${items.length + 1} agregado` +
+            (added.inherited ? ', y sigue a donde siguen los demás.' : '.'),
+        );
         // El foco pasa al primer campo de lo que se acaba de agregar.
         const fresh = [...container.querySelectorAll('[data-f]')].find(c =>
           c.dataset.f.startsWith(`${path}.${items.length}.`),

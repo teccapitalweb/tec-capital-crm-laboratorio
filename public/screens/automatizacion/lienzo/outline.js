@@ -1,12 +1,16 @@
-// Vista «Esquema»: el mismo recorrido como una lista ordenada, sin coordenadas. Es la alternativa accesible al lienzo
-// (lector de pantalla, teclado, celular): cada paso es un renglón con su nombre, su resumen y sus salidas, y todo lo que
-// se hace arrastrando en el lienzo aquí se hace con controles nativos (botones y listas de selección).
+// Vista «Pasos»: el recorrido como una lista numerada de tarjetas, en el orden en que lo vive la persona. Es la vista
+// principal en cualquier tamaño de pantalla (el lienzo es la segunda) y también la alternativa accesible al lienzo:
+// cada paso es un botón, y todo lo que se hace arrastrando en el lienzo aquí se hace con controles nativos.
 //
-// Es una lista plana y no un árbol con sangrías: un recorrido tiene ramas que se vuelven a juntar y pasos que regresan,
-// y eso un árbol no lo puede decir. Cada salida nombra a dónde lleva y permite saltar a ese renglón.
+// Cada tarjeta lleva el color de su clase de paso (tones.js), su número, el nombre de su tipo, su nombre, lo que le
+// falta dicho en palabras («Ningún camino llega a este paso…») y, si tiene varias salidas, a dónde lleva cada una. Un
+// recorrido tiene ramas que se vuelven a juntar y pasos que regresan: un árbol no lo podría decir, así que es una
+// lista plana y cada salida nombra su destino y permite saltar a él. Dónde lleva cada salida se cambia en el panel del
+// paso (el centro de la vista), que tiene la lista completa de destinos y «crear aquí».
 
 import {
   GROUPS,
+  INTENTS,
   PALETTE,
   acceptsInput,
   nodeName,
@@ -18,6 +22,7 @@ import {
 } from '../../../kit/shared/flow-model.js';
 import { attrs, html, render } from '../../../kit/html.js';
 import { icon } from './icons.js';
+import { toneOf } from './tones.js';
 
 const GROUP_LABEL = Object.fromEntries(GROUPS.map(g => [g.id, g.label]));
 
@@ -39,6 +44,7 @@ export function buildOutline(graph, ctx = {}) {
       id,
       index: i + 1,
       type: node.type,
+      tone: toneOf(node.type),
       kind: def ? def.label : 'Paso desconocido',
       group: def ? def.group : 'logica',
       groupLabel: def ? GROUP_LABEL[def.group] : '',
@@ -64,8 +70,32 @@ export function buildOutline(graph, ctx = {}) {
   });
 }
 
+// Las opciones de unos botones o de una lista, en su orden, también las que contesta el asistente (ésas no tienen
+// salida: «al elegirla» responde él). [{id, label, port, intent, stay}].
+export function optionsOf(node) {
+  const d = node?.data;
+  if (!d) return [];
+  const items =
+    node.type === 'buttons'
+      ? d.options.map(o => ({ id: o.id, label: o.label, action: o.do }))
+      : node.type === 'list'
+        ? d.sections.flatMap(s => s.rows).map(r => ({ id: r.id, label: r.title, action: r.do }))
+        : [];
+  return items.map(({ id, label, action }) => ({
+    id,
+    label,
+    port: action?.type === 'goto' ? 'opt:' + id : null,
+    intent: action?.type === 'intent' ? action.intent : null,
+    stay: Boolean(action?.stay),
+  }));
+}
+
+// Qué hace el asistente con una opción que no lleva a un paso: «Lo contesta el asistente: enviar el temario».
+export const intentText = option =>
+  `Lo contesta el asistente: ${String(INTENTS[option.intent] || '').toLowerCase()}${option.stay ? ' (las opciones siguen a la vista)' : ''}`;
+
 // Opciones de una lista de selección para elegir el destino de una salida: los pasos que admiten una entrada y, al
-// final, los tipos de paso que se pueden crear ahí mismo. La comparten el esquema y el panel.
+// final, los tipos de paso que se pueden crear ahí mismo. La usa el panel del paso.
 export function targetOptions(graph, ctx, selected) {
   const order = readingOrder(graph);
   const byId = new Map(graph.nodes.map(n => [n.id, n]));
@@ -100,70 +130,90 @@ export function statsText(stats, brief = false) {
   return parts.join(' · ');
 }
 
-// Monta el esquema. `options.onOpen(id)` pide abrir el panel de ese paso; `options.announce(texto)` avisa a quien usa
-// lector de pantalla.
+// Monta la lista de pasos. `options.onOpen(id)` pide abrir el panel de ese paso; `options.startText()` dice cómo
+// empieza el recorrido (lo que muestra la tarjeta del Inicio).
 export function createOutline(container, store, options) {
   let last = null;
+  const startText = () => (typeof options.startText === 'function' ? options.startText() : '');
+
+  // A dónde lleva una salida, como botón que salta a ese paso (con el color de su clase) o «sin conectar».
+  function destination(label, to, row, required) {
+    const target = to ? store.node(to) : null;
+    const index = to ? store.order().indexOf(to) + 1 : 0;
+    return html`<li class="lz-out" data-linked="${target ? 'true' : 'false'}">
+      <span class="lz-out-label">${label}</span>
+      ${icon('arrow')}
+      ${
+        target
+          ? html`<button type="button" class="lz-out-to" data-do="fila-ir" data-to="${to}" data-tone="${toneOf(target.type)}" aria-label="${label}: sigue al paso ${index}, ${nodeName(target, store.context)}. Ir a ese paso">${index}. ${nodeName(target, store.context)}</button>`
+          : html`<span class="lz-out-none" data-level="${required ? 'warn' : ''}">${required ? 'Sin conectar' : 'Sin conectar (termina)'}</span>`
+      }
+    </li>`;
+  }
+
+  // Salidas que vale la pena decir en la tarjeta: en un paso con opciones, todas las opciones (y las opcionales que
+  // estén conectadas); en uno de una sola salida, sólo si no sigue al renglón de abajo.
+  function exitsHtml(row, node) {
+    if (row.type === 'note') return '';
+    if (!row.outputs.length) {
+      return html`<p class="lz-row-end">${icon('flag')}<span>Aquí termina el recorrido.</span></p>`;
+    }
+    const choices = optionsOf(node);
+    const required = row.outputs.filter(o => !o.optional);
+    const lines = [];
+    if (choices.length) {
+      for (const c of choices) {
+        if (c.port) {
+          const o = row.outputs.find(x => x.port === c.port);
+          lines.push(destination(c.label || 'Opción sin texto', o ? o.to : null, row, true));
+        } else
+          lines.push(
+            html`<li class="lz-out"><span class="lz-out-label">${c.label || 'Opción sin texto'}</span>${icon('arrow')}<span class="lz-out-ai" data-tone="sky">${intentText(c)}</span></li>`,
+          );
+      }
+      for (const o of row.outputs.filter(o => o.optional && o.to)) lines.push(destination(o.label, o.to, row, false));
+    } else if (required.length > 1 || row.outputs.some(o => o.optional && o.to)) {
+      for (const o of row.outputs.filter(o => !o.optional || o.to))
+        lines.push(destination(o.label, o.to, row, !o.optional));
+    } else if (required.length === 1 && required[0].to && !required[0].next) {
+      lines.push(destination('Sigue a', required[0].to, row, true));
+    }
+    return lines.length ? html`<ul class="lz-row-outs" aria-label="A dónde sigue «${row.name}»">${lines}</ul>` : '';
+  }
 
   function rowHtml(row) {
+    const node = store.node(row.id);
     const issues = store.issuesFor(row.id);
     const selected = store.selection.nodes.includes(row.id);
     const stats = store.overlay.showStats ? store.overlay.stats?.nodes?.[row.id] : null;
     const trail = store.overlay.simTrail.includes(row.id);
-    const editable = !store.readOnly;
-    return html`<li class="lz-row" data-key="${row.id}" data-node="${row.id}" data-group="${row.group}" data-sim="${store.overlay.simNode === row.id ? 'now' : trail ? 'seen' : ''}">
+    const problems = [
+      ...issues.errors.map(i => ({ ...i, level: 'error' })),
+      ...issues.warnings.map(i => ({ ...i, level: 'warn' })),
+    ];
+    const name = row.type === 'start' ? startText() || row.name : row.name;
+    return html`<li class="lz-row" data-key="${row.id}" data-node="${row.id}" data-group="${row.group}" data-tone="${row.tone}" data-current="${selected ? 'true' : 'false'}" data-sim="${store.overlay.simNode === row.id ? 'now' : trail ? 'seen' : ''}">
       <button type="button" class="lz-row-main" data-do="fila" aria-current="${selected ? 'true' : 'false'}">
         <span class="lz-row-n" aria-hidden="true">${row.index}</span>
-        <span class="lz-pill">${icon(row.icon)}</span>
         <span class="lz-row-text">
           <span class="lz-sr">Paso ${row.index}: </span>
-          <strong class="lz-row-name">${row.name}</strong>
-          <span class="lz-row-kind">${[row.kind === row.name ? '' : row.kind, row.groupLabel].filter(Boolean).join(' · ')}</span>
-          ${row.summary && row.summary !== row.name ? html`<span class="lz-row-sum">${row.summary}</span>` : ''}
+          <span class="lz-row-kind">${row.kind}</span>
+          <strong class="lz-row-name">${name}</strong>
+          ${row.type !== 'start' && row.summary && row.summary !== row.name ? html`<span class="lz-row-sum">${row.summary}</span>` : ''}
         </span>
-        ${issues.errors.length ? html`<span class="lz-badge" data-level="error">${icon('error')}<span>${issues.errors.length} ${issues.errors.length === 1 ? 'error' : 'errores'}</span></span>` : ''}
-        ${issues.warnings.length ? html`<span class="lz-badge" data-level="warn">${icon('warn')}<span>${issues.warnings.length} ${issues.warnings.length === 1 ? 'aviso' : 'avisos'}</span></span>` : ''}
+        ${problems.length ? html`<span class="lz-sr">. ${problems.length === 1 ? 'Tiene un problema' : `Tiene ${problems.length} problemas`}.</span>` : ''}
       </button>
-      ${stats ? html`<p class="lz-row-stats">${icon('chart')}<span>${statsText(stats)}</span></p>` : ''}
       ${
-        row.outputs.length
-          ? html`<ul class="lz-row-outs" aria-label="Salidas de ${row.name}">
-            ${row.outputs.map(o => outputHtml(row, o, editable, stats))}
-          </ul>`
-          : row.type === 'note'
-            ? ''
-            : html`<p class="lz-row-end">${icon('flag')}<span>Aquí termina el recorrido.</span></p>`
-      }
-    </li>`;
-  }
-
-  function outputHtml(row, o, editable, stats) {
-    const count = stats?.ports?.[o.port];
-    const where = o.to ? `${o.toIndex}. ${o.toName}` : 'Sin conectar';
-    // La lista nace sólo con su valor actual y se llena al abrirla (`fill`): con 80 pasos y varias salidas por paso,
-    // pintar todas las opciones de todas las listas en cada cambio haría lento el esquema.
-    return html`<li class="lz-out">
-      <span class="lz-out-label">${o.label}${count !== undefined ? html`<span class="lz-out-count"> · ${count}</span>` : ''}</span>
-      ${icon('arrow')}
-      ${
-        editable
-          ? html`<select class="lz-out-pick" data-do="fila-salida" data-node="${row.id}" data-port="${o.port}" aria-label="Salida «${o.label}» del paso ${row.index}: a dónde lleva">
-            <option value="${o.to || ''}" selected>${where}</option>
-          </select>`
-          : html`<span class="lz-out-text">${where}</span>`
-      }
-      ${
-        o.to
-          ? html`<button type="button" class="lz-icon-btn" data-do="fila-ir" data-to="${o.to}" aria-label="Ir al paso ${o.toIndex}: ${o.toName}" title="Ir a ese paso">${icon('jump')}</button>`
+        problems.length
+          ? html`<ul class="lz-row-issues">
+              ${problems.slice(0, 2).map(p => html`<li data-level="${p.level}">${icon(p.level)}<span>${p.message}</span></li>`)}
+              ${problems.length > 2 ? html`<li data-level="${problems[2].level}"><span>Y ${problems.length - 2} más: elige el paso para verlos.</span></li>` : ''}
+            </ul>`
           : ''
       }
+      ${stats ? html`<p class="lz-row-stats">${icon('chart')}<span>${statsText(stats)}</span></p>` : ''}
+      ${exitsHtml(row, node)}
     </li>`;
-  }
-
-  function fill(event, el) {
-    if (el.options.length > 1) return;
-    const current = store.edgeFrom(el.dataset.node, el.dataset.port);
-    render(el, targetOptions(store.graph, store.context, current));
   }
 
   function draw() {
@@ -173,19 +223,14 @@ export function createOutline(container, store, options) {
       .filter(s => s.rows.length);
     const active = container.ownerDocument.activeElement;
     const focused = container.contains(active)
-      ? {
-          node: active.closest('[data-node]')?.dataset.node,
-          k: active.dataset.do,
-          port: active.dataset.port,
-          to: active.dataset.to,
-        }
+      ? { node: active.closest('[data-node]')?.dataset.node, k: active.dataset.do, to: active.dataset.to }
       : null;
     const scroll = container.scrollTop;
     render(
       container,
       html`${sections.map(
         section => html`${SECTION_TITLES[section.key] ? html`<h3 class="lz-outline-title">${SECTION_TITLES[section.key]}</h3>` : ''}
-          <ol class="lz-outline-list" start="${section.rows[0].index}">
+          <ol class="lz-outline-list" start="${section.rows[0].index}" aria-label="${section.key === 'flow' ? 'Pasos del recorrido' : SECTION_TITLES[section.key]}">
             ${section.rows.map(rowHtml)}
           </ol>`,
       )}`,
@@ -195,10 +240,7 @@ export function createOutline(container, store, options) {
     if (focused?.node) {
       const row = container.querySelector(`[data-node="${focused.node}"]`);
       const again =
-        row &&
-        [...row.querySelectorAll(`[data-do="${focused.k}"]`)].find(
-          el => el.dataset.port === focused.port && el.dataset.to === focused.to,
-        );
+        row && [...row.querySelectorAll(`[data-do="${focused.k}"]`)].find(el => el.dataset.to === focused.to);
       (again || row?.querySelector('[data-do="fila"]'))?.focus({ preventScroll: true });
     }
   }
@@ -223,15 +265,6 @@ export function createOutline(container, store, options) {
         focusRow(el.dataset.to);
       },
     },
-    change: {
-      'fila-salida'(event, el) {
-        options.onConnect(el.dataset.node, el.dataset.port, el.value);
-      },
-    },
-    // Antes de que la lista se abra, con el ratón, el dedo o el teclado.
-    pointerdown: { 'fila-salida': fill },
-    focusin: { 'fila-salida': fill },
-    keydown: { 'fila-salida': fill },
   };
 
   return {
