@@ -1847,7 +1847,7 @@ th[aria-sort] > .k-table__sort {
 /* Cifras de la vista: bloques de color con número enorme. Sólo cifras que la pantalla ya enseña. */
 .k-figures {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
   gap: var(--space-5);
   min-width: 0;
 }
@@ -2162,6 +2162,16 @@ th[aria-sort] > .k-table__sort {
 
   .k-head .k-actions {
     width: 100%;
+  }
+
+  /* Dos cifras por fila: una sola a lo ancho empujaba la lista una pantalla hacia abajo. */
+  .k-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .k-figure {
+    padding: var(--space-5) var(--space-6);
   }
 
   /* La cifra de la cabecera se acuesta: número y frase en una fila, para no empujar la lista hacia abajo. */
