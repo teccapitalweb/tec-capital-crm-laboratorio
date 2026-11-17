@@ -13,6 +13,8 @@ import {
   checkAnswer,
   fill,
   outcomeText,
+  pathTo,
+  previewTo,
   simInput,
   simNode,
   simStart,
@@ -435,6 +437,80 @@ test('esquema: un renglón por paso en orden de lectura, con a dónde lleva cada
   );
 });
 
+test('«Así lo ve la persona»: la conversación hasta el paso elegido, con lo que contesta para llegar', () => {
+  const row = (id, title) => ({ id, title, description: '', do: goto });
+  const graph = normalizeGraph(
+    G(
+      [
+        N('s', 'start'),
+        N('m', 'message', say('Hola, {{nombre|qué tal}}.')),
+        N('l', 'list', {
+          text: '¿Qué te gustaría saber?',
+          button: 'Ver opciones',
+          sections: [{ title: '', rows: [row('r1', 'Precio'), row('r2', 'Fechas')] }],
+          saveAs: 'tema',
+        }),
+        N('p', 'price'),
+        N('e', 'end', { text: 'Elegiste {{var.tema}}' }),
+        N('d', 'delay', { seconds: 3 }),
+        N('x', 'message', say('Nadie llega aquí')),
+      ],
+      [
+        E('s', 'next', 'm'),
+        E('m', 'next', 'l'),
+        E('l', 'opt:r1', 'p'),
+        E('l', 'opt:r2', 'd'),
+        E('d', 'next', 'e'),
+        E('p', 'next', 'e'),
+      ],
+      [{ name: 'tema', label: '', type: 'text' }],
+    ),
+  );
+  const env = simulationEnv({ graph, catalogue: DEMO_CATALOGUE });
+
+  // Hasta la lista: el saludo (con el dato resuelto como al enviar) y la lista, marcada como el paso elegido.
+  const upToList = previewTo(env, 'l');
+  assert.equal(upToList.reached, true);
+  assert.deepEqual(
+    upToList.entries.map(e => [e.who, e.nodeId, e.current]),
+    [
+      ['out', 'm', false],
+      ['out', 'l', true],
+    ],
+  );
+  assert.match(upToList.entries[0].text, /^Hola, /);
+  assert.equal(upToList.entries[1].listButton, 'Ver opciones');
+  assert.deepEqual(upToList.entries[1].options, ['Precio', 'Fechas']);
+
+  // Hasta el Fin por el camino más corto: la persona elige «Precio» y el dato guardado se usa después.
+  const upToEnd = previewTo(env, 'e');
+  assert.deepEqual(
+    upToEnd.entries.filter(e => e.who === 'in').map(e => e.text),
+    ['Precio'],
+  );
+  const catalogue = upToEnd.entries.find(e => e.nodeId === 'p');
+  assert.equal(catalogue.label, 'Precio y promoción', 'el catálogo no se inventa: se dice que se arma al enviar');
+  assert.match(catalogue.note, /datos vigentes del curso/);
+  assert.equal(upToEnd.entries.at(-1).text, 'Elegiste Precio');
+
+  // Un paso que no escribe (la espera) se describe en texto plano.
+  const wait = previewTo(env, 'd').entries.find(e => e.nodeId === 'd');
+  assert.equal(wait.who, 'note');
+  assert.match(wait.text, /^Espera: /);
+
+  // Un paso al que no llega ningún camino: se dice y se muestra sólo ese paso.
+  const loose = previewTo(env, 'x');
+  assert.equal(loose.reached, false);
+  assert.deepEqual(
+    loose.entries.map(e => e.nodeId),
+    ['x'],
+  );
+
+  // Sin paso elegido: el camino principal completo.
+  assert.ok(previewTo(env).entries.some(e => e.nodeId === 'e'));
+  assert.deepEqual(pathTo(env, 'nope'), null);
+});
+
 test('cifras por paso, en palabras', () => {
   assert.equal(
     statsText({ entered: 24, completed: 6, dropped: 14, left: 4 }),
@@ -469,7 +545,7 @@ test('pantalla «Automatización»: visible en el menú, con el lienzo y sus est
     nav: { group: 'WhatsApp', icon: 'workflow', label: 'Automatización', order: 44.5 },
     roles: ['admin', 'agent'],
     entry: 'index.js',
-    styles: ['lienzo.css', 'screen.css'],
+    styles: ['lienzo.css', 'pasos.css', 'screen.css'],
   });
   const module = await import(new URL(screen.entry, base).href);
   assert.equal(typeof module.default.mount, 'function');

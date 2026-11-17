@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { AUTH, ensureUser, expectNiebla, settled, watch } from './helpers.mjs';
+import { NODE_TYPES } from '../../public/kit/shared/flow-model.js';
 
 test.use({ storageState: AUTH.admin });
 
@@ -47,9 +48,20 @@ async function seedSessions(page, playwright, baseURL, flowId) {
   }
 }
 
-// La pantalla «Automatización» (en vista previa) conectada al servidor de recorridos: lista, crear, armar en el
-// esquema, revisar con un problema y arreglarlo, guardar y recargar, publicar, activar, probar con el servidor, ver el
-// rendimiento con cifras, pedir sugerencias y archivar. En computadora y en celular (donde se edita en el esquema).
+// La marca de la lista: con pocas marcas se elige con píldoras; con muchas, con una lista desplegable.
+async function pickBrand(pageEl, brandId) {
+  const pill = pageEl.locator(`[data-do="marca-pildora"][data-id="${brandId}"]`);
+  if (await pill.count()) await pill.click();
+  else {
+    const picker = pageEl.locator('form[data-do="marca"] select');
+    if (await picker.count()) await picker.selectOption(brandId);
+  }
+}
+const card = (pageEl, name) => pageEl.locator('.au-tarjeta', { hasText: name });
+
+// La pantalla «Automatización» conectada al servidor de recorridos: lista, crear, armar en la vista Pasos, revisar con
+// un problema y arreglarlo, guardar y recargar, publicar (con su aviso pendiente), activar, probar con el servidor, ver
+// el rendimiento con cifras, pedir sugerencias y archivar. En computadora y en celular.
 test('automatización: un recorrido de punta a punta, del borrador al rendimiento', async ({
   page,
   playwright,
@@ -88,20 +100,20 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   await expectNiebla(page, 'automatizacion-lista', testInfo);
 
   // Cambiar de marca no esconde el selector: las marcas llegan completas aunque se pidan los recorridos de una sola
-  const brandPicker = pageEl.locator('form[data-do="marca"] select');
-  await expect(brandPicker).toBeVisible();
-  const original = await brandPicker.inputValue();
-  const others = (await brandPicker.locator('option').evaluateAll(options => options.map(o => o.value))).filter(
-    value => value && value !== original,
+  const pills = pageEl.locator('[data-do="marca-pildora"]');
+  expect(await pills.count(), 'hay más de una marca para elegir').toBeGreaterThan(1);
+  const original = await pageEl.locator('[data-do="marca-pildora"][aria-pressed="true"]').getAttribute('data-id');
+  const other = await pageEl.locator('[data-do="marca-pildora"][aria-pressed="false"]').first().getAttribute('data-id');
+  await pickBrand(pageEl, other);
+  await settled(page);
+  await expect(pageEl.locator(`[data-do="marca-pildora"][data-id="${other}"]`)).toHaveAttribute('aria-pressed', 'true');
+  await expect(pills).toHaveCount(await pills.count());
+  await pickBrand(pageEl, original);
+  await settled(page);
+  await expect(pageEl.locator(`[data-do="marca-pildora"][data-id="${original}"]`)).toHaveAttribute(
+    'aria-pressed',
+    'true',
   );
-  expect(others.length, 'hay más de una marca para elegir').toBeGreaterThan(0);
-  await brandPicker.selectOption(others[0]);
-  await settled(page);
-  await expect(brandPicker).toBeVisible();
-  await expect(brandPicker).toHaveValue(others[0]);
-  await brandPicker.selectOption(original);
-  await settled(page);
-  await expect(brandPicker).toHaveValue(original);
 
   // Crear en blanco
   await pageEl.locator('[data-do="nuevo"]').click();
@@ -113,9 +125,14 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   await expect(pageEl.locator('h1')).toContainText(name);
   await expect(pageEl.locator('h1')).toContainText('Borrador');
   await expect(editor.locator('.lz-node')).toHaveCount(1);
+  // abre en «Pasos», en computadora y en celular
+  await expect(editor.locator('.lz-bar [data-do="ver"][data-pane="outline"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(editor.locator('.lz-bar [data-do="ver"][data-pane="outline"]')).toHaveText('Pasos');
+  await expect(editor.locator('.lz-outline .lz-row')).toHaveCount(1);
 
-  // Los tipos que el servidor todavía no ejecuta se ven, pero no se agregan
+  // Los tipos que el servidor todavía no ejecuta se ven, pero no se agregan (están en «Ver todos los tipos de paso»)
   if (phone) await editor.locator('.lz-bar [data-do="paleta"]').click();
+  await editor.locator('[data-do="paleta-todos"]').click();
   const webhook = editor.locator('[data-do="paleta-tipo"][data-type="webhook"]');
   await expect(webhook).toHaveAttribute('aria-disabled', 'true');
   await expect(webhook).toContainText('Todavía no disponible');
@@ -132,15 +149,13 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   await webhook.click({ force: true });
   await expect(editor.locator('.lz-node')).toHaveCount(1);
   await expect(editor.locator('[data-slot="aviso"]')).toContainText('todavía no llama a servicios externos');
-  if (phone) await editor.locator('.lz-palette [data-do="paleta"]').click();
+  await editor.locator('[data-do="paleta-todos"]').click();
 
-  // Agregar un Mensaje conectado al Inicio, desde el esquema
-  if (!phone) await editor.locator('.lz-bar [data-do="ver"][data-pane="outline"]').click();
-  const exit = editor.locator('.lz-outline [data-do="fila-salida"]').first();
-  await exit.focus();
-  await exit.selectOption('new:message');
+  // Agregar un Mensaje: sin paso elegido cae al final del camino (después del Inicio), ya conectado
+  await editor.locator('[data-do="paleta-tipo"][data-type="message"]').click();
   await expect(editor.locator('.lz-node')).toHaveCount(2);
   await expect(editor.locator('.lz-outline .lz-row')).toHaveCount(2);
+  await expect(editor.locator('.lz-outline-title'), 'no queda ningún paso suelto').toHaveCount(0);
   if (phone) await page.keyboard.press('Escape');
 
   // Revisar: el mensaje vacío impide publicar; «Ir al paso» lleva a él y se arregla
@@ -169,16 +184,18 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   await expect(page.locator('#breadcrumb-title')).toHaveText('Mi día');
   await page.locator('.nav [data-view="automatizacion"]').click();
   await expect(pageEl.locator('h1')).toHaveText('Recorridos');
-  await pageEl.locator('[data-do="abrir"]', { hasText: name }).first().click();
+  await card(pageEl, name).locator('[data-do="abrir"]').click();
   await expect(editor.locator('.lz-node')).toHaveCount(2);
   await settled(page);
   await expectNiebla(page, 'automatizacion', testInfo);
 
-  // Publicar y activar
+  // Publicar con un aviso pendiente: la ventana lo nombra con su paso y pide confirmarlo
   await pageEl.locator('[data-do="publicar"]').click();
-  await expect(dialog).toContainText('Publicar la versión 1');
+  await expect(dialog).toContainText('Publicar la versión 1 con 1 aviso');
+  await expect(dialog.locator('.au-pub-avisos')).toContainText('Paso 2');
+  await expect(dialog.locator('.au-pub-avisos')).toContainText('no está conectada');
   await expect(dialog).toContainText('siguen con la versión con la que empezaron');
-  await dialog.getByRole('button', { name: 'Publicar' }).click();
+  await dialog.getByRole('button', { name: 'Publicar de todos modos' }).click();
   await expect(pageEl.locator('h1')).toContainText('Publicado, sin activar');
   await pageEl.locator('[data-do="activar"]').click();
   // con la marca apagada, la ventana lo dice antes de confirmar y el estado es honesto
@@ -215,7 +232,7 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   // Las cifras sobre el recorrido
   await rend.locator('[data-do="ver-paso"]').first().click();
   await expect(editor).toBeVisible();
-  await expect(editor.locator(phone ? '.lz-row-stats' : '.lz-node-stats').first()).toContainText('Entraron 2');
+  await expect(editor.locator('.lz-row-stats').first()).toContainText('Entraron 2');
 
   // De vuelta a la lista: el estado a la vista; archivar para dejar limpio
   await pageEl.locator('[data-do="volver"]').click();
@@ -223,7 +240,7 @@ test('automatización: un recorrido de punta a punta, del borrador al rendimient
   await expect(row).toContainText('Activo, pero la marca no está atendiendo');
   await row.locator('[data-do="archivar"]').click();
   await dialog.getByRole('button', { name: 'Archivar' }).click();
-  await expect(pageEl.locator('[data-do="abrir"]', { hasText: name })).toHaveCount(0);
+  await expect(card(pageEl, name)).toHaveCount(0);
 
   // al salir no queda nada de la pantalla y la aplicación de siempre sigue funcionando
   await page.locator('.nav [data-view="day"]').click();
@@ -301,16 +318,14 @@ test('automatización: subir un archivo a un paso y probar una lista de cinco op
 
   await page.locator('.nav [data-view="automatizacion"]').click();
   await expect(pageEl.locator('h1')).toHaveText('Recorridos');
-  const picker = pageEl.locator('form[data-do="marca"] select');
-  if (await picker.count()) await picker.selectOption(brandId);
-  await pageEl.locator('[data-do="abrir"]', { hasText: name }).first().click();
+  await pickBrand(pageEl, brandId);
+  await card(pageEl, name).locator('[data-do="abrir"]').click();
   const editor = pageEl.locator('.lz');
   await expect(editor.locator('.lz-node')).toHaveCount(4);
   // el archivo sin elegir impide publicar
   await expect(editor.locator('.lz-bar [data-slot="problemas"]')).toHaveAttribute('data-level', 'error');
 
-  // Abrir el Mensaje desde el esquema y subir una imagen desde su panel
-  if (!phone) await editor.locator('.lz-bar [data-do="ver"][data-pane="outline"]').click();
+  // Abrir el Mensaje desde la lista de pasos y subir una imagen desde su panel
   await editor.locator('.lz-outline .lz-row-main', { hasText: 'Archivo' }).first().click();
   const panel = editor.locator('[data-slot="panel"]');
   await expect(panel.locator('.lz-upload')).toContainText('Subir archivo');
@@ -340,5 +355,158 @@ test('automatización: subir un archivo a un paso y probar una lista de cinco op
     data: { expectedRevision: current.revision },
   });
   expect(archived.status()).toBe(200);
+  watcher.done();
+});
+
+// Lo que salió mal al armar un recorrido a mano en producción, hecho como lo haría alguien por primera vez: duplicar
+// un recorrido, agregar una Lista de cuatro filas después del saludo y publicar. La lista nace conectada, sus filas
+// también, y lo que falta se dice en el propio paso. Además: todos los tipos de paso siguen a la mano en «Agregar
+// paso», la vista elegida (Pasos o Lienzo) se recuerda y un cambio de «Ajustes» con versión publicada avisa que no
+// está en servicio hasta publicar.
+test('automatización: agregar una lista conectada después del saludo, publicar y avisos de ajustes', async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const watcher = watch(page);
+  const phone = testInfo.project.name === 'celular';
+  const name = `Saludo UI ${testInfo.project.name}`;
+  const pageEl = page.locator('#page');
+  const dialog = page.locator('dialog.k-dialog[open]');
+  const headers = { Origin: baseURL };
+  const brands = (await (await page.request.get('/api/chatflows')).json()).brands;
+  const brandId = brands.find(b => b.canManage).id;
+  const graph = {
+    v: 1,
+    start: 's',
+    variables: [],
+    nodes: [
+      { id: 's', type: 'start', x: 0, y: 0, data: {} },
+      { id: 'g', type: 'message', title: 'Saludo', x: 300, y: 0, data: { parts: [{ kind: 'text', text: 'Hola' }] } },
+      { id: 'f', type: 'end', x: 600, y: 0, data: { text: 'Gracias' } },
+    ],
+    edges: [
+      { from: 's', port: 'next', to: 'g' },
+      { from: 'g', port: 'next', to: 'f' },
+    ],
+  };
+  await page.goto('/crm');
+  await expect(page.locator('#breadcrumb-title')).toHaveText('Mi día');
+  const created = await page.request.post('/api/chatflows', {
+    headers,
+    data: { brandId, name, graph, start: { type: 'manual' }, clientRef: crypto.randomUUID() },
+  });
+  const originalId = (await created.json()).flow.id;
+
+  // Duplicar desde la lista y abrir la copia
+  await page.locator('.nav [data-view="automatizacion"]').click();
+  await expect(pageEl.locator('h1')).toHaveText('Recorridos');
+  await pickBrand(pageEl, brandId);
+  await card(pageEl, name).first().locator('[data-do="duplicar"]').click();
+  const copy = pageEl.locator('.au-tarjeta', { hasText: `${name} (copia)` });
+  await expect(copy).toHaveCount(1);
+  await expect(copy).toContainText('Borrador');
+  await copy.locator('[data-do="abrir"]').click();
+  const editor = pageEl.locator('.lz');
+  await expect(editor.locator('.lz-outline .lz-row')).toHaveCount(3);
+
+  // Todos los tipos de paso siguen a la mano: los mensajes primero, el resto con «Ver todos los tipos de paso»
+  if (phone) await editor.locator('.lz-bar [data-do="paleta"]').click();
+  const types = Object.values(NODE_TYPES)
+    .filter(t => t.palette)
+    .map(t => t.type);
+  for (const type of ['message', 'buttons', 'list', 'question', 'template'])
+    await expect(editor.locator(`[data-do="paleta-tipo"][data-type="${type}"]`)).toBeVisible();
+  await expect(editor.locator('[data-do="paleta-tipo"][data-type="enroll"]')).toBeHidden();
+  await editor.locator('[data-do="paleta-todos"]').click();
+  for (const type of types) await expect(editor.locator(`[data-do="paleta-tipo"][data-type="${type}"]`)).toBeVisible();
+  await editor.locator('[data-do="paleta-todos"]').click();
+  if (phone) await editor.locator('.lz-palette [data-do="paleta"]').click();
+
+  // Elegir el saludo y agregar una Lista: queda entre el saludo y el Fin, con su fila llevando al Fin
+  await editor.locator('.lz-outline [data-node="g"] [data-do="fila"]').click();
+  if (phone) {
+    await page.keyboard.press('Escape');
+    await editor.locator('.lz-bar [data-do="paleta"]').click();
+  }
+  await expect(editor.locator('.lz-palette-hint')).toContainText('después de «Saludo», ya conectado');
+  await editor.locator('[data-do="paleta-tipo"][data-type="list"]').click();
+  const rows = editor.locator('.lz-outline .lz-row');
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(2)).toHaveAttribute('data-tone', 'lilac');
+  await expect(rows.nth(2)).toHaveAttribute('data-current', 'true');
+  await expect(editor.locator('.lz-outline-title'), 'nada quedó suelto').toHaveCount(0);
+
+  // Cuatro filas con su texto: cada fila nueva lleva a donde llevan las demás (el Fin)
+  const panel = editor.locator('[data-slot="panel"]');
+  await expect(panel.locator('.lz-panel-step')).toHaveText(/Paso 3 · Lista/i);
+  await panel.locator('[data-f="text"]').fill('¿Qué te gustaría saber?');
+  for (let i = 1; i < 4; i += 1) await panel.locator('[data-do="lista-agregar"][data-f="sections.0.rows"]').click();
+  for (const [i, title] of ['Precio', 'Fechas', 'Temario', 'Inscribirme'].entries())
+    await panel.locator(`[data-f="sections.0.rows.${i}.title"]`).fill(title);
+  const exits = panel.locator('.lz-exits .lz-exit select[data-do="salida"]');
+  await expect(exits).toHaveCount(6); // cuatro filas, «Si no elige» y «Sin respuesta»
+  for (let i = 0; i < 4; i += 1) await expect(exits.nth(i)).toHaveValue('f');
+  await expect(panel.locator('.lz-exits')).toContainText('Inscribirme');
+  // «Así lo ve la persona»: el saludo y la lista con sus cuatro filas, sin llamar al servidor
+  if (phone) await editor.locator('[data-do="vista-abrir"]').click();
+  const preview = editor.locator('.lz-preview');
+  await expect(preview.locator('.lz-ph-bubble[data-current="true"]')).toContainText('¿Qué te gustaría saber?');
+  await expect(preview.locator('.lz-ph-row')).toHaveCount(4);
+  await expect(preview).toContainText('Hola');
+  if (phone) {
+    await editor.locator('[data-do="vista-cerrar"]').click();
+    await page.keyboard.press('Escape');
+  }
+  await expect(editor.locator('.lz-bar [data-slot="problemas"]')).toHaveAttribute('data-level', 'ok');
+  await settled(page);
+  await expectNiebla(page, 'automatizacion-pasos', testInfo);
+
+  // Guardar y publicar: sin avisos pendientes, la ventana de siempre
+  await editor.locator('.lz-bar [data-do="guardar"]').click();
+  await expect(editor.locator('[data-slot="estado"]')).toHaveText('Guardado');
+  await pageEl.locator('[data-do="publicar"]').click();
+  await expect(dialog).toContainText('Publicar la versión 1');
+  await expect(dialog).not.toContainText('aviso');
+  await dialog.getByRole('button', { name: 'Publicar', exact: true }).click();
+  await expect(pageEl.locator('h1')).toContainText('Publicado, sin activar');
+  const flows = (await (await page.request.get(`/api/chatflows?brand=${brandId}`)).json()).flows;
+  const copyId = flows.find(f => f.name === `${name} (copia)`).id;
+  const published = (await (await page.request.get(`/api/chatflows/${copyId}/versions/1`)).json()).version.graph;
+  const list = published.nodes.find(n => n.type === 'list');
+  expect(published.edges.find(e => e.from === 'g').to).toBe(list.id);
+  expect(published.edges.filter(e => e.from === list.id && e.to === 'f')).toHaveLength(4);
+
+  // Ajustes: cambiar cómo empieza con una versión publicada avisa que no está en servicio hasta publicar
+  await pageEl.locator('[data-do="ajustes"]').click();
+  await dialog.getByLabel('Cómo empieza').selectOption('keyword');
+  await dialog.getByLabel('Palabras clave').fill('lista');
+  await dialog.getByRole('button', { name: 'Guardar ajustes' }).click();
+  await expect(dialog).toContainText('todavía no en servicio');
+  await expect(dialog).toContainText('Publicar');
+  await dialog.getByRole('button', { name: 'Publicar después' }).click();
+  await expect(pageEl.locator('.au-ajustes-pendientes')).toContainText('todavía no están en servicio');
+  await pageEl.locator('[data-do="publicar"]').click();
+  await dialog.getByRole('button', { name: 'Publicar', exact: true }).click();
+  await expect(pageEl.locator('h1')).toContainText('Publicado, sin activar');
+  await expect(pageEl.locator('.au-ajustes-pendientes')).toHaveCount(0);
+
+  // La vista elegida se recuerda al volver a abrir un recorrido
+  await editor.locator('.lz-bar [data-do="ver"][data-pane="canvas"]').click();
+  await expect(editor.locator('.lz-canvas')).toBeVisible();
+  await pageEl.locator('[data-do="volver"]').click();
+  await card(pageEl, `${name} (copia)`).locator('[data-do="abrir"]').click();
+  await expect(editor.locator('.lz-bar [data-do="ver"][data-pane="canvas"]')).toHaveAttribute('aria-pressed', 'true');
+  await editor.locator('.lz-bar [data-do="ver"][data-pane="outline"]').click();
+  await expect(editor.locator('.lz-outline .lz-row')).toHaveCount(4);
+
+  // Dejar limpio
+  for (const id of [originalId, copyId]) {
+    const current = (await (await page.request.get(`/api/chatflows/${id}`)).json()).flow;
+    await page.request.post(`/api/chatflows/${id}/archive`, {
+      headers,
+      data: { expectedRevision: current.revision },
+    });
+  }
   watcher.done();
 });

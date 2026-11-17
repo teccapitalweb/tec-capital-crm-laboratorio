@@ -28,28 +28,61 @@ import { attachInteractions } from './interact.js';
 import { createMinimap } from './minimap.js';
 import { createOutline } from './outline.js';
 import { createPanel } from './panel.js';
+import { createPreview } from './preview.js';
 import { createSimulator } from './sim.js';
 import { createStore } from './store.js';
+import { toneOf } from './tones.js';
 import { createView } from './view.js';
 
-// Por debajo de este ancho (el del contenedor, no el de la ventana) el editor pasa a una columna y abre en el esquema.
+// Por debajo de este ancho (el del contenedor, no el de la ventana) el editor pasa a una columna: la lista de pasos (o el
+// lienzo) ocupa la vista, y el panel del paso, la paleta y la vista previa son hojas que la cubren.
 const NARROW = 850;
 const clone = value => JSON.parse(JSON.stringify(value));
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const closest = (target, selector) =>
   target && typeof target.closest === 'function' ? target.closest(selector) : null;
 
+// La paleta «Agregar paso»: primero los tipos de mensaje; el resto, detrás de «Ver todos los tipos de paso» en la vista
+// Pasos (en el lienzo se ven todos, como siempre). Cada tipo lleva el color de su clase y el aviso «Todavía no
+// disponible» si el servidor todavía no lo ejecuta.
+const palette = unavailable => html`<div class="lz-palette-head">
+    <h2 class="lz-palette-title">Agregar paso</h2>
+    <button type="button" class="lz-icon-btn lz-narrow-only" data-do="paleta" aria-label="Cerrar la lista de pasos">${icon('close')}</button>
+  </div>
+  <p class="lz-palette-hint" data-slot="paleta-ayuda"></p>
+  ${PALETTE.map(
+    (
+      group,
+      i,
+    ) => html`<section class="lz-palette-group" data-group="${group.id}" data-first="${i === 0 ? 'true' : 'false'}">
+      <h3>${group.label}</h3>
+      <ul>
+        ${group.types.map(type => {
+          const def = typeOf(type);
+          // Lo que el servidor todavía no ejecuta se ve, pero no se agrega: el motivo va en el título y al pulsarlo.
+          const off = unavailable[type];
+          return html`<li>
+            <button type="button" class="lz-pal" data-do="paleta-tipo" data-type="${type}" data-tone="${toneOf(type)}" title="${off || def.hint}" ${attrs({ 'aria-disabled': off ? 'true' : false })}>
+              <span class="lz-pill">${icon(def.icon)}</span><span class="lz-pal-name">${def.label}${off ? html`<span class="lz-pal-off">Todavía no disponible</span>` : ''}</span>
+            </button>
+          </li>`;
+        })}
+      </ul>
+    </section>`,
+  )}
+  <button type="button" class="lz-pal-all" data-do="paleta-todos" aria-expanded="false" data-slot="paleta-todos">Ver todos los tipos de paso</button>`;
+
 const shell = (hasSave, unavailable) => html`<div class="lz-bar" role="toolbar" aria-label="Herramientas del recorrido">
     <div class="lz-seg" role="group" aria-label="Cómo ver el recorrido">
-      <button type="button" class="lz-tool" data-do="ver" data-pane="outline" aria-pressed="false">${icon('list')}<span>Esquema</span></button>
-      <button type="button" class="lz-tool" data-do="ver" data-pane="canvas" aria-pressed="true">${icon('canvas')}<span>Lienzo</span></button>
+      <button type="button" class="lz-tool" data-do="ver" data-pane="outline" aria-pressed="true">${icon('list')}<span>Pasos</span></button>
+      <button type="button" class="lz-tool" data-do="ver" data-pane="canvas" aria-pressed="false">${icon('canvas')}<span>Lienzo</span></button>
     </div>
     <button type="button" class="lz-tool lz-narrow-only" data-do="paleta" aria-expanded="false" aria-label="Agregar paso">${icon('plus')}<span>Agregar</span></button>
     <span class="lz-sep" aria-hidden="true"></span>
     <button type="button" class="lz-tool lz-tool-icon" data-do="deshacer" aria-label="Deshacer" title="Deshacer (Ctrl+Z)">${icon('undo')}</button>
     <button type="button" class="lz-tool lz-tool-icon" data-do="rehacer" aria-label="Rehacer" title="Rehacer (Ctrl+Mayús+Z)">${icon('redo')}</button>
-    <button type="button" class="lz-tool" data-do="acomodar" title="Acomoda los pasos por capas desde el Inicio">${icon('tidy')}<span>Acomodar</span></button>
-    <div class="lz-zoom lz-canvas-only" role="group" aria-label="Acercamiento">
+    <div class="lz-zoom lz-canvas-only" role="group" aria-label="Acomodo y acercamiento del lienzo">
+      <button type="button" class="lz-tool" data-do="acomodar" title="Acomoda los pasos por capas desde el Inicio">${icon('tidy')}<span>Acomodar</span></button>
       <span class="lz-sep" aria-hidden="true"></span>
       <button type="button" class="lz-tool lz-tool-icon" data-do="alejar" aria-label="Alejar" title="Alejar (−)">${icon('minus')}</button>
       <output class="lz-zoom-n" data-slot="zoom" aria-label="Acercamiento">100 %</output>
@@ -64,40 +97,23 @@ const shell = (hasSave, unavailable) => html`<div class="lz-bar" role="toolbar" 
     ${hasSave ? html`<button type="button" class="lz-tool lz-primary" data-do="guardar">${icon('save')}<span>Guardar</span></button>` : ''}
   </div>
   <div class="lz-body">
-    <nav class="lz-palette" data-slot="paleta" aria-label="Pasos que se pueden agregar">
-      <div class="lz-palette-head">
-        <h2 class="lz-palette-title">Agregar paso</h2>
-        <button type="button" class="lz-icon-btn lz-narrow-only" data-do="paleta" aria-label="Cerrar la lista de pasos">${icon('close')}</button>
-      </div>
-      <p class="lz-hint lz-wide-only">Clic: lo agrega después del paso seleccionado. También se puede arrastrar al lienzo.</p>
-      ${PALETTE.map(
-        group => html`<section class="lz-palette-group" data-group="${group.id}">
-          <h3>${group.label}</h3>
-          <ul>
-            ${group.types.map(type => {
-              const def = typeOf(type);
-              // Lo que el servidor todavía no ejecuta se ve, pero no se agrega: el motivo va en el título y al pulsarlo.
-              const off = unavailable[type];
-              return html`<li>
-                <button type="button" class="lz-pal" data-do="paleta-tipo" data-type="${type}" title="${off || def.hint}" ${attrs({ 'aria-disabled': off ? 'true' : false })}>
-                  <span class="lz-pill">${icon(def.icon)}</span><span class="lz-pal-name">${def.label}${off ? html`<span class="lz-pal-off">Todavía no disponible</span>` : ''}</span>
-                </button>
-              </li>`;
-            })}
-          </ul>
-        </section>`,
-      )}
-    </nav>
+    <div class="lz-left">
+      <div class="lz-outline" data-slot="esquema"></div>
+      <nav class="lz-palette" data-slot="paleta" aria-label="Pasos que se pueden agregar" data-all="false">${palette(unavailable)}</nav>
+    </div>
     <div class="lz-stage">
       <div class="lz-canvas" data-slot="lienzo" tabindex="0" role="group" aria-label="Lienzo del recorrido. El tabulador recorre los pasos; las flechas mueven la vista."></div>
       <div class="lz-minimap" data-slot="minimapa"></div>
       <p class="lz-tip lz-wide-only" aria-hidden="true">Arrastra el fondo para moverte · Ctrl + rueda para acercar · Mayús + arrastrar para marcar varios</p>
-      <div class="lz-outline" data-slot="esquema" hidden></div>
     </div>
     <aside class="lz-side" data-slot="lado" aria-label="Detalle del paso o del recorrido">
       <div class="lz-side-pane" data-slot="panel" tabindex="-1"></div>
       <div class="lz-side-pane" data-slot="prueba" tabindex="-1" hidden></div>
+      <div class="lz-side-foot lz-narrow-only">
+        <button type="button" class="lz-btn" data-do="vista-abrir">${icon('message')} Así lo ve la persona</button>
+      </div>
     </aside>
+    <aside class="lz-preview" data-slot="vista" aria-label="Así lo ve la persona"></aside>
   </div>
   <div class="lz-ghost" data-slot="fantasma" hidden></div>
   <p class="lz-flash" data-slot="aviso" role="status" hidden></p>
@@ -121,8 +137,9 @@ export function mountCanvas(root, options = {}) {
   if (options.stats) store.setOverlay({ stats: options.stats });
 
   // Lo que es de la interfaz y no del recorrido: qué vista se ve, qué hoja está abierta en celular, cómo va el guardado.
+  // La vista con que abre es «Pasos» en cualquier tamaño, salvo que la pantalla anfitriona recuerde otra elección.
   const ui = {
-    pane: 'canvas',
+    pane: options.pane === 'canvas' ? 'canvas' : 'outline',
     picked: false,
     narrow: false,
     side: 'edit',
@@ -144,6 +161,7 @@ export function mountCanvas(root, options = {}) {
   const paletteEl = slot('paleta');
   const panelEl = slot('panel');
   const simEl = slot('prueba');
+  const previewEl = slot('vista');
   const ghost = slot('fantasma');
   const flashEl = slot('aviso');
   const voice = slot('voz');
@@ -186,11 +204,21 @@ export function mountCanvas(root, options = {}) {
     ui.sheet = name;
     root.dataset.sheet = name;
     tool('paleta').setAttribute('aria-expanded', name === 'paleta' ? 'true' : 'false');
+    syncPreview();
+  }
+
+  // La vista previa se pinta sólo cuando se ve: en la vista Pasos (en angosto, cuando su hoja está abierta).
+  function syncPreview() {
+    if (!preview) return;
+    const shown = ui.pane === 'outline' && (root.dataset.preview === 'column' || ui.sheet === 'vista');
+    if (shown) preview.open();
+    else preview.close();
   }
 
   function setSide(side) {
     if (ui.side === side) return;
     ui.side = side;
+    root.dataset.side = side;
     panelEl.hidden = side !== 'edit';
     simEl.hidden = side !== 'sim';
     if (side === 'sim') sim.open();
@@ -262,9 +290,19 @@ export function mountCanvas(root, options = {}) {
     uploadFile,
   });
 
+  let startText = typeof options.startText === 'string' ? options.startText : '';
   const outline = createOutline(outlineEl, store, {
     onOpen: () => openPanel(),
-    onConnect,
+    startText: () => startText,
+  });
+
+  const preview = createPreview(previewEl, store, {
+    catalogue: () => catalogue,
+    settings: () => settings,
+    onClose() {
+      setSheet('panel');
+      root.querySelector('[data-do="vista-abrir"]')?.focus({ preventScroll: true });
+    },
   });
 
   const sim = createSimulator(simEl, store, {
@@ -307,16 +345,39 @@ export function mountCanvas(root, options = {}) {
   // ---- Barra ------------------------------------------------------------------------------------------------------------
 
   function setPane(pane, picked = true) {
+    const changed = ui.pane !== pane;
     ui.pane = pane;
     if (picked) ui.picked = true;
     root.dataset.pane = pane;
     canvas.hidden = pane !== 'canvas';
     slot('minimapa').hidden = pane !== 'canvas';
     outlineEl.hidden = pane !== 'outline';
+    previewEl.hidden = pane !== 'outline';
     for (const button of root.querySelectorAll('.lz-bar [data-do="ver"]'))
       button.setAttribute('aria-pressed', button.dataset.pane === pane ? 'true' : 'false');
+    paintPaletteHint();
+    if (ui.sheet === 'vista' && pane !== 'outline') setSheet('');
+    syncPreview();
     if (pane === 'outline') outline.refresh();
     else fitOnce();
+    if (picked && changed && typeof options.onPane === 'function') options.onPane(pane);
+    if (changed && root.dataset.layout) measure();
+  }
+
+  // Qué hace un clic en la paleta, dicho junto a ella: dónde cae el paso y que queda conectado.
+  function paintPaletteHint() {
+    const hint = slot('paleta-ayuda');
+    if (!hint) return;
+    const picked = store.selection.nodes.length === 1 ? store.node(store.selection.nodes[0]) : null;
+    const where =
+      picked && picked.type !== 'note'
+        ? `Se agrega después de «${nodeName(picked, store.context)}», ya conectado.`
+        : 'Se agrega al final del camino, ya conectado.';
+    const text =
+      ui.pane === 'canvas'
+        ? `${where} También se puede arrastrar al lienzo (ahí queda suelto hasta que lo conectes).`
+        : where;
+    if (hint.textContent !== text) hint.textContent = text;
   }
 
   // La primera vez que el lienzo tiene tamaño, el recorrido se ajusta a la vista.
@@ -418,18 +479,24 @@ export function mountCanvas(root, options = {}) {
 
   // ---- Paleta -----------------------------------------------------------------------------------------------------------
 
+  // Un clic en la paleta agrega el paso conectado: después del paso elegido o al final del camino principal, y entre
+  // A y B queda A → nuevo → B (store.insertStep). Sólo una nota queda sin conectar, porque no se ejecuta.
   function addFromPalette(type) {
     if (ui.skipClick) return;
     if (unavailable[type]) return flash(unavailable[type]);
-    const anchor = store.selection.nodes[store.selection.nodes.length - 1];
-    const added = store.addNodeNear(type, { at: store.toWorld(centre()) });
+    const added = store.insertStep(type);
     if (!added.ok) return report(added);
     const label = typeOf(type).label;
-    announce(
-      added.connected
-        ? `Se agregó «${label}» después de «${nodeName(store.node(anchor), store.context)}», ya conectado.`
-        : `Se agregó «${label}», sin conectar.`,
-    );
+    const name = id => `«${nodeName(store.node(id), store.context)}»`;
+    if (added.connected && added.from) {
+      announce(
+        `Se agregó «${label}» después de ${name(added.from)}, ya conectado` +
+          (added.to && added.exits?.length ? `, y sigue a ${name(added.to)}.` : '.'),
+      );
+    } else announce(type === 'note' ? 'Se agregó una nota junto al paso.' : `Se agregó «${label}».`);
+    // Un paso sin salidas (un Fin, por ejemplo) metido en medio deja al siguiente sin camino: se dice en voz alta.
+    if (added.orphaned && store.node(added.orphaned) && !store.edgesInto(added.orphaned).length)
+      flash(`${name(added.orphaned)} quedó sin camino: conéctalo desde otro paso o elimínalo.`);
     if (ui.narrow) setSheet('');
     return afterAdd(added.id);
   }
@@ -511,6 +578,13 @@ export function mountCanvas(root, options = {}) {
     click: {
       ver: (event, el) => setPane(el.dataset.pane),
       paleta: () => setSheet(ui.sheet === 'paleta' ? '' : 'paleta'),
+      'paleta-todos'(event, el) {
+        const all = paletteEl.dataset.all !== 'true';
+        paletteEl.dataset.all = all ? 'true' : 'false';
+        el.setAttribute('aria-expanded', all ? 'true' : 'false');
+        el.textContent = all ? 'Ver sólo los mensajes' : 'Ver todos los tipos de paso';
+      },
+      'vista-abrir': () => setSheet('vista'),
       'paleta-tipo': (event, el) => addFromPalette(el.dataset.type),
       deshacer: () => !off('deshacer') && undo(false),
       rehacer: () => !off('rehacer') && undo(true),
@@ -555,7 +629,7 @@ export function mountCanvas(root, options = {}) {
   };
 
   const merged = {};
-  for (const table of [own, panel.handlers, outline.handlers, sim.handlers]) {
+  for (const table of [own, panel.handlers, outline.handlers, sim.handlers, preview.handlers]) {
     for (const [type, verbs] of Object.entries(table)) merged[type] = { ...merged[type], ...verbs };
   }
   const unlisten = listen(root, merged);
@@ -563,7 +637,7 @@ export function mountCanvas(root, options = {}) {
   // Atajos que valen en todo el editor. Dentro de un campo de texto, Ctrl+Z es del campo.
   const offKeys = on(root, 'keydown', event => {
     if (event.key === 'Escape' && ui.sheet) {
-      setSheet('');
+      setSheet(ui.sheet === 'vista' ? 'panel' : '');
       event.preventDefault();
       return;
     }
@@ -585,6 +659,8 @@ export function mountCanvas(root, options = {}) {
     outline.update(change);
     panel.update(change);
     sim.update(change);
+    preview.update(change);
+    if (change.selection || change.graph) paintPaletteHint();
     // Al desplazar la vista llegan decenas de avisos por segundo: de la barra sólo cambia la cifra del acercamiento.
     if (change.viewport) slot('zoom').textContent = `${Math.round(store.viewport.zoom * 100)} %`;
     if (change.graph || change.history || change.mode || change.overlay || change.context) syncBar();
@@ -603,13 +679,20 @@ export function mountCanvas(root, options = {}) {
     const width = root.getBoundingClientRect().width;
     const narrow = width < NARROW;
     // Con menos de este ancho la barra completa ya no cabe en un renglón: algunos botones quedan sólo con su icono.
-    root.dataset.bar = width < 1320 ? 'tight' : 'full';
+    // En Pasos la barra lleva menos herramientas (sin acomodo ni acercamiento): cabe completa con menos ancho.
+    root.dataset.bar = width < (ui.pane === 'canvas' ? 1320 : 980) ? 'tight' : 'full';
+    // La vista previa va en su propia columna si caben las tres; si no, es una hoja que se abre desde el paso.
+    const previewMode = !narrow && width >= 1000 ? 'column' : 'sheet';
+    if (root.dataset.preview !== previewMode) {
+      root.dataset.preview = previewMode;
+      if (previewMode === 'column' && ui.sheet === 'vista') setSheet('');
+      syncPreview();
+    }
     if (narrow !== ui.narrow || !root.dataset.layout) {
       ui.narrow = narrow;
       root.dataset.layout = narrow ? 'narrow' : 'wide';
       if (!narrow) setSheet('');
-      // Hasta que la persona elija, en angosto se abre el esquema y en ancho el lienzo.
-      if (!ui.picked) setPane(narrow ? 'outline' : 'canvas', false);
+      syncPreview();
     }
     fitOnce();
     minimap.update({ resize: true });
@@ -620,8 +703,9 @@ export function mountCanvas(root, options = {}) {
     observer.observe(canvas);
   }
 
+  root.dataset.side = 'edit';
   setSheet('');
-  setPane('canvas', false);
+  setPane(ui.pane, false);
   measure();
   syncBar();
 
@@ -642,6 +726,7 @@ export function mountCanvas(root, options = {}) {
       win.clearTimeout(ui.flashTimer);
       win.clearTimeout(ui.voiceTimer);
       sim.destroy();
+      preview.destroy();
       panel.destroy();
       outline.destroy();
       minimap.destroy();
@@ -649,7 +734,7 @@ export function mountCanvas(root, options = {}) {
       store.setOverlay({ simNode: null, simTrail: [] });
       root.replaceChildren();
       root.classList.remove('lz');
-      for (const name of ['pane', 'layout', 'sheet', 'readonly', 'bar']) delete root.dataset[name];
+      for (const name of ['pane', 'layout', 'sheet', 'readonly', 'bar', 'side', 'preview']) delete root.dataset[name];
     },
     // Lo que sigue no lo exige el contrato, pero la pantalla anfitriona lo necesita para guardar y para sobrevivir a
     // que la desmonten.
@@ -670,6 +755,14 @@ export function mountCanvas(root, options = {}) {
       store.setContext(context());
     },
     showPane: pane => setPane(pane === 'outline' ? 'outline' : 'canvas'),
+    get pane() {
+      return ui.pane;
+    },
+    // Cómo empieza el recorrido (lo que dice la tarjeta del Inicio en la vista Pasos).
+    setStartText(text) {
+      startText = String(text || '');
+      if (ui.pane === 'outline') outline.refresh();
+    },
     focusNode: goTo,
     // Abre el panel de un paso (o, con null, el de los problemas del recorrido) desde fuera del lienzo.
     openIssues(id) {

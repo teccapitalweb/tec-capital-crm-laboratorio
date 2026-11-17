@@ -15,11 +15,13 @@ import {
   findRef,
   flowResult,
   matchesPattern,
+  nodeSummary,
   norm,
   normalizeGraph,
   normalizeSettings,
   refName,
   tokensIn,
+  typeOf,
 } from '../../../kit/shared/flow-model.js';
 import { attrs, html, render } from '../../../kit/html.js';
 import { icon } from './icons.js';
@@ -884,6 +886,124 @@ export function simNode(state) {
   if (state.waiting) return state.waiting.nodeId;
   const last = [...state.trace].reverse().find(t => t.nodeId);
   return last ? last.nodeId : null;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// «Así lo ve la persona» (vista Pasos): la conversación hasta el paso elegido, sin red y sin estado de prueba
+// ---------------------------------------------------------------------------------------------------------------------
+
+// Pasos que se pintan con lo mismo que usa la prueba local (su texto, sus opciones, sus datos {{…}}): el resultado es
+// fiel. Los de catálogo se arman al enviar con los datos vigentes del curso (que el editor no tiene), y los demás no
+// escriben nada: de ésos se dice en texto plano qué hacen, sin inventar un mensaje.
+const FAITHFUL = new Set(['message', 'buttons', 'list', 'question', 'template', 'end', 'handoff']);
+const CATALOGUE = new Set(['course_card', 'price', 'syllabus', 'schedule', 'enroll', 'choose_course']);
+
+// El camino más corto desde el Inicio hasta un paso: [{nodeId, port}] (port es la salida por la que se sigue al
+// siguiente; el último no tiene). null si ningún camino llega.
+export function pathTo(env, targetId) {
+  const start = env.graph.start;
+  if (!env.byId.has(targetId)) return null;
+  const back = new Map([[start, null]]);
+  const queue = [start];
+  while (queue.length && !back.has(targetId)) {
+    const id = queue.shift();
+    for (const e of env.graph.edges) {
+      if (e.from !== id || back.has(e.to)) continue;
+      back.set(e.to, { from: id, port: e.port });
+      queue.push(e.to);
+    }
+  }
+  if (!back.has(targetId)) return null;
+  const path = [{ nodeId: targetId, port: null }];
+  for (let at = back.get(targetId); at; at = back.get(at.from)) path.unshift({ nodeId: at.from, port: at.port });
+  return path;
+}
+
+// El camino principal: del Inicio, por la primera salida conectada de cada paso, hasta que se acaba o se repite.
+export function mainPath(env) {
+  const path = [];
+  const seen = new Set();
+  let id = env.graph.start;
+  while (id && env.byId.has(id) && !seen.has(id)) {
+    seen.add(id);
+    const node = env.byId.get(id);
+    const edge = env.graph.edges.find(e => e.from === id && !['default', 'timeout'].includes(e.port));
+    path.push({ nodeId: id, port: edge ? edge.port : null });
+    id = edge ? edge.to : null;
+    if (!edge || !node) break;
+  }
+  if (path.length) path[path.length - 1].port = null;
+  return path;
+}
+
+// Lo que la persona contesta para seguir por una salida, o '' si la salida no es una respuesta suya.
+function answerFor(env, s, node, port) {
+  if (!port) return '';
+  if (port.startsWith('opt:')) {
+    const id = port.slice(4);
+    const d = node.data;
+    const option =
+      node.type === 'buttons'
+        ? d.options.find(o => o.id === id)
+        : node.type === 'list'
+          ? d.sections.flatMap(x => x.rows).find(r => r.id === id)
+          : null;
+    const title = option ? (option.label ?? option.title) : '';
+    if (d.saveAs) s.vars[d.saveAs] = title;
+    return title || '(una de las opciones)';
+  }
+  if (node.type === 'template' && node.data.wait && node.data.buttons.length) return node.data.buttons[0];
+  if (node.type === 'question') return port === 'invalid' ? '(una respuesta que no sirve)' : '(su respuesta)';
+  if (node.type === 'choose_course') return '(el curso que le interesa)';
+  return '';
+}
+
+// La conversación hasta `targetId` (o, sin él, por el camino principal). Devuelve {entries, reached}: entries son
+// burbujas como las de la prueba ({who: 'out'|'in'|'note', nodeId, text, options…}) y llevan `current: true` las del
+// paso elegido; reached dice si algún camino llega a él (si no, se muestra sólo ese paso).
+export function previewTo(env, targetId = null) {
+  const path = targetId ? pathTo(env, targetId) : mainPath(env);
+  const reached = Boolean(path);
+  const steps = path || [{ nodeId: targetId, port: null }];
+  const s = {
+    status: 'running',
+    outcome: null,
+    nodeId: null,
+    waiting: null,
+    vars: {},
+    attrs: {},
+    tags: [],
+    courseId: env.courseId,
+    lastText: '',
+    transcript: [],
+    trace: [],
+  };
+  const entries = [];
+  for (const { nodeId, port } of steps) {
+    const node = env.byId.get(nodeId);
+    if (!node) continue;
+    const current = nodeId === targetId;
+    const from = s.transcript.length;
+    if (FAITHFUL.has(node.type)) {
+      s.status = 'running';
+      RUN[node.type](env, s, node);
+    } else if (CATALOGUE.has(node.type)) {
+      say(s, node, {
+        label: typeOf(node.type).label,
+        text: nodeSummary(node, env.catalogue),
+        note: 'Se arma al enviar con los datos vigentes del curso.',
+      });
+    } else if (node.type !== 'start' && node.type !== 'note') {
+      note(s, node, `${typeOf(node.type)?.label || 'Paso'}: ${nodeSummary(node, env.catalogue)}`);
+    }
+    for (const entry of s.transcript.slice(from)) entries.push({ ...entry, current });
+    const said = answerFor(env, s, node, port);
+    if (said) {
+      s.lastText = said;
+      entries.push({ who: 'in', nodeId, text: said, current: false });
+    }
+  }
+  return { entries, reached };
 }
 
 const OUTCOMES = {

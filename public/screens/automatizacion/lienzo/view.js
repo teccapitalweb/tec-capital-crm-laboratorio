@@ -21,6 +21,7 @@ import {
 } from '../../../kit/shared/flow-model.js';
 import { html, render } from '../../../kit/html.js';
 import { svgEl } from './dom.js';
+import { toneOf } from './tones.js';
 import { icon } from './icons.js';
 import { statsText } from './outline.js';
 import { ZOOM } from './store.js';
@@ -151,6 +152,7 @@ export function createView(canvas, store) {
         const def = typeOf(node.type);
         card.el.dataset.group = def ? def.group : 'logica';
         card.el.dataset.type = node.type;
+        card.el.dataset.tone = toneOf(node.type);
         card.el.dataset.level = errors ? 'error' : warnings ? 'warn' : '';
         card.el.style.height = `${nodeSize(node).h}px`;
         render(card.el, cardHtml(node, { errors, warnings, linked, stats, deletable, ctx }));

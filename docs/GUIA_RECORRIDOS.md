@@ -4,20 +4,27 @@ Un **recorrido** es una conversación automática: saluda, manda la información
 
 ## 1. Crear el recorrido
 
-1. Entra a **Automatización**. Verás la lista de recorridos de la marca (si tienes varias, elige la marca arriba).
+1. Entra a **Automatización**. Verás una tarjeta por recorrido de la marca, con su estado, cómo empieza, la versión publicada, cuántas conversaciones van en él y cómo les fue, y sus botones (**Abrir**, **Duplicar**, **Activar** o **Pausar**, **Archivar**). Si tienes varias marcas, elígela arriba; ahí mismo se dice si la marca está atendiendo con recorridos.
 2. Pulsa **Nuevo recorrido**, escribe un nombre (por ejemplo «Venta de curso») y elige **Plantilla de ejemplo «Venta de curso»**. Trae listo: saludo, ficha del curso con su flyer, una espera corta, botones «Sí, me interesa / Ver el temario / Hablar con alguien», inscripción, pregunta del correo y pasar con una persona.
 3. Un mismo recorrido sirve para todos los cursos de la marca: el curso es el de la conversación y su precio, fechas y flyer salen siempre del catálogo vigente.
 
 ## 2. Ajustarlo a tu marca
 
-- En computadora trabajas en el **lienzo** (cajas y flechas) o en el **esquema** (los pasos en orden). En celular se edita en el esquema.
-- Haz clic en un paso para cambiar su texto a la derecha. Para agregar uno, elígelo en la columna «Agregar paso»; si tienes un paso seleccionado, el nuevo queda conectado después de él. En el esquema, cada salida tiene una lista «a dónde lleva»: ahí puedes conectar con otro paso o crear uno nuevo en ese punto.
+El editor abre en **Pasos**, en computadora y en celular. Es la manera rápida de armar un recorrido:
+
+- **A la izquierda, los pasos en orden**, numerados, como los vive la persona. Cada tarjeta tiene el color de su clase de paso, y el color quiere decir siempre lo mismo: **cielo** un mensaje, **menta** botones, **lila** una lista, **durazno** la persona (una pregunta que contesta ella, o pasarla con alguien del equipo), **mantequilla** el catálogo (ficha, precio, temario, fechas, elegir curso), **lima** la inscripción con enlace de pago y **blanco** lo demás (Inicio, esperas, condiciones, datos, etiquetas, Fin…). Si un paso tiene varias salidas (botones, lista, condición), su tarjeta dice a dónde lleva cada una; pulsa el destino para ir a ese paso.
+- **En el centro, el paso que elegiste**, con todos sus campos. En botones y listas, cada opción va en su renglón y, al lado, **a dónde sigue**, pintado con el color del paso de destino; ahí mismo la cambias, la dejas sin conectar o creas un paso nuevo en ese punto. Arriba están **Duplicar** y **Eliminar**.
+- **A la derecha, «Así lo ve la persona»**: un teléfono con la conversación hasta el paso que elegiste, con lo que contesta la persona para llegar ahí. Se arma con lo que hay en pantalla aunque no lo hayas guardado, y no envía nada. Lo que se arma al enviar con los datos vigentes del curso (ficha, precio, fechas…) aparece dicho en palabras, sin inventar el mensaje. En celular (o en una ventana angosta) se abre con el botón **Así lo ve la persona**, abajo del paso.
+- **Agregar paso** (abajo de la lista; en celular, el botón **Agregar** de la barra): primero los mensajes (Mensaje, Botones, Lista, Pregunta, Plantilla de WhatsApp); el resto, con **Ver todos los tipos de paso**. El paso nuevo **siempre queda conectado**: va después del paso que tienes elegido o, si no tienes ninguno, al final del camino. Si lo metes entre dos pasos, queda en medio (A → nuevo → B), y si el nuevo tiene varias opciones (botones, lista), todas llevan a B para que ninguna quede colgando. Cambias a dónde lleva cada una en el centro.
+- **Agregar una fila o un botón** a un paso cuyas opciones llevan todas al mismo paso: la nueva lleva ahí también. Si ya iban a sitios distintos, se queda sin conectar y la tarjeta te lo dice.
+- **Lo que falta, dicho en el propio paso.** Una tarjeta avisa en palabras «Ningún camino llega a este paso», «La salida “Precio” no está conectada…» o que el mensaje está vacío. La pastilla de la barra (por ejemplo «2 avisos») abre la lista completa, cada uno con **Ir al paso**.
+- **Lienzo** (junto a «Pasos», arriba) es el mismo recorrido en cajas y flechas, con todo lo de siempre: arrastrar, conectar, acomodar, acercar y alejar, el minimapa, selección múltiple y atajos de teclado. El editor recuerda la última vista que elegiste mientras la aplicación esté abierta. En el lienzo, arrastrar un tipo de paso al fondo lo deja **suelto** donde lo sueltas (y la tarjeta lo avisa hasta que lo conectes); un clic en la paleta lo agrega conectado, igual que en Pasos.
 - Los tipos que dicen **«Todavía no disponible»** (Suscribir, Servicio externo, «¿Qué curso te interesa?») aún no se pueden publicar; algunas opciones de otros pasos tampoco (por ejemplo, «Material según el curso»), y el paso lo marca en rojo en cuanto la eliges.
 - **Más de tres opciones: Lista.** Hasta 10 filas, en secciones si quieres. En WhatsApp real la persona ve el botón (por ejemplo «Ver cursos») y elige una fila; en el chat de prueba ve las opciones numeradas. En los dos casos puede contestar con el número o escribiendo la opción.
 - **Guardar lo que eligió.** En Botones y en Lista, «Guardar la opción elegida en la variable» guarda el texto del botón o de la fila; lo usas después como `{{var.nombre}}` o en una Condición.
 - **Archivos.** En un Mensaje elige «Archivo» (o «Archivo» como encabezado de Botones) y escoge una imagen JPG o PNG o un PDF de la biblioteca de la marca, o pulsa **Subir archivo**. Sólo aparecen los archivos de esa marca.
 - **Plantilla de WhatsApp.** Elige una plantilla de la marca aprobada por Meta. Sale sólo por el número real de WhatsApp, con los datos de la persona, y es lo único que sale aunque hayan pasado más de 24 horas desde su último mensaje. Si la marca no tiene número real, o el recorrido también va por Instagram o Facebook, la revisión no deja publicarla. En una conversación de prueba no se envía: la conversación pasa a una persona.
-- **Ajustes** (arriba): el nombre, **cómo empieza** (a mano desde el chat, con el primer mensaje, con una palabra clave o con cualquier mensaje) y cuánto esperar antes de dar la conversación por abandonada.
+- **Ajustes** (arriba): el nombre, **cómo empieza** (a mano desde el chat, con el primer mensaje, con una palabra clave o con cualquier mensaje) y cuánto esperar antes de dar la conversación por abandonada. **Ojo:** lo que atiende es la versión publicada. Si el recorrido ya está publicado y cambias cómo empieza o los tiempos, el cambio queda en el borrador: al guardar los ajustes el CRM te lo dice («todavía no en servicio») y te ofrece **Publicar ahora**; mientras no publiques, un aviso amarillo arriba del editor lo recuerda.
 - Pulsa **Guardar** (o Ctrl+S). La barra dice «Sin guardar» mientras haya cambios. Si otra persona guardó el mismo recorrido mientras lo editabas, el CRM te avisa y **no pisa nada**: tus cambios siguen en pantalla y tú eliges.
 
 ## 3. Revisar
@@ -35,7 +42,7 @@ Pulsa **Probar**. Es una conversación de ensayo con **el mismo motor que atende
 
 ## 5. Publicar y activar
 
-1. **Publicar** guarda lo que hay (si falta), lo revisa y te pide confirmar. Lo publicado queda como una **versión** (1, 2, 3…), que ves en la pestaña **Versiones**.
+1. **Publicar** guarda lo que hay (si falta), lo revisa y te pide confirmar. Si quedan **avisos** (una salida sin conectar, un paso al que no llega nadie…), la ventana los nombra uno por uno, con su paso y **Ir al paso**, y el botón dice **Publicar de todos modos**: los avisos no impiden publicar, pero ya no se publica sin verlos. Lo publicado queda como una **versión** (1, 2, 3…), que ves en la pestaña **Versiones**.
 2. Las conversaciones que ya iban en el recorrido **siguen con la versión con la que empezaron**; las nuevas usan la recién publicada.
 3. **Activar** hace que empiece a atender, siempre que la automatización de la marca esté encendida y su asistente responda solo. **Pausar** deja de empezar con gente nueva (y, si lo eliges, detiene las conversaciones en curso). **Archivar** lo retira; su historial se conserva.
 
@@ -54,7 +61,7 @@ Si además ves «El modo real de esta marca está apagado», es sólo informaci�
 En la pestaña **Rendimiento**, elige el periodo (7, 30 o 90 días) y la versión:
 
 - **Empezaron, terminaron, pasaron con una persona, se fueron y en curso.**
-- **Dónde se pierde gente**, lo más débil primero: «El 62 % se va en el paso 4, “¿Te gustaría inscribirte?”». Con **Ver en el recorrido** las cifras aparecen sobre cada paso del lienzo o del esquema.
+- **Dónde se pierde gente**, lo más débil primero: «El 62 % se va en el paso 4, “¿Te gustaría inscribirte?”». Con **Ver en el recorrido** las cifras aparecen sobre cada paso, en Pasos y en el lienzo.
 - **Paso por paso**: cuántas conversaciones llegaron, cuántas siguieron, cuántas se fueron ahí y cuánto tardan en contestar (la mediana).
 - **Cómo terminaron**: terminó el recorrido, pasó con una persona, una persona tomó el chat, dejó de contestar, escribió otra cosa, error.
 

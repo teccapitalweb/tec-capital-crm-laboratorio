@@ -87,6 +87,50 @@ const rectOf = node => ({ x: node.x, y: node.y, ...nodeSize(node) });
 const overlap = (a, b, gap = 0) =>
   a.x < b.x + b.w + gap && b.x < a.x + a.w + gap && a.y < b.y + b.h + gap && b.y < a.y + a.h + gap;
 
+// Dónde cae un paso nuevo que se agrega «después de» otro: {from, port, to} quiere decir que la salida `port` de `from`
+// llevará al paso nuevo, y que el paso nuevo llevará a `to` (el paso al que antes llevaba esa salida, o null).
+//  - Con un paso elegido: su primera salida obligatoria libre; si no tiene libre, la primera (el nuevo se mete en
+//    medio). Si el paso no tiene salidas (Fin, Pasar con una persona, Ir a otro recorrido), el nuevo va justo antes.
+//  - Sin paso elegido (o con una nota): al final del camino principal, que sale del Inicio y sigue la primera salida
+//    conectada de cada paso; se detiene en la primera salida obligatoria libre, antes de un paso sin salidas o al
+//    volver a un paso por el que ya pasó.
+// {from: null} si no hay dónde (un recorrido roto sin Inicio): entonces el paso se agrega suelto.
+export function insertionPoint(graph, afterId = null) {
+  const byId = new Map(graph.nodes.map(n => [n.id, n]));
+  const out = new Map(graph.edges.map(e => [e.from + '\n' + e.port, e.to]));
+  const order = readingOrder(graph);
+  const required = n => portsOf(n).filter(p => !p.optional);
+  const target = (n, p) => out.get(n.id + '\n' + p.id) ?? null;
+  const before = n => {
+    const into = graph.edges.filter(e => e.to === n.id && byId.has(e.from));
+    into.sort((a, b) => order.indexOf(a.from) - order.indexOf(b.from));
+    return into.length ? { from: into[0].from, port: into[0].port, to: n.id } : null;
+  };
+  const anchor = afterId ? byId.get(afterId) : null;
+  if (anchor && typeOf(anchor.type) && anchor.type !== 'note') {
+    const ports = required(anchor);
+    if (ports.length) {
+      const port = ports.find(p => !target(anchor, p)) || ports[0];
+      return { from: anchor.id, port: port.id, to: target(anchor, port) };
+    }
+    const spot = before(anchor);
+    if (spot) return spot;
+  }
+  let current = byId.get(graph.start) || null;
+  let previous = null;
+  const seen = new Set();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    const ports = typeOf(current.type) ? required(current) : [];
+    if (!ports.length) return previous || { from: null, port: null, to: null };
+    const free = ports.find(p => !target(current, p));
+    if (free) return { from: current.id, port: free.id, to: null };
+    previous = { from: current.id, port: ports[0].id, to: target(current, ports[0]) };
+    current = byId.get(previous.to) || null;
+  }
+  return previous || { from: null, port: null, to: null };
+}
+
 export function createStore(options = {}) {
   const limits = { nodes: LIMITS.nodes, edges: LIMITS.edges, variables: LIMITS.variables, ...options.limits };
   const historyLimit = Math.max(1, options.historyLimit ?? HISTORY_LIMIT);
@@ -248,6 +292,55 @@ export function createStore(options = {}) {
     });
   }
 
+  // «Agregar paso» (vista Pasos y clic en la paleta): el paso nuevo nunca queda suelto. Va después del paso elegido o,
+  // sin selección, al final del camino principal; entre A y B queda A → nuevo → B, y si el nuevo tiene varias salidas
+  // (botones, lista, condición…) todas las obligatorias llevan a B, para que ninguna quede colgando. Las salidas
+  // opcionales («Si no elige», «Sin respuesta», «No disponible») se quedan como están: sin conectar tienen un
+  // comportamiento definido. Un solo paso del historial.
+  function insertStep(type, opts = {}) {
+    if (readOnly) return no('read_only');
+    if (!typeOf(type)) return no('type');
+    if (type === 'start') return no('start');
+    const after = opts.after ?? selection.nodes[selection.nodes.length - 1] ?? null;
+    // Una nota no se conecta: se deja junto al paso elegido. Sin Inicio no hay camino: el paso se agrega suelto.
+    if (type === 'note') return addNodeNear(type, { anchor: after ?? undefined });
+    const spot = insertionPoint(graph, after);
+    const from = spot.from ? node(spot.from) : null;
+    if (!from) return addNode(type);
+    if (graph.nodes.length >= limits.nodes) return no('limit', `Un recorrido admite hasta ${limits.nodes} pasos.`);
+    const id = nextId(new Set(graph.nodes.map(n => n.id)));
+    const draft = createNode(type, { id });
+    const row = Math.max(
+      0,
+      portsOf(from).findIndex(p => p.id === spot.port),
+    );
+    const at = freeSpot(from.x + GEOMETRY.width + GEOMETRY.gapX, from.y + row * GEOMETRY.port, nodeSize(draft));
+    let next = { ...graph, nodes: [...graph.nodes, { ...draft, x: at.x, y: at.y }] };
+    const linked = link(next, from.id, spot.port, id);
+    if (!linked.ok) return linked;
+    next = linked.graph;
+    const exits = [];
+    if (spot.to) {
+      for (const p of portsOf(draft).filter(p => !p.optional)) {
+        const out = link(next, id, p.id, spot.to);
+        if (out.ok) {
+          next = out.graph;
+          exits.push(p.id);
+        }
+      }
+    }
+    commit('Agregar paso', next, { select: { nodes: [id], edge: null } });
+    return ok({
+      id,
+      connected: true,
+      from: from.id,
+      port: spot.port,
+      to: spot.to,
+      exits,
+      orphaned: spot.to && !exits.length ? spot.to : null,
+    });
+  }
+
   function setPositions(map, opts = {}) {
     if (readOnly) return no('read_only');
     let changed = false;
@@ -405,12 +498,35 @@ export function createStore(options = {}) {
     const ports = new Set(portsOf(updated).map(p => p.id));
     const edges = graph.edges.filter(e => e.from !== id || ports.has(e.port));
     const pruned = graph.edges.length - edges.length;
-    const next = {
+    let next = {
       ...graph,
       nodes: graph.nodes.map(n => (n === current ? updated : n)),
       edges: pruned ? edges : graph.edges,
     };
-    return { ...commit('Editar paso', next, { key: opts?.coalesce || null }), pruned };
+    // `inherit`: una opción nueva (un botón o una fila más) lleva a donde llevan las demás, si todas llevan al mismo
+    // paso. Así agregar opciones no deja salidas colgando; si las opciones ya iban a sitios distintos, se queda sin
+    // conectar (y el paso lo avisa) porque no hay manera de adivinar a dónde debe ir.
+    let inherited = 0;
+    if (opts?.inherit) {
+      const before = new Set(portsOf(current).map(p => p.id));
+      const options = portsOf(current).filter(p => p.id.startsWith('opt:'));
+      const targets = new Set(options.map(p => edgeFrom(id, p.id)));
+      const [only] = targets;
+      if (targets.size === 1 && only) {
+        for (const p of portsOf(updated).filter(p => p.id.startsWith('opt:') && !before.has(p.id))) {
+          const linked = link(next, id, p.id, only);
+          if (linked.ok) {
+            next = linked.graph;
+            inherited += 1;
+          }
+        }
+      }
+    }
+    return {
+      ...commit('Editar paso', next, { key: opts?.coalesce || null }),
+      pruned,
+      ...(opts?.inherit ? { inherited } : {}),
+    };
   }
 
   const setData = (id, path, value, opts) => writeData(id, data => setIn(data, String(path).split('.'), value), opts);
@@ -669,6 +785,8 @@ export function createStore(options = {}) {
     setSnap,
     addNode,
     addNodeNear,
+    insertStep,
+    insertionPoint: after => insertionPoint(graph, after),
     setPositions,
     moveNodes,
     deleteNodes,
