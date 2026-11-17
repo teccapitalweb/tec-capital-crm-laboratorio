@@ -1,0 +1,358 @@
+/*
+ * Estilos propios de la pantalla «Bandeja» (vistas, contadores y lista). Sólo la composición que el kit no trae,
+ * con el prefijo bj- y siempre con variables de public/tokens.css. Nada se anima al actualizar en vivo.
+ */
+
+.bj-cabeza {
+  align-items: flex-end;
+}
+
+.bj-buscar {
+  flex: 1 1 280px;
+  max-width: 440px;
+}
+
+.bj-cuerpo {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: var(--space-8);
+  align-items: start;
+}
+
+/* ---- Vistas */
+
+.bj-vistas {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+}
+
+.bj-subtitulo {
+  margin: var(--space-3) var(--space-3) 0;
+  color: var(--text-2);
+  font-size: var(--font-min);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bj-vistas__lista {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bj-vista {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 36px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-3);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--font-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.bj-vista:hover {
+  background: var(--soft);
+}
+
+.bj-vista[aria-current='true'] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.bj-vista__nombre {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bj-vista__cuenta {
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.bj-compartida {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--text-2);
+  font-size: var(--font-min);
+}
+
+.bj-sin-guardadas {
+  margin: 0 var(--space-3);
+}
+
+/* En celular, las vistas se abren en una ventana desde el botón «Vistas». */
+.bj-abrir-vistas {
+  display: none;
+}
+
+/* ---- Barra de la lista */
+
+.bj-principal {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.bj-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.bj-titulo {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.bj-titulo h2 {
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.bj-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.bj-orden {
+  width: auto;
+}
+
+.bj-filtros > summary {
+  list-style: none;
+}
+
+.bj-filtros > summary::-webkit-details-marker {
+  display: none;
+}
+
+.bj-filtros[open] > summary {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* Lo que no dice nada (resumen, acciones, aviso, «Cargar más») no ocupa sitio en la rejilla. */
+.bj-principal > [data-slot]:empty {
+  display: none;
+}
+
+.bj-acciones {
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.bj-aviso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+/* ---- Filas */
+
+.bj-lista {
+  padding: var(--space-2);
+}
+
+.bj-filas {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bj-item + .bj-item {
+  border-top: 1px solid var(--line);
+}
+
+.bj-fila {
+  display: flex;
+  gap: var(--space-5);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--space-5);
+  border: 0;
+  border-radius: var(--radius-3);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bj-fila:hover {
+  background: var(--accent-tint);
+}
+
+.bj-avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  font-weight: 650;
+}
+
+.bj-texto {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bj-linea {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.bj-linea--meta,
+.bj-linea--chips {
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.bj-nombre {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-lg);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bj-hora,
+.bj-curso,
+.bj-quien {
+  color: var(--text-2);
+  font-size: var(--font-sm);
+}
+
+.bj-curso {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bj-vista-previa {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--font-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Distintivo de canal: el punto lleva el color de siempre y el nombre lo dice en texto. */
+.bj-canal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.bj-canal::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--text-3);
+}
+
+.bj-canal--whatsapp::before {
+  background: var(--wa);
+}
+
+.bj-canal--instagram::before {
+  background: var(--ig);
+}
+
+.bj-canal--facebook::before {
+  background: var(--fb);
+}
+
+.bj-no-leidos {
+  min-width: 22px;
+  margin-left: auto;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--font-min);
+  font-weight: 650;
+  line-height: 20px;
+  text-align: center;
+}
+
+.bj-vistas--hoja {
+  position: static;
+  padding: 0;
+}
+
+/* ---- Celular y tableta estrecha */
+
+@media (pointer: coarse), (max-width: 680px) {
+  .bj-vista {
+    min-height: var(--touch);
+  }
+}
+
+@media (max-width: 860px) {
+  .bj-cuerpo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bj-cuerpo > .bj-vistas {
+    display: none;
+  }
+
+  .bj-abrir-vistas {
+    display: inline-flex;
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .bj-titulo {
+    display: none;
+  }
+
+  .bj-buscar {
+    max-width: none;
+  }
+}

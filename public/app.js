@@ -125,7 +125,8 @@
   const portalUI = window.createPortalUI({ state, api, esc, icon, icons, toast });
   const agendaUI = window.createAgendaUI({ state, api, esc, icon, icons, toast });
   // Pantallas nuevas (public/screens/, docs/GUIA_PANTALLAS.md): el kit usa esto para montar cada una dentro de #page.
-  if (window.TC) window.TC.host = { state, api, esc, icon, icons, toast, showModal, setView, refresh };
+  if (window.TC)
+    window.TC.host = { state, api, esc, icon, icons, toast, showModal, setView, refresh, openConversation };
   const operationsUI = window.createOperationsUI({
     state,
     api,
@@ -516,6 +517,11 @@
         '<button class="load-more" data-action="more-threads">Cargar más conversaciones</button>',
       );
     icons();
+  }
+  // La bandeja nueva (public/screens/bandeja) abre aquí la conversación elegida: el hilo y el compositor de siempre.
+  function openConversation(id) {
+    setView('inbox');
+    return selectConversation(id).catch(error => toast(error.message));
   }
   async function selectConversation(id) {
     const detail = await api('/api/conversations/' + id);
