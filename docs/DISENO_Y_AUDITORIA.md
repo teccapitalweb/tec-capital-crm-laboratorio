@@ -1,27 +1,158 @@
-# Diseño Niebla: reglas y auditoría visual
+# Diseño Tinta: reglas y auditoría visual
 
-Niebla es la identidad del producto: blanco y gris, transparencias discretas, bordes finos, composición compacta y distintivos de canal reconocibles (WhatsApp, Instagram, Facebook). Desde el 3 nov 2026 lleva además un **acento sobrio** (azul petróleo) y tres tonos de estado; ver la paleta al final. Este documento fija las reglas que la sostienen y la manera de **medir** que se cumplen, para refinar el diseño sin discutir de gusto.
+**Tinta** es la identidad visual del CRM del equipo desde el 17 nov 2026. Sustituye a Niebla (blanco, gris y bordes finos), que se queda sólo en la experiencia del cliente. El dueño del producto la aprobó después de configurar un recorrido a mano en producción y encontrar el interior de los módulos «pobre y difícil de usar»: pidió **más color y más vida**, con dos reglas firmes:
 
-## Reglas
+1. **No es un cambio radical de lo que hace el producto.** Cambia el aspecto, no el funcionamiento.
+2. **No se pierde ni se inventa ninguna opción.** Cada botón, filtro, campo y acción que existía sigue existiendo, con el mismo comportamiento.
 
-- **Contraste de texto:** WCAG AA, mínimo 4,5:1 (3:1 en texto grande). Los grises de texto son dos tokens: `--text-2` (`#4b515c`, cuerpo secundario) y `--text-3` / `--muted` (`#636977`, apoyo y metadatos; 5,5:1 sobre blanco, 4,97:1 sobre el fondo `--bg` y 4,77:1 sobre `--accent-soft`, el fondo tintado más oscuro donde se permite texto gris). No escribir grises de texto a mano en las hojas: usar el token. Sobre fondos tintados más oscuros (columnas del tablero, chips) usar `--text-2` o el color del propio estado.
-- **Tamaño mínimo de letra: 11 px.** No usar 9 ni 10 px.
-- **Excepciones permitidas a propósito (siguen suaves):** iconos decorativos, la casilla de tarea, precios tachados, tareas hechas y el texto de columnas vacías.
-- **Áreas táctiles:** al menos 40 px de alto en pantallas táctiles o de 680 px o menos; en texto-enlace se amplía el área con un pseudo-elemento sin mover la composición.
-- **Foco de teclado:** siempre visible (anillo de 2 px), nunca eliminado.
-- **Movimiento:** sólo al navegar entre vistas (`#page.enter`) y al abrir diálogos. **Nunca** animar en las actualizaciones en vivo (el contenido se vuelve a dibujar cada pocos segundos y parpadearía). Respetar `prefers-reduced-motion`. Sí se permite la **respuesta al cursor**: transiciones de 160 ms de color, borde y sombra al pasar el cursor o pulsar (nada se desplaza ni cambia de tamaño); no se disparan al redibujar.
+Los bocetos aprobados son la especificación visual (fuera de Git, en `data/diseno-canvas/project/`: `FinalMenu`, `FinalMiDia`, `FinalConversaciones`, `FinalRecorridos` y `FinalEditor`). Este documento fija las reglas que los sostienen y la manera de **medir** que se cumplen.
+
+## En una línea
+
+Bloques de color en lugar de tarjetas blancas con borde, esquinas muy redondas, botones en píldora, **tinta negra como protagonista** con un **acento lima**, cifras enormes y Manrope en todo.
+
+## Paleta
+
+Todos los valores viven en `public/tokens.css` y **sólo ahí** (la prueba `test/kit-static.test.mjs` falla si otra hoja vuelve a declarar una variable en `:root`). Contraste medido con la fórmula de WCAG 2.
+
+| Token | Valor | Uso |
+| --- | --- | --- |
+| `--ink` | `#16181d` | Texto principal, botón principal, menú oscuro, filtro o pestaña activa |
+| `--ink-2` / `--ink-3` | `#23262d` / `#2a2d35` | Superficies y líneas sobre tinta (selector de marca, filas del menú oscuro) |
+| `--on-ink` | `#fff` | Texto sobre tinta (17,8:1) |
+| `--on-ink-text` | `#e6e8ee` | Filas del menú oscuro (14,5:1) |
+| `--on-ink-soft` | `#c5c9d3` | Texto secundario sobre tinta (10,7:1; 8,3:1 sobre `--ink-3`) |
+| `--on-ink-muted` | `#aab0bc` | Rótulos sobre tinta (8,2:1; 6,3:1 sobre `--ink-3`) |
+| `--page` (= `--bg`) | `#eceef3` | Fondo de la página |
+| `--surface` | `#fff` | Tarjeta blanca |
+| `--soft` | `#f4f5f8` | Pieza hundida dentro de una tarjeta, botón secundario, buscador |
+| `--line` | `#e3e5ec` | Borde de los campos y separadores |
+| `--text-2` | `#3a3f4a` | Texto secundario |
+| `--text-3` (= `--muted`) | `#4a505c` | Apoyo y metadatos |
+| `--lime` | `#d9f24f` | Acento: llamada a la acción, elemento activo sobre tinta, selección |
+| `--lilac` `--mint` `--sky` `--butter` `--peach` | `#e3dcff` `#d3f4e2` `#d6ebff` `#fff0b8` `#ffe0cf` | Bloques de color |
+| `--rose` | `#f6d9ec` | Pastel de Instagram de los bocetos |
+| `--ok` / `--warn` / `--bad` | `#256b4e` / `#7d5710` / `#a7433a` | Texto de estado; sus fondos son menta, mantequilla y durazno |
+| `--wa` / `--ig` / `--fb` | sin cambios | Distintivos de canal: se reconocen igual que antes |
+
+### Contraste de texto sobre cada fondo
+
+AA exige 4,5:1 en texto normal y 3:1 en texto de 24 px o más (o de 18,66 px en negrita). Peor caso de cada color de texto:
+
+| Texto | Blanco | `--soft` | `--page` | Lila | Menta | Cielo | Mantequilla | Durazno | Lima |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `--ink` | 17,76 | 16,29 | 15,30 | 13,49 | 15,06 | 14,53 | 15,57 | 14,22 | 14,18 |
+| `--text-2` | 10,55 | 9,68 | 9,09 | 8,01 | 8,95 | 8,64 | 9,25 | 8,45 | 8,43 |
+| `--text-3` | 8,10 | 7,43 | 6,98 | 6,15 | 6,87 | 6,63 | 7,10 | 6,48 | 6,46 |
+| `--ok` | 6,38 | 5,85 | 5,50 | 4,84 | 5,41 | 5,22 | 5,59 | 5,11 | 5,09 |
+| `--warn` | 6,48 | 5,94 | 5,58 | 4,92 | 5,49 | 5,30 | 5,68 | 5,19 | 5,17 |
+| `--bad` | 5,99 | 5,49 | 5,16 | 4,55 | 5,08 | 4,90 | 5,25 | 4,79 | 4,78 |
+
+Sobre tinta: blanco 17,76; `--on-ink-text` 14,50; `--on-ink-soft` 10,71; `--on-ink-muted` 8,16; lima 14,18. Todo pasa AA. Regla práctica: **sobre un pastel o sobre lima, el texto es siempre `--ink`** (los bocetos no ponen texto gris ni de color sobre pastel salvo `--bad` en avisos de error).
+
+### Dónde se queda el azul petróleo (`#2f6f8f`)
+
+- En la **paleta de gráficas** (`--ch-seq-4` y vecinos): se validó para daltonismo sobre blanco y Tinta no tocó las gráficas.
+- En el **icono de la app y el favicon** (`favicon.svg`, `icon-192.png`, `icon-512.png`) y en la **pantalla de entrada** (la marca «tc» del panel izquierdo), que comparten clientes y equipo.
+- En la **experiencia del cliente** (`.customer-skin`: el chat con aspecto de app de mensajería en `/`, también cuando el equipo entra en modo «Cliente»), que conserva los colores de Niebla a propósito: `tokens.css` §9 los vuelve a declarar sobre `.customer-skin`.
+- En las **páginas públicas sin guiones** (certificados, encuestas, aviso de privacidad, formulario de aliados), que llevan su CSS en línea en `server/*.mjs` y no cargan `tokens.css`.
+
+En el CRM del equipo ya no se usa: lo que antes era «acento» (`--accent`) ahora apunta a `--ink`, y el fondo del elemento activo (`--accent-soft`) a `--lime`.
+
+## Formas, letra y profundidad
+
+| Token | Valor | Uso |
+| --- | --- | --- |
+| `--radius-card` | 28 px | Tarjetas, paneles, menú, ventanas |
+| `--radius-block-lg` / `--radius-block` | 22 / 20 px | Piezas dentro de una tarjeta (hilo, dato, aviso, tabla) |
+| `--radius-control` | 16 px | Campos de texto y listas desplegables |
+| `--radius-item` | 14 px | Filas del menú, selector de marca |
+| `--radius-pill` | 999 px | Botones, fichas, pestañas, filtros |
+| `--font-title` | 40 px (30 px en celular) | Título de la vista, peso 800, `letter-spacing: -0.03em` |
+| `--font-display` | 56 px (44 px en celular) | Cifras grandes |
+| `--font-2xl` / `--font-section` | 24 / 19 px | Título de tarjeta grande / de tarjeta |
+| `--font-lead` | 15 px | Bajada bajo el título |
+| `--font-lg` | 14 px | Botones, filas y cuerpo |
+| `--font-min` | 11 px | Mínimo absoluto |
+| `--weight-black` / `--weight-bold` | 800 / 700 | Títulos, rótulos y activos / botones |
+| `--control` / `--control-lg` | 44 / 50 px | Alto de botones y campos / llamada a la acción de la página |
+| `--shadow-card` | `none` | Tinta es plana: el color separa, no la sombra |
+| `--shadow-lift`, `--shadow-dialog` | sombras | Sólo lo que flota: menús desplegables, avisos y ventanas |
+
+La letra es **Manrope** (Google Fonts, pesos 400–800, cargada desde `styles.css`; la CSP ya permitía `fonts.googleapis.com` y `fonts.gstatic.com`, no hubo que cambiarla).
+
+## Piezas
+
+- **Botones** (`.btn` y `.k-btn`): píldora de 40 px (44 px en pantallas táctiles; 44 px siempre en el kit), sin borde ni sombra. **Principal** (`.btn.primary`, `.k-btn--primary`): tinta con texto blanco. **Llamada a la acción** (`.btn.accent`, `.k-btn--accent`): lima con texto tinta; una por vista, como mucho. **Secundario** (por omisión): `--soft` dentro de una tarjeta y blanco sobre la página gris (cabecera de la vista, barra superior y barras de herramientas). **Peligro** (`.k-btn--danger`): durazno con texto `--bad`.
+- **Fichas** (`.pill`, `.k-chip`, `.t-chip`): píldora con texto tinta en negrita; el color de fondo dice el estado (menta bien, mantequilla alerta, durazno mal, lima activo, lila o cielo para categorías).
+- **Pestañas y filtros**: píldoras; la activa en tinta con texto blanco, las demás blancas sobre la página o `--soft` dentro de una tarjeta.
+- **Tarjetas**: bloques blancos de 28 px de radio, sin borde ni sombra, con 22 px de relleno. Sin la raya de acento que Niebla ponía delante de los títulos.
+- **Campos**: borde de 2 px `--line`, radio de 16 px, 14 px de letra (16 px en celular dentro del kit, para que iOS no amplíe); al enfocar, borde tinta y anillo lima de 3 px. El buscador es una píldora `--soft`.
+- **Tablas**: caja blanca redondeada, encabezado `--soft` con rótulos en `--text-2` y peso 800.
+- **Ventanas**: radio de 28 px, sin borde, velo de tinta translúcida. **Avisos breves**: tinta con texto blanco, radio de 20 px.
+- **Avisos dentro de la vista** (`.k-notice`, `.info-box`): bloque cielo (información), menta, mantequilla o durazno, sin borde, texto tinta.
+
+## Menú lateral: oscuro y claro
+
+El menú es un **panel flotante** (14 px de margen, 28 px de radio) sobre la página gris, en dos versiones que la persona elige:
+
+- **Oscuro** (por omisión): fondo tinta, filas `--on-ink-text`, rótulos de grupo `--on-ink-muted` con una línea `--ink-3` entre grupos; la fila activa en **lima con texto tinta**; la marca «tc» lima con tinta.
+- **Claro**: fondo blanco, filas tinta, rótulos `--text-2` con un **punto de color por grupo** (Atención naranja, Contactos violeta, Ventas ámbar, WhatsApp verde, Resultados azul, Ajustes y grupos nuevos gris; variables `--dot-*`); la fila activa en **tinta con texto blanco**; la marca tinta con «tc» lima.
+- En los dos: contador de Operación en durazno con tinta; selector Cliente/Equipo en píldora; avatar lila.
+
+**Dónde se cambia:** el botón redondo con el icono de sol y luna junto al selector **Cliente / Equipo**, abajo del menú (en celular, a la derecha de la barra de arriba). Es un interruptor (`aria-pressed`) con el nombre accesible «Menú claro». La elección se guarda en este navegador (`localStorage`, clave `tc-menu-theme`, valores `dark` o `light`, protegido con `try/catch`: sin almacenamiento el menú es oscuro). Sólo aparece en el modo Equipo; el modo Cliente no lo tiene.
+
+Todo lo que el menú hacía sigue igual: los mismos seis grupos en el mismo orden, grupos plegables que se recuerdan (`tc-nav-groups`), la posición de desplazamiento al cambiar de pantalla, el contador, el selector de marca, Cliente/Equipo, la nota del laboratorio, la persona y «Cerrar sesión», el riel de iconos de 681 a 850 px y la barra de arriba en celular.
+
+Los colores del menú son variables propias (`--m-bg`, `--m-text`, `--m-active-bg`…), declaradas en `public/tinta.css` sobre `.sidebar` según `data-menu` de `.workspace`: el tema del menú no cambia nada fuera del menú.
+
+## Reglas medibles
+
+- **Contraste de texto:** WCAG AA, 4,5:1 (3:1 en texto de 24 px o más, o 18,66 px en negrita), **también sobre cada pastel, sobre tinta y sobre lima** (tabla de arriba). No se escriben colores de texto a mano: se usa el token.
+- **Tamaño mínimo de letra: 11 px.**
+- **Excepciones permitidas a propósito:** iconos decorativos; la «f» de Facebook (glifo blanco sobre degradado, que la herramienta no sabe leer); precios tachados; tareas hechas; el texto de columnas vacías.
+- **Áreas táctiles:** al menos 40 px en pantallas táctiles o de 680 px o menos (los bocetos usan 44 px: es el alto de `--control`). En texto-enlace se amplía el área con un pseudo-elemento sin mover la composición.
+- **Foco de teclado:** siempre visible: anillo tinta de 2 px sobre fondos claros, lima sobre tinta (`--ring` cambia dentro del menú oscuro y de `.t-ink`); en los campos, anillo lima de 3 px.
+- **Movimiento:** sólo al navegar entre vistas (`#page.enter`) y al abrir ventanas. Nunca en las actualizaciones en vivo. Respetar `prefers-reduced-motion`. Se permite la respuesta al cursor (160 ms de color, borde y sombra; nada se desplaza ni cambia de tamaño).
 - **Números:** `font-variant-numeric: tabular-nums` en contadores, tablas y métricas.
-- **Escritorio ancho:** el espacio de trabajo ocupa todo el ancho de la ventana (sin tope de 1800 px).
-- **Móvil (390 px):** sin desplazamiento horizontal de la página; tablas anchas se desplazan dentro de su contenedor.
+- **Tamaños de ventana:** funciona a **375 × 812** y a **1366 × 800** (y en ventanas de más de 1800 px de ancho): sin desplazamiento horizontal de la página; las tablas anchas se desplazan dentro de su caja.
 
 ## Dónde vive
 
-- `public/styles.css` define las variables (`--ink`, `--muted`, `--text-2`, `--text-3`, `--line`, `--bg`, los tokens de acento y de estado, colores de canal).
-- `public/polish.css` se carga **al final** y concentra el pulido transversal: selección y barras de desplazamiento, tipografía, transiciones, estados al pasar el cursor y presionar, foco, animación de entrada, bloque de usuario del menú y áreas táctiles. Para ajustes de una pantalla concreta se sigue usando su hoja.
+- `public/tokens.css`: todas las variables (paleta, radios, letra, sombras, alturas) y, en §9, los colores de Niebla que conserva la experiencia del cliente. Es la única hoja que declara variables.
+- `public/tinta.css` (se carga **la última**): la capa transversal que reviste lo que comparten las pantallas de antes (marco, menú, botones, fichas, tarjetas, campos, pestañas, tablas, ventanas, avisos, estados vacíos) y las clases de ayuda `t-…`. Sólo variables de `tokens.css`; los selectores van envueltos en `:where(…)` para no ganar especificidad, así que la regla de una pantalla concreta sigue mandando sobre la pieza genérica. No toca `.customer-skin`.
+- `public/kit/kit.css`: las mismas piezas para las pantallas nuevas (`public/screens/`).
+- `public/styles.css`, `public/polish.css` y las hojas de cada módulo: el diseño de cada pantalla, sin variables propias en `:root`.
+
+## Clases para rediseñar una pantalla por dentro
+
+Para las pantallas de antes (`public/*.js`), en `public/tinta.css`:
+
+| Clase | Qué es |
+| --- | --- |
+| `.t-block` | Bloque (tarjeta) de 28 px de radio y 22 px de relleno; blanco sin modificador |
+| `.t-piece` | Pieza dentro de un bloque (20 px de radio); `--soft` sin modificador |
+| `.t-lilac` `.t-mint` `.t-sky` `.t-butter` `.t-peach` `.t-lime` `.t-soft` `.t-white` | Color de un bloque, una pieza o una ficha (texto tinta) |
+| `.t-ink` | Bloque en tinta: cambia `--text-2`, `--text-3`, `--soft`, `--line` y `--ring` para que lo de dentro se lea, y los enlaces pasan a lima |
+| `.t-eyebrow`, `.t-title`, `.t-section`, `.t-lead` | Rótulo, título de la vista, título de bloque y bajada |
+| `.t-figure` | Cifra grande (56 px, 44 px en celular) |
+| `.t-label` | Rótulo de dato en mayúsculas (CÓMO EMPIEZA) |
+| `.t-chip` | Ficha de estado en píldora; con `.t-mint`, `.t-peach`… |
+| `.t-filters` | Fila de filtros en píldora; el activo con `aria-pressed="true"` o `.active` |
+| `.t-grid` | Rejilla de bloques que se acomoda sola |
+| `.btn.accent` | Botón lima de llamada a la acción |
+
+Para las pantallas del kit: `.k-btn--accent` (lima), `.k-chip--lilac`, `.k-chip--sky`, `.k-chip--ink`, además de las piezas de siempre ya revestidas (`.k-card`, `.k-btn`, `.k-chip`, `.k-tab`, `.k-input`, `.k-notice`, `.k-table`, `.k-dialog`, `.k-tile`).
 
 ## Auditoría reproducible
 
-Medir antes de cambiar y después. En el navegador, con sesión iniciada y datos de práctica variados, pega este código en la consola de cada vista (Mi día, Contactos, Oportunidades, Tareas, Operación, Analítica, Catálogo, Actividad, Mi configuración):
+La auditoría automática está en `test/ui/niebla-audit.mjs` (el nombre del archivo es de Niebla; mide reglas, no colores) y se ejecuta en las pruebas de navegador (`npm run test:ui`) a 1366 × 800 (`escritorio`) y 375 × 812 (`celular`):
+
+- `expectNiebla(page, nombre, testInfo)` mide la vista (`#page`): textos de menos de 11 px (debe ser 0), desbordamiento horizontal (0), textos con contraste insuficiente y, en celular, controles de menos de 40 px (no pueden superar la línea base `test/ui/niebla-baseline.json`, que sólo puede bajar; una pantalla nueva no tiene línea base y su límite es cero).
+- `test/ui/tinta.spec.mjs` comprueba el sistema: fondo de página `#eceef3`, Manrope, título de 40 px (30 px en celular) en peso 800, botón principal tinta en píldora de 40 px o más, campos de 16 px de radio y borde de 2 px, paneles de 28 px; el menú oscuro por omisión con la fila activa en lima, el cambio a claro (fila activa en tinta), que se recuerde al recargar y al cambiar de pantalla, y **la auditoría completa del menú en los dos temas con límite cero** (letra, contraste y, en celular, áreas táctiles); y que la experiencia del cliente conserve sus colores y no tenga el interruptor.
+- `test/kit-static.test.mjs` comprueba sin navegador que `tokens.css` es la única hoja con variables en `:root`, que la paleta tiene los valores de los bocetos y que las hojas del kit y de las pantallas no escriben colores, sombras ni tamaños de letra a mano.
+
+Para medir a mano una vista en el navegador, con sesión iniciada, pega en la consola:
 
 ```js
 (() => {
@@ -30,71 +161,26 @@ Medir antes de cambiar y después. En el navegador, con sesión iniciada y datos
   const bgOf=el=>{let e=el,acc={r:255,g:255,b:255};const st=[];while(e&&e!==document.documentElement){const c=parse(getComputedStyle(e).backgroundColor);if(c&&c.a>0){st.push(c);if(c.a>=.99)break;}e=e.parentElement;}for(const c of st.reverse())acc={r:acc.r*(1-c.a)+c.r*c.a,g:acc.g*(1-c.a)+c.g*c.a,b:acc.b*(1-c.a)+c.b*c.a};return acc;};
   const ratio=(a,b)=>{const x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);};
   let total=0,small=0;const fails=[];
-  const w=document.createTreeWalker(document.querySelector('#page'),NodeFilter.SHOW_TEXT);
+  const w=document.createTreeWalker(document.querySelector('#app'),NodeFilter.SHOW_TEXT);
   while(w.nextNode()){const n=w.currentNode;if(!n.textContent.trim())continue;const el=n.parentElement,cs=getComputedStyle(el);if(!el.getClientRects().length||cs.visibility==='hidden')continue;total++;
     const fg=parse(cs.color),bg=bgOf(el),mix={r:fg.r*fg.a+bg.r*(1-fg.a),g:fg.g*fg.a+bg.g*(1-fg.a),b:fg.b*fg.a+bg.b*(1-fg.a)},cr=ratio(mix,bg),size=parseFloat(cs.fontSize),large=size>=18||(size>=14&&+cs.fontWeight>=700);
     if(size<11)small++;if(cr<(large?3:4.5))fails.push(cr.toFixed(2)+' · '+size+'px · '+n.textContent.trim().slice(0,30));}
-  return {total,under11px:small,contrastFailures:fails.length,sample:fails.slice(0,8)};
+  return {total,under11px:small,contrastFailures:fails.length,sample:fails.slice(0,8),overflowX:document.documentElement.scrollWidth-innerWidth};
 })()
 ```
 
-Criterios de aceptación de un cambio visual: **0 textos bajo 4,5:1** (salvo las excepciones de arriba), **0 textos bajo 11 px**, **sin desplazamiento horizontal a 390 px** (`document.documentElement.scrollWidth - innerWidth === 0`) y sin errores nuevos en la consola. Revisar siempre escritorio (incluida una ventana de más de 1800 px) y celular.
+Criterios de aceptación de un cambio visual: **0 textos bajo 4,5:1** (salvo las excepciones), **0 textos bajo 11 px**, **0 px de desbordamiento** a 375 px y sin errores nuevos en la consola, en los **dos temas del menú**.
 
-## Resultado del refinamiento (31 oct 2026)
+## Resultado de la base de Tinta (17 nov 2026)
 
-Antes: más de 290 textos con contraste de entre 2,6:1 y 4,4:1 (entre ellos encabezados de tabla, subtítulos, avisos y etiquetas de pestañas) y 140 textos de 9–10 px. Después, en las nueve vistas auditadas: **0 y 0**, con la misma identidad visual.
+Medido con la base de pruebas local (`npm run demo`) a 1366 × 800 y 375 × 812, con el menú oscuro y con el claro, en Mi día, Conversaciones con un chat abierto, Operación, Contactos, Tareas, Catálogo, Mi configuración, Analítica, Audiencias y Plantillas (pantallas del kit, con tabla), Automatización (lista, ventana «Nuevo recorrido» y editor), la ventana de perfil, la entrada y el chat del cliente: **0** textos de menos de 11 px, **0 px** de desbordamiento y **0** fallos de contraste fuera de las excepciones (sólo la «f» de Facebook sobre su degradado; antes también fallaba el «tc» del menú sobre su degradado, que ya no existe).
 
-## Paleta de acento sobrio (3 nov 2026)
+## Antes: Niebla (31 oct – 16 nov 2026)
 
-El usuario pidió «un poco de color, normalito, obvio pero no colorido». La respuesta es un único acento y tres estados, siempre como tokens de `public/styles.css`; `public/polish.css` lleva al final la capa transversal «Acento sobrio» que los aplica a lo que debe reconocerse de un vistazo.
+Niebla era blanco y gris, transparencias discretas, bordes finos y composición compacta, con un acento sobrio azul petróleo (`#2f6f8f`) desde el 3 nov y un pulido de oficio el 12 nov. Sus reglas medibles (contraste AA, 11 px, 40 px, movimiento sólo al navegar) siguen vigentes en Tinta sin cambios de umbral; lo que cambió es la paleta, las formas y el peso visual. La experiencia del cliente la conserva.
 
-| Token | Valor | Uso | Contraste medido |
-| --- | --- | --- | --- |
-| `--bg` | `#f1f4f6` | Fondo general y de las páginas de contenido (con un degradado radial muy suave); los paneles y el chat siguen en blanco | `--text-3` 4,97:1 |
-| `--line` | `#e1e6ea` | Bordes (antes `#e9e9ef`) | — |
-| `--soft` | `#f4f6f8` | Superficies hundidas: buscador, encabezados de tabla, contexto del chat | `--text-3` 5,08:1 |
-| `--accent` | `#2f6f8f` | Botón primario, eyebrows, enlaces, contador, barras y gráfica, progresos, foco de teclado, marca «tc» y favicon (degradado `#3a7fa0` → `#255a75`) | blanco 5,56:1 · sobre `--bg` 5,02:1 |
-| `--accent-strong` | `#255a75` | Texto del elemento activo (menú, pestañas, filtros, selector Cliente/Equipo) y hover del botón primario | sobre `--accent-soft` 6,5:1 |
-| `--accent-soft` / `--accent-tint` | `#e8f0f4` / `#f1f6f9` | Fondo del elemento activo, pestaña de canal activa, hilo seleccionado, aviso superior, sugerencia de respuesta | — |
-| `--accent-line` | `#cddbe3` | Borde del elemento activo y del compositor enfocado | — |
-| `--ok` / `--ok-soft` / `--ok-line` | `#256b4e` / `#e7f4ed` / `#cfe6d9` | Bueno: chips `good`/`ok`, insignia `ready`, sesión pagada, progreso terminado, tarea hecha | 5,66:1 |
-| `--warn` / `--warn-soft` / `--warn-line` | `#7d5710` / `#fcf3df` / `#efdfb8` | Alerta: chips `high`/`warn`, etiqueta ámbar, ventana de servicio cerrada | 5,86:1 |
-| `--bad` / `--bad-soft` / `--bad-line` | `#a7433a` / `#fcecea` / `#f2d2ce` | Urgente: chip `urgent`, etiqueta roja, errores de formulario e importación, vencidas, envíos fallidos | 5,18:1 |
+## Ideas que se dejaron fuera a propósito
 
-Las páginas públicas sin scripts (`/verificar/<folio>`, `/encuesta/<token>`) no cargan las hojas de `public/`: llevan los mismos valores escritos en su CSS en línea (`server/certificates.mjs`, `server/surveys.mjs`). Si cambia un token, cambiarlo también ahí.
-
-Lo que **no** cambia: los colores y degradados de canal (`--wa`, `--ig`, `--fb`), la tinta de títulos y cuerpo, la composición y las reglas medibles de arriba. Única excepción medida: el **texto** del nombre del canal en el encabezado del chat (`WhatsApp`) usa `#04794a`, un tono más oscuro del verde del distintivo, porque `#06985c` sobre blanco da 3,7:1; el distintivo no cambia. Burbujas salientes del chat: degradado `#eef5f8` → `#e3eef3` (tinta negra, sin texto gris encima).
-
-**Resultado (3 nov 2026):** auditoría en escritorio (1366 px) y celular (375 px) sobre entrada, Mi día, Conversaciones con chat abierto, Contactos, Oportunidades, Tareas, Equipo, Mi configuración, Operación (Cola, Coordinación, Finanzas, Conectores), Analítica, Presentación, Actividad, Catálogo y la experiencia del cliente: **0** textos bajo 11 px (se corrigieron dos de 8 px en celular: selector Cliente/Equipo e insignia «Curso activo»), **0** fallos de contraste fuera de las excepciones (la herramienta no lee degradados: el «tc» de la marca y la «f» de Facebook son glifos blancos sobre degradado; las columnas vacías del tablero siguen siendo una excepción declarada) y **0 px** de desbordamiento horizontal. Los encabezados del tablero de Oportunidades pasaron a `--text-2` para mantener AA sobre la columna tintada.
-
-## Menú por grupos y Operación por áreas (6 nov 2026)
-
-Cuando una lista de navegación pasa de ~8 elementos se agrupa por tarea, no se deja plana ni se esconde tras un desplazamiento horizontal. Reglas que quedaron: **grupos con título de 11 px** en la barra lateral (en el riel de 70 px el título se oculta y queda una línea divisoria; en celular los grupos se aplanan en la barra de iconos); **máximo ~5 pestañas por área** en Operación; un área sin pestañas visibles para ese rol no se dibuja; la fila de áreas mide 40 px de alto y el área táctil de las filas del menú es de 40 px aunque la fila mida 32–36 (pseudo-elemento, como en las pestañas). Si se agrega una pestaña nueva a Operación, se coloca en el área que corresponde en `opsTabs()` (`public/operations.js`), no al final de una fila.
-
-## Auditoría de celular, ronda 3 (7 nov 2026)
-
-Se recorrieron **todas** las pantallas del equipo (12 vistas y las 4 áreas de Operación con todas sus pestañas) a 375 px y a escritorio con un guion que mide, por pantalla: desbordamiento horizontal de la página, letra menor de 11 px, controles de menos de 36 px de alto y elementos que se salen de su contenedor sin desplazamiento propio. **Escritorio: sin hallazgos.** **Celular, hallazgos corregidos** (sólo CSS, en `public/polish.css`): tachar tarea (26 px), botones de ícono (34 px), casillas y campos de horas de «Horarios y reparto» (19–32 px), resúmenes desplegables de Conectores (22 px) y la tabla de Históricos, que se salía de su panel. Las tablas de datos anchas (Mis resultados, Finanzas, Históricos) se **desplazan dentro de su panel** por diseño. Para repetir la auditoría: mismo guion en la consola del navegador con el viewport en 375×812 y en escritorio.
-
-## Avisos (11 nov 2026)
-
-Los avisos breves (`toast`) se muestran en la capa superior del navegador (`popover="manual"`), por encima de las ventanas, **arriba a la derecha** en computadora y **arriba a lo ancho** en celular. No bloquean clics. Al guardar cambios de algo existente en Catálogo la ventana se cierra; si falta un paso (algo recién creado o un borrador por aprobar), sigue abierta.
-
-## Pulido de diseño (12 nov 2026)
-
-Pedido del usuario: «que se vea más profesional». Se mantuvo Niebla y se afinó el oficio. Todo vive en un bloque marcado al final de `public/polish.css` y en `tintAvatars()` de `public/app.js`; sin cambios de servidor ni de esquema. No toca la vista del cliente (`.customer-skin`).
-
-- **Chat del equipo, más conversación:** se compactaron la cabecera, la fila de interés, el resumen y la barra de ventana, y el cuadro de escribir arranca en dos renglones. En 1366 × 800 la conversación pasa de 167 px a 238 px de alto (+43 %). Los botones de apoyo (Equipo, Etiquetas, Respuestas…) son discretos, sin borde hasta pasar el cursor.
-- **Personas con color:** cada avatar toma uno de seis tonos suaves de Niebla según sus iniciales (`data-h` 0–5), siempre el mismo para la misma persona. Contraste medido de 5,1:1 a 7,1:1. La insignia del canal se redujo para no tapar las iniciales.
-- **Profundidad:** una sola sombra para tarjetas y paneles (`--shadow-card`) y otra al pasar el cursor (`--shadow-lift`).
-- **Cifras:** números con más peso y el icono en una pastilla.
-- **Menú:** la sección activa es una ficha blanca con una marca de acento a la izquierda (en pantallas de más de 850 px).
-- **Tablero de oportunidades:** un punto de color por etapa.
-- **Botones:** el principal con relieve; al pulsar se hunde un tono. Las filas de las tablas responden al cursor.
-- **Detalles:** barras de desplazamiento finas, color de selección y diálogos más despegados del fondo.
-
-Auditoría del 12 nov, en 1366 px y 375 px (Mi día, Conversaciones con chat abierto, Contactos, Oportunidades y vista del cliente): 0 textos de menos de 11 px, 0 px de desbordamiento, sin controles de menos de 40 px de alto en celular dentro del chat, contraste del botón principal 5,5:1. 204 pruebas aprobadas.
-
-## Ideas de diseño que se dejaron fuera a propósito
-
-- **Modo oscuro:** cambia la identidad Niebla; se haría como decisión explícita (tokens de color por tema), no como pulido.
-- **Rediseño de componentes o de la composición:** el diseño compacto ya está validado; los cambios grandes requieren la aprobación visual del usuario.
+- **Modo oscuro de toda la aplicación:** sólo el menú tiene versión oscura. Un tema oscuro completo pide tokens por tema y una revisión de cada pantalla.
+- **Rediseño del interior de Mi día, Conversaciones, la lista de recorridos y el editor:** lo hacen después otras personas sobre esta base; aquí sólo heredan las piezas y la paleta.
+- **Pasar la experiencia del cliente y las páginas públicas a Tinta:** no forma parte de lo aprobado.
