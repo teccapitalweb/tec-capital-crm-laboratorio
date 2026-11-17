@@ -51,7 +51,20 @@ import { CONSENTIMIENTOS, ETIQUETAS, fakeFetch, touchElsewhere } from './datos.j
 // Definiciones (lo que en una pantalla real describe sus datos)
 // ---------------------------------------------------------------------------------------------------
 
-const TONO_CONSENTIMIENTO = { opted_in: 'k-chip--ok', unknown: '', opted_out: 'k-chip--bad' };
+// Colores de estado comunes a las pantallas (docs/GUIA_PANTALLAS.md): bien menta, mal durazno, sin decidir gris.
+const TONO_CONSENTIMIENTO = { opted_in: 'k-chip--ok', unknown: 'k-chip--draft', opted_out: 'k-chip--bad' };
+
+/** La tabla de colores de estado, con un ejemplo de cada uno: la misma en todas las pantallas. */
+const FICHAS_DE_ESTADO = [
+  ['k-chip--ok', 'Activa · Aprobada · Entregada'],
+  ['k-chip--accent', 'En curso · Enviando'],
+  ['k-chip--sky', 'Programada · En revisión de Meta'],
+  ['k-chip--warn', 'En pausa · Necesita atención'],
+  ['k-chip--bad', 'Falló · Rechazada · Baja'],
+  ['k-chip--draft', 'Borrador · Archivada · Sin respuesta'],
+  ['k-chip--lilac', 'Tipo o categoría · Etiqueta'],
+  ['k-chip--wa', 'De WhatsApp · Sin número'],
+];
 /** Número de color (1 a 6 de la paleta de gráficas) de cada resultado de un envío. */
 const COLOR_RESULTADO = { read: 3, delivered: 1, failed: 2 };
 const rotulo = (lista, valor) => lista.find(item => item.value === valor)?.label ?? valor;
@@ -118,6 +131,7 @@ function resumen(panel, { api }) {
     const tarjetas = [
       tile({
         label: 'Mensajes recibidos',
+        tone: 'sky',
         value: recibidos,
         delta: cambio(recibidos, anteriores),
         period: 'los 14 días anteriores',
@@ -125,6 +139,7 @@ function resumen(panel, { api }) {
       }),
       tile({
         label: 'Mensajes enviados',
+        tone: 'lilac',
         value: total(datos.sent),
         delta: cambio(total(datos.sent), datos.sentPrevious),
         period: 'los 14 días anteriores',
@@ -133,12 +148,18 @@ function resumen(panel, { api }) {
       // Subir aquí es malo: goodWhenUp en false pone el tono de alerta, siempre con flecha y frase.
       tile({
         label: 'Envíos fallidos',
+        tone: 'peach',
         value: datos.failed,
         delta: datos.failedChange,
         goodWhenUp: false,
         period: 'los 14 días anteriores',
       }),
-      tile({ label: 'Primera respuesta', value: datos.firstReply, hint: 'Mediana en horario de atención' }),
+      tile({
+        label: 'Primera respuesta',
+        value: datos.firstReply,
+        hint: 'Mediana en horario de atención',
+        tone: 'mint',
+      }),
     ];
     const gratis = meter({
       label: 'Respuestas gratis del mes',
@@ -152,7 +173,15 @@ function resumen(panel, { api }) {
       panel,
       html`<div class="k-stack">
         <div class="k-tiles">${tarjetas.map(tarjeta => tarjeta.html)}</div>
-        <div class="k-card ej-medidor">${gratis.html}</div>
+        <div class="ej-fila">
+          <div class="k-card ej-medidor">${gratis.html}</div>
+          <section class="k-card ej-fichas" aria-label="Fichas de estado">
+            <h2 class="k-card__title">Fichas de estado</h2>
+            <ul class="k-row ej-fichas__lista">
+              ${FICHAS_DE_ESTADO.map(([tono, texto]) => html`<li class="${['k-chip', tono]}">${texto}</li>`)}
+            </ul>
+          </section>
+        </div>
         <div class="k-grid k-grid--wide">
           ${['g-linea', 'g-columnas', 'g-barras', 'g-embudo', 'g-partes', 'g-calor'].map(ranura => html`<div class="k-card"><div data-slot="${ranura}"></div></div>`)}
         </div>
@@ -270,8 +299,9 @@ function contactos(panel, { api, ctx }) {
   render(
     panel,
     html`<div class="k-stack">
-      <div class="k-card ej-busqueda">
-        <div class="k-field">
+      <div class="ej-busqueda">
+        <div class="k-filterbar">
+          <div class="k-field">
           <label class="k-label" for="${ctx.uid('buscar')}">Buscar</label>
           <input
             class="k-input"
@@ -283,11 +313,12 @@ function contactos(panel, { api, ctx }) {
             maxlength="100"
             autocomplete="off"
           />
-          <p class="k-hint">Escribe «error» para ver cómo se muestra un fallo del servidor.</p>
+          </div>
         </div>
+        <p class="k-hint">Escribe «error» para ver cómo se muestra un fallo del servidor.</p>
         <details class="ej-filtros">
-          <summary class="k-btn">Filtros</summary>
-          <div data-slot="condiciones"></div>
+          <summary class="k-filter">Filtros</summary>
+          <div class="k-card" data-slot="condiciones"></div>
         </details>
         <p class="k-hint ej-resumen" data-slot="resumen" role="status"></p>
       </div>
@@ -315,7 +346,7 @@ function contactos(panel, { api, ctx }) {
         id: 'tags',
         label: 'Etiquetas',
         cell: contacto =>
-          html`<span class="k-row">${contacto.tags.map(etiqueta => html`<span class="k-chip">${rotulo(ETIQUETAS, etiqueta)}</span>`)}</span>`,
+          html`<span class="k-row">${contacto.tags.map(etiqueta => html`<span class="k-chip k-chip--lilac">${rotulo(ETIQUETAS, etiqueta)}</span>`)}</span>`,
       },
       {
         id: 'consent',
