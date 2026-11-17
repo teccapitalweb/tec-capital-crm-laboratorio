@@ -1,19 +1,40 @@
 /*
  * Pantalla «Plantillas de WhatsApp»: sólo la composición que el kit no trae, con el prefijo pla- y variables de
- * public/tokens.css. La vista previa es una burbuja neutra con el estilo Niebla: no imita la interfaz de ninguna
- * aplicación.
+ * public/tokens.css. La vista previa es una burbuja neutra: no imita la interfaz de ninguna aplicación.
+ * Tinta: el estado de la cuenta en piezas de color (la cifra de plantillas en lima), los filtros en la barra de la
+ * página, la tabla en su tarjeta y la vista previa como un bloque redondo.
  */
 
-.pla-filtros {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--space-4);
-  align-items: end;
+.pla-estado {
+  grid-template-columns: minmax(170px, 1fr) minmax(170px, 1fr) minmax(0, 2fr);
+}
+
+.pla-cifra {
+  color: var(--ink);
+  font-size: var(--font-title);
+  font-weight: var(--weight-black);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.pla-cifra__de {
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0;
+}
+
+.pla-estado__texto .k-piece__value {
+  font-size: var(--font-md);
+}
+
+.pla-estado .k-piece:not([data-tone]) {
+  background: var(--surface);
 }
 
 .pla-nombre {
   color: var(--ink);
-  font-weight: 600;
+  font-weight: var(--weight-black);
 }
 
 .pla-acciones {
@@ -50,36 +71,36 @@
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: var(--space-3);
   align-items: end;
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--line);
+  padding: var(--space-5);
+  border-radius: var(--radius-block);
+  background: var(--soft);
 }
 
 .pla-vista {
   display: grid;
   gap: var(--space-3);
   margin: 0;
-  padding: var(--space-5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-4);
+  padding: var(--space-7);
+  border: 0;
+  border-radius: var(--radius-block-lg);
   background: var(--soft);
 }
 
 .pla-burbuja {
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-3);
+  padding: var(--space-5) var(--space-6);
+  border: 0;
+  border-radius: var(--radius-block);
   background: var(--surface);
-  box-shadow: var(--shadow-1);
-  color: var(--text-1);
+  color: var(--ink);
   font-size: var(--font-md);
 }
 
 .pla-encabezado {
   margin: 0;
   color: var(--ink);
-  font-weight: 600;
+  font-weight: var(--weight-black);
 }
 
 .pla-imagen {
@@ -87,15 +108,15 @@
   width: 100%;
   max-height: 180px;
   object-fit: cover;
-  border-radius: var(--radius-2);
+  border-radius: var(--radius-4);
 }
 
 .pla-archivo {
   margin: 0;
   padding: var(--space-4);
-  border: 1px dashed var(--line);
-  border-radius: var(--radius-2);
-  color: var(--text-2);
+  border-radius: var(--radius-4);
+  background: var(--sky);
+  color: var(--ink);
   font-size: var(--font-sm);
 }
 
@@ -119,13 +140,23 @@
 .pla-boton {
   display: block;
   padding: var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-3);
+  border: 0;
+  border-radius: var(--radius-pill);
   background: var(--surface);
-  color: var(--accent-strong);
-  font-size: var(--font-sm);
-  font-weight: 600;
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
   text-align: center;
+}
+
+@media (max-width: 900px) {
+  .pla-estado {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pla-estado__texto {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 720px) {
@@ -135,5 +166,11 @@
 
   .pla-lado {
     position: static;
+  }
+}
+
+@media (max-width: 680px) {
+  .pla-cifra {
+    font-size: var(--font-2xl);
   }
 }
