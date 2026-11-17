@@ -1,18 +1,20 @@
 /*
  * Pantalla «Salud de WhatsApp»: sólo la composición que el kit no trae, con el prefijo sal- y variables de
- * public/tokens.css.
+ * public/tokens.css. Tinta: cada dato es una pieza con su rótulo (el límite diario en cielo), el estado y la
+ * calidad de cada número en fichas grandes y el historial como filas redondas. El color de una pieza nunca dice
+ * si el dato es bueno o malo: eso lo dicen las fichas, con su texto.
  */
 
 .sal-numeros {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--gap-page);
 }
 
 .sal-numero {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-5);
   min-width: 0;
 }
 
@@ -26,62 +28,55 @@
 
 .sal-titulo h2 {
   margin: 0;
-  font-size: var(--font-xl);
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
 .sal-datos {
   display: grid;
-  grid-template-columns: minmax(160px, auto) minmax(0, 1fr);
-  gap: var(--space-2) var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: var(--space-3);
   margin: 0;
 }
 
-/* en las tarjetas de número, angostas, la etiqueta no se come la mitad */
-.sal-numero .sal-datos {
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-}
-
-.sal-datos dt {
-  color: var(--text-2);
-}
-
-.sal-datos dd {
+.sal-dato dd {
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
+.sal-dato--ancho {
+  grid-column: 1 / -1;
+  --k-fill: var(--surface);
+}
+
+.sal-dato--ancho .k-chip--ok,
+.sal-dato--ancho .k-chip--bad {
+  font-size: var(--font-md);
+}
+
 .sal-historial {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .sal-historial li {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--line);
+  padding: var(--space-5) var(--space-7);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
 }
 
-.sal-historial li:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-@media (max-width: 520px) {
-  .sal-datos,
-  .sal-numero .sal-datos {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-1);
-  }
-
-  .sal-datos dd {
-    margin-bottom: var(--space-2);
-  }
+.sal-historial li .k-muted {
+  color: var(--text-2);
+  font-size: var(--font-sm);
 }
