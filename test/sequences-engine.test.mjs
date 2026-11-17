@@ -901,3 +901,37 @@ test('migración: una base anterior se actualiza conservando sus datos y repetir
     again.close();
   }
 });
+
+test('el ejemplo de la guía: día siguiente, a los tres días, dos días antes y el mismo día (sábado, «De día»)', async t => {
+  // Horario de atención de lunes a viernes; la secuencia envía «De día» para alcanzar el sábado.
+  const L = await lab(t, { hours: [null, [540, 1080], [540, 1080], [540, 1080], [540, 1080], [540, 1080], null] });
+  const start = zonedInstant({ year: 2026, month: 11, day: 21 }, 18, 0, ZONE);
+  L.db.prepare("UPDATE editions SET starts_at=?, status='published' WHERE id='edition-aves'").run(start);
+  const seq = L.sequence('globalvet', {
+    steps: [
+      text(1, 'days', 'Uno'),
+      text(3, 'days', 'Dos'),
+      { timing: { base: 'edition_start', daysBefore: 2, at: '10:00' }, send: { kind: 'text', text: 'Tres' } },
+      { timing: { base: 'edition_start', daysBefore: 0, at: '09:00' }, send: { kind: 'text', text: 'Cuatro' } },
+    ],
+    settings: { sendHours: 'daytime' },
+  });
+  const p = L.person();
+  L.enroll(p, seq);
+  // El reloj avanza de media en media hora hasta el sábado por la noche.
+  const end = zonedInstant({ year: 2026, month: 11, day: 21 }, 23, 0, ZONE);
+  for (let x = T0; x <= end; x += 30 * MINUTE) await L.at(x);
+  const when = m =>
+    new Intl.DateTimeFormat('es-MX', { timeZone: ZONE, weekday: 'long', hour: 'numeric', hourCycle: 'h23' }).format(
+      m.created_at,
+    );
+  assert.deepEqual(
+    L.messagesOf(p.conv).map(m => [m.text, when(m)]),
+    [
+      ['Uno', 'martes, 10'],
+      ['Dos', 'jueves, 10'],
+      ['Tres', 'jueves, 10'],
+      ['Cuatro', 'sábado, 09'],
+    ],
+  );
+});
