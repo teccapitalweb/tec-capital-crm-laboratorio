@@ -659,7 +659,7 @@
 .workspace:not(.customer-skin) .chat {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  grid-template-rows: auto auto auto auto minmax(120px, 1fr) auto;
+  grid-template-rows: max-content max-content max-content max-content minmax(120px, 1fr) max-content;
   grid-template-areas:
     'head head'
     'ctx ctx'
@@ -698,7 +698,7 @@
     'win win'
     'hist hist'
     'bottom bottom';
-  grid-template-rows: auto auto auto auto auto minmax(120px, 1fr) auto;
+  grid-template-rows: max-content max-content max-content max-content max-content minmax(120px, 1fr) max-content;
 }
 .workspace:not(.customer-skin) .chat > .chat-window {
   grid-area: win;
@@ -1463,35 +1463,181 @@
   pointer-events: none;
 }
 
-/* ============ 8. Pantallas medianas ============ */
+/* ============ 7b. Chat denso: más conversación a la vista (computadora y tableta) ============ */
 
-@media (max-width: 1280px) {
-  /* El resumen baja a su propia fila, debajo del estado */
-  .workspace:not(.customer-skin) .chat > .conv-summary {
-    justify-self: stretch;
-    padding-left: 0;
+/* El chat es una superficie de trabajo: huecos de 8 px por dentro, pestañas de 44 px y nada de filas que se
+   puedan juntar. En pantallas anchas la cabecera lleva también el resumen; el interés con su etapa y la barra de
+   estado comparten una fila; quién atiende y las herramientas comparten otra (las herramientas se deslizan de
+   lado si no caben); y el compositor es una sola fila mientras el borrador cabe en una línea. */
+@media (min-width: 681px) {
+  .workspace:not(.customer-skin) .sources {
+    padding-top: 0;
   }
-  .workspace:not(.customer-skin) .chat,
-  .workspace:not(.customer-skin) .chat:has(.sum-card[open]) {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto auto auto minmax(120px, 1fr) auto;
-    grid-template-areas: 'head' 'ctx' 'lc' 'sum' 'win' 'hist' 'bottom';
+  .workspace:not(.customer-skin) .source-tab {
+    min-height: var(--control);
   }
-  .workspace:not(.customer-skin) .chat-head-tools .icon-btn {
+  .workspace:not(.customer-skin) .source-tab .provider {
+    width: 32px;
+    height: 32px;
+  }
+  .workspace:not(.customer-skin) .inbox {
+    gap: var(--space-5);
+    padding-top: var(--space-4);
+    padding-bottom: var(--space-6);
+  }
+  .workspace:not(.customer-skin) .chat {
+    row-gap: var(--space-3);
+    padding: var(--space-5) var(--space-6);
+  }
+  .workspace:not(.customer-skin) .chat-head {
     padding: 0;
   }
-  /* Compositor en dos filas: el texto con «Enviar» al lado y, debajo, adjuntar, ampliar, Programar, Agendar cita
-     y el canal en una fila que se desliza (ninguna herramienta se pierde) */
+  .workspace:not(.customer-skin) .chat-person .identity {
+    width: 40px;
+    flex-basis: 40px;
+  }
+  .workspace:not(.customer-skin) .chat-person .avatar {
+    width: 40px;
+    height: 40px;
+    font-size: var(--font-md);
+  }
+  .workspace:not(.customer-skin) .chat-person strong {
+    font-size: var(--font-lead);
+  }
+  .workspace:not(.customer-skin) .chat-person small {
+    margin-top: 0;
+    font-size: var(--font-sm);
+  }
+  .workspace:not(.customer-skin) .chat-head-tools .icon-btn {
+    height: var(--touch);
+    min-width: var(--touch);
+  }
+  /* Interés: una sola pieza de 44 px; el texto se recorta a dos líneas */
+  .workspace:not(.customer-skin) .chat-context {
+    flex-wrap: nowrap;
+    min-height: var(--control);
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-6);
+    font-size: var(--font-md);
+  }
+  .workspace:not(.customer-skin) .chat-context > span {
+    flex: 1 1 auto;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.3;
+  }
+  .workspace:not(.customer-skin) .chat-context select {
+    flex: 0 0 auto;
+    max-width: 200px;
+    min-height: 36px;
+  }
+  .workspace:not(.customer-skin) .lc-bar,
+  .workspace:not(.customer-skin) .chat > .conv-summary {
+    padding: 0;
+  }
+  .workspace:not(.customer-skin) .chat > .conv-summary {
+    align-self: center;
+  }
+  /* Aviso de la ventana de 24 h y anuncio: una franja compacta, con «Enviar plantilla» */
+  .workspace:not(.customer-skin) .chat-window {
+    margin: 0;
+    padding: 2px 2px 2px var(--space-6);
+    min-height: var(--control);
+    font-size: var(--font-sm);
+  }
+  .workspace:not(.customer-skin) .chat-window .pill {
+    padding: 2px 10px;
+  }
+  .workspace:not(.customer-skin) .history {
+    gap: var(--space-4);
+    margin: 0;
+    padding: var(--space-5) var(--space-6);
+  }
+
+  /* Pie: quién atiende y las herramientas en una fila; las listas y el compositor debajo */
+  .workspace:not(.customer-skin) .chat-bottom {
+    flex-flow: row wrap;
+    align-items: center;
+    gap: var(--space-3);
+    max-height: none;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > * {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .typing {
+    height: auto;
+    min-height: 0;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .typing:empty {
+    display: none;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .conv-scheduled {
+    display: block;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .conv-scheduled:empty {
+    display: none;
+  }
+  .workspace:not(.customer-skin) .chat-bottom .sch-list {
+    max-height: 112px;
+    margin: 0;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .reply-suggestion {
+    margin: 0;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .assist-row {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    max-width: 50%;
+    padding: 0;
+    font-size: var(--font-sm);
+  }
+  .workspace:not(.customer-skin) .assist-label {
+    flex: 0 1 auto;
+    min-width: 0;
+    line-height: 1.3;
+  }
+  .workspace:not(.customer-skin) .assist-actions {
+    flex: 0 0 auto;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .quick-replies {
+    flex: 1 1 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin: 0;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .quick-replies button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .workspace:not(.customer-skin) .chat-bottom::before {
+    content: none;
+  }
+}
+
+/* Computadora y tableta: compositor en una fila (texto, herramientas, el canal y Enviar); crece con el texto o al
+   ampliarlo, y las herramientas se deslizan de lado si no caben */
+@media (min-width: 681px) {
   .workspace:not(.customer-skin) .compose,
   .workspace:not(.customer-skin) .compose:focus-within {
     display: grid;
+    grid-template-columns: minmax(200px, 1fr) minmax(0, max-content) auto;
+    grid-template-areas:
+      'prev prev prev'
+      'text tools send';
+    gap: var(--space-2) var(--space-3);
+    align-items: end;
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-7);
+  }
+  .workspace:not(.customer-skin) .compose.compose-tall {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       'prev prev'
-      'text send'
-      'tools tools';
-    gap: var(--space-2) var(--space-3);
-    align-items: end;
+      'text text'
+      'tools send';
   }
   .workspace:not(.customer-skin) .compose .attachment-preview {
     grid-area: prev;
@@ -1499,6 +1645,9 @@
   .workspace:not(.customer-skin) .compose #message-input {
     grid-area: text;
     align-self: center;
+    min-height: var(--control);
+    padding: 11px 0;
+    line-height: 1.45;
   }
   .workspace:not(.customer-skin) .compose-footer {
     display: contents;
@@ -1513,13 +1662,119 @@
     flex: 0 0 auto;
   }
   .workspace:not(.customer-skin) .compose-footer small {
-    white-space: nowrap;
+    max-width: 96px;
+    line-height: 1.3;
   }
   .workspace:not(.customer-skin) .compose #send-button {
     grid-area: send;
     margin: 0;
   }
+}
+/* Pantallas anchas: el estado sube a la cabecera y el resumen va junto al interés */
+@media (min-width: 1281px) {
+  .workspace:not(.customer-skin) .chat {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: max-content max-content max-content minmax(120px, 1fr) max-content;
+    grid-template-areas:
+      'head lc'
+      'ctx sum'
+      'win win'
+      'hist hist'
+      'bottom bottom';
+    column-gap: var(--space-3);
+  }
+  .workspace:not(.customer-skin) .chat:has(.sum-card[open]) {
+    grid-template-rows: max-content max-content max-content max-content minmax(120px, 1fr) max-content;
+    grid-template-areas:
+      'head lc'
+      'ctx ctx'
+      'sum sum'
+      'win win'
+      'hist hist'
+      'bottom bottom';
+  }
+  .workspace:not(.customer-skin) .chat > .conv-summary {
+    justify-self: end;
+    max-width: 330px;
+  }
+  .workspace:not(.customer-skin) .chat:has(.sum-card[open]) > .conv-summary {
+    justify-self: stretch;
+    max-width: none;
+  }
+  .workspace:not(.customer-skin) .lc-bar {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+  .workspace:not(.customer-skin) .chat-head-tools .icon-btn {
+    padding: 0;
+  }
+  .workspace:not(.customer-skin) .chat-head-label {
+    display: none;
+  }
+}
+/* Pantallas muy anchas: los iconos de la cabecera recuperan su rótulo */
+@media (min-width: 1600px) {
+  .workspace:not(.customer-skin) .chat-head-tools .icon-btn {
+    padding: 0 var(--space-7);
+  }
+  .workspace:not(.customer-skin) .chat-head-label {
+    display: inline;
+  }
+}
+/* Ventanas medianas (chat de menos de ~640 px): quién atiende, más angosto, junto a las herramientas que se deslizan;
+   en el compositor, adjuntar y ampliar siempre a la vista y el resto a un deslizamiento */
+@media (min-width: 681px) and (max-width: 1280px) {
+  .workspace:not(.customer-skin) .chat-bottom > .assist-row {
+    max-width: 65%;
+  }
+  .workspace:not(.customer-skin) .assist-label {
+    max-width: 128px;
+  }
+  .workspace:not(.customer-skin) .compose,
+  .workspace:not(.customer-skin) .compose:focus-within {
+    grid-template-columns: minmax(120px, 1fr) minmax(88px, max-content) auto;
+  }
+}
+/* Ventanas medianas: en cada cita o mensaje programado, la hora y el texto a la izquierda y las acciones a la
+   derecha, que bajan de línea si no caben (no tapan la hora) */
+@media (min-width: 681px) and (max-width: 1280px) {
+  .workspace:not(.customer-skin) .chat-bottom .sch-row {
+    grid-template-columns: minmax(150px, 1fr) minmax(0, max-content);
+  }
+  .workspace:not(.customer-skin) .chat-bottom .sch-row .sch-actions {
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+  .workspace:not(.customer-skin) .chat-bottom .sch-row .sch-text {
+    grid-column: 1;
+  }
+  .workspace:not(.customer-skin) .chat-bottom .sch-row .sch-when {
+    flex-wrap: wrap;
+    min-width: 0;
+    white-space: normal;
+  }
+  .workspace:not(.customer-skin) .chat-bottom .sch-list {
+    max-height: 60px;
+  }
+}
 
+/* ============ 8. Pantallas medianas ============ */
+
+@media (max-width: 1280px) {
+  /* El resumen baja a su propia fila, debajo del estado */
+  .workspace:not(.customer-skin) .chat > .conv-summary {
+    justify-self: stretch;
+    padding-left: 0;
+  }
+  .workspace:not(.customer-skin) .chat,
+  .workspace:not(.customer-skin) .chat:has(.sum-card[open]) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: max-content max-content max-content max-content max-content minmax(120px, 1fr) max-content;
+    grid-template-areas: 'head' 'ctx' 'lc' 'sum' 'win' 'hist' 'bottom';
+  }
+  .workspace:not(.customer-skin) .chat-head-tools .icon-btn {
+    padding: 0;
+  }
   .workspace:not(.customer-skin) .chat-head-label {
     display: none;
   }
@@ -1680,7 +1935,7 @@
     max-height: 44vh;
   }
   .workspace:not(.customer-skin) .chat {
-    grid-template-rows: auto auto auto auto auto minmax(120px, 1fr) auto;
+    grid-template-rows: max-content max-content max-content max-content max-content minmax(120px, 1fr) max-content;
     padding: var(--space-3) var(--space-4);
     border-radius: var(--radius-block-lg);
   }
@@ -1808,10 +2063,46 @@
     min-height: var(--control);
     white-space: nowrap;
   }
+  /* Compositor en dos filas: el texto con «Enviar» al lado y, debajo, adjuntar, ampliar, Programar, Agendar cita
+     y el canal en una fila que se desliza (ninguna herramienta se pierde) */
   .workspace:not(.customer-skin) .compose,
   .workspace:not(.customer-skin) .compose:focus-within {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'prev prev'
+      'text send'
+      'tools tools';
+    gap: var(--space-2) var(--space-3);
+    align-items: end;
     padding: var(--space-3) var(--space-3) var(--space-3) var(--space-6);
     border-radius: var(--radius-block-lg);
+  }
+  .workspace:not(.customer-skin) .compose .attachment-preview {
+    grid-area: prev;
+  }
+  .workspace:not(.customer-skin) .compose #message-input {
+    grid-area: text;
+    align-self: center;
+  }
+  .workspace:not(.customer-skin) .compose-footer {
+    display: contents;
+  }
+  .workspace:not(.customer-skin) .compose-left {
+    grid-area: tools;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .workspace:not(.customer-skin) .compose-left > * {
+    flex: 0 0 auto;
+  }
+  .workspace:not(.customer-skin) .compose-footer small {
+    white-space: nowrap;
+  }
+  .workspace:not(.customer-skin) .compose #send-button {
+    grid-area: send;
+    margin: 0;
   }
   .workspace:not(.customer-skin) .compose textarea {
     font-size: var(--font-xl);
