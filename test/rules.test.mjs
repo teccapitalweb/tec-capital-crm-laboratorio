@@ -560,6 +560,17 @@ test('orden de atención: persona, recorrido en curso, regla, recorrido que arra
   const inFlow = await bob.say('inscribirme sí');
   assert.equal(L.runs(startRule.id).length, runsBefore + 1, 'en un recorrido en curso la regla no corre');
   assert.notEqual(inFlow.log?.intent, 'rule');
+  // Si la espera del recorrido ya venció, termina como lo haría el recorrido («timeout») y las reglas vuelven a atender.
+  const ivo = await L.customer('Ivo Sol');
+  await ivo.say('quiero inscribirme');
+  const stale = session(ivo.conv);
+  assert.equal(stale.state, 'waiting');
+  db.prepare('UPDATE chatflow_sessions SET expires_at=? WHERE id=?').run(Date.now() - 1000, stale.id);
+  const again = await ivo.say('quiero inscribirme otra vez');
+  assert.equal(again.log.intent, 'rule');
+  assert.equal(db.prepare('SELECT outcome FROM chatflow_sessions WHERE id=?').get(stale.id).outcome, 'timeout');
+  assert.equal(session(ivo.conv).started_by, 'rule');
+  assert.notEqual(session(ivo.conv).id, stale.id);
   // Ninguna regla coincide: arranca el recorrido de bienvenida.
   const cam = await L.customer('Cam Paz');
   const greeted = await cam.say('Buenas tardes');
