@@ -196,6 +196,102 @@ test('agregar desde la paleta: cae junto al seleccionado y se conecta a su prime
   assert.equal(new Set(boxes.map(b => b.x + ',' + b.y)).size, boxes.length, 'ningún paso quedó exactamente sobre otro');
 });
 
+test('agregar paso: siempre queda conectado, después del elegido o al final del camino principal', () => {
+  // Entre A y B: A → nuevo → B, en un solo paso del historial.
+  const store = open();
+  store.select('n3');
+  const before = store.historySize();
+  const added = store.insertStep('delay');
+  assert.equal(added.ok, true);
+  assert.equal(store.edgeFrom('n3', 'next'), added.id);
+  assert.equal(store.edgeFrom(added.id, 'next'), 'n5');
+  assert.equal(store.historySize(), before + 1, 'un solo paso del historial');
+  assert.deepEqual(store.selection.nodes, [added.id], 'el nuevo queda elegido');
+  store.undo();
+  assert.equal(store.edgeFrom('n3', 'next'), 'n5', 'deshacer lo devuelve todo');
+
+  // Una lista nueva entre el Inicio y los botones: todas sus filas llevan a los botones; las salidas opcionales no.
+  store.select('n1');
+  const list = store.insertStep('list');
+  assert.equal(store.edgeFrom('n1', 'next'), list.id);
+  const ports = portsOf(store.node(list.id));
+  for (const p of ports.filter(p => !p.optional)) assert.equal(store.edgeFrom(list.id, p.id), 'n2', p.label);
+  for (const p of ports.filter(p => p.optional)) assert.equal(store.edgeFrom(list.id, p.id), null, p.label);
+  assert.deepEqual(
+    store.issues().warnings.filter(w => w.code === 'unreachable'),
+    [],
+    'nadie quedó sin camino',
+  );
+
+  // Sin selección: al final del camino principal. Aquí acaba en un Fin, así que el nuevo va justo antes.
+  store.clearSelection();
+  const last = store.insertStep('message');
+  assert.equal(store.edgeFrom('n3', 'next'), last.id);
+  assert.equal(store.edgeFrom(last.id, 'next'), 'n5');
+
+  // Con un paso sin salidas elegido (el Fin), el nuevo va antes de él.
+  store.select('n5');
+  const beforeEnd = store.insertStep('delay');
+  assert.equal(store.edgeFrom(last.id, 'next'), beforeEnd.id);
+  assert.equal(store.edgeFrom(beforeEnd.id, 'next'), 'n5');
+
+  // Unos botones con una salida libre: el nuevo la ocupa y no lleva a ningún lado (no había nada después).
+  const free = createStore({
+    graph: {
+      ...sample(),
+      edges: [E('n1', 'next', 'n2'), E('n2', 'opt:o1', 'n3'), E('n3', 'next', 'n5')],
+    },
+  });
+  free.clearSelection();
+  const filled = free.insertStep('message');
+  assert.equal(free.edgeFrom('n2', 'opt:o2'), filled.id, 'llena el primer hueco del camino principal');
+  assert.equal(free.edgeFrom(filled.id, 'next'), null);
+
+  // Una nota nunca se conecta; en sólo lectura no se agrega nada.
+  assert.equal(store.insertStep('note').connected, false);
+  refused(store.insertStep('start'), 'start');
+  store.setReadOnly(true);
+  refused(store.insertStep('message'), 'read_only');
+  store.setReadOnly(false);
+  assertInvariants(store);
+});
+
+test('una fila o un botón más lleva a donde llevan los demás, si todos llevan al mismo paso', () => {
+  const store = open();
+  store.select('n3');
+  const list = store.insertStep('list');
+  const rows = () => store.node(list.id).data.sections[0].rows;
+  const row = i => ({ id: 'r' + i, title: 'Fila ' + i, description: '', do: { type: 'goto' } });
+  for (const i of [2, 3, 4]) {
+    const r = store.setData(list.id, 'sections.0.rows', [...rows(), row(i)], { inherit: true });
+    assert.equal(r.inherited, 1);
+  }
+  for (const i of [1, 2, 3, 4]) assert.equal(store.edgeFrom(list.id, 'opt:r' + i), 'n5', 'fila ' + i);
+  // Si las filas ya iban a sitios distintos, la nueva se queda sin conectar: no hay cómo adivinar.
+  store.connect(list.id, 'opt:r1', 'n4');
+  const r = store.setData(list.id, 'sections.0.rows', [...rows(), row(5)], { inherit: true });
+  assert.equal(r.inherited, 0);
+  assert.equal(store.edgeFrom(list.id, 'opt:r5'), null);
+  // Sin `inherit` (otras ediciones) no se conecta nada por su cuenta.
+  store.connect(list.id, 'opt:r1', 'n5');
+  store.setData(list.id, 'sections.0.rows', [...rows().slice(0, 4), row(6)]);
+  assert.equal(store.edgeFrom(list.id, 'opt:r6'), null);
+  assertInvariants(store);
+});
+
+test('agregar paso en un recorrido nuevo (sólo el Inicio): queda conectado al Inicio', () => {
+  const store = createStore({});
+  const first = store.insertStep('message');
+  assert.equal(store.edgeFrom(store.graph.start, 'next'), first.id);
+  const second = store.insertStep('list');
+  assert.equal(store.edgeFrom(first.id, 'next'), second.id);
+  store.clearSelection();
+  const third = store.insertStep('message');
+  // la lista tiene su fila sin destino: el paso sin selección llena ese hueco
+  assert.equal(store.edgeFrom(second.id, 'opt:r1'), third.id);
+  assertInvariants(store);
+});
+
 test('límite de pasos: el 81 se rechaza y no cambia nada', () => {
   const store = createStore({ limits: { nodes: 6 } });
   for (let i = 0; i < 5; i += 1) assert.ok(store.addNode('message').ok);
