@@ -2152,7 +2152,8 @@ th[aria-sort] > .k-table__sort {
     flex: 1 1 100%;
   }
 
-  .k-filterbar .k-input {
+  .k-filterbar .k-input,
+  .k-filterbar input[type='search'].k-input {
     flex: 1 1 0;
     min-width: 0;
   }
