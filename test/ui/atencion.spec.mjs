@@ -103,27 +103,33 @@ test('Conversaciones: filtros, estado y herramientas del chat siguen todos a la 
     expect(seen.sendInView, '«Enviar» a la vista sin desplazarse').toBe(true);
   }
   // Una herramienta se alcanza si, tras deslizar su fila, queda entera dentro de su fila y de la ventana.
-  const reachable = async locator => {
-    await locator.scrollIntoViewIfNeeded();
-    await expect(locator).toBeVisible();
-    const inside = await locator.evaluate(el => {
-      const r = el.getBoundingClientRect();
-      const row = el.closest('.quick-replies, .compose-left, .compose') ?? el.parentElement;
-      // una franja sin caja propia (display: contents) se mide con el pie del chat
-      const box = row.getBoundingClientRect().width
-        ? row.getBoundingClientRect()
-        : el.closest('.chat-bottom').getBoundingClientRect();
-      return (
-        r.left >= box.left - 1 &&
-        r.right <= box.right + 1 &&
-        r.top >= 0 &&
-        r.bottom <= innerHeight + 1 &&
-        r.left >= 0 &&
-        r.right <= innerWidth + 1
+  // El chat se vuelve a pintar cuando llega algo en vivo; si eso pasa a media comprobación, se repite con el botón nuevo.
+  const reachable = locator =>
+    expect(async () => {
+      await locator.scrollIntoViewIfNeeded({ timeout: 3000 });
+      await expect(locator).toBeVisible({ timeout: 3000 });
+      const inside = await locator.evaluate(
+        el => {
+          const r = el.getBoundingClientRect();
+          const row = el.closest('.quick-replies, .compose-left, .compose') ?? el.parentElement;
+          // una franja sin caja propia (display: contents) se mide con el pie del chat
+          const box = row.getBoundingClientRect().width
+            ? row.getBoundingClientRect()
+            : el.closest('.chat-bottom').getBoundingClientRect();
+          return (
+            r.left >= box.left - 1 &&
+            r.right <= box.right + 1 &&
+            r.top >= 0 &&
+            r.bottom <= innerHeight + 1 &&
+            r.left >= 0 &&
+            r.right <= innerWidth + 1
+          );
+        },
+        null,
+        { timeout: 3000 },
       );
-    });
-    expect(inside, 'la herramienta queda a la vista tras deslizar su fila').toBe(true);
-  };
+      expect(inside, 'la herramienta queda a la vista tras deslizar su fila').toBe(true);
+    }).toPass({ timeout: 15_000 });
   // Quién atiende y las diez herramientas (la fila se desliza de lado cuando no caben: cada una se alcanza).
   await expect(page.locator('.assist-actions .btn[data-chat-action]')).toBeVisible();
   await expect(page.locator('.assist-actions [data-chat-action="resolve"]')).toBeVisible();
