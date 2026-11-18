@@ -40,7 +40,8 @@ test('Conversaciones: filtros, estado y herramientas del chat siguen todos a la 
 }, testInfo) => {
   const base = testInfo.project.use.baseURL;
   const tag = `${testInfo.project.name}${Date.now().toString(36)}`;
-  const name = `Atención ${tag}`;
+  // Nombre corto: la tabla de Contactos (otra prueba) se desborda con un nombre largo sin espacios.
+  const name = `Atención ${testInfo.project.name === 'celular' ? 'C' : 'E'} ${tag.slice(-4)}`;
   const customerContext = await browser.newContext();
   const customer = customerContext.request;
   const headers = { Origin: base };
@@ -108,7 +109,10 @@ test('Conversaciones: filtros, estado y herramientas del chat siguen todos a la 
     const inside = await locator.evaluate(el => {
       const r = el.getBoundingClientRect();
       const row = el.closest('.quick-replies, .compose-left, .compose') ?? el.parentElement;
-      const box = row.getBoundingClientRect();
+      // una franja sin caja propia (display: contents) se mide con el pie del chat
+      const box = row.getBoundingClientRect().width
+        ? row.getBoundingClientRect()
+        : el.closest('.chat-bottom').getBoundingClientRect();
       return (
         r.left >= box.left - 1 &&
         r.right <= box.right + 1 &&
@@ -135,6 +139,28 @@ test('Conversaciones: filtros, estado y herramientas del chat siguen todos a la 
     '[data-template="price"]',
     '[data-action="pay-new"]',
   ];
+  // A 1366 × 800 las diez están a la vista a la vez, sin deslizar nada: los atajos del catálogo son los más usados.
+  if (testInfo.project.name === 'escritorio') {
+    const shown = await page.evaluate(selectors => {
+      const strip = document.querySelector('.quick-replies');
+      const chat = document.querySelector('#chat').getBoundingClientRect();
+      return {
+        scrolls: strip.scrollWidth > strip.clientWidth + 1 || strip.scrollLeft > 0,
+        outside: selectors.filter(selector => {
+          const r = strip.querySelector(selector).getBoundingClientRect();
+          return !(
+            r.width > 0 &&
+            r.left >= chat.left &&
+            r.right <= chat.right &&
+            r.top >= 0 &&
+            r.bottom <= Math.min(innerHeight, chat.bottom)
+          );
+        }),
+      };
+    }, tools);
+    expect(shown.scrolls, 'la fila de herramientas no se desliza a 1366 × 800').toBe(false);
+    expect(shown.outside, 'herramientas fuera de la vista a 1366 × 800').toEqual([]);
+  }
   for (const selector of tools) await reachable(page.locator(`.quick-replies ${selector}`));
   // Compositor: adjuntar, ampliar, Programar, Agendar cita y Enviar (lima).
   for (const selector of [
