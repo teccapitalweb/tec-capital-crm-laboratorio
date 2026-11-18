@@ -1107,7 +1107,7 @@
 /* ---- Barra: pestañas de la pantalla y herramientas en un renglón cuando caben --------------------------------------- */
 
 .lz-bar {
-  gap: var(--space-3) var(--space-6);
+  gap: var(--space-3);
 }
 
 .lz-bar-start:empty {
@@ -1119,8 +1119,25 @@
   flex: 1 1 560px;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   min-width: 0;
+}
+
+/* En una laptop (poca altura) la lista de pasos necesita el espacio: mientras la paleta sólo muestra su primer grupo,
+   el rótulo de ese grupo sobra y los márgenes se aprietan. Con «Ver todos los tipos de paso» vuelven los rótulos. */
+@media (max-height: 860px) {
+  .lz:not([data-layout='narrow'])[data-pane='outline'] .lz-palette {
+    gap: var(--space-3);
+    padding: var(--space-6);
+  }
+
+  .lz:not([data-layout='narrow'])[data-pane='outline'] .lz-palette[data-all='false'] {
+    max-height: 62%;
+  }
+
+  .lz:not([data-layout='narrow'])[data-pane='outline'] .lz-palette[data-all='false'] .lz-palette-group h3 {
+    display: none;
+  }
 }
 
 .lz[data-layout='narrow'] .lz-tools-row {
