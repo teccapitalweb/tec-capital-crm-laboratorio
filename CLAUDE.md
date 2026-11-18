@@ -21,7 +21,7 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 1. [Estado y decisiones](docs/CONTINUIDAD.md): entregas, diseño, evidencia y pendientes.
 2. [Arquitectura y contratos](docs/ARQUITECTURA.md): módulos, datos, rutas e invariantes.
 3. [Operación y pruebas](docs/OPERACION_Y_PRUEBAS.md): desarrollo, despliegue, verificaciones y recuperación.
-3b. [Diseño y auditoría visual](docs/DISENO_Y_AUDITORIA.md): reglas de Niebla y cómo medirlas.
+3b. [Diseño y auditoría visual](docs/DISENO_Y_AUDITORIA.md): reglas de Tinta (el diseño vigente del CRM del equipo) y cómo medirlas.
 4. [Plan de la fase 4](docs/PLAN_FASE_4.md): siguiente trabajo propuesto, todavía sin implementar.
 4d. [Plan de la Fase 2](docs/PLAN_FASE_2.md): bloques, dependencias, decisiones y criterios de salida para el núcleo único e integración.
 4c. [Contrato de conectores](docs/CONECTORES.md): interfaz de canal y pago, webhooks firmados y requisitos por consultora para Meta y la pasarela.
@@ -68,7 +68,7 @@ El código y el estado real del repositorio prevalecen si estas notas quedan des
 
 ## Reglas del proyecto
 
-- Conserva el diseño **Niebla**: blanco, gris, transparencias discretas, bordes finos, tipografía limpia y composición compacta. Los distintivos de canal deben seguir siendo fáciles de reconocer. Revisa escritorio y celular. Reglas medibles (contraste AA con los tokens `--text-2`/`--text-3`, letra mínima de 11 px, áreas táctiles de 40 px, movimiento sólo al navegar) y la auditoría reproducible: [docs/DISENO_Y_AUDITORIA.md](docs/DISENO_Y_AUDITORIA.md).
+- El diseño del CRM del equipo es **Tinta** (el dueño lo aprobó el 17 nov 2026 y sustituye a Niebla dentro del CRM): bloques de color en lugar de tarjetas blancas, esquinas muy redondeadas, botones en píldora, tinta negra con acento lima, cifras grandes y Manrope; menú lateral en dos temas, oscuro y claro. Los colores de estado significan lo mismo en todas las pantallas ([docs/GUIA_PANTALLAS.md](docs/GUIA_PANTALLAS.md)). **Dos reglas del dueño para cualquier cambio de diseño: no se pierde ninguna opción y no se inventa ninguna** (antes de rediseñar una pantalla se inventaría lo que muestra y hace, y se comprueba al terminar), y configurar debe ser fácil (un paso nuevo nace conectado, los pendientes se avisan antes de publicar). La experiencia del cliente (`/`: chat, página de pago, entrada) conserva su aspecto propio y no imita a ningún servicio real. Los distintivos de canal deben seguir siendo fáciles de reconocer. Revisa escritorio y celular, con los dos menús. Reglas medibles (contraste AA sobre cada fondo, letra mínima de 11 px, áreas táctiles de 40 px, movimiento sólo al navegar) y la auditoría reproducible: [docs/DISENO_Y_AUDITORIA.md](docs/DISENO_Y_AUDITORIA.md).
 - Continúa la aplicación actual: Node HTTP, WebSocket, SQLite y JavaScript del navegador. No existe una aplicación React/Next en este repositorio. No emprendas una reescritura como requisito para continuar.
 - Mantén el alcance por marca en servidor, archivos, búsquedas, eventos y futuras consultas de IA. Una marca autorizada no equivale a acceso a toda la empresa.
 - La etapa comercial pertenece a `opportunities`; el estado abierto/esperando/cerrado pertenece al chat. No vuelvas a mantener dos etapas comerciales independientes.
@@ -100,6 +100,8 @@ npm start
 La referencia vigente es **725 pruebas aprobadas** más 47 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
+
+**18 nov 2026 (Tinta):** el rediseño «Tinta» de todas las pantallas del CRM del equipo (bloques de color, menú en dos temas, editor de recorridos por pasos) está **construido en la rama `chore/f0-01-codificacion` y sin publicar**; sólo interfaz, sin esquema nuevo, y la experiencia del cliente no cambia. Detalle en [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md) y reglas en [docs/DISENO_Y_AUDITORIA.md](docs/DISENO_Y_AUDITORIA.md).
 
 **17 nov 2026 (undécima):** la undécima tanda (pasos nuevos de los recorridos: lista, plantilla de WhatsApp, archivos y guardar la opción; reglas por mensaje con el orden de atención; bandeja nueva con vistas, contadores y búsqueda; y secuencias de seguimiento) se **publicó** en `main` (commit `60fd00b`; esquema `41+24.48be9286`); Bandeja, Reglas y Secuencias siguen en vista previa. Planes: [PLAN_REGLAS.md](docs/PLAN_REGLAS.md), [PLAN_BANDEJA_VISTAS.md](docs/PLAN_BANDEJA_VISTAS.md), [PLAN_SECUENCIAS.md](docs/PLAN_SECUENCIAS.md) y [GUIA_SECUENCIAS.md](docs/GUIA_SECUENCIAS.md).
 
