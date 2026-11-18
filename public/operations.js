@@ -214,14 +214,14 @@ window.createOperationsUI = function ({
     let content = '';
     if (tab === 'queue') {
       content = `<div class="ops-stats">${[
-        ['all', 'Atención humana'],
-        ['unassigned', 'Sin asignar'],
-        ['mine', 'A mi cargo'],
-        ['overdue', 'Fuera de objetivo'],
+        ['all', 'Atención humana', 'sky'],
+        ['unassigned', 'Sin asignar', 'butter'],
+        ['mine', 'A mi cargo', 'lilac'],
+        ['overdue', 'Fuera de objetivo', 'peach'],
       ]
         .map(
-          ([id, title]) =>
-            `<button data-action="ops-filter" data-id="${id}" class="ops-stat ${filter === id ? 'active' : ''}"><strong>${data.counts[id]}</strong><span>${title}</span></button>`,
+          ([id, title, tone]) =>
+            `<button data-action="ops-filter" data-id="${id}" data-tone="${tone}" class="ops-stat ${filter === id ? 'active' : ''}"><strong>${data.counts[id]}</strong><span>${title}</span></button>`,
         )
         .join(
           '',

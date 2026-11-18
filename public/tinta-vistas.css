@@ -963,3 +963,351 @@
   font-size: var(--font-md);
   font-weight: var(--weight-bold);
 }
+
+/* El tono de una cifra lo decide la vista cuando la cifra tiene un significado propio (data-tone) */
+.workspace:not(.customer-skin) .ops-stat[data-tone='sky'] {
+  background: var(--sky);
+}
+.workspace:not(.customer-skin) .ops-stat[data-tone='butter'] {
+  background: var(--butter);
+}
+.workspace:not(.customer-skin) .ops-stat[data-tone='lilac'] {
+  background: var(--lilac);
+}
+.workspace:not(.customer-skin) .ops-stat[data-tone='mint'] {
+  background: var(--mint);
+}
+.workspace:not(.customer-skin) .ops-stat[data-tone='peach'] {
+  background: var(--peach);
+}
+.workspace:not(.customer-skin) .ops-stat[data-tone='lime'] {
+  background: var(--lime);
+}
+.workspace:not(.customer-skin) button.ops-stat.active[data-tone] {
+  background: var(--ink);
+}
+/* Un importe largo («$12,379.00») cabe en su bloque: la cifra se ajusta al ancho del bloque */
+.workspace:not(.customer-skin) .ops-stat {
+  container-type: inline-size;
+}
+.workspace:not(.customer-skin) .content-page > .ops-stats .ops-stat strong {
+  font-size: min(var(--font-display), 19cqi);
+  white-space: nowrap;
+}
+.workspace:not(.customer-skin) :is(.an-kpi, .metric) {
+  container-type: inline-size;
+}
+.workspace:not(.customer-skin) .content-page :is(.an-kpis, .metrics) > :is(.an-kpi, .metric) strong {
+  font-size: min(var(--font-display), 19cqi);
+}
+.workspace:not(.customer-skin) .content-page .crm-panel .an-kpis > .an-kpi strong {
+  font-size: min(var(--font-2xl), 14cqi);
+}
+
+/* ============ 3. Operación ============ */
+
+/* Filas de la cola, de pagos y de llaves: tarjetas blancas redondas, sin borde */
+.workspace:not(.customer-skin) .ops-queue {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-7);
+}
+.workspace:not(.customer-skin) .ops-row {
+  gap: var(--space-7);
+  padding: var(--space-7) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-block-lg);
+  background: var(--surface);
+  box-shadow: none;
+}
+.workspace:not(.customer-skin) .ops-row-person strong {
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .ops-row small,
+.workspace:not(.customer-skin) .ops-row-state > span,
+.workspace:not(.customer-skin) .ops-row-goal > span {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .ops-row-state > span {
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .ops-row .avatar {
+  width: var(--control);
+  height: var(--control);
+  border-radius: var(--radius-pill);
+  background: var(--lilac);
+  color: var(--ink);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .ops-row .actions .btn:first-child {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.workspace:not(.customer-skin) .ops-row .actions .btn:first-child:hover {
+  background: var(--ink-3);
+}
+.workspace:not(.customer-skin) .ops-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-7);
+  color: var(--text-2);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .ops-pagination > span {
+  flex: 1 1 auto;
+}
+
+/* Mis avisos: cada aviso una tarjeta; los no leídos con el icono en lima y una ficha «Nuevo» implícita en negrita */
+.workspace:not(.customer-skin) .ops-notification {
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-3);
+  padding: var(--space-6) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-block-lg);
+  background: var(--surface);
+  box-shadow: none;
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .ops-notification.unread {
+  border: 0;
+  box-shadow: inset 4px 0 0 var(--lime);
+}
+.workspace:not(.customer-skin) .ops-notification > div {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.workspace:not(.customer-skin) .ops-notification strong {
+  color: var(--ink);
+  font-size: var(--font-lead);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .ops-notification.unread strong {
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .ops-notification small {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .ops-notification-icon {
+  flex: none;
+  padding: var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .ops-notification.unread .ops-notification-icon {
+  background: var(--lime);
+}
+
+/* Macros: rejilla de tarjetas con su estado en ficha */
+.workspace:not(.customer-skin) .ops-macro-grid {
+  gap: var(--space-5);
+}
+.workspace:not(.customer-skin) .ops-macro-grid > .crm-panel {
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
+  margin: 0;
+}
+.workspace:not(.customer-skin) .ops-macro-grid > .crm-panel > h2 {
+  margin: 0;
+  font-size: var(--font-2xl);
+}
+.workspace:not(.customer-skin) .ops-action-list,
+#modal:not(.pay-page) .ops-action-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.workspace:not(.customer-skin) .ops-action-list li,
+#modal:not(.pay-page) .ops-action-list li {
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-item);
+  background: var(--soft);
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: 600;
+}
+
+/* Horarios y reparto: la marca en una tarjeta grande; cada día una fila con su casilla y sus horas */
+.workspace:not(.customer-skin) .ops-config {
+  gap: var(--gap-page);
+}
+.workspace:not(.customer-skin) .ops-config > .crm-panel {
+  margin: 0;
+}
+.workspace:not(.customer-skin) #ops-settings-form fieldset {
+  display: grid;
+  gap: var(--space-6);
+}
+.workspace:not(.customer-skin) #ops-settings-form .checkbox-field {
+  margin: 0;
+}
+.workspace:not(.customer-skin) #ops-settings-form h3 {
+  margin: var(--space-5) 0 0;
+}
+.workspace:not(.customer-skin) .ops-hours {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .ops-hours-row {
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-item);
+}
+.workspace:not(.customer-skin) .ops-hours-row:has(input[type='checkbox']:checked) {
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .ops-hours-row label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--touch);
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .ops-hours-row input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+}
+.workspace:not(.customer-skin) .ops-hours-row span {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .ops-hours-row input:not([type='checkbox']) {
+  min-height: var(--touch);
+}
+/* Disponibilidad y capacidad: cada integrante una pieza */
+.workspace:not(.customer-skin) .ops-members {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-5) 0;
+}
+.workspace:not(.customer-skin) .ops-members article {
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .ops-members article strong {
+  color: var(--ink);
+  font-size: var(--font-lead);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .ops-members article small {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .ops-members .avatar {
+  background: var(--lilac);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .ops-members .btn {
+  background: var(--surface);
+}
+
+/* Piezas dentro de una tarjeta de Operación (marcas, filas, versiones, eventos, comprobantes…): gris, sin borde */
+.workspace:not(.customer-skin)
+  .content-page
+  :is(.crm-panel, .ops-detail)
+  :is(
+    .rcp-brand,
+    .co-row,
+    .co-event,
+    .ct-event,
+    .cn-event,
+    .wa-number,
+    .ops-version,
+    .pay-receipt,
+    .rdy-group,
+    .sim-persona,
+    .sim-actor,
+    .ads-day,
+    .co-section,
+    .cmp-block,
+    .int-row,
+    .cert-form
+  ),
+#modal:not(.pay-page)
+  :is(
+    .rcp-brand,
+    .co-row,
+    .co-event,
+    .ct-event,
+    .cn-event,
+    .wa-number,
+    .ops-version,
+    .pay-receipt,
+    .co-section,
+    .cmp-block,
+    .int-row
+  ) {
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  box-shadow: none;
+  color: var(--ink);
+}
+/* Lo que va dentro de una pieza gris se separa en blanco */
+.workspace:not(.customer-skin)
+  .content-page
+  .crm-panel
+  :is(.rcp-brand, .co-row, .wa-number, .co-section, .cmp-block)
+  :is(.btn:not(.primary, .accent), input:not([type='checkbox'], [type='radio']), select, textarea),
+#modal:not(.pay-page)
+  :is(.rcp-brand, .co-row, .wa-number, .co-section, .cmp-block, .pay-receipt)
+  .btn:not(.primary, .accent) {
+  background-color: var(--surface);
+}
+.workspace:not(.customer-skin)
+  .content-page
+  .crm-panel
+  :is(.rcp-brand, .co-row, .wa-number, .co-section, .cmp-block)
+  .btn:not(.primary, .accent):hover {
+  background-color: var(--line);
+}
+.workspace:not(.customer-skin)
+  .content-page
+  .crm-panel
+  :is(.rcp-brand, .co-row, .wa-number, .co-section, .cmp-block)
+  .checkbox-field:not(:has(input:checked)) {
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .content-page .rcp-brands {
+  gap: var(--space-3);
+}
+.workspace:not(.customer-skin) .content-page .rcp-brand > strong:first-child,
+.workspace:not(.customer-skin) .content-page .rcp-brand > h3:first-child {
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: var(--weight-black);
+}
+/* Vista previa de un mensaje o de un código: pieza gris con letra legible */
+.workspace:not(.customer-skin) .cat-preview-copy,
+#modal:not(.pay-page) .cat-preview-copy {
+  padding: var(--space-6) var(--space-7);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
+  font-size: var(--font-md);
+}
