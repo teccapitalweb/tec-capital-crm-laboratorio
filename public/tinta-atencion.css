@@ -1758,6 +1758,78 @@
   }
 }
 
+/* Herramientas siempre a la vista (computadora ancha): quién atiende y las diez herramientas fluyen en la misma
+   franja y bajan a una segunda fila si no caben (una sola fila en pantallas muy anchas). Ninguna queda detrás de
+   un deslizamiento: los atajos del catálogo (Flyer, Temario, Precio, Cobrar) son los que más se usan. */
+@media (min-width: 1281px) {
+  .workspace:not(.customer-skin) .chat-bottom {
+    column-gap: var(--space-1);
+  }
+  .workspace:not(.customer-skin) .chat-bottom > :not(.assist-row, .quick-replies) {
+    flex: 0 0 100%;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .assist-row {
+    max-width: none;
+    margin-right: var(--space-1);
+  }
+  .workspace:not(.customer-skin) .assist-label {
+    white-space: nowrap;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .quick-replies {
+    display: contents;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .quick-replies button,
+  .workspace:not(.customer-skin) .chat-bottom > .quick-replies button:hover {
+    flex: 0 0 auto;
+    gap: var(--space-1);
+    padding: 0 var(--space-4);
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .quick-replies button svg {
+    width: 15px;
+    height: 15px;
+  }
+}
+/* Ventanas medianas: quién atiende en su fila y las herramientas en una franja a todo lo ancho que se desliza; el
+   borde derecho se difumina para que se note que hay más */
+@media (min-width: 681px) and (max-width: 1280px) {
+  .workspace:not(.customer-skin) .chat-bottom > .assist-row {
+    flex: 1 1 100%;
+    max-width: none;
+    justify-content: space-between;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .assist-row .assist-label {
+    max-width: none;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .quick-replies {
+    flex: 1 1 100%;
+    mask-image: linear-gradient(to right, var(--ink) calc(100% - 28px), transparent);
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .quick-replies button,
+  .workspace:not(.customer-skin) .chat-bottom > .quick-replies button:hover {
+    gap: var(--space-1);
+    padding: 0 var(--space-3);
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .quick-replies button svg {
+    width: 14px;
+    height: 14px;
+  }
+  .workspace:not(.customer-skin) .chat-bottom .sch-list {
+    max-height: 44px;
+  }
+  /* La línea de canal, número y marca en una sola línea (completa en la ficha y en la tarjeta de la lista) */
+  .workspace:not(.customer-skin) .chat-person > div {
+    min-width: 0;
+  }
+  .workspace:not(.customer-skin) .chat-person small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .workspace:not(.customer-skin) .chat-bottom > .quick-replies button:last-child {
+    margin-right: 32px;
+  }
+}
+
 /* ============ 8. Pantallas medianas ============ */
 
 @media (max-width: 1280px) {
