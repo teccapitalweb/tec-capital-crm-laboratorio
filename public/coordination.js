@@ -27,7 +27,7 @@ window.createCoordinationUI = function ({ state, api, esc, icon, showModal, toas
     `<button type="button" class="btn" data-action="co-${action}" data-id="${esc(id)}" ${extra}>${label}</button>`;
   const note = copy => `<p class="crm-hint">${copy}</p>`;
   const brandName = id => state.brands.find(b => b.id === id)?.name || '';
-  const KIND = { planned: '', open: 'good', running: 'good', closed: '', cancelled: 'urgent' };
+  const KIND = { planned: 'sky', open: 'good', running: 'lime', closed: '', cancelled: 'urgent' };
   const MODALITY = { online: 'En línea', in_person: 'Presencial', hybrid: 'Híbrida' };
   const SURVEY_MODES = {
     off: 'Sin encuesta automática',

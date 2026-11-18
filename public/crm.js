@@ -284,7 +284,7 @@ window.createCRMUI = function ({
                   .map(id => esc(brand(id)))
                   .join(
                     ' · ',
-                  )} · Vence ${stamp(i.expires_at)}</small></span><span class="pill">${i.used_by ? 'Aceptada' : i.revoked_at ? 'Revocada' : i.expires_at < Date.now() ? 'Vencida' : 'Pendiente'}</span>${!i.used_by && !i.revoked_at && i.expires_at > Date.now() ? button('revoke', 'Revocar', i.id) : ''}</div>`,
+                  )} · Vence ${stamp(i.expires_at)}</small></span><span class="pill ${i.used_by ? 't-mint' : i.revoked_at ? '' : i.expires_at < Date.now() ? 't-peach' : 't-sky'}">${i.used_by ? 'Aceptada' : i.revoked_at ? 'Revocada' : i.expires_at < Date.now() ? 'Vencida' : 'Pendiente'}</span>${!i.used_by && !i.revoked_at && i.expires_at > Date.now() ? button('revoke', 'Revocar', i.id) : ''}</div>`,
             )
             .join('') ||
           blank('Invita a tu equipo', 'Cada código corresponde a un usuario, dura 24 horas y se usa una sola vez.')

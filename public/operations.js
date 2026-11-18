@@ -214,14 +214,14 @@ window.createOperationsUI = function ({
     let content = '';
     if (tab === 'queue') {
       content = `<div class="ops-stats">${[
-        ['all', 'Atención humana'],
-        ['unassigned', 'Sin asignar'],
-        ['mine', 'A mi cargo'],
-        ['overdue', 'Fuera de objetivo'],
+        ['all', 'Atención humana', 'sky'],
+        ['unassigned', 'Sin asignar', 'butter'],
+        ['mine', 'A mi cargo', 'lilac'],
+        ['overdue', 'Fuera de objetivo', 'peach'],
       ]
         .map(
-          ([id, title]) =>
-            `<button data-action="ops-filter" data-id="${id}" class="ops-stat ${filter === id ? 'active' : ''}"><strong>${data.counts[id]}</strong><span>${title}</span></button>`,
+          ([id, title, tone]) =>
+            `<button data-action="ops-filter" data-id="${id}" data-tone="${tone}" class="ops-stat ${filter === id ? 'active' : ''}"><strong>${data.counts[id]}</strong><span>${title}</span></button>`,
         )
         .join(
           '',
@@ -257,7 +257,7 @@ window.createOperationsUI = function ({
       }</div>${note('Las macros se ejecutan por decisión del asesor desde el chat. Las recetas automáticas y la IA corresponden a la siguiente fase.')}`;
     const scrolled = $('#page .content-page')?.scrollTop || 0; // las actualizaciones en vivo no deben devolver la vista al inicio
     $('#page').innerHTML =
-      `<div class="content-page ops-page"><div class="page-heading"><div><span class="eyebrow">Coordinación · por marca</span><h1>El equipo, en sintonía.</h1><p>Cada conversación con responsable, contexto y siguiente paso.</p></div></div><label class="crm-brand-filter">Marca<select id="ops-brand"><option value="all">Todas mis marcas</option>${opts(state.brands, state.brand)}</select></label>${opsTabs()}${content}</div>`;
+      `<div class="content-page ops-page"><div class="page-heading"><div><span class="eyebrow">Atención · por marca</span><h1>Operación</h1><p>La cola de atención, los cobros, las campañas y el sistema: elige un área y después su pestaña.</p></div></div><label class="crm-brand-filter">Marca<select id="ops-brand"><option value="all">Todas mis marcas</option>${opts(state.brands, state.brand)}</select></label>${opsTabs()}${content}</div>`;
     icons();
     if (scrolled) $('#page .content-page').scrollTop = scrolled;
   }
