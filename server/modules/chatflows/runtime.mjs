@@ -662,8 +662,20 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
 
   function startOrNull(c, m) {
     if (!brandSpeaks(c.brand_id)) return null;
-    const flow = pick(c, m);
+    // Un número de WhatsApp que atiende toda la marca: si este mensaje elige o cambia el curso (con las mismas reglas
+    // que el asistente), el recorrido se elige y empieza ya con ese curso. Sólo se guarda si de verdad arranca uno; si
+    // no se puede cambiar (otra conversación abierta de ese curso), lo resuelve el asistente.
+    const routed = svc.replies.routeCourse?.(c, m) ?? null;
+    const next = routed?.course ? { ...c, course_id: routed.course.id, edition_id: routed.course.editionId } : c;
+    const flow = pick(next, m);
     if (!flow) return null;
+    if (
+      routed?.course &&
+      !svc.crm.moveConversation(c, routed.course.id, routed.course.editionId, {
+        placeholder: Boolean(c.course_pending),
+      })
+    )
+      return null;
     const ctx = start(c, flow, { startedBy: 'message', sourceKey: 'msg:' + m.id, trigger: m });
     if (ctx.s.state === 'ended' && !ctx.sent.length && !ctx.handedOff) return null; // no dijo nada: contesta el asistente
     ctx.s.lastInputMessageId = m.id;

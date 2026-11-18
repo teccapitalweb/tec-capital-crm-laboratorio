@@ -598,4 +598,65 @@ test('un número para toda la marca: pregunta el curso, lo reconoce por anuncio 
     'aves',
     'una conversación del laboratorio no cambia de curso',
   );
+  // 7) con un recorrido que atiende por palabra clave, el curso que nombra el mensaje también se toma: antes sólo lo
+  //    hacía el asistente, y el recorrido saludaba con el curso anterior de la conversación
+  const auto = (await call('/api/automation', admin.cookie)).brands.find(b => b.id === 'globalvet');
+  if (!auto.enabled)
+    await call(
+      '/api/automation/brands/globalvet',
+      admin.cookie,
+      { enabled: true, expectedRevision: auto.revision },
+      'PATCH',
+    );
+  const graph = {
+    v: 1,
+    start: 's',
+    variables: [],
+    nodes: [
+      { id: 's', type: 'start', x: 0, y: 0, data: {} },
+      {
+        id: 'g',
+        type: 'message',
+        title: 'Saludo',
+        x: 300,
+        y: 0,
+        data: { parts: [{ kind: 'text', text: 'Gracias por tu interés en {{curso}}.' }] },
+      },
+      { id: 'f', type: 'end', x: 600, y: 0, data: { text: 'Hasta pronto.' } },
+    ],
+    edges: [
+      { from: 's', port: 'next', to: 'g' },
+      { from: 'g', port: 'next', to: 'f' },
+    ],
+  };
+  let fl = (
+    await call(
+      '/api/chatflows',
+      admin.cookie,
+      {
+        brandId: 'globalvet',
+        name: 'Información',
+        graph,
+        start: { type: 'keyword', keywords: ['info'] },
+        settings: {},
+        clientRef: randomUUID(),
+      },
+      'POST',
+      201,
+    )
+  ).flow;
+  fl = (await call('/api/chatflows/' + fl.id + '/publish', admin.cookie, { expectedRevision: fl.revision })).flow;
+  await call('/api/chatflows/' + fl.id + '/activate', admin.cookie, { expectedRevision: fl.revision });
+  await say('5215511110020', 'Hola');
+  const r1 = await say('5215511110020', String(pos(otro)));
+  assert.equal(r1.conv.course_id, otro.id);
+  const r2 = await say('5215511110020', 'info del curso de aves');
+  assert.equal(r2.log.intent, 'flow', 'lo atiende el recorrido');
+  assert.equal(r2.conv.course_id, 'aves', 'la conversación pasó al curso que nombró');
+  assert.ok(r2.text.includes(aves.title), 'el recorrido saluda con el curso nuevo: ' + r2.text);
+  // sin nombrar otro curso, el recorrido sigue con el de la conversación
+  const r3 = await say('5215511110020', 'info');
+  assert.equal(r3.log.intent, 'flow');
+  assert.equal(r3.conv.course_id, 'aves');
+  assert.ok(r3.text.includes(aves.title));
 });

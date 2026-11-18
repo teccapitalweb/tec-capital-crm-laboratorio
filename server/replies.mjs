@@ -1642,6 +1642,9 @@ export function createReplies({
     commit,
     escalate,
     classify,
+    // ¿Este mensaje elige o cambia el curso? (número que atiende toda la marca). Sin escribir: lo usa también el motor
+    // de recorridos para empezar ya con el curso que la persona nombró.
+    routeCourse: route,
     settings,
     resumeIfPausedByMode,
     suggestion,
