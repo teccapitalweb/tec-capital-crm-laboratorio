@@ -97,11 +97,11 @@ npm start
 
 `npm run check` comprueba codificación (UTF-8, LF), sintaxis y formato (Prettier); antes de entregar, `npx prettier --write` sobre lo que tocaste.
 
-La referencia vigente es **725 pruebas aprobadas** más 47 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **730 pruebas aprobadas** más 73 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 
-**18 nov 2026 (Tinta):** el rediseño «Tinta» de todas las pantallas del CRM del equipo (bloques de color, menú en dos temas, editor de recorridos por pasos) está **construido en la rama `chore/f0-01-codificacion` y sin publicar**; sólo interfaz, sin esquema nuevo, y la experiencia del cliente no cambia. Detalle en [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md) y reglas en [docs/DISENO_Y_AUDITORIA.md](docs/DISENO_Y_AUDITORIA.md).
+**18 nov 2026 (Tinta):** el rediseño «Tinta» de todas las pantallas del CRM del equipo (bloques de color, menú en dos temas, editor de recorridos por pasos) se **publicó** en `main` (commit `7c022c8`); sólo interfaz, sin esquema nuevo, y la experiencia del cliente no cambia. Falta que el dueño lo vea con su cuenta y con datos reales. Detalle en [docs/CONTINUIDAD.md](docs/CONTINUIDAD.md) y reglas en [docs/DISENO_Y_AUDITORIA.md](docs/DISENO_Y_AUDITORIA.md).
 
 **17 nov 2026 (undécima):** la undécima tanda (pasos nuevos de los recorridos: lista, plantilla de WhatsApp, archivos y guardar la opción; reglas por mensaje con el orden de atención; bandeja nueva con vistas, contadores y búsqueda; y secuencias de seguimiento) se **publicó** en `main` (commit `60fd00b`; esquema `41+24.48be9286`); Bandeja, Reglas y Secuencias siguen en vista previa. Planes: [PLAN_REGLAS.md](docs/PLAN_REGLAS.md), [PLAN_BANDEJA_VISTAS.md](docs/PLAN_BANDEJA_VISTAS.md), [PLAN_SECUENCIAS.md](docs/PLAN_SECUENCIAS.md) y [GUIA_SECUENCIAS.md](docs/GUIA_SECUENCIAS.md).
 
