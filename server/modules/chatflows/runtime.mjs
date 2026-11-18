@@ -465,19 +465,25 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
 
   // ¿Qué recorrido publicado arranca con este mensaje? Primero los de palabra clave, luego «primer mensaje de la
   // conversación» y al final «cualquier mensaje»; dentro de cada tipo, el más antiguo.
+  const byKeyword = (flows, m) =>
+    flows.filter(
+      f =>
+        f.start?.type === 'keyword' &&
+        keywordMatch(m.text || '', f.start.keywords || [], { mode: f.start.mode || 'contains' }) !== null,
+    );
+  // ¿Este mensaje es la palabra clave de un recorrido que puede volver a empezar? Es la persona que escribe otra vez
+  // la palabra (o toca de nuevo el anuncio, que manda su frase) mientras un recorrido espera su respuesta. Sólo los
+  // recorridos que se pueden repetir «siempre»: con «una vez por conversación» o con un descanso, la palabra no
+  // reinicia y sigue contando como una respuesta que no se entendió.
+  const restartsWith = (c, m) =>
+    byKeyword(repo.startable(c.brand_id), m).some(f => (f.settings?.reentry ?? 'always') === 'always');
   function pick(c, m) {
     const brandId = c.brand_id;
     const flows = repo.startable(brandId);
     if (!flows.length) return null;
     const first = repo.customerMessages(brandId, c.id) === 1;
     const ofType = type => flows.filter(f => f.start?.type === type);
-    const candidates = [
-      ...ofType('keyword').filter(
-        f => keywordMatch(m.text || '', f.start.keywords || [], { mode: f.start.mode || 'contains' }) !== null,
-      ),
-      ...(first ? ofType('first_message') : []),
-      ...ofType('any_message'),
-    ];
+    const candidates = [...byKeyword(flows, m), ...(first ? ofType('first_message') : []), ...ofType('any_message')];
     for (const f of candidates) {
       if (!reentryAllows(brandId, c, f)) continue;
       // Un recorrido propio para el curso de la conversación (ajuste courseOverrides; una sola redirección).
@@ -619,6 +625,12 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
           decorate: labels ? reoffer(labels) : null,
           after: afterDetour(brandId, c.id),
         };
+      }
+      if (r.kind === 'detour' && restartsWith(c, m)) {
+        // No era una respuesta a lo que se esperaba, sino la palabra clave otra vez: la atención en curso se cierra
+        // («restarted», fuera de las tasas) y el recorrido de esa palabra empieza de nuevo con este mismo mensaje.
+        endRow(brandId, row, 'restarted');
+        return startOrNull(c, m);
       }
       if (r.kind === 'detour') {
         s.waiting.misses = (s.waiting.misses || 0) + 1;

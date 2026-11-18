@@ -27,6 +27,7 @@ export const CAPS = Object.freeze({
 // Resultado de una sesión → categoría de las estadísticas (flowResult del modelo). Los propios de este motor:
 //   automation_off   la marca apagó la automatización o su asistente ya no responde solo
 //   stopped          alguien del equipo detuvo la sesión o pausó el recorrido con «detener las conversaciones»
+//   restarted        la persona escribió otra vez la palabra clave mientras se esperaba su respuesta: empezó de nuevo
 export const OUTCOMES = Object.freeze([
   'completed',
   'assistant',
@@ -42,6 +43,7 @@ export const OUTCOMES = Object.freeze([
   'error',
   'automation_off',
   'stopped',
+  'restarted',
 ]);
 
 // ---- Tipos de paso que el motor del servidor sabe ejecutar: la lista vive en el modelo compartido (flow-support.js)

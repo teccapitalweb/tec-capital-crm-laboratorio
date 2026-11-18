@@ -29,7 +29,7 @@ export const ENDING_LABELS = Object.freeze({
   left: 'Escribió otra cosa y siguió el asistente',
   opt_out: 'Pidió no recibir más mensajes',
   error: 'Error',
-  other: 'Otro (recorrido pausado, archivado o automatización apagada)',
+  other: 'Otro (recorrido pausado, archivado, automatización apagada o la persona empezó de nuevo)',
 });
 // Terminar en un paso por estas razones es «irse ahí»: es lo que el resumen ordena de más débil a más fuerte.
 const LOST = new Set(['timeout', 'window_closed', 'left', 'opt_out']);

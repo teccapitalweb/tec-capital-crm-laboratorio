@@ -702,3 +702,50 @@ test('WhatsApp real: un webhook repetido no repite el recorrido y un número en 
   assert.match(heard.body.results[0].result, /^escucha/);
   assert.equal(db.prepare('SELECT count(*) n FROM chatflow_sessions').get().n, before);
 });
+
+test('la palabra clave otra vez, con el recorrido esperando una respuesta, lo empieza de nuevo', async t => {
+  const L = await lab(t);
+  const { db } = L;
+  await L.enableAutomation();
+  const flow = await L.publishFlow({ start: { type: 'keyword', keywords: ['aves'] } });
+  const ana = await L.customer('Ana Pérez');
+  assert.equal((await ana.say('Quiero info de aves')).log.intent, 'flow');
+  await L.wake(ana.conv, 'delay');
+  const first = L.session(ana.conv);
+  assert.equal(first.state, 'waiting');
+  // Otra cosa sigue siendo una respuesta que no se entendió: contesta el asistente y la sesión sigue esperando.
+  assert.notEqual((await ana.say('mi gato se llama Pelusa')).log.intent, 'flow');
+  assert.equal(L.session(ana.conv).id, first.id);
+  // La palabra clave (como al tocar otra vez el anuncio): la atención anterior se cierra y el recorrido arranca.
+  const before = L.outgoing(ana.conv).length;
+  const again = await ana.say('aves');
+  assert.equal(again.log.intent, 'flow');
+  assert.match(again.reply.text, /^Hola, Ana\. Gracias por tu interés en /);
+  const second = L.session(ana.conv);
+  assert.notEqual(second.id, first.id);
+  assert.equal(second.flow_id, flow.id);
+  assert.equal(second.state, 'delayed');
+  assert.ok(L.outgoing(ana.conv).length > before, 'el saludo salió otra vez');
+  const closed = db.prepare('SELECT state,outcome FROM chatflow_sessions WHERE id=?').get(first.id);
+  assert.deepEqual({ ...closed }, { state: 'ended', outcome: 'restarted' });
+  // Empezar de nuevo no cuenta como terminar ni como abandonar: queda fuera de las tasas.
+  const counts = (await L.api('/api/chatflows')).flows.find(f => f.id === flow.id).metrics;
+  assert.equal(counts.excluded, 1);
+  assert.equal(counts.left + counts.dropped + counts.completed, 0);
+
+  // Un recorrido de «una vez por conversación» no se reinicia: la palabra sigue contando como no entendida.
+  const once = await L.publishFlow({
+    name: 'Una vez',
+    start: { type: 'keyword', keywords: ['perros'] },
+    settings: { reentry: 'once_conversation' },
+  });
+  const luis = await L.customer('Luis Mora');
+  assert.equal((await luis.say('perros')).log.intent, 'flow');
+  await L.wake(luis.conv, 'delay');
+  const only = L.session(luis.conv);
+  assert.equal(only.flow_id, once.id);
+  assert.notEqual((await luis.say('perros')).log.intent, 'flow');
+  const still = L.session(luis.conv);
+  assert.equal(still.id, only.id);
+  assert.equal(JSON.parse(still.waiting).misses, 1);
+});
