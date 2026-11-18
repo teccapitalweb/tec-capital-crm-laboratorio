@@ -2348,3 +2348,140 @@
     min-width: var(--touch);
   }
 }
+
+/* ---- Catálogo: proporciones de las tarjetas de Cursos y Flyers (18 nov 2026) -------------------------------------------
+   La portada manda: el curso enseña su flyer casi entero (4:3 desde arriba, donde va el título) y el flyer se ve completo,
+   sin recortes, porque es lo que se revisa antes de aprobar. Todas las tarjetas de una fila miden lo mismo, con las
+   acciones en un solo renglón pegado abajo. */
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course-grid, .cat-flyer-grid) {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  align-items: stretch;
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-flyer) {
+  display: flex;
+  flex-direction: column;
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-flyer) > .cat-card-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-7) var(--space-8) var(--space-8);
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-flyer) > .cat-card-body > * {
+  margin: 0;
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-flyer) h2 {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--font-xl);
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-flyer) .cat-card-body :is(small, p) {
+  font-size: var(--font-sm);
+  line-height: 1.45;
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-course .cat-card-body > small:first-child {
+  color: var(--text-2);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-flyer) .actions {
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-4);
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-flyer) .actions .btn {
+  flex: 0 1 auto;
+  min-width: var(--touch);
+  padding: 0 var(--space-6);
+  white-space: nowrap;
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-flyer) .actions .btn:first-child {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-flyer) .actions .btn:first-child:hover {
+  background: var(--ink-2);
+  color: var(--on-ink);
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-flyer) .actions .btn[aria-label] {
+  flex: none;
+  margin-left: auto;
+  padding: 0;
+  width: var(--touch);
+}
+
+/* Curso: portada 4:3 con el flyer visto desde arriba; el estado va sobre una franja oscura para que se lea encima de
+   cualquier imagen. Sin imagen, un bloque de color con el icono grande. */
+.workspace:not(.customer-skin) .catalogue-page .cat-course-cover {
+  flex: none;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(135deg, var(--lilac), var(--sky));
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-course-cover img {
+  filter: none;
+  object-position: center top;
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-course-cover:has(img)::after {
+  position: absolute;
+  inset: auto 0 0;
+  height: 44%;
+  background: linear-gradient(to top, rgb(22 24 29 / 55%), rgb(22 24 29 / 0%));
+  content: '';
+  pointer-events: none;
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-course-cover > .cat-badge {
+  z-index: 1;
+  backdrop-filter: none;
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-course-cover > span > svg {
+  width: 44px;
+  height: 44px;
+  color: var(--ink);
+  opacity: 0.55;
+}
+
+/* Flyer: la imagen completa y grande (los flyers son 4:5 o cuadrados); nunca se recorta. */
+.workspace:not(.customer-skin) .catalogue-page .cat-flyer-preview {
+  flex: none;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  padding: var(--space-5);
+  cursor: zoom-in;
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-flyer-preview img {
+  border-radius: var(--radius-item);
+  filter: none;
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-flyer .cat-badges {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 760px) {
+  /* En el celular, una tarjeta por renglón: el flyer se revisa grande y las acciones caben en un renglón. */
+  .workspace:not(.customer-skin) .catalogue-page :is(.cat-course-grid, .cat-flyer-grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace:not(.customer-skin) .catalogue-page .cat-course-cover {
+    aspect-ratio: 16 / 9;
+  }
+  .workspace:not(.customer-skin) .catalogue-page .cat-flyer h2 {
+    font-size: var(--font-xl);
+  }
+  .workspace:not(.customer-skin) .catalogue-page .cat-flyer .cat-card-body :is(small, p) {
+    font-size: var(--font-sm);
+  }
+  .workspace:not(.customer-skin) .catalogue-page .cat-flyer .actions .btn {
+    min-height: var(--touch);
+    padding: 0 var(--space-6);
+    font-size: var(--font-md);
+  }
+}
