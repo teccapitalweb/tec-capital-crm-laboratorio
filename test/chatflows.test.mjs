@@ -733,6 +733,18 @@ test('la palabra clave otra vez, con el recorrido esperando una respuesta, lo em
   assert.equal(counts.excluded, 1);
   assert.equal(counts.left + counts.dropped + counts.completed, 0);
 
+  // La ventana «Probar» hace lo mismo y lo anota.
+  let sim = await L.api('/api/chatflows/' + flow.id + '/simulate', { body: {} });
+  assert.equal(sim.waiting.kind, 'choice');
+  sim = await L.api('/api/chatflows/' + flow.id + '/simulate', { body: { state: sim.state, input: { text: 'aves' } } });
+  assert.ok(sim.notes.some(note => /empieza de nuevo/.test(note)));
+  assert.ok(sim.messages.some(m => /Gracias por tu interés en /.test(m.text || '')));
+  assert.equal(sim.waiting.kind, 'choice');
+  sim = await L.api('/api/chatflows/' + flow.id + '/simulate', {
+    body: { state: sim.state, input: { text: 'otra cosa' } },
+  });
+  assert.ok(!sim.notes.some(note => /empieza de nuevo/.test(note)), 'otra cosa sigue siendo un desvío');
+
   // Un recorrido de «una vez por conversación» no se reinicia: la palabra sigue contando como no entendida.
   const once = await L.publishFlow({
     name: 'Una vez',

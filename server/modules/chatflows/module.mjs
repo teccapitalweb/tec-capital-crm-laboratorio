@@ -61,6 +61,7 @@ import { REVIEW_KINDS, cleanSuggestions, outlineOf, ruleSuggestions } from './re
 import { FLOW_FILE_MIMES, UNAVAILABLE_TYPES } from '../../../public/kit/shared/flow-support.js';
 import { discard, receive, store } from '../../lib/upload.mjs';
 import { createRuntime } from './runtime.mjs';
+import { keywordMatch } from '../../lib/conditions.mjs';
 
 const ID = '[A-Za-z0-9-]{1,64}';
 const REF = /^[A-Za-z0-9-]{8,100}$/;
@@ -616,7 +617,19 @@ export default {
           throw fail(400, 'Escribe lo que diría la persona o elige una opción.', { code: 'invalid_request' });
         messages.push({ from: 'person', text: message.text });
         const r = route(s, env, message, svc.replies.classify);
-        if (['detour', 'intent', 'interrupt', 'during_delay', 'expired'].includes(r.kind)) {
+        // Igual que el motor: la palabra clave del propio recorrido, escrita mientras se espera una respuesta, lo
+        // empieza de nuevo (sólo si puede repetirse «siempre»).
+        const restarts =
+          r.kind === 'detour' &&
+          f.start?.type === 'keyword' &&
+          (settings.reentry ?? 'always') === 'always' &&
+          keywordMatch(message.text, f.start.keywords || [], { mode: f.start.mode || 'contains' }) !== null;
+        if (restarts) {
+          notes.push('La persona escribió otra vez la palabra clave: el recorrido empieza de nuevo.');
+          s = newSession({ id: 'simulacion', flowId: id, version: 0, graph: env.graph, now: now() });
+          bind(s);
+          advance(s, env);
+        } else if (['detour', 'intent', 'interrupt', 'during_delay', 'expired'].includes(r.kind)) {
           const answer = await svc.replies.test(user, {
             brandId,
             courseId,

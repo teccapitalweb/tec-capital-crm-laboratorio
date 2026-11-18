@@ -603,7 +603,11 @@ function adoptar({ api, ctx, datos, marca }) {
           { id: 'name', label: 'Nombre', fixed: true, cell: r => r.name },
           { id: 'language', label: 'Idioma', cell: r => r.language },
           { id: 'category', label: 'Categoría', cell: r => CATEGORIA[r.category] ?? r.category },
-          { id: 'status', label: 'Estado', cell: r => r.status },
+          {
+            id: 'status',
+            label: 'Estado',
+            cell: r => ESTADOS.find(e => e.value === String(r.status).toLowerCase())?.label ?? r.status,
+          },
           { id: 'header', label: 'Encabezado', cell: r => ENCABEZADO[r.header] ?? r.header },
           { id: 'usable', label: 'Se puede usar', wrap: true, cell: r => (r.supported ? 'Sí' : r.unsupported) },
         ],
