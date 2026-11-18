@@ -1096,9 +1096,16 @@
   box-shadow: none;
   color: var(--ink);
 }
+/* La clase global .unread (el contador redondo de 18 px de styles.css) aplastaba la tarjeta del aviso sin leer */
 .workspace:not(.customer-skin) .ops-notification.unread {
+  display: flex;
+  place-items: normal;
+  min-width: 0;
+  height: auto;
   border: 0;
-  box-shadow: inset 4px 0 0 var(--lime);
+  border-radius: var(--radius-block-lg);
+  background: var(--surface);
+  box-shadow: inset 6px 0 0 var(--lime);
 }
 .workspace:not(.customer-skin) .ops-notification > div {
   display: grid;
@@ -1119,6 +1126,7 @@
 }
 .workspace:not(.customer-skin) .ops-notification-icon {
   flex: none;
+  align-self: flex-start;
   padding: var(--space-4);
   border-radius: var(--radius-pill);
   background: var(--soft);
@@ -2108,8 +2116,13 @@
   .workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task {
     flex-wrap: wrap;
   }
+  /* La casilla y el texto en la primera línea; la hora y «Editar» debajo */
+  .workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task .task-main {
+    flex: 1 1 calc(100% - var(--touch) - var(--space-6));
+  }
   .workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task .task-meta {
     flex: 1 1 100%;
+    max-width: none;
     align-items: flex-start;
     text-align: left;
   }
