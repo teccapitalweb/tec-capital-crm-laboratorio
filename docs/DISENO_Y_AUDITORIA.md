@@ -53,7 +53,7 @@ Sobre tinta: blanco 17,76; `--on-ink-text` 14,50; `--on-ink-soft` 10,71; `--on-i
 ### Dónde se queda el azul petróleo (`#2f6f8f`)
 
 - En la **paleta de gráficas** (`--ch-seq-4` y vecinos): se validó para daltonismo sobre blanco y Tinta no tocó las gráficas.
-- En el **icono de la app y el favicon** (`favicon.svg`, `icon-192.png`, `icon-512.png`) y en la **pantalla de entrada** (la marca «tc» del panel izquierdo), que comparten clientes y equipo.
+- En el **icono de la app y el favicon** (`favicon.svg`, `icon-192.png`, `icon-512.png`), que comparten clientes y equipo. (La pantalla de entrada lo usó hasta el 18 nov 2026; desde entonces su marca «tc» va en lima sobre tinta.)
 - En la **experiencia del cliente** (`.customer-skin`: el chat con aspecto de app de mensajería en `/`, también cuando el equipo entra en modo «Cliente»), que conserva los colores de Niebla a propósito: `tokens.css` §9 los vuelve a declarar sobre `.customer-skin`.
 - En las **páginas públicas sin guiones** (certificados, encuestas, aviso de privacidad, formulario de aliados), que llevan su CSS en línea en `server/*.mjs` y no cargan `tokens.css`.
 
@@ -162,6 +162,26 @@ La tabla de **colores de estado** (qué ficha para qué estado) está en GUIA_PA
 Variables que el kit define por su cuenta y podrían pasar a `tokens.css` si las pantallas de antes las necesitan: ninguna de color; sólo `--k-fill`, que es de contexto (se declara en cada caja) y no un valor de la paleta.
 
 **Cajas que se desplazan y `.k-sr`:** las etiquetas «sólo para lector de pantalla» son absolutas. Toda caja del kit que se desplaza (`.k-page`, `.k-table__scroll`, el cuerpo de una ventana y del panel) es `position: relative` para que una `.k-sr` dentro de una tabla ancha no se coloque respecto a la ventana y ensanche el documento (era el desbordamiento intermitente de 2–3 px de Contactos a 1366 px con un nombre largo; lo vigila `test/ui/contactos.spec.mjs`). Una caja propia que se desplace horizontalmente debe hacer lo mismo.
+
+## Vistas del equipo en Tinta (18 nov 2026)
+
+Las vistas de antes que no estaban hechas con el kit (Operación y todas sus áreas, Tareas, Agenda, Oportunidades, Catálogo, Mis resultados, Analítica, Actividad, Presentación, Equipo, Mi configuración, sus ventanas y la entrada) se rediseñaron por dentro en **`public/tinta-vistas.css`**, que se carga justo después de `tinta-atencion.css`. Sólo cambia el aspecto; ninguna opción se perdió ni se inventó. Lo que quedó fijado:
+
+- **Alcance:** todo va bajo `.workspace:not(.customer-skin)`, `#modal:not(.pay-page)` o `.entry`; las reglas comunes saltan Mi día (`.content-page:not(:has(> .day-summary))`) y dejan Conversaciones y las ventanas del chat a `tinta-atencion.css`. Se comprobó píxel a píxel que Mi día y Conversaciones se ven igual con y sin la hoja.
+- **Cabecera:** el título nombra la vista (Operación, Catálogo, Agenda, Actividad) con una línea de propósito; la acción principal (`.btn.primary` en `.page-heading`) va en tinta con letra lima y 50 px de alto. El selector **Marca** es una píldora blanca en una barra de filtros.
+- **Áreas y pestañas de Operación:** áreas en píldoras grandes (activa en tinta); sus pestañas en una franja blanca con la elegida en **lima**.
+- **Cifras:** `.ops-stat`, `.an-kpi` y `.metric` son bloques de color con la cifra en `--font-display`; la cifra se ajusta al ancho del bloque (`cqi`) para que un importe quepa. Una cifra que filtra, encendida, va en tinta con la cifra en lima. El tono lo pone la vista con `data-tone` cuando la cifra tiene significado (pagos: por revisar mantequilla, pendientes cielo, pagados menta, cobrado lila; cola: fuera de objetivo durazno); si no, sigue el orden cielo, mantequilla, lila, menta. En celular, dos por fila.
+- **Fichas de estado:** `.ops-chip` sigue la tabla de [GUIA_PANTALLAS.md](GUIA_PANTALLAS.md): `good`/`ok` menta, `warn`/`high` mantequilla, `urgent`/`bad` durazno con letra `--bad`, y los nuevos `sky`, `lilac` y `lime`; sin tipo, gris. Se ajustaron los estados que no seguían la tabla: apertura planeada en cielo y en curso en lima; pedido pendiente en cielo y vencido en durazno; invitación aceptada menta, pendiente cielo, vencida durazno; «Curso activo» en menta. En el catálogo, `.cat-badge.ready`/`.ok` en menta.
+- **Bloques y piezas:** `.crm-panel` es la tarjeta blanca de 28 px; lo que va dentro (marcas, filas, versiones, eventos, comprobantes, integrantes) es una pieza gris sin borde, y lo que va dentro de una pieza gris (botones, campos, fichas neutras) pasa a blanco.
+- **Ajustes:** cada `.checkbox-field` es una pieza con su rótulo; encendida, en lima (como el ciclo de las conversaciones). Los días de «Horarios y reparto» encendidos van en blanco dentro de su pieza gris.
+- **Listas:** filas de la cola, pedidos, avisos, ediciones, tareas y actividad como tarjetas redondas; la primera acción de una fila (Abrir chat, Ver, Gestionar) en tinta.
+- **Oportunidades:** cada etapa una columna con el color de su estado (nuevo blanco, en conversación cielo, inscripción lima, ganada menta, no continuó durazno); la marca de cada tarjeta en ficha lila; el contador en tinta.
+- **Vacío y cargando:** `.crm-empty` con un disco lima y lila, título de 19 px y explicación; `.loading-message` como pieza tranquila, sin animación.
+- **Ventanas:** cierre redondo de 44 px, secciones con rótulo de 16 px, tareas, versiones y notas de operación como piezas.
+- **Entrada:** la historia en un bloque de tinta con la marca **en lima** (ya no en azul petróleo) y la conversación de ejemplo en piezas blanca y lima; el formulario en una tarjeta blanca con la nota en mantequilla. Es la misma página en `/crm` y en `/`.
+- **Celular:** botones de estas vistas de 40 px como mínimo, buscadores de 40 px, filas en una columna y el tablero que se desliza de lado dentro de su caja.
+
+La prueba `test/ui/vistas.spec.mjs` recorre cada área y pestaña de Operación y cada una de estas vistas en computadora y celular, con la auditoría en cero (sin línea base) y sus acciones clave a la vista.
 
 ## Auditoría reproducible
 
