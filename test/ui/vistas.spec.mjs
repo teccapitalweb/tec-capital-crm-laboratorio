@@ -143,12 +143,13 @@ test.describe('Vistas del equipo', () => {
   });
 });
 
-test('La entrada: la historia en tinta con la marca en lima y el formulario en una tarjeta blanca', async ({
+test('La entrada del equipo (/crm): la historia en tinta con la marca en lima y el formulario en una tarjeta blanca', async ({
   page,
 }, testInfo) => {
   const watcher = watch(page);
   await page.goto('/crm');
   await expect(page.locator('#auth-form')).toBeVisible();
+  await expect(page.locator('.entry')).toHaveClass(/entry--team/);
   await expect(page.locator('.entry-story')).toHaveCSS('background-color', INK);
   await expect(page.locator('.entry-story .brand-mark')).toHaveCSS('background-color', LIME);
   await expect(page.locator('.entry-form')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
@@ -161,5 +162,27 @@ test('La entrada: la historia en tinta con la marca en lima y el formulario en u
   expect(result.overflowX).toBe(0);
   expect(result.contrastFailures, result.contrastSample.join(' | ')).toBe(0);
   if (testInfo.project.name === 'celular') expect(result.smallTargets, result.targetSample.join(' | ')).toBe(0);
+  watcher.done();
+});
+
+// La entrada de los clientes («/», enlaces de invitación, la app «Chat de prueba», «?pay=» sin sesión) conserva su
+// aspecto de antes hasta que el dueño decida otra cosa: tinta-vistas.css no la toca.
+test('La entrada de los clientes (/) conserva su aspecto: sin bloque en tinta ni marca en lima', async ({ page }) => {
+  const watcher = watch(page);
+  await page.goto('/');
+  await expect(page.locator('#auth-form')).toBeVisible();
+  await expect(page.locator('.entry')).not.toHaveClass(/entry--team/);
+  await expect(page.locator('.entry-story')).not.toHaveCSS('background-color', INK);
+  await expect(page.locator('.entry-story .brand-mark')).not.toHaveCSS('background-color', LIME);
+  // Pintada igual con y sin la hoja de las vistas del equipo
+  const story = () =>
+    page.evaluate(() => {
+      const s = getComputedStyle(document.querySelector('.entry-story'));
+      const f = getComputedStyle(document.querySelector('.entry-form'));
+      return [s.backgroundColor, s.backgroundImage, s.color, s.borderRadius, f.backgroundColor, f.padding].join('|');
+    });
+  const withSheet = await story();
+  await page.evaluate(() => (document.querySelector('link[href="/tinta-vistas.css"]').disabled = true));
+  expect(await story()).toBe(withSheet);
   watcher.done();
 });

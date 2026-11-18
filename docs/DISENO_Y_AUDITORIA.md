@@ -53,7 +53,7 @@ Sobre tinta: blanco 17,76; `--on-ink-text` 14,50; `--on-ink-soft` 10,71; `--on-i
 ### Dónde se queda el azul petróleo (`#2f6f8f`)
 
 - En la **paleta de gráficas** (`--ch-seq-4` y vecinos): se validó para daltonismo sobre blanco y Tinta no tocó las gráficas.
-- En el **icono de la app y el favicon** (`favicon.svg`, `icon-192.png`, `icon-512.png`), que comparten clientes y equipo. (La pantalla de entrada lo usó hasta el 18 nov 2026; desde entonces su marca «tc» va en lima sobre tinta.)
+- En el **icono de la app y el favicon** (`favicon.svg`, `icon-192.png`, `icon-512.png`), que comparten clientes y equipo. También en la **pantalla de entrada de los clientes** (`/`: la marca «tc» del panel izquierdo); la entrada del equipo (`/crm`) la lleva en lima sobre tinta desde el 18 nov 2026.
 - En la **experiencia del cliente** (`.customer-skin`: el chat con aspecto de app de mensajería en `/`, también cuando el equipo entra en modo «Cliente»), que conserva los colores de Niebla a propósito: `tokens.css` §9 los vuelve a declarar sobre `.customer-skin`.
 - En las **páginas públicas sin guiones** (certificados, encuestas, aviso de privacidad, formulario de aliados), que llevan su CSS en línea en `server/*.mjs` y no cargan `tokens.css`.
 
@@ -178,7 +178,7 @@ Las vistas de antes que no estaban hechas con el kit (Operación y todas sus ár
 - **Oportunidades:** cada etapa una columna con el color de su estado (nuevo blanco, en conversación cielo, inscripción lima, ganada menta, no continuó durazno); la marca de cada tarjeta en ficha lila; el contador en tinta.
 - **Vacío y cargando:** `.crm-empty` con un disco lima y lila, título de 19 px y explicación; `.loading-message` como pieza tranquila, sin animación.
 - **Ventanas:** cierre redondo de 44 px, secciones con rótulo de 16 px, tareas, versiones y notas de operación como piezas.
-- **Entrada:** la historia en un bloque de tinta con la marca **en lima** (ya no en azul petróleo) y la conversación de ejemplo en piezas blanca y lima; el formulario en una tarjeta blanca con la nota en mantequilla. Es la misma página en `/crm` y en `/`.
+- **Entrada:** la historia en un bloque de tinta con la marca **en lima** (ya no en azul petróleo) y la conversación de ejemplo en piezas blanca y lima; el formulario en una tarjeta blanca con la nota en mantequilla. Sólo en la puerta del equipo (`/crm`, clase `.entry--team` que pone `app.js` según la ruta); en `/` (y en los enlaces de invitación, la app «Chat de prueba» y `?pay=` sin sesión) la entrada de los clientes conserva su aspecto de antes, como el chat al que lleva.
 - **Celular:** botones de estas vistas de 40 px como mínimo, buscadores de 40 px, filas en una columna y el tablero que se desliza de lado dentro de su caja.
 
 La prueba `test/ui/vistas.spec.mjs` recorre cada área y pestaña de Operación y cada una de estas vistas en computadora y celular, con la auditoría en cero (sin línea base) y sus acciones clave a la vista.

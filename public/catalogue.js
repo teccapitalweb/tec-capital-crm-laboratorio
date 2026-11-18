@@ -117,7 +117,8 @@ window.createCatalogueUI = function ({ state, api, esc, icon, icons, showModal, 
                 .replace(/[\u0300-\u036f]/g, ''),
             )),
     );
-  const badge = (label, good = false) => `<span class="cat-badge ${good ? 'ready' : ''}">${esc(label)}</span>`;
+  const badge = (label, good = false, kind = '') =>
+    `<span class="cat-badge ${good ? 'ready' : ''} ${kind}">${esc(label)}</span>`;
   const editionOptions = (courseId, selected, onlyPublished = false) =>
     opts(
       data.editions.filter(
@@ -237,7 +238,7 @@ window.createCatalogueUI = function ({ state, api, esc, icon, icons, showModal, 
       content = `<div class="cat-grid">${rows
         .map(p => {
           const e = edition(p.edition_id);
-          return `<article class="cat-panel"><div class="cat-card-heading">${icon('tag')}${badge(p.availability, p.availability === 'Vigente')}</div><small>${esc(brand(p.brand_id))} · ${esc(e?.name)}</small><h2>${esc(p.name)}</h2><div class="cat-big-price">${money(p.price_cents, e?.currency)} <del>${money(e?.price_cents || 0, e?.currency)}</del></div><p>${stamp(p.starts_at, e?.timezone)} → ${stamp(p.ends_at, e?.timezone)}</p><small>${esc(e?.timezone)} · ${esc(course(e?.course_id)?.title)}</small><div class="actions">${btn('edit', admin() ? 'Editar' : 'Ver promoción', p.id, 'promotions')}${btn('history', icon('history'), p.id, 'promotion', 'aria-label="Historial de promoción"')}</div></article>`;
+          return `<article class="cat-panel"><div class="cat-card-heading">${icon('tag')}${badge(p.availability, p.availability === 'Vigente', p.availability === 'Programada' ? 'sky' : '')}</div><small>${esc(brand(p.brand_id))} · ${esc(e?.name)}</small><h2>${esc(p.name)}</h2><div class="cat-big-price">${money(p.price_cents, e?.currency)} <del>${money(e?.price_cents || 0, e?.currency)}</del></div><p>${stamp(p.starts_at, e?.timezone)} → ${stamp(p.ends_at, e?.timezone)}</p><small>${esc(e?.timezone)} · ${esc(course(e?.course_id)?.title)}</small><div class="actions">${btn('edit', admin() ? 'Editar' : 'Ver promoción', p.id, 'promotions')}${btn('history', icon('history'), p.id, 'promotion', 'aria-label="Historial de promoción"')}</div></article>`;
         })
         .join('')}</div>`;
     if (tab === 'flyers')
