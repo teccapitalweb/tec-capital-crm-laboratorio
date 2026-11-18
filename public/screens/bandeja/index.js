@@ -192,7 +192,7 @@ function fila(c, { marcas, coincide }) {
           <span class="${['k-chip', TONO_ESTADO[c.state] ?? '']}">${rotulo(ESTADOS, c.state)}</span>
           <span class="bj-quien">${quienAtiende(c)}</span>
           ${when(c.service.waitingSince, () => html`<span class="k-chip k-chip--warn">Sin respuesta</span>`)}
-          ${c.tags.slice(0, 2).map(tag => html`<span class="k-chip">${tag.name}</span>`)}
+          ${c.tags.slice(0, 2).map(tag => html`<span class="k-chip k-chip--lilac">${tag.name}</span>`)}
           ${when(
             c.unread > 0,
             () =>

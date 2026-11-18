@@ -1,19 +1,21 @@
 /*
  * Pantalla «Cambio de número»: sólo la composición que el kit no trae, con el prefijo cn- y variables de
- * public/tokens.css.
+ * public/tokens.css. Tinta: una tarjeta blanca por número con su modo en fichas grandes (activo menta, escucha
+ * cielo), los contadores en bloques de color con la cifra grande, los demás datos como piezas, la escucha por día
+ * en su tabla y el historial como filas redondas.
  */
 
 .cn-numeros {
   display: grid;
   /* la tabla de la escucha necesita ancho: una tarjeta por fila salvo en pantallas muy anchas */
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 1fr));
-  gap: var(--space-4);
+  gap: var(--gap-page);
 }
 
 .cn-numero {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-5);
   min-width: 0;
 }
 
@@ -27,40 +29,42 @@
 
 .cn-titulo h2 {
   margin: 0;
-  font-size: var(--font-xl);
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
+.cn-cifras,
 .cn-datos {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-  gap: var(--space-2) var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: var(--space-3);
   margin: 0;
 }
 
-.cn-datos dt {
-  color: var(--text-2);
-}
-
+.cn-cifras dd,
 .cn-datos dd {
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
+.cn-cifras .k-figure__value {
+  font-size: var(--font-title);
+}
+
 .cn-historial,
 .cn-consecuencias {
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  margin: 0;
+  padding: 0;
 }
 
 .cn-historial {
   list-style: none;
-  border-top: 1px solid var(--line);
-  padding-top: var(--space-3);
 }
 
 .cn-historial li {
@@ -69,8 +73,31 @@
   justify-content: space-between;
   gap: var(--space-1) var(--space-3);
   min-width: 0;
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
+  font-size: var(--font-md);
 }
 
+.cn-historial li .k-muted {
+  color: var(--text-2);
+}
+
+/* Las consecuencias de una acción delicada, en una pieza mantequilla. */
 .cn-consecuencias {
-  padding-left: var(--space-5);
+  padding: var(--space-5) var(--space-6) var(--space-5) calc(var(--space-6) + var(--space-5));
+  border-radius: var(--radius-block);
+  background: var(--butter);
+  color: var(--ink);
+}
+
+@media (max-width: 680px) {
+  .cn-cifras {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cn-cifras .k-figure__value {
+    font-size: var(--font-2xl);
+  }
 }

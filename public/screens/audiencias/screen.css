@@ -3,13 +3,14 @@
  * public/tokens.css.
  */
 
-.aud-marca {
-  max-width: 320px;
-}
-
 .aud-nombre {
   margin-right: var(--space-2);
-  font-weight: 600;
+  color: var(--ink);
+  font-weight: var(--weight-black);
+}
+
+.aud-cifras {
+  position: relative;
 }
 
 .aud-acciones {
@@ -23,9 +24,22 @@
   gap: var(--space-2);
 }
 
+/* En la ventana del segmento: cuántos entran, en grande. */
 .aud-cifra {
   margin: 0;
   color: var(--ink);
+  font-size: var(--font-lead);
+}
+
+.aud-cifra > strong {
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.02em;
+}
+
+.k-dialog .aud-vista {
+  min-height: 72px;
+  background: var(--mint);
 }
 
 .aud-motivos {
@@ -35,10 +49,6 @@
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.aud-vista {
-  min-height: 72px;
 }
 
 /* Buscar dentro de los miembros y exportar: en una fila en computadora, apilados en celular. */

@@ -52,12 +52,12 @@ export default {
               <div>
                 <span class="k-eyebrow">Conversaciones</span>
                 <h1>Ciclo de las conversaciones</h1>
+                <p class="k-lead">
+                  El estado de cada conversación (Abierta, Pendiente, Resuelta, Expirada) es aparte de quién la atiende.
+                  Aquí decides, por marca, si las conversaciones expiran solas.
+                </p>
               </div>
             </header>
-            <p class="k-lead">
-              El estado de cada conversación (Abierta, Pendiente, Resuelta, Expirada) es aparte de quién la atiende. Aquí
-              decides, por marca, si las conversaciones expiran solas.
-            </p>
             <div class="cv-grid">${list.settings.map(card)}</div>
           </section>`,
         );

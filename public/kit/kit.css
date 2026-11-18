@@ -28,8 +28,16 @@
   box-sizing: border-box;
 }
 
-/* La página ocupa el hueco de #page y es la que se desplaza, como .content-page en las pantallas actuales. */
+/*
+ * La página ocupa el hueco de #page y es la que se desplaza, como .content-page en las pantallas actuales.
+ *
+ * position: relative no es decoración: las piezas «sólo para lectores de pantalla» (.k-sr) son absolutas, y una
+ * pieza absoluta sin antecesor posicionado se coloca respecto a la ventana y se escapa del recorte de las cajas que
+ * se desplazan. Dentro de una tabla ancha (los rótulos de orden de Contactos con un nombre largo) eso ensanchaba el
+ * documento unos píxeles a 1366 px. Toda caja del kit que se desplaza es, por eso, su propio bloque contenedor.
+ */
 .k-page {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -232,11 +240,36 @@
   box-shadow: none;
 }
 
-/* Sobre la página gris o dentro de una pieza hundida, el botón secundario es blanco (bocetos de Tinta). */
-.k-page > .k-head .k-btn:not(.k-btn--primary, .k-btn--accent, .k-btn--danger, .k-btn--ghost),
-.k-card .k-card .k-btn:not(.k-btn--primary, .k-btn--accent, .k-btn--danger, .k-btn--ghost),
-.k-dialog .k-card .k-btn:not(.k-btn--primary, .k-btn--accent, .k-btn--danger, .k-btn--ghost) {
-  background: var(--surface);
+/*
+ * El relleno de lo secundario depende de dónde está (bocetos de Tinta): blanco sobre la página gris, sobre un
+ * pastel o dentro de una pieza hundida; --soft dentro de algo blanco. Cada caja dice el suyo con --k-fill y los
+ * botones, pestañas y filtros de dentro lo heredan, así que una pantalla con un bloque propio sólo declara su
+ * --k-fill. Antes sólo la cabecera de la vista lo hacía y un botón secundario suelto sobre la página gris
+ * (--soft sobre --page) casi no se veía.
+ */
+.k-page,
+.k-notice,
+.k-card .k-card,
+.k-dialog .k-card,
+.k-piece,
+.k-figure,
+.k-tile[class*='k-tile--'] {
+  --k-fill: var(--surface);
+}
+
+.k-card,
+.k-side,
+.k-tile,
+.k-dialog {
+  --k-fill: var(--soft);
+}
+
+.k-btn:not(.k-btn--primary, .k-btn--accent, .k-btn--danger, .k-btn--ghost) {
+  background: var(--k-fill, var(--soft));
+}
+
+.k-btn:not(.k-btn--primary, .k-btn--accent, .k-btn--danger, .k-btn--ghost):hover {
+  background: var(--line);
 }
 
 .k-btn--primary {
@@ -293,9 +326,16 @@
   padding: 0;
 }
 
-.k-btn:disabled,
-.k-btn[aria-disabled='true'] {
-  opacity: 0.55;
+/*
+ * Desactivado: el relleno del sitio con un borde gris y la letra de apoyo, sin transparencia. Con opacidad, un
+ * botón principal quedaba en un gris tinta lavado que parecía roto y su letra no llegaba a AA; así se lee (7:1 o
+ * más), se distingue sobre la página gris y se nota que no se puede pulsar.
+ */
+.k-btn:is(:disabled, [aria-disabled='true']),
+.k-btn:is(:disabled, [aria-disabled='true']):hover {
+  border: 2px solid var(--line);
+  background: var(--k-fill, var(--soft));
+  color: var(--text-3);
   cursor: not-allowed;
 }
 
@@ -512,6 +552,20 @@ select.k-input {
 }
 
 /* Las hojas actuales esconden todo input de archivo; el del kit se ve. */
+/* El botón del selector de archivo, en píldora tinta como el resto. */
+.k-input[type='file']::file-selector-button {
+  min-height: 36px;
+  margin-right: var(--space-5);
+  padding: 0 var(--space-7);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--on-ink);
+  font: inherit;
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
 .k-field .k-input[type='file'] {
   display: block;
   padding: var(--space-3);
@@ -523,9 +577,10 @@ select.k-input {
   cursor: pointer;
 }
 
+/* Ayuda bajo un campo o una línea de apoyo: 12 px (11 px se perdía junto a los títulos grandes de Tinta). */
 .k-hint {
-  color: var(--text-3);
-  font-size: var(--font-min);
+  color: var(--text-2);
+  font-size: var(--font-sm);
   line-height: 1.6;
 }
 
@@ -643,7 +698,7 @@ select.k-input {
   padding: 0 18px;
   border: 0;
   border-radius: var(--radius-pill);
-  background: var(--surface);
+  background: var(--k-fill, var(--surface));
   color: var(--ink);
   font: inherit;
   font-size: var(--font-lg);
@@ -653,11 +708,6 @@ select.k-input {
   transition:
     color 0.16s var(--ease),
     background-color 0.16s var(--ease);
-}
-
-.k-card .k-tab,
-.k-dialog .k-tab {
-  background: var(--soft);
 }
 
 .k-tab:hover {
@@ -725,6 +775,7 @@ select.k-input {
 }
 
 .k-table__scroll {
+  position: relative; /* bloque contenedor de los .k-sr de la tabla: ver .k-page */
   overflow-x: auto;
   border: 0;
   border-radius: var(--radius-block-lg);
@@ -932,6 +983,7 @@ th[aria-sort] > .k-table__sort {
 }
 
 .k-dialog__body {
+  position: relative;
   overflow-y: auto;
   min-height: 0;
   padding: var(--space-7) 24px 24px;
@@ -1046,6 +1098,7 @@ th[aria-sort] > .k-table__sort {
 }
 
 .k-side__body {
+  position: relative;
   display: grid;
   align-content: start;
   gap: var(--space-7);
@@ -1158,15 +1211,15 @@ th[aria-sort] > .k-table__sort {
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  min-height: var(--touch);
+  min-height: var(--control);
   margin: 0;
-  padding: var(--space-3) var(--space-6);
-  border: 1px solid transparent;
+  padding: var(--space-3) var(--space-6) var(--space-3) var(--space-3);
+  border: 0;
   border-radius: var(--radius-pill);
-  background: var(--soft);
-  color: var(--text-2);
+  background: var(--k-fill, var(--soft));
+  color: var(--ink);
   font: inherit;
-  font-size: var(--font-md);
+  font-size: var(--font-lg);
   font-weight: var(--weight-bold);
   text-align: left;
   cursor: pointer;
@@ -1175,6 +1228,7 @@ th[aria-sort] > .k-table__sort {
 .k-step__btn:disabled {
   opacity: 1;
   background: transparent;
+  color: var(--text-2);
   cursor: default;
 }
 
@@ -1182,12 +1236,13 @@ th[aria-sort] > .k-table__sort {
   display: inline-grid;
   flex: none;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--soft);
-  color: var(--text-2);
-  font-size: var(--font-min);
+  background: var(--line);
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1202,24 +1257,24 @@ th[aria-sort] > .k-table__sort {
   white-space: nowrap;
 }
 
+/* Paso actual en tinta con su número en lima; los hechos con el número en menta. */
 .k-step.is-current .k-step__btn {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--ink);
+  color: var(--on-ink);
 }
 
 .k-step.is-current .k-step__n {
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--lime);
+  color: var(--ink);
 }
 
 .k-step.is-done .k-step__btn {
-  color: var(--text-2);
+  color: var(--ink);
 }
 
 .k-step.is-done .k-step__n {
-  background: var(--ok-soft);
-  color: var(--ok);
+  background: var(--mint);
+  color: var(--ink);
 }
 
 .k-wizard__where {
@@ -1237,7 +1292,7 @@ th[aria-sort] > .k-table__sort {
 
 .k-wizard__title {
   color: var(--ink);
-  font-size: var(--font-xl);
+  font-size: var(--font-section);
   font-weight: var(--weight-black);
   letter-spacing: -0.02em;
 }
@@ -1286,13 +1341,15 @@ th[aria-sort] > .k-table__sort {
 }
 
 /* Cifras proporcionales en la tarjeta; tabular-nums se reserva para tablas y ejes. */
+/* La cifra es lo primero que se lee: en la escala del título de la vista (40 px; 30 px en celular). */
 .k-tile__value {
   overflow: hidden;
+  padding-block: var(--space-1);
   color: var(--ink);
-  font-size: var(--font-2xl);
+  font-size: var(--font-title);
   font-weight: var(--weight-black);
-  letter-spacing: -0.03em;
-  line-height: 1.25;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1696,6 +1753,348 @@ th[aria-sort] > .k-table__sort {
 }
 
 /* ==========================================================================================
+   Tinta por dentro: las piezas que comparten las pantallas del kit (docs/GUIA_PANTALLAS.md)
+   ========================================================================================== */
+
+/* La llamada a la acción de la vista: tinta con letra lima y más alta (como «Nuevo recorrido»). Los demás botones
+   de la cabecera toman la misma altura para que la fila no baile. */
+.k-head .k-actions .k-btn {
+  min-height: var(--control-lg);
+}
+
+.k-head .k-btn--primary {
+  padding: 0 24px;
+  color: var(--lime);
+  font-size: var(--font-lead);
+  font-weight: var(--weight-black);
+}
+
+.k-head .k-btn--primary:is(:disabled, [aria-disabled='true']) {
+  color: var(--text-3);
+}
+
+/* Barra de filtros sobre la página: rótulo y control en una fila, sin tarjeta alrededor. Sirve para «Marca», un
+   estado o un buscador; el control es una píldora blanca. */
+.k-filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5) var(--space-8);
+  min-width: 0;
+}
+
+.k-filterbar .k-field {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+}
+
+.k-filterbar .k-label {
+  font-size: var(--font-lg);
+  white-space: nowrap;
+}
+
+.k-filterbar .k-input {
+  width: auto;
+  min-width: 190px;
+  max-width: 100%;
+  padding-inline: 18px;
+  border-color: var(--k-fill, var(--surface));
+  border-radius: var(--radius-pill);
+  background-color: var(--k-fill, var(--surface));
+  font-weight: var(--weight-bold);
+}
+
+.k-filterbar select.k-input {
+  padding-right: var(--space-6);
+}
+
+.k-filterbar input[type='search'].k-input {
+  min-width: min(100%, 300px);
+  font-weight: 500;
+}
+
+/* Un filtro que se enciende y se apaga (aria-pressed): píldora; encendido, en tinta. */
+.k-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control);
+  margin: 0;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--k-fill, var(--surface));
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--font-lg);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.16s var(--ease);
+}
+
+.k-filter:hover {
+  background: var(--line);
+}
+
+.k-filter[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+/* Cifras de la vista: bloques de color con número enorme. Sólo cifras que la pantalla ya enseña. */
+.k-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.k-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: 18px var(--space-8);
+  border-radius: var(--radius-block-lg);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.k-figure__label {
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.k-figure__value {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--font-display);
+  font-weight: var(--weight-black);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Una cifra que es texto («Sin dato», «Conectado»): grande, pero no de cartel. */
+.k-figure__value--text {
+  font-size: var(--font-2xl);
+  letter-spacing: -0.02em;
+  white-space: normal;
+}
+
+.k-figure__sub {
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: 600;
+}
+
+/* Colores de bloque (cifras, tarjetas de lista, piezas). El texto de dentro es siempre tinta. */
+:is(.k-figure, .k-piece, .k-tile)[data-tone='lilac'],
+.k-tile--lilac {
+  background: var(--lilac);
+}
+
+:is(.k-figure, .k-piece, .k-tile)[data-tone='mint'],
+.k-tile--mint {
+  background: var(--mint);
+}
+
+:is(.k-figure, .k-piece, .k-tile)[data-tone='sky'],
+.k-tile--sky {
+  background: var(--sky);
+}
+
+:is(.k-figure, .k-piece, .k-tile)[data-tone='butter'],
+.k-tile--butter {
+  background: var(--butter);
+}
+
+:is(.k-figure, .k-piece, .k-tile)[data-tone='peach'],
+.k-tile--peach {
+  background: var(--peach);
+}
+
+:is(.k-figure, .k-piece, .k-tile)[data-tone='lime'],
+.k-tile--lime {
+  background: var(--lime);
+}
+
+:is(.k-figure, .k-piece)[data-tone='soft'] {
+  background: var(--soft);
+}
+
+/* Sobre un pastel todo el texto es tinta (regla de contraste de Tinta). */
+.k-tile[class*='k-tile--']
+  :is(.k-tile__label, .k-tile__hint, .k-tile__delta:not(.k-tile__delta--good, .k-tile__delta--bad)) {
+  color: var(--ink);
+}
+
+/* Pieza dentro de un bloque: el dato con su rótulo en mayúsculas (CÓMO EMPIEZA). */
+.k-piece {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-6) var(--space-7);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.k-piece__label {
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.k-piece__value {
+  color: var(--ink);
+  font-size: var(--font-lead);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.k-pieces {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+/* Lista de tarjetas redondas (lo que no es una tabla de muchas columnas): una tarjeta blanca por elemento. */
+.k-cards {
+  display: grid;
+  gap: var(--gap-page);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.k-item {
+  display: grid;
+  gap: var(--space-7);
+  min-width: 0;
+  padding: var(--pad-card) 24px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  --k-fill: var(--soft);
+}
+
+.k-item__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.k-item__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  min-width: 0;
+}
+
+.k-item__title {
+  color: var(--ink);
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+/* Fichas de estado: el mismo color dice lo mismo en todas las pantallas (docs/GUIA_PANTALLAS.md). Además de los
+   de siempre (ok menta, warn mantequilla, bad durazno, accent lima, lilac, sky, ink): borrador en gris claro y
+   lo que es de WhatsApp con su punto verde. */
+.k-chip--draft {
+  background: var(--soft);
+}
+
+.k-card .k-chip--draft,
+.k-item .k-chip--draft,
+.k-dialog .k-chip--draft {
+  background: var(--line);
+}
+
+.k-chip--wa::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--wa);
+}
+
+/* Una ficha suelta en una tabla o tarjeta: un poco más de aire que la de una fila de etiquetas. */
+.k-chip--lg {
+  padding: 5px 14px;
+  font-size: var(--font-md);
+  font-weight: var(--weight-black);
+}
+
+/* Estados vacío, cargando y fallo con jerarquía: título en tinta, explicación, acción. */
+.k-state {
+  gap: var(--space-4);
+  padding: 44px var(--space-8);
+  color: var(--text-2);
+  font-size: var(--font-lg);
+  line-height: 1.6;
+}
+
+.k-state > .k-state__title {
+  color: var(--ink);
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.01em;
+}
+
+.k-state--empty::before {
+  content: '';
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--space-2);
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--lime) 50%, var(--lilac) 50%);
+}
+
+.k-state--error {
+  border-radius: var(--radius-block-lg);
+  background: var(--peach);
+  color: var(--ink);
+  --k-fill: var(--surface);
+}
+
+.k-state--error > .k-state__title {
+  color: var(--bad);
+}
+
+.k-state > .k-btn {
+  margin-top: var(--space-2);
+}
+
+/* El texto de apoyo de un bloque, en la escala de Tinta (12 px y no 11). */
+.k-note {
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  line-height: 1.6;
+}
+
+/* ==========================================================================================
    Táctil y celular
    ========================================================================================== */
 
@@ -1746,6 +2145,44 @@ th[aria-sort] > .k-table__sort {
 @media (max-width: 680px) {
   .k-page {
     padding: var(--space-1) var(--space-7) 24px;
+  }
+
+  /* La barra de filtros se apila: cada control a lo ancho, con su rótulo encima. */
+  .k-filterbar .k-field {
+    flex: 1 1 100%;
+  }
+
+  .k-filterbar .k-input,
+  .k-filterbar input[type='search'].k-input {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .k-item {
+    padding: var(--pad-card);
+  }
+
+  .k-head .k-actions {
+    width: 100%;
+  }
+
+  /* Dos cifras por fila: una sola a lo ancho empujaba la lista una pantalla hacia abajo. */
+  .k-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .k-figure {
+    padding: var(--space-5) var(--space-6);
+  }
+
+  /* La cifra de la cabecera se acuesta: número y frase en una fila, para no empujar la lista hacia abajo. */
+  .k-head > .k-figure {
+    flex-flow: row wrap;
+    align-items: baseline;
+    column-gap: var(--space-4);
+    width: 100%;
+    padding: var(--space-5) 18px;
   }
 
   .k-lead {

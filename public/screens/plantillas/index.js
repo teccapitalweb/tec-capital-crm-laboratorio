@@ -18,13 +18,16 @@ import { failure } from '../../kit/components/feedback.js';
 
 const CATEGORIA = { utility: 'Utilidad', marketing: 'Marketing' };
 const USO = { manual: 'Manual (desde el chat)', notice: 'Aviso automático' };
+// Colores de estado comunes a las pantallas (docs/GUIA_PANTALLAS.md): esperar a Meta es cielo, una pausa de Meta
+// mantequilla, lo que ya no se puede usar durazno, un borrador gris.
 const TONO = {
+  draft: 'k-chip--draft',
   approved: 'k-chip--ok',
   flagged: 'k-chip--warn',
-  pending: 'k-chip--accent',
-  in_appeal: 'k-chip--accent',
+  pending: 'k-chip--sky',
+  in_appeal: 'k-chip--sky',
   rejected: 'k-chip--bad',
-  paused: 'k-chip--bad',
+  paused: 'k-chip--warn',
   disabled: 'k-chip--bad',
   deleted: 'k-chip--bad',
   missing: 'k-chip--warn',
@@ -755,18 +758,30 @@ export default {
             sincronizar necesita la cuenta.
           </p>`,
       )}
-        <p class="k-hint" role="status">
-          ${l.count} de ${l.limit} plantillas en la cuenta · ${datos.remoteTotal} en Meta sin adoptar ·
-          ${datos.syncedAt ? `sincronizado ${fecha(datos.syncedAt)}` : 'sin sincronizar'} ·
-          ${datos.lastWebhookAt ? `último aviso de Meta ${fecha(datos.lastWebhookAt)}` : 'Meta todavía no ha avisado de ningún cambio: usa «Sincronizar con Meta»'}
-        </p>`;
+        <div class="k-pieces pla-estado" role="status">
+          <p class="k-piece" data-tone="lime">
+            <span class="k-piece__label">En la cuenta</span>
+            <span class="pla-cifra">${l.count} <span class="pla-cifra__de">de ${l.limit} plantillas</span></span>
+          </p>
+          <p class="k-piece" data-tone="sky">
+            <span class="k-piece__label">En Meta sin adoptar</span>
+            <span class="pla-cifra">${datos.remoteTotal}</span>
+          </p>
+          <p class="k-piece pla-estado__texto">
+            <span class="k-piece__label">Con Meta</span>
+            <span class="k-piece__value"
+              >${datos.syncedAt ? `Sincronizado ${fecha(datos.syncedAt)}` : 'Sin sincronizar'} ·
+              ${datos.lastWebhookAt ? `último aviso de Meta ${fecha(datos.lastWebhookAt)}` : 'Meta todavía no ha avisado de ningún cambio: usa «Sincronizar con Meta»'}</span
+            >
+          </p>
+        </div>`;
     }
 
     function pintar() {
       render(
         cuerpo,
         html`<div data-slot="estado"></div>
-          <form class="k-card pla-filtros" novalidate data-do="filtros">${camposFiltro()}</form>
+          <form class="k-filterbar pla-filtros" novalidate data-do="filtros">${camposFiltro()}</form>
           <div class="k-card" data-slot="tabla"></div>`,
       );
       render(cuerpo.querySelector('[data-slot="estado"]'), estado());
@@ -789,7 +804,7 @@ export default {
             cell: f =>
               html`<span class="${['k-chip', TONO[f.status]]}">${f.statusLabel}</span>${when(
                 f.archivedAt,
-                () => html` <span class="k-chip">De baja</span>`,
+                () => html` <span class="k-chip k-chip--draft">De baja</span>`,
               )}${when(f.needsMapping, () => html` <span class="k-chip k-chip--warn">Falta indicar sus datos</span>`)}`,
           },
           { id: 'category', label: 'Categoría', cell: f => CATEGORIA[f.category] ?? f.category },

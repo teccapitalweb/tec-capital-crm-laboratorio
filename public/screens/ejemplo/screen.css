@@ -3,6 +3,8 @@
  *
  * Una pantalla sólo escribe aquí lo que el kit no trae (su composición), con un prefijo propio (ej-) y
  * siempre con las variables de public/tokens.css: ningún color, sombra ni tamaño de letra a mano.
+ * Tinta (docs/GUIA_PANTALLAS.md): cifras en bloques de color (tile con `tone`), buscador en la barra de filtros
+ * sobre la página, «Filtros» en píldora, la tabla en su tarjeta y la tabla de fichas de estado.
  */
 
 .ej-busqueda {
@@ -10,8 +12,12 @@
   gap: var(--space-5);
 }
 
-.ej-busqueda > .k-field {
-  max-width: 440px;
+.ej-busqueda .k-field {
+  flex: 0 1 460px;
+}
+
+.ej-busqueda .k-input {
+  flex: 1 1 auto;
 }
 
 .ej-filtros > summary {
@@ -25,13 +31,21 @@
 
 .ej-filtros[open] > summary {
   margin-bottom: var(--space-5);
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--ink);
+  color: var(--on-ink);
 }
 
-.ej-medidor {
-  max-width: 360px;
+.ej-fila {
+  display: grid;
+  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+  gap: var(--space-7);
+  align-items: start;
+}
+
+.ej-fichas__lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .ej-revision {
@@ -48,4 +62,19 @@
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr);
   gap: var(--space-5);
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+
+@media (max-width: 900px) {
+  .ej-fila {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .ej-busqueda .k-field {
+    flex-basis: 100%;
+  }
 }

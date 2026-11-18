@@ -47,8 +47,16 @@ const CONSENTIMIENTOS = [
   { value: 'opted_in', label: 'Aceptó mensajes' },
   { value: 'opted_out', label: 'No quiere mensajes' },
 ];
-const TONO_CONSENTIMIENTO = { opted_in: 'k-chip--ok', unknown: '', opted_out: 'k-chip--bad' };
-const TONO_ETAPA = { ganada: 'k-chip--ok', perdida: 'k-chip--bad', inscripcion: 'k-chip--accent' };
+// Colores de estado comunes a las pantallas (docs/GUIA_PANTALLAS.md): bien menta, mal durazno, en curso lima,
+// información cielo, sin decidir gris.
+const TONO_CONSENTIMIENTO = { opted_in: 'k-chip--ok', unknown: 'k-chip--draft', opted_out: 'k-chip--bad' };
+const TONO_ETAPA = {
+  nuevo: 'k-chip--draft',
+  interesado: 'k-chip--sky',
+  inscripcion: 'k-chip--accent',
+  ganada: 'k-chip--ok',
+  perdida: 'k-chip--bad',
+};
 const CANALES = { whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook' };
 const ESTADOS = { open: 'Abierta', waiting: 'En espera', resolved: 'Cerrada' };
 const ORIGENES = { manual: 'Alta manual', whatsapp: 'WhatsApp', ipcil: 'Históricos', import: 'Importación' };
@@ -147,7 +155,7 @@ function etiquetas(lista, tope = 3) {
 }
 
 /** Quien conversa por WhatsApp real sin teléfono visible lleva el distintivo «sin número» (nunca su identificador). */
-const sinNumero = () => html`<span class="k-chip ct-sin-numero">Sin número</span>`;
+const sinNumero = () => html`<span class="k-chip k-chip--wa ct-sin-numero">Sin número</span>`;
 const telefono = contacto =>
   contacto.phone ||
   (contacto.noNumber
@@ -443,27 +451,30 @@ export default {
           <div>
             <span class="k-eyebrow">Atención</span>
             <h1>Contactos</h1>
-            <p class="k-lead" data-slot="total" role="status"></p>
+            <p class="k-lead">Las personas de tus marcas: búscalas, fíltralas, ábrelas y añádelas a una lista.</p>
           </div>
+          <p class="k-figure ct-total" data-tone="lime" data-slot="total" role="status"></p>
         </header>
-        <div class="k-card ct-herramientas">
-          <div class="k-field ct-buscar">
-            <label class="k-label" for="${ctx.uid('buscar')}">Buscar</label>
-            <input
-              class="k-input"
-              type="search"
-              id="${ctx.uid('buscar')}"
-              data-do="buscar"
-              value="${store.get().q}"
-              placeholder="Nombre, correo o teléfono"
-              maxlength="100"
-              autocomplete="off"
-            />
+        <div class="ct-herramientas">
+          <div class="k-filterbar ct-buscar">
+            <div class="k-field">
+              <label class="k-label" for="${ctx.uid('buscar')}">Buscar</label>
+              <input
+                class="k-input"
+                type="search"
+                id="${ctx.uid('buscar')}"
+                data-do="buscar"
+                value="${store.get().q}"
+                placeholder="Nombre, correo o teléfono"
+                maxlength="100"
+                autocomplete="off"
+              />
+            </div>
           </div>
           <div class="k-row ct-rapidos" role="group" aria-label="Filtros rápidos" data-slot="rapidos"></div>
           <details class="ct-filtros" data-key="ct-filtros">
-            <summary class="k-btn">Más filtros</summary>
-            <div data-slot="condiciones"></div>
+            <summary class="k-filter">Más filtros</summary>
+            <div class="k-card ct-condiciones" data-slot="condiciones"></div>
           </details>
           <p class="k-hint" data-slot="resumen" role="status"></p>
         </div>
@@ -583,7 +594,7 @@ export default {
         ranura('rapidos'),
         html`${RAPIDOS.map(
           rapido =>
-            html`<button type="button" class="k-btn ct-rapido" data-do="rapido" data-id="${rapido.id}" aria-pressed="${estado.quick.includes(rapido.id)}">
+            html`<button type="button" class="k-filter ct-rapido" data-do="rapido" data-id="${rapido.id}" aria-pressed="${estado.quick.includes(rapido.id)}">
               ${rapido.label}
             </button>`,
         )}`,
@@ -595,16 +606,21 @@ export default {
         ranura('resumen'),
         html`${frase ? `Filtro: ${frase}.` : ''}${when(!estado.completo, () => ' Falta completar una condición.')}`,
       );
+      // El total es la cifra de la vista: grande a la vista y, para quien escucha, la frase completa («1 contacto»).
       const total = estado.total;
+      const donde = marca === 'all' ? ' en tus marcas' : '';
+      const texto =
+        total === null
+          ? 'Buscando contactos…'
+          : total.capped
+            ? `Más de ${NUMERO.format(total.n)} contactos`
+            : `${NUMERO.format(total.n)} ${total.n === 1 ? 'contacto' : 'contactos'}`;
       render(
         ranura('total'),
-        html`${
-          total === null
-            ? 'Buscando contactos…'
-            : total.capped
-              ? `Más de ${NUMERO.format(total.n)} contactos`
-              : `${NUMERO.format(total.n)} ${total.n === 1 ? 'contacto' : 'contactos'}`
-        }${marca === 'all' ? ' en tus marcas' : ''}`,
+        total === null
+          ? html`<span class="k-figure__sub">${texto}</span>`
+          : html`<span class="k-figure__value" aria-hidden="true">${total.capped ? '+' : ''}${NUMERO.format(total.n)}</span>
+              <span class="k-figure__sub"><span class="k-sr">${texto}</span><span aria-hidden="true">${total.n === 1 && !total.capped ? 'contacto' : 'contactos'}</span>${donde}</span>`,
       );
     }
 

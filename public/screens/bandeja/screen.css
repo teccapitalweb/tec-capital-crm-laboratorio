@@ -1,6 +1,8 @@
 /*
  * Estilos propios de la pantalla «Bandeja» (vistas, contadores y lista). Sólo la composición que el kit no trae,
  * con el prefijo bj- y siempre con variables de public/tokens.css. Nada se anima al actualizar en vivo.
+ * Tinta: buscador en píldora, las vistas como filas redondas (la elegida en tinta), el nombre de la vista en
+ * grande, «Filtros» y el orden en píldora, cada conversación como una fila redonda y sin leer en lima.
  */
 
 .bj-cabeza {
@@ -32,9 +34,9 @@
 .bj-subtitulo {
   margin: var(--space-3) var(--space-3) 0;
   color: var(--text-2);
-  font-size: var(--font-min);
-  font-weight: 650;
-  letter-spacing: 0.04em;
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -51,14 +53,15 @@
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  min-height: 36px;
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid transparent;
-  border-radius: var(--radius-3);
+  min-height: var(--touch);
+  padding: var(--space-2) var(--space-5);
+  border: 0;
+  border-radius: var(--radius-item);
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: var(--font-md);
+  font-size: var(--font-lg);
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
@@ -68,10 +71,14 @@
 }
 
 .bj-vista[aria-current='true'] {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-weight: 600;
+  background: var(--ink);
+  color: var(--on-ink);
+  font-weight: var(--weight-bold);
+}
+
+.bj-vista[aria-current='true'] .bj-vista__cuenta,
+.bj-vista[aria-current='true'] .bj-compartida {
+  color: var(--on-ink-soft);
 }
 
 .bj-vista__nombre {
@@ -90,10 +97,11 @@
 
 .bj-compartida {
   padding: 0 var(--space-2);
-  border: 1px solid var(--line);
   border-radius: var(--radius-pill);
-  color: var(--text-2);
+  background: var(--lilac);
+  color: var(--ink);
   font-size: var(--font-min);
+  font-weight: var(--weight-bold);
 }
 
 .bj-sin-guardadas {
@@ -127,8 +135,8 @@
 
 .bj-titulo h2 {
   color: var(--ink);
-  font-size: var(--font-xl);
-  font-weight: 650;
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-black);
   letter-spacing: -0.02em;
 }
 
@@ -141,6 +149,16 @@
 
 .bj-orden {
   width: auto;
+  border-color: var(--surface);
+  border-radius: var(--radius-pill);
+  font-weight: var(--weight-bold);
+}
+
+.bj-buscar .k-input {
+  min-height: var(--control-lg);
+  padding-inline: 22px;
+  border-color: var(--surface);
+  border-radius: var(--radius-pill);
 }
 
 .bj-filtros > summary {
@@ -151,10 +169,11 @@
   display: none;
 }
 
-.bj-filtros[open] > summary {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+.bj-filtros[open] > summary,
+.bj-filtros[open] > summary:hover {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--on-ink);
 }
 
 /* Lo que no dice nada (resumen, acciones, aviso, «Cargar más») no ocupa sitio en la rejilla. */
@@ -178,7 +197,7 @@
 /* ---- Filas */
 
 .bj-lista {
-  padding: var(--space-2);
+  padding: var(--space-3);
 }
 
 .bj-filas {
@@ -197,9 +216,9 @@
   gap: var(--space-5);
   width: 100%;
   min-height: 64px;
-  padding: var(--space-5);
+  padding: var(--space-6);
   border: 0;
-  border-radius: var(--radius-3);
+  border-radius: var(--radius-block);
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -215,14 +234,14 @@
   display: inline-grid;
   flex: none;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--line);
+  width: 40px;
+  height: 40px;
+  border: 0;
   border-radius: var(--radius-pill);
-  background: var(--soft);
-  color: var(--text-2);
+  background: var(--lilac);
+  color: var(--ink);
   font-size: var(--font-sm);
-  font-weight: 650;
+  font-weight: var(--weight-black);
 }
 
 .bj-texto {
@@ -250,7 +269,7 @@
   min-width: 0;
   overflow: hidden;
   font-size: var(--font-lg);
-  font-weight: 650;
+  font-weight: var(--weight-black);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -312,11 +331,11 @@
   margin-left: auto;
   padding: 0 var(--space-2);
   border-radius: var(--radius-pill);
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: var(--font-min);
-  font-weight: 650;
-  line-height: 20px;
+  background: var(--lime);
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+  line-height: 24px;
   text-align: center;
 }
 

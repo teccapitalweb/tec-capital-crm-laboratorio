@@ -1,22 +1,24 @@
 /*
  * Pantalla «Importar contactos»: sólo la composición que el kit no trae, con el prefijo imp- y variables de
- * public/tokens.css.
+ * public/tokens.css. Tinta: el asistente en su tarjeta blanca con los pasos en píldora, los grupos de opciones como
+ * piezas hundidas, las importaciones recientes como filas redondas y el resultado con cifras en bloques de color.
  */
 
 .imp-campo {
-  max-width: 440px;
+  max-width: 460px;
 }
 
 .imp-sub {
   margin: 0;
   color: var(--ink);
-  font-size: var(--font-lg);
-  font-weight: 600;
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.01em;
 }
 
 .imp-lista {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -26,16 +28,24 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-  border-top: 1px solid var(--line);
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-7);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  --k-fill: var(--surface);
 }
 
 .imp-reciente__nombre {
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--ink);
-  font-weight: 500;
+  font-weight: var(--weight-bold);
+}
+
+.imp-reciente > .k-muted {
+  flex: 1 1 auto;
+  color: var(--text-2);
+  font-size: var(--font-md);
 }
 
 .imp-plantilla,
@@ -46,11 +56,38 @@
   gap: var(--space-3);
 }
 
+.imp-plantilla {
+  padding: var(--space-5) var(--space-5) var(--space-5) var(--space-7);
+  border-radius: var(--radius-block);
+  background: var(--sky);
+  --k-fill: var(--surface);
+}
+
+.imp-plantilla .k-hint {
+  color: var(--ink);
+  font-size: var(--font-md);
+}
+
 .imp-columnas {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 
+/* Cada grupo de opciones (contactos que ya existen, permiso, lista) es una pieza hundida. */
 .imp-grupo {
   display: grid;
   gap: var(--space-3);
+  padding: var(--space-7);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+
+.imp-grupo > legend {
+  float: left;
+  width: 100%;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-lead);
+}
+
+.imp-grupo .k-input {
+  background: var(--surface);
 }

@@ -56,10 +56,32 @@ function telefono({ marca, texto, botones = [] }) {
   </figure>`;
 }
 
+// Colores de estado comunes a las pantallas (docs/GUIA_PANTALLAS.md).
+const TONO_CAMPANA = {
+  draft: 'k-chip--draft',
+  scheduled: 'k-chip--sky',
+  sending: 'k-chip--accent',
+  paused: 'k-chip--warn',
+  stopped: 'k-chip--bad',
+  completed: 'k-chip--ok',
+  cancelled: 'k-chip--draft',
+};
+const TONO_DESTINATARIO = {
+  queued: 'k-chip--draft',
+  sending: 'k-chip--accent',
+  sent: 'k-chip--sky',
+  delivered: 'k-chip--ok',
+  read: 'k-chip--ok',
+  failed: 'k-chip--bad',
+  deferred: 'k-chip--warn',
+  skipped: 'k-chip--warn',
+  cancelled: 'k-chip--draft',
+};
+
 const chipEstado = c =>
-  html`<span class="${['k-chip', c.status === 'completed' && 'k-chip--ok']}">${c.statusLabel}</span>${when(
+  html`<span class="${['k-chip', TONO_CAMPANA[c.status]]}">${c.statusLabel}</span>${when(
     c.rehearsal,
-    () => html` <span class="k-chip">Ensayo: no se envía nada</span>`,
+    () => html` <span class="k-chip k-chip--lilac">Ensayo: no se envía nada</span>`,
   )}`;
 
 export default {
@@ -130,7 +152,7 @@ export default {
         caja,
         html`${when(
           marcas.length > 1,
-          () => html`<form class="k-card dif-marca" novalidate data-do="marca">
+          () => html`<form class="k-filterbar dif-marca" novalidate data-do="marca">
               ${field(
                 {
                   name: 'marca',
@@ -554,8 +576,10 @@ export default {
       render(
         cuerpo,
         html`<div class="k-card k-stack">
-            <h2>${c.title}</h2>
-            <p class="dif-chips">${chipEstado(c)}</p>
+            <div class="k-item__name">
+              <h2 class="k-item__title dif-titulo">${c.title}</h2>
+              <p class="dif-chips">${chipEstado(c)}</p>
+            </div>
             ${when(c.reasonLabel, () => html`<p class="dif-aviso" role="status">${c.reasonLabel}</p>`)}
             <progress
               class="dif-avance"
@@ -564,14 +588,14 @@ export default {
               aria-label="Avance del envío"
             ></progress>
             <dl class="dif-cifras">
-              <div><dt>Destinatarios</dt><dd>${numero(s.recipients)}</dd></div>
+              <div data-tone="lime"><dt>Destinatarios</dt><dd>${numero(s.recipients)}</dd></div>
               <div><dt>En cola</dt><dd>${numero(s.queued + s.sending)}</dd></div>
-              <div><dt>Enviados</dt><dd>${numero(s.sentTotal)}</dd></div>
-              <div><dt>Entregados</dt><dd>${numero(s.deliveredTotal)}</dd></div>
-              <div><dt>Leídos</dt><dd>${numero(s.read)}</dd></div>
-              <div><dt>Respondieron</dt><dd>${numero(s.replied)}</dd></div>
-              <div><dt>Fallidos</dt><dd>${numero(s.failed)}</dd></div>
-              <div><dt>Omitidos</dt><dd>${numero(s.skipped)}</dd></div>
+              <div data-tone="sky"><dt>Enviados</dt><dd>${numero(s.sentTotal)}</dd></div>
+              <div data-tone="sky"><dt>Entregados</dt><dd>${numero(s.deliveredTotal)}</dd></div>
+              <div data-tone="mint"><dt>Leídos</dt><dd>${numero(s.read)}</dd></div>
+              <div data-tone="mint"><dt>Respondieron</dt><dd>${numero(s.replied)}</dd></div>
+              <div data-tone="peach"><dt>Fallidos</dt><dd>${numero(s.failed)}</dd></div>
+              <div data-tone="butter"><dt>Omitidos</dt><dd>${numero(s.skipped)}</dd></div>
             </dl>
             <p class="k-hint">Programada: ${fecha(c.scheduledAt)} · Empezó: ${fecha(c.startedAt)} · Terminó: ${fecha(c.finishedAt)}</p>
             <div class="dif-acciones">
@@ -585,10 +609,10 @@ export default {
             () => html`<div class="k-card k-stack">
               <h3>Por qué no les llegó</h3>
               <ul class="dif-chips">
-                ${r.reasons.map(x => html`<li class="k-chip" data-key="${'o-' + x.reason}">${x.label}: ${numero(x.count)}</li>`)}
+                ${r.reasons.map(x => html`<li class="k-chip k-chip--warn" data-key="${'o-' + x.reason}">${x.label}: ${numero(x.count)}</li>`)}
                 ${r.failures.map(
                   (x, i) =>
-                    html`<li class="k-chip" data-key="${'f-' + i}">${x.label}${x.code ? ` (${x.code})` : ''}: ${numero(x.count)}</li>`,
+                    html`<li class="k-chip k-chip--bad" data-key="${'f-' + i}">${x.label}${x.code ? ` (${x.code})` : ''}: ${numero(x.count)}</li>`,
                 )}
               </ul>
             </div>`,
@@ -610,8 +634,8 @@ export default {
               ${r.recipients.map(
                 x => html`<li class="dif-destinatario" data-key="${x.id}">
                   <strong>${x.name || 'Sin nombre'}</strong> · ${x.phone || '—'}
-                  ${when(x.noNumber, () => html` <span class="k-chip dif-sin-numero">Sin número</span>`)} ·
-                  <span class="k-chip">${x.stateLabel}</span>
+                  ${when(x.noNumber, () => html` <span class="k-chip k-chip--wa dif-sin-numero">Sin número</span>`)} ·
+                  <span class="${['k-chip', TONO_DESTINATARIO[x.state]]}">${x.stateLabel}</span>
                   ${x.reasonLabel || x.failReason ? ` ${x.reasonLabel ?? x.failReason}` : ''}
                   ${x.clickLabel ? ` · tocó «${x.clickLabel}»` : x.repliedAt ? ' · respondió' : ''}
                 </li>`,

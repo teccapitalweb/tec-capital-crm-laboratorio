@@ -33,7 +33,7 @@ function resumen(datos) {
     ${when(
       datos.excluded.length,
       () => html`<ul class="aud-motivos">
-        ${datos.excluded.map(e => html`<li class="k-chip" data-key="${e.reason}">${e.label}: ${numero(e.count)}</li>`)}
+        ${datos.excluded.map(e => html`<li class="k-chip k-chip--warn" data-key="${e.reason}">${e.label}: ${numero(e.count)}</li>`)}
       </ul>`,
       () => html`<p class="k-hint">Nadie queda fuera.</p>`,
     )}
@@ -285,7 +285,7 @@ function ventanaMiembros({ api, ctx, audiencia, puedeExportar }) {
             label: 'Estado',
             cell: fila =>
               fila.reason
-                ? html`<span class="k-chip">${fila.reasonLabel}</span>`
+                ? html`<span class="k-chip k-chip--warn">${fila.reasonLabel}</span>`
                 : html`<span class="k-chip k-chip--ok">Puede recibir</span>`,
           },
         ],
@@ -364,7 +364,7 @@ export default {
         cuerpo,
         html`${when(
           datos.brands.length > 1,
-          () => html`<form class="k-card aud-marca" novalidate data-do="marca">
+          () => html`<form class="k-filterbar aud-marca" novalidate data-do="marca">
               ${field(
                 {
                   name: 'marca',
@@ -376,10 +376,22 @@ export default {
               )}
             </form>`,
         )}
-          <div class="k-card" data-slot="tabla"></div>
-          <p class="k-hint" role="status">
-            ${`${datos.active.lists} de ${datos.limits.lists} listas y ${datos.active.segments} de ${datos.limits.segments} segmentos propios.`}
-          </p>`,
+          <div class="k-figures aud-cifras">
+            <p class="k-sr" role="status">
+              ${`${datos.active.lists} de ${datos.limits.lists} listas y ${datos.active.segments} de ${datos.limits.segments} segmentos propios.`}
+            </p>
+            <div class="k-figure" data-tone="lilac" aria-hidden="true">
+              <span class="k-figure__label">Listas propias</span>
+              <span class="k-figure__value">${numero(datos.active.lists)}</span>
+              <span class="k-figure__sub">de ${numero(datos.limits.lists)} posibles</span>
+            </div>
+            <div class="k-figure" data-tone="sky" aria-hidden="true">
+              <span class="k-figure__label">Segmentos propios</span>
+              <span class="k-figure__value">${numero(datos.active.segments)}</span>
+              <span class="k-figure__sub">de ${numero(datos.limits.segments)} posibles</span>
+            </div>
+          </div>
+          <div class="k-card" data-slot="tabla"></div>`,
       );
       if (tabla) return;
       tabla = pagedTable(cuerpo.querySelector('[data-slot="tabla"]'), {
@@ -394,10 +406,15 @@ export default {
             label: 'Nombre',
             fixed: true,
             cell: fila => html`<span class="aud-nombre">${fila.name}</span>
-              ${when(fila.preset, () => html`<span class="k-chip">Prediseñado</span>`)}
-              ${when(fila.archived, () => html`<span class="k-chip">Archivado</span>`)}`,
+              ${when(fila.preset, () => html`<span class="k-chip k-chip--lilac">Prediseñado</span>`)}
+              ${when(fila.archived, () => html`<span class="k-chip k-chip--draft">Archivado</span>`)}`,
           },
-          { id: 'kind', label: 'Tipo', cell: fila => tipoDe(fila) },
+          {
+            id: 'kind',
+            label: 'Tipo',
+            cell: fila =>
+              html`<span class="${['k-chip', fila.kind === 'list' ? (fila.role === 'suppression' ? 'k-chip--warn' : 'k-chip--sky') : 'k-chip--lilac']}">${tipoDe(fila)}</span>`,
+          },
           { id: 'count', label: 'Contactos', numeric: true, cell: fila => numero(fila.memberCount) },
           {
             id: 'actions',

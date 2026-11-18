@@ -16,7 +16,7 @@ const TONO_CALIDAD = { green: 'k-chip--ok', yellow: 'k-chip--warn', red: 'k-chip
 const TONO_ESTADO = {
   connected: 'k-chip--ok',
   flagged: 'k-chip--warn',
-  pending: 'k-chip--warn',
+  pending: 'k-chip--sky',
   restricted: 'k-chip--bad',
   banned: 'k-chip--bad',
   offline: 'k-chip--bad',
@@ -44,6 +44,13 @@ function textoLimite(limite) {
   return limite.source === 'default' ? `${base}. Meta aún no informa el nivel: se usa el más bajo.` : base;
 }
 
+/** Un dato en su pieza (rótulo en mayúsculas y valor); `tono` le da color de bloque. */
+const dato = (rotulo, valor, tono = null) =>
+  html`<div class="k-piece sal-dato" ${attrs({ 'data-tone': tono })}>
+    <dt class="k-piece__label">${rotulo}</dt>
+    <dd class="k-piece__value">${valor}</dd>
+  </div>`;
+
 function tarjetaNumero(numero, { puede }) {
   const nombre = numero.verifiedName
     ? `${numero.verifiedName}${numero.nameStatus ? ` (${NOMBRE[numero.nameStatus] ?? numero.nameStatus})` : ''}`
@@ -57,27 +64,24 @@ function tarjetaNumero(numero, { puede }) {
       <span class="k-muted">${numero.brandName}</span>
     </div>
     <div class="k-row">
-      <span class="${['k-chip', TONO_ESTADO[numero.status]]}">Estado: ${numero.statusLabel}</span>
-      <span class="${['k-chip', TONO_CALIDAD[numero.quality]]}">Calidad: ${numero.qualityLabel}</span>
-      ${when(!numero.enabled, () => html`<span class="k-chip">Apagado en el CRM</span>`)}
+      <span class="${['k-chip', 'k-chip--lg', TONO_ESTADO[numero.status]]}">Estado: ${numero.statusLabel}</span>
+      <span class="${['k-chip', 'k-chip--lg', TONO_CALIDAD[numero.quality]]}">Calidad: ${numero.qualityLabel}</span>
+      ${when(!numero.enabled, () => html`<span class="k-chip k-chip--lg k-chip--draft">Apagado en el CRM</span>`)}
     </div>
     <dl class="sal-datos">
-      <dt>Número</dt>
-      <dd>${numero.display || 'Sin dato'}</dd>
-      <dt>Nombre visible</dt>
-      <dd>${nombre}</dd>
-      <dt>Límite diario</dt>
-      <dd>${textoLimite(numero.limit)}</dd>
-      <dt>Puede enviar</dt>
-      <dd class="k-row">
-        ${CATEGORIAS.map(
-          ([clave, rotulo]) =>
-            html`<span class="${['k-chip', numero.sending[clave].ok ? 'k-chip--ok' : 'k-chip--bad']}">${rotulo}: ${numero.sending[clave].ok ? 'sí' : 'no'}</span>`,
-        )}
-      </dd>
-      <dt>Última consulta</dt>
-      <dd>${fecha(numero.checkedAt)}</dd>
-      ${when(numero.lastWebhookAt, () => html`<dt>Último aviso</dt><dd>${fecha(numero.lastWebhookAt)}</dd>`)}
+      ${dato('Número', numero.display || 'Sin dato', 'lilac')} ${dato('Nombre visible', nombre)}
+      ${dato('Límite diario', textoLimite(numero.limit), 'sky')}
+      <div class="k-piece sal-dato sal-dato--ancho">
+        <dt class="k-piece__label">Puede enviar</dt>
+        <dd class="k-row">
+          ${CATEGORIAS.map(
+            ([clave, rotulo]) =>
+              html`<span class="${['k-chip', numero.sending[clave].ok ? 'k-chip--ok' : 'k-chip--bad']}">${rotulo}: ${numero.sending[clave].ok ? 'sí' : 'no'}</span>`,
+          )}
+        </dd>
+      </div>
+      ${dato('Última consulta', fecha(numero.checkedAt))}
+      ${when(numero.lastWebhookAt, () => dato('Último aviso', fecha(numero.lastWebhookAt)))}
     </dl>
     ${when(motivos.length, () => html`<p class="k-notice k-notice--warn">${motivos.join(' ')}</p>`)}
     ${when(numero.error, () => html`<p class="k-notice k-notice--bad" role="status">${numero.error}</p>`)}
@@ -113,16 +117,13 @@ function tarjetaCuenta(cuenta, uid) {
         </p>`,
     )}
     <dl class="sal-datos">
-      <dt>Revisión de la cuenta</dt>
-      <dd>${REVISION[cuenta.reviewStatus] ?? (cuenta.reviewStatus || 'Sin dato')}</dd>
-      <dt>Verificación del negocio</dt>
-      <dd>${VERIFICACION[cuenta.businessVerification] ?? (cuenta.businessVerification || 'Sin dato')}</dd>
-      <dt>Método de pago</dt>
-      <dd>${PAGO[cuenta.paymentStatus] ?? cuenta.paymentStatus}</dd>
-      <dt>Límite diario</dt>
-      <dd>${textoLimite(limite)}</dd>
-      <dt>Última consulta</dt>
-      <dd>${fecha(cuenta.checkedAt)}</dd>
+      ${dato('Revisión de la cuenta', REVISION[cuenta.reviewStatus] ?? (cuenta.reviewStatus || 'Sin dato'))}
+      ${dato(
+        'Verificación del negocio',
+        VERIFICACION[cuenta.businessVerification] ?? (cuenta.businessVerification || 'Sin dato'),
+      )}
+      ${dato('Método de pago', PAGO[cuenta.paymentStatus] ?? cuenta.paymentStatus)}
+      ${dato('Límite diario', textoLimite(limite), 'sky')} ${dato('Última consulta', fecha(cuenta.checkedAt))}
     </dl>
     ${when(medidor, () => medidor.html)}
     ${when(cuenta.error, () => html`<p class="k-notice k-notice--bad" role="status">${cuenta.error}</p>`)}
@@ -139,7 +140,7 @@ function historial(lista, uid) {
         html`<ul class="sal-historial">
           ${lista.map(
             item => html`<li data-key="${String(item.seq)}">
-              <span>${item.subject}: ${item.text}</span>
+              <span class="sal-aviso"><strong>${item.subject}:</strong> ${item.text}</span>
               <span class="k-muted">${fecha(item.createdAt)} · ${item.source === 'webhook' ? 'Aviso de Meta' : 'Consulta a Meta'}</span>
             </li>`,
           )}

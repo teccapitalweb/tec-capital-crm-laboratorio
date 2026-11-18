@@ -144,6 +144,25 @@ Para las pantallas de antes (`public/*.js`), en `public/tinta.css`:
 
 Para las pantallas del kit: `.k-btn--accent` (lima), `.k-chip--lilac`, `.k-chip--sky`, `.k-chip--ink`, además de las piezas de siempre ya revestidas (`.k-card`, `.k-btn`, `.k-chip`, `.k-tab`, `.k-input`, `.k-notice`, `.k-table`, `.k-dialog`, `.k-tile`).
 
+Desde el rediseño del interior de las pantallas del kit (17 nov 2026), en `public/kit/kit.css`, con su uso explicado en [GUIA_PANTALLAS.md](GUIA_PANTALLAS.md) («Una pantalla en Tinta»):
+
+| Clase | Qué es |
+| --- | --- |
+| `.k-filterbar` | Barra de filtros sobre la página: rótulo y control en una fila, el control en píldora blanca |
+| `.k-filter` | Filtro en píldora que se enciende (`aria-pressed="true"`: tinta) |
+| `.k-figures` > `.k-figure` | Cifra grande en un bloque de color (`data-tone`), con `__label`, `__value` (56 px; 44 px en celular) y `__sub` |
+| `.k-pieces` > `.k-piece` | Dato con rótulo en mayúsculas en una pieza redonda (`data-tone` opcional) |
+| `.k-cards` > `.k-item` | Lista de tarjetas blancas redondas (`__head`, `__name`, `__title`) |
+| `.k-tile--lilac` … `--lime` | Tarjeta de cifra en color (`tile({ tone })` en `charts.js`); su cifra va en la escala del título |
+| `.k-chip--draft`, `.k-chip--wa`, `.k-chip--lg` | Ficha gris (borrador, archivado), ficha con el punto de WhatsApp y ficha suelta más grande |
+| `--k-fill` | Relleno que heredan botones secundarios, pestañas y filtros según la caja: blanco sobre la página y los pasteles, `--soft` dentro de lo blanco |
+
+La tabla de **colores de estado** (qué ficha para qué estado) está en GUIA_PANTALLAS.md y la pantalla `ejemplo` la enseña. Otras decisiones del kit: el botón desactivado ya no usa opacidad (relleno del sitio, borde `--line` y letra `--text-3`, 7:1 o más); el paso actual de un asistente va en tinta con su número en lima; `.k-hint` sube de 11 a 12 px.
+
+Variables que el kit define por su cuenta y podrían pasar a `tokens.css` si las pantallas de antes las necesitan: ninguna de color; sólo `--k-fill`, que es de contexto (se declara en cada caja) y no un valor de la paleta.
+
+**Cajas que se desplazan y `.k-sr`:** las etiquetas «sólo para lector de pantalla» son absolutas. Toda caja del kit que se desplaza (`.k-page`, `.k-table__scroll`, el cuerpo de una ventana y del panel) es `position: relative` para que una `.k-sr` dentro de una tabla ancha no se coloque respecto a la ventana y ensanche el documento (era el desbordamiento intermitente de 2–3 px de Contactos a 1366 px con un nombre largo; lo vigila `test/ui/contactos.spec.mjs`). Una caja propia que se desplace horizontalmente debe hacer lo mismo.
+
 ## Auditoría reproducible
 
 La auditoría automática está en `test/ui/niebla-audit.mjs` (el nombre del archivo es de Niebla; mide reglas, no colores) y se ejecuta en las pruebas de navegador (`npm run test:ui`) a 1366 × 800 (`escritorio`) y 375 × 812 (`celular`):
@@ -182,5 +201,5 @@ Niebla era blanco y gris, transparencias discretas, bordes finos y composición 
 ## Ideas que se dejaron fuera a propósito
 
 - **Modo oscuro de toda la aplicación:** sólo el menú tiene versión oscura. Un tema oscuro completo pide tokens por tema y una revisión de cada pantalla.
-- **Rediseño del interior de Mi día, Conversaciones, la lista de recorridos y el editor:** lo hacen después otras personas sobre esta base; aquí sólo heredan las piezas y la paleta.
+- **Rediseño del interior de Mi día, Conversaciones, la lista de recorridos y el editor:** lo hacen después otras personas sobre esta base; aquí sólo heredan las piezas y la paleta. (Hecho después; las pantallas del kit, `public/screens/`, se rediseñaron por dentro el 17 nov 2026 con las piezas descritas arriba.)
 - **Pasar la experiencia del cliente y las páginas públicas a Tinta:** no forma parte de lo aprobado.

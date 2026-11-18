@@ -979,6 +979,9 @@ export function heat({
 // Tarjeta de cifra y envoltura
 // ---------------------------------------------------------------------------------------------------
 
+/** Colores de bloque que acepta una tarjeta de dato (Tinta); sin color, blanca. */
+const TILE_TONES = new Set(['lilac', 'mint', 'sky', 'butter', 'peach', 'lime']);
+
 /**
  * Tarjeta de cifra: el dato, cuánto cambió frente al periodo anterior y, si se quiere, su chispa.
  * La diferencia nunca se dice sólo con color: lleva flecha y frase («12 % más que los 7 días anteriores»);
@@ -993,6 +996,7 @@ export function heat({
  * @param {string} [data.hint] Una línea de contexto.
  * @param {number[]} [data.spark] Serie para la chispa.
  * @param {(value: number) => string} [data.format]
+ * @param {'lilac' | 'mint' | 'sky' | 'butter' | 'peach' | 'lime'} [data.tone] Bloque de color; sin él, blanca.
  */
 export function tile({
   label: given,
@@ -1003,6 +1007,7 @@ export function tile({
   hint = '',
   spark,
   format = formatNumber,
+  tone = '',
 } = {}) {
   // Sin nombre no hay nada que leer en voz alta ni que titular en la tabla.
   const label = String(given ?? '') || 'Dato';
@@ -1021,7 +1026,8 @@ export function tile({
   const mini =
     Array.isArray(spark) && spark.length ? sparkline({ values: spark, label: `Evolución de ${label}`, format }) : null;
   const spoken = `${label}: ${shown}${change ? `. ${change}` : ''}.`;
-  const markup = `<div class="k-tile"><p class="k-tile__label">${esc(label)}</p><p class="k-tile__value">${esc(shown)}</p>${changeMarkup}${hint ? `<p class="k-tile__hint">${esc(hint)}</p>` : ''}${mini ? mini.svg : ''}</div>`;
+  const toneClass = TILE_TONES.has(tone) ? ` k-tile--${tone}` : '';
+  const markup = `<div class="k-tile${toneClass}"><p class="k-tile__label">${esc(label)}</p><p class="k-tile__value">${esc(shown)}</p>${changeMarkup}${hint ? `<p class="k-tile__hint">${esc(hint)}</p>` : ''}${mini ? mini.svg : ''}</div>`;
   const rows = [
     ['Valor', shown],
     ...(change ? [['Cambio', change]] : []),

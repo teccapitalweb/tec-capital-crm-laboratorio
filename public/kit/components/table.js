@@ -156,8 +156,9 @@ export function pagedTable(root, options) {
     const all = rows.length > 0 && rows.every(row => selected.has(keyOf(row)));
     const some = !all && rows.some(row => selected.has(keyOf(row)));
     const keys = [...selected];
+    // Sin filas no se cuenta nada: el estado vacío ya lo dice con palabras («0 filas» encima sobraba).
     const summary =
-      phase === 'loading' || phase === 'error'
+      phase === 'loading' || phase === 'error' || !rows.length
         ? ''
         : `${rows.length} ${rows.length === 1 ? 'fila' : 'filas'}${next !== null ? ' · hay más' : ''}${keys.length ? ` · ${keys.length} ${keys.length === 1 ? 'seleccionada' : 'seleccionadas'}` : ''}`;
     const selectAll = text =>

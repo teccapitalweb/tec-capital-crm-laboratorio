@@ -14,7 +14,7 @@ import { confirm, dialog } from '../../kit/components/dialog.js';
 import { failure, loading } from '../../kit/components/feedback.js';
 
 const KEY = /^[a-z][a-z0-9_]{1,39}$/;
-const TONO = { active: 'k-chip--ok', archived: '' };
+const TONO = { active: 'k-chip--ok', archived: 'k-chip--draft' };
 const ESTADO = { active: 'Activo', archived: 'Archivado' };
 
 /** Lo vivo de este montaje, para que onEvent() llegue a la tabla. Lo que sobrevive a un remontaje va en ctx.keep. */
@@ -174,7 +174,7 @@ export default {
         html`${when(
           datos.brands.length > 1,
           () =>
-            html`<form class="k-card atr-marca" novalidate data-do="marca">
+            html`<form class="k-filterbar atr-marca" novalidate data-do="marca">
                 ${field(
                   {
                     name: 'marca',
@@ -186,17 +186,28 @@ export default {
                 )}
               </form>`,
         )}
+          ${when(
+            elegida,
+            () =>
+              html`<div class="k-figures">
+                <p class="k-figure" data-tone="lime" role="status">
+                  <span class="k-figure__label">Datos activos</span>
+                  <span class="k-figure__value" aria-hidden="true">${elegida.active}</span>
+                  <span class="k-figure__sub"
+                    ><span class="k-sr">${elegida.active} </span>de ${datos.limits.definitions} datos activos en
+                    ${elegida.brandName}.</span
+                  >
+                </p>
+              </div>`,
+          )}
           <div class="k-card" data-slot="tabla"></div>
-          <div class="k-card">
+          <div class="k-card atr-sistema-bloque">
             <h2 class="atr-titulo">Datos del sistema</h2>
             <p class="k-hint">Se leen de la ficha, del consentimiento, de las etiquetas y del interés comercial. Son de sólo lectura.</p>
             <ul class="atr-sistema">
               ${datos.system.map(item => html`<li class="k-chip">${item.label} · {{contacto.${item.key}}}</li>`)}
             </ul>
-          </div>
-          <p class="k-hint" role="status">
-            ${elegida ? `${elegida.active} de ${datos.limits.definitions} datos activos en ${elegida.brandName}.` : ''}
-          </p>`,
+          </div>`,
       );
       if (!tabla) {
         tabla = pagedTable(cuerpo.querySelector('[data-slot="tabla"]'), {
