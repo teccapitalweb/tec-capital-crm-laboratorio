@@ -666,6 +666,9 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
     // que el asistente), el recorrido se elige y empieza ya con ese curso. Sólo se guarda si de verdad arranca uno; si
     // no se puede cambiar (otra conversación abierta de ese curso), lo resuelve el asistente.
     const routed = svc.replies.routeCourse?.(c, m) ?? null;
+    // Nombró otro curso pero tiene un pedido vigente: no se cambia solo y el recorrido no debe empezar con el curso
+    // equivocado. Lo contesta el asistente, que se lo explica.
+    if (routed?.blocked) return null;
     const next = routed?.course ? { ...c, course_id: routed.course.id, edition_id: routed.course.editionId } : c;
     const flow = pick(next, m);
     if (!flow) return null;

@@ -654,6 +654,10 @@ test('un número para toda la marca: pregunta el curso, lo reconoce por anuncio 
   assert.equal(r2.log.intent, 'flow', 'lo atiende el recorrido');
   assert.equal(r2.conv.course_id, 'aves', 'la conversación pasó al curso que nombró');
   assert.ok(r2.text.includes(aves.title), 'el recorrido saluda con el curso nuevo: ' + r2.text);
+  // con un pedido vigente no se cambia solo: el recorrido no arranca con el curso equivocado, contesta el asistente
+  const held = await say('5215511110012', 'info del curso de nutrición');
+  assert.notEqual(held.log.intent, 'flow', 'con pedido vigente no lo toma el recorrido');
+  assert.equal(held.conv.course_id, 'aves', 'y la conversación no cambia de curso');
   // sin nombrar otro curso, el recorrido sigue con el de la conversación
   const r3 = await say('5215511110020', 'info');
   assert.equal(r3.log.intent, 'flow');
