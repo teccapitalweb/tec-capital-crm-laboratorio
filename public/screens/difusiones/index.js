@@ -481,7 +481,7 @@ export default {
       }
     }
     async function pintarAsistente() {
-      render(acciones, html`<button type="button" class="k-btn" data-do="volver">Volver a la lista</button>`);
+      render(acciones, html`<button type="button" class="k-btn k-back" data-do="volver">Volver a la lista</button>`);
       render(cuerpo, loading('Preparando el asistente…'));
       try {
         opciones = await api.get('/api/broadcasts/options', { brand: marca });
@@ -572,7 +572,7 @@ export default {
         reanudar: ['paused', 'stopped'].includes(c.status),
         cancelar: ['draft', 'scheduled', 'sending', 'paused', 'stopped'].includes(c.status),
       };
-      render(acciones, html`<button type="button" class="k-btn" data-do="volver">Volver a la lista</button>`);
+      render(acciones, html`<button type="button" class="k-btn k-back" data-do="volver">Volver a la lista</button>`);
       render(
         cuerpo,
         html`<div class="k-card k-stack">

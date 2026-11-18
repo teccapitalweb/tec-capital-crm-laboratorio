@@ -1021,3 +1021,20 @@ dialog:where(:not(.k-dialog, .k-side, .pay-page))::backdrop {
     height: 25px;
   }
 }
+
+/* Regresar en las pantallas clásicas: el mismo dibujo de flecha que en las del kit (public/kit/kit.css). */
+.workspace:not(.customer-skin) .btn.is-back {
+  gap: var(--space-3);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .btn.is-back::before {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-left: var(--space-1);
+  border-bottom: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  border-radius: 1px;
+  content: '';
+  transform: rotate(45deg);
+}

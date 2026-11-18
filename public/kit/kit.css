@@ -2354,3 +2354,33 @@ th[aria-sort] > .k-table__sort {
     animation: none;
   }
 }
+
+/* ---- Regresar: un mismo botón en todas las pantallas (18 nov 2026) ----------------------------------------------------
+   Píldora blanca con una flecha dibujada, en lugar de un texto con «←». Va sobre la página gris; al pasar el cursor se
+   vuelve tinta. */
+.k-btn.k-back {
+  gap: var(--space-3);
+  padding: 0 var(--space-7) 0 var(--space-6);
+  border-color: transparent;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: var(--weight-black);
+}
+
+.k-btn.k-back::before {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-left: var(--space-1);
+  border-bottom: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  border-radius: 1px;
+  content: '';
+  transform: rotate(45deg);
+}
+
+.k-btn.k-back:hover {
+  border-color: transparent;
+  background: var(--ink);
+  color: var(--on-ink);
+}

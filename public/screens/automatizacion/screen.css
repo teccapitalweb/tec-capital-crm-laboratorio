@@ -34,7 +34,7 @@
 }
 
 .au-volver {
-  margin-left: calc(var(--space-3) * -1);
+  margin-left: 0;
 }
 
 .au-meta {
@@ -513,10 +513,10 @@
   gap: var(--space-2);
 }
 
+/* «Recorridos» es el botón de regresar del kit (.k-back): una píldora, ya sin el margen negativo del enlace de antes. */
 .au-head--editor .au-volver {
   min-height: var(--touch);
-  margin-left: calc(var(--space-4) * -1);
-  padding: 0 var(--space-4);
+  margin-left: 0;
 }
 
 .au-head--editor h1 {

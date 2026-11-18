@@ -89,7 +89,7 @@ window.createContactsUI = function ({ state, api, esc, icon, showModal, toast, g
       `<div class="ctc-merge">${card('Se conserva', p.keep)}${card('Se une y desaparece', p.merge)}
       <ul class="ctc-moves"><li>${p.moves.opportunities} interés(es) pasan a la ficha principal</li><li>${p.moves.notes} nota(s) interna(s)</li><li>${p.moves.tags} etiqueta(s) nueva(s)</li>${p.fill.phone ? '<li>Se completará el teléfono</li>' : ''}${p.fill.email ? '<li>Se completará el correo</li>' : ''}</ul>
       ${p.problems.length ? `<ul class="imp-errors">${p.problems.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="crm-hint">Queda una nota en la ficha con lo que se unió. La fusión no se puede deshacer desde la interfaz.</p>'}
-      <div class="actions"><button type="button" class="btn" data-action="ctc-duplicates">Volver</button>${p.canMerge ? `<button type="button" class="btn primary" data-action="ctc-merge" data-keep="${p.keep.id}" data-merge="${p.merge.id}" data-token="${esc(p.previewToken)}">Fusionar fichas</button>` : ''}</div></div>`,
+      <div class="actions"><button type="button" class="btn is-back" data-action="ctc-duplicates">Volver</button>${p.canMerge ? `<button type="button" class="btn primary" data-action="ctc-merge" data-keep="${p.keep.id}" data-merge="${p.merge.id}" data-token="${esc(p.previewToken)}">Fusionar fichas</button>` : ''}</div></div>`,
     );
   }
   function exportDialog() {

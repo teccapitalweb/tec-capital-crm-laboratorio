@@ -82,7 +82,7 @@ window.createPersonsUI = function ({
               .join('')}`
           : ''
       }
-      <div class="actions">${btn('list', 'Volver a personas')}</div></div>`,
+      <div class="actions">${btn('list', 'Volver a personas', '', '', 'is-back')}</div></div>`,
     );
   }
   async function candidates() {
@@ -108,7 +108,7 @@ window.createPersonsUI = function ({
           : '<div class="crm-empty">' +
             icon('check') +
             '<h3>Nada por revisar</h3><p>Las identidades coinciden solas o ya se decidieron.</p></div>'
-      }<div class="actions">${btn('list', 'Volver a personas')}</div></div>`,
+      }<div class="actions">${btn('list', 'Volver a personas', '', '', 'is-back')}</div></div>`,
     );
   }
   async function mergePreview(keepId, mergeId) {

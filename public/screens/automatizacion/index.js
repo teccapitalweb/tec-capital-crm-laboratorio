@@ -550,7 +550,7 @@ export default {
           html`<header class="k-head au-head au-head--editor">
               <div class="au-titulo">
                 <div class="au-migas">
-                  <button type="button" class="k-btn k-btn--ghost au-volver" data-do="volver">← Recorridos</button>
+                  <button type="button" class="k-btn k-back au-volver" data-do="volver" aria-label="Volver a Recorridos">Recorridos</button>
                   <span class="k-eyebrow">Recorrido</span>
                   <h1 data-slot="nombre"></h1>
                 </div>
