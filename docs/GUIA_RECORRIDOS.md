@@ -57,6 +57,10 @@ Un recorrido activo sólo atiende si **la marca está atendiendo con recorridos*
 
 Si además ves «El modo real de esta marca está apagado», es sólo información: los recorridos atienden igual, también por WhatsApp real, pero sus mensajes llevan los avisos de prueba («Chat de prueba…», «Pago de prueba…»). Para atender clientes de verdad sin esos avisos, enciende el modo real de la marca en Operación → Ventas y cobro → Pagos ([PLAN_MODO_REAL.md](PLAN_MODO_REAL.md)).
 
+### Si la persona escribe otra vez la palabra clave
+
+Cuando un recorrido que empieza con una palabra clave está esperando una respuesta (unos botones, una lista, una pregunta) y la persona escribe de nuevo la palabra —o toca otra vez el anuncio, que manda su frase—, el recorrido **empieza de nuevo** desde el saludo. La atención anterior se cierra como «empezó de nuevo» y no cuenta como terminada ni como abandonada en el rendimiento. Sólo aplica a los recorridos que se pueden repetir «siempre»: con «una vez por conversación» o con un descanso entre repeticiones, la palabra se toma como una respuesta que no se entendió y contesta el asistente. La ventana **Probar** no imita este reinicio: ahí la palabra clave a medio recorrido se sigue viendo como un desvío.
+
 ## 6. Leer su rendimiento
 
 En la pestaña **Rendimiento**, elige el periodo (7, 30 o 90 días) y la versión:
