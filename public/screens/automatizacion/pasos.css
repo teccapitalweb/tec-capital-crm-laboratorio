@@ -1186,3 +1186,91 @@
 .lz[data-bar='tight'] :is([data-do='acomodar'], [data-do='ajustar'], [data-do='rendimiento'], [data-do='probar']) {
   width: var(--control);
 }
+
+/* ---- Conexiones del lienzo en Tinta (18 nov 2026) --------------------------------------------------------------------
+   Las líneas dejan el azul grisáceo de Niebla: gris tinta de 2 px con punta redondeada; al pasar el cursor o elegir una,
+   la línea se vuelve tinta sobre un halo lima (el mismo trazo ancho que ya servía para atinarle). El punto del que sale
+   cada conexión es más grande, lleno en tinta si ya está conectado y lima al pasar el cursor. Con la vista alejada los
+   renglones de las salidas no se dibujan como celdas vacías: queda el bloque limpio con sus puntos. */
+.lz {
+  --lz-edge: var(--text-3);
+}
+
+.lz-edge-line {
+  stroke-linecap: round;
+  stroke-width: 2px;
+}
+
+.lz-edge-head {
+  stroke: var(--lz-edge);
+  stroke-linejoin: round;
+  stroke-width: 2px;
+}
+
+.lz-edge-hit {
+  stroke-linecap: round;
+  transition: stroke 0.16s var(--ease);
+}
+
+.lz-edge:hover .lz-edge-hit {
+  stroke: var(--lime);
+  stroke-opacity: 0.55;
+  stroke-width: 10px;
+}
+
+.lz-edge[data-selected='true'] .lz-edge-hit {
+  stroke: var(--lime);
+  stroke-opacity: 1;
+  stroke-width: 11px;
+}
+
+.lz-edge:hover .lz-edge-line,
+.lz-edge[data-selected='true'] .lz-edge-line {
+  stroke: var(--ink);
+}
+
+.lz-edge:hover .lz-edge-head,
+.lz-edge[data-selected='true'] .lz-edge-head {
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+
+.lz-edge[data-selected='true'] .lz-edge-line {
+  stroke-width: 3px;
+}
+
+.lz-edge-draft {
+  stroke: var(--ink);
+  stroke-dasharray: 2 8;
+  stroke-linecap: round;
+  stroke-width: 3px;
+}
+
+.lz-handle {
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border-color: var(--lz-edge);
+  outline: 3px solid var(--surface);
+}
+
+.lz-port[data-linked='true'] .lz-handle {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+.lz-port:hover .lz-handle {
+  border-color: var(--ink);
+  background: var(--lime);
+}
+
+.lz-canvas[data-compact='true'] .lz-port {
+  border-top-color: transparent;
+}
+
+.lz-canvas[data-compact='true'] .lz-handle {
+  width: 18px;
+  height: 18px;
+  margin-top: -9px;
+  right: -9px;
+}
