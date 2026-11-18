@@ -453,12 +453,13 @@
   display: none;
 }
 
+/* La columna de pasos crece con la pantalla: más ancha, los nombres ocupan menos renglones y caben más pasos. */
 .lz:not([data-layout='narrow'])[data-pane='outline'] .lz-body {
-  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  grid-template-columns: minmax(250px, clamp(300px, 22vw, 380px)) minmax(0, 1fr);
 }
 
 .lz:not([data-layout='narrow'])[data-pane='outline'][data-preview='column'] .lz-body {
-  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(240px, 290px);
+  grid-template-columns: minmax(250px, clamp(300px, 22vw, 380px)) minmax(0, 1fr) minmax(240px, 290px);
 }
 
 .lz:not([data-layout='narrow'])[data-pane='outline'] .lz-side {
@@ -1123,21 +1124,32 @@
   min-width: 0;
 }
 
-/* En una laptop (poca altura) la lista de pasos necesita el espacio: mientras la paleta sólo muestra su primer grupo,
-   el rótulo de ese grupo sobra y los márgenes se aprietan. Con «Ver todos los tipos de paso» vuelven los rótulos. */
-@media (max-height: 860px) {
-  .lz:not([data-layout='narrow'])[data-pane='outline'] .lz-palette {
-    gap: var(--space-3);
-    padding: var(--space-6);
-  }
+/* La lista de pasos necesita el espacio: mientras la paleta sólo muestra su primer grupo, el rótulo de ese grupo sobra,
+   los márgenes se aprietan y la ayuda (que crece con el nombre del paso elegido) no pasa de dos renglones. Con «Ver
+   todos los tipos de paso» vuelven los rótulos. */
+.lz:not([data-layout='narrow'])[data-pane='outline'] .lz-palette {
+  gap: var(--space-3);
+  padding: var(--space-6);
+}
 
-  .lz:not([data-layout='narrow'])[data-pane='outline'] .lz-palette[data-all='false'] {
-    max-height: 62%;
-  }
+.lz:not([data-layout='narrow'])[data-pane='outline'] .lz-palette[data-all='false'] {
+  max-height: 62%;
+}
 
-  .lz:not([data-layout='narrow'])[data-pane='outline'] .lz-palette[data-all='false'] .lz-palette-group h3 {
-    display: none;
-  }
+.lz:not([data-layout='narrow'])[data-pane='outline'] .lz-palette[data-all='false'] .lz-palette-group h3 {
+  display: none;
+}
+
+.lz:not([data-layout='narrow'])[data-pane='outline'] .lz-palette-hint {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.lz:not([data-layout='narrow'])[data-pane='outline'] .lz-pal {
+  padding-right: var(--space-5);
 }
 
 .lz[data-layout='narrow'] .lz-tools-row {
