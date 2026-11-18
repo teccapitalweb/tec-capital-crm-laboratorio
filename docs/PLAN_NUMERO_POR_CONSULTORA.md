@@ -18,6 +18,8 @@ Una marca con un solo curso disponible nunca pregunta.
 
 ## Cambiar de curso en el mismo chat
 
+- **Con un recorrido activo también** (18 nov 2026): si el mensaje arranca un recorrido por palabra clave («info del curso de aves»), el motor de recorridos aplica estas mismas reglas antes de empezar, y el saludo, la ficha y el precio salen ya del curso nombrado.
+
 - «¿Y el de aves cuánto cuesta?» contesta de aves y la conversación **pasa a aves**. A media conversación hace falta una señal además de la palabra («el de…», «curso», «también», «mejor») o dos palabras propias del curso: «tengo 200 aves, ¿me sirve?» no cambia nada.
 - «¿Qué otros cursos tienen?» da la lista numerada; el número siguiente elige. Un número suelto sin lista antes no elige nada.
 - Si la persona vuelve a entrar por el anuncio de otro curso, su conversación pasa a ese curso.
