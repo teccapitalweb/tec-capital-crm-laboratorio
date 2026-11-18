@@ -1311,3 +1311,252 @@
   color: var(--ink);
   font-size: var(--font-md);
 }
+
+/* ============ 6. Catálogo ============ */
+
+/* Marca y conteos: barra de filtros en píldora; los conteos («6 ediciones disponibles») en fichas de color */
+.workspace:not(.customer-skin) .catalogue-page .cat-topline {
+  gap: var(--space-3);
+  margin-bottom: var(--space-7);
+  color: var(--ink);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-topline > span {
+  padding: var(--space-2) var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--sky);
+  color: var(--ink);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-topline > span:last-child {
+  background: var(--butter);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-filter {
+  gap: var(--space-3);
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-filter select {
+  min-height: var(--control);
+  max-width: 260px;
+  padding-inline: var(--space-7) 40px;
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  background-color: var(--surface);
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-tabs:not(.ops-subtabs) {
+  margin-bottom: var(--space-7);
+}
+/* Barra de herramientas: buscar, estado y, a la derecha, crear (tinta) e importar */
+.workspace:not(.customer-skin) .catalogue-page .cat-toolbar {
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-toolbar .btn {
+  min-height: var(--control);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin)
+  .catalogue-page
+  .cat-toolbar
+  > :is([data-action='cat-wizard'], [data-action='cat-edit']) {
+  background: var(--ink);
+  color: var(--lime);
+}
+.workspace:not(.customer-skin)
+  .catalogue-page
+  .cat-toolbar
+  > :is([data-action='cat-wizard'], [data-action='cat-edit']):hover {
+  background: var(--ink-3);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-results,
+.workspace:not(.customer-skin) .catalogue-page .cat-count {
+  color: var(--text-2);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+}
+
+/* Fichas del catálogo: lista (aprobada, disponible, vigente, curso activo) en menta; el resto gris */
+.workspace:not(.customer-skin) .catalogue-page .cat-badge,
+#modal:not(.pay-page) .cat-badge {
+  padding: 3px 11px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-badge:is(.ready, .ok),
+#modal:not(.pay-page) .cat-badge:is(.ready, .ok) {
+  background: var(--mint);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-badge.kn-ai {
+  background: var(--lilac);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-course-cover > .cat-badge {
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-course-cover > .cat-badge.ready {
+  background: var(--mint);
+}
+
+/* Cursos, promociones, plantillas, flyers y conocimiento: tarjetas blancas con el nombre grande */
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course-grid, .cat-grid, .cat-template-grid, .cat-flyer-grid) {
+  gap: var(--space-5);
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-panel, .cat-template, .cat-flyer) {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: none;
+  overflow: hidden;
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-panel, .cat-template, .cat-flyer) h2 {
+  color: var(--ink);
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-panel, .cat-template, .cat-flyer) small,
+.workspace:not(.customer-skin) .catalogue-page :is(.cat-course, .cat-panel, .cat-template, .cat-flyer) p {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-card-heading > span:first-child {
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-course-cover {
+  background: var(--lilac);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-course-cover > span {
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-template-copy {
+  padding: var(--space-6) var(--space-7);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-big-price {
+  color: var(--ink);
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-black);
+  font-variant-numeric: tabular-nums;
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-cover-note {
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-item);
+  background: var(--butter);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-flyer-preview {
+  border: 0;
+  background: var(--soft);
+}
+
+/* Ediciones: una fila por edición con la fecha en un bloque lila, precio grande y las acciones en una fila */
+.workspace:not(.customer-skin) .catalogue-page .cat-edition-list {
+  display: grid;
+  gap: var(--space-3);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-edition {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 300px);
+  align-items: center;
+  gap: var(--space-7);
+  padding: var(--space-7) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-block-lg);
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-date {
+  width: 72px;
+  height: 72px;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--lilac);
+  color: var(--ink);
+  text-align: center;
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-date strong {
+  color: var(--ink);
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-black);
+  line-height: 1;
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-date span {
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  line-height: 1.2;
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-edition h2 {
+  margin: var(--space-1) 0;
+  color: var(--ink);
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-edition :is(p, small) {
+  margin: 2px 0;
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-edition-price {
+  min-width: 0;
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-edition-price strong {
+  color: var(--ink);
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-black);
+  font-variant-numeric: tabular-nums;
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-edition > .actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-edition > .actions .btn:first-child {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.workspace:not(.customer-skin) .catalogue-page .cat-edition > .actions .btn:first-child:hover {
+  background: var(--ink-3);
+}
+
+/* Conocimiento: preguntas sin respuesta en piezas mantequilla; las palabras clave en fichas grises sin borde */
+.workspace:not(.customer-skin) .catalogue-page .kn-gap {
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--butter);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .catalogue-page .kn-gap :is(strong, small) {
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .catalogue-page .kn-gap .btn {
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .catalogue-page .kn-variants .ctc-tag {
+  border: 0;
+  background: var(--soft);
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+}
+/* Las ocho secciones del catálogo caben: la fila de pestañas pasa a dos líneas si hace falta */
+.workspace:not(.customer-skin) .catalogue-page .cat-tabs:not(.ops-subtabs) {
+  flex-wrap: wrap;
+  overflow: visible;
+}
