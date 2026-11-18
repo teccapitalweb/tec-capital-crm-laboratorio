@@ -59,7 +59,7 @@ Si además ves «El modo real de esta marca está apagado», es sólo informaci�
 
 ### Si la persona escribe otra vez la palabra clave
 
-Cuando un recorrido que empieza con una palabra clave está esperando una respuesta (unos botones, una lista, una pregunta) y la persona escribe de nuevo la palabra —o toca otra vez el anuncio, que manda su frase—, el recorrido **empieza de nuevo** desde el saludo. La atención anterior se cierra como «empezó de nuevo» y no cuenta como terminada ni como abandonada en el rendimiento. Sólo aplica a los recorridos que se pueden repetir «siempre»: con «una vez por conversación» o con un descanso entre repeticiones, la palabra se toma como una respuesta que no se entendió y contesta el asistente. La ventana **Probar** no imita este reinicio: ahí la palabra clave a medio recorrido se sigue viendo como un desvío.
+Cuando un recorrido que empieza con una palabra clave está esperando una respuesta (unos botones, una lista, una pregunta) y la persona escribe de nuevo la palabra —o toca otra vez el anuncio, que manda su frase—, el recorrido **empieza de nuevo** desde el saludo. La atención anterior se cierra como «empezó de nuevo» y no cuenta como terminada ni como abandonada en el rendimiento. Sólo aplica a los recorridos que se pueden repetir «siempre»: con «una vez por conversación» o con un descanso entre repeticiones, la palabra se toma como una respuesta que no se entendió y contesta el asistente. La ventana **Probar** hace lo mismo y lo anota («el recorrido empieza de nuevo»).
 
 ## 6. Leer su rendimiento
 
