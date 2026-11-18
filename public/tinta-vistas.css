@@ -1560,3 +1560,477 @@
   flex-wrap: wrap;
   overflow: visible;
 }
+
+/* ============ 7. Resultados ============ */
+
+/* Tablas de Analítica, Finanzas y Mis resultados dentro de su tarjeta: filas con aire y cifras alineadas */
+.workspace:not(.customer-skin) .content-page :is(.an-table, .fin-table) :is(th, td) {
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .content-page :is(.an-table, .fin-table) td {
+  color: var(--ink);
+}
+/* Embudo: barras en tinta sobre pista gris, como en Mi día */
+.workspace:not(.customer-skin) .content-page .an-funnel-row {
+  color: var(--ink);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .content-page .an-bar {
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+}
+/* Notas al pie de los resultados */
+.workspace:not(.customer-skin) .content-page .an-notes {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+/* Presentación: el guion de pasos en piezas; los pasos listos en menta */
+.workspace:not(.customer-skin) .pr-page .pr-step {
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* ============ 8. Equipo y Mi configuración ============ */
+
+/* Equipo: cada persona e invitación una pieza gris con sus fichas */
+.workspace:not(.customer-skin) .crm-page #team-content > .crm-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--space-3);
+}
+.workspace:not(.customer-skin) .crm-page #team-content > .crm-panel > .panel-title {
+  grid-column: 1 / -1;
+  margin-bottom: var(--space-3);
+}
+.workspace:not(.customer-skin) .crm-page #team-content > .crm-panel > .crm-empty {
+  grid-column: 1 / -1;
+}
+.workspace:not(.customer-skin) .crm-page #team-content .crm-list-row {
+  gap: var(--space-5);
+  min-width: 0;
+  padding: var(--space-6) var(--space-7);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .crm-page #team-content .crm-list-row strong {
+  color: var(--ink);
+  font-size: var(--font-lead);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .crm-page #team-content .crm-list-row small {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .crm-page #team-content .crm-list-row .avatar {
+  background: var(--lilac);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .crm-page #team-content :is(.pill, .btn) {
+  background-color: var(--surface);
+}
+.workspace:not(.customer-skin) .crm-page #team-content .btn:hover {
+  background-color: var(--line);
+}
+.workspace:not(.customer-skin) .crm-page #team-content .pill:is(.t-mint, .t-sky, .t-peach) {
+  background: var(--sky);
+}
+.workspace:not(.customer-skin) .crm-page #team-content .pill.t-mint {
+  background: var(--mint);
+}
+.workspace:not(.customer-skin) .crm-page #team-content .pill.t-peach {
+  background: var(--peach);
+}
+/* Verificación en dos pasos: con ella, menta; sin ella, mantequilla (atención) */
+.workspace:not(.customer-skin) .crm-page #team-content .ctc-tag {
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--butter);
+  color: var(--ink);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .crm-page #team-content .ctc-tag.green {
+  background: var(--mint);
+}
+
+/* Mi configuración: perfil y acceso en tarjetas; respuestas rápidas con filtros en píldora (el activo en tinta) */
+.workspace:not(.customer-skin) .crm-page .settings-grid {
+  gap: var(--gap-page);
+  max-width: none;
+}
+.workspace:not(.customer-skin) .crm-page .settings-grid > .crm-panel {
+  margin: 0;
+}
+.workspace:not(.customer-skin) .crm-page .settings-grid .muted {
+  margin: var(--space-3) 0;
+  color: var(--text-2);
+  font-size: var(--font-lg);
+}
+.workspace:not(.customer-skin) .crm-page .settings-grid .brand-pills .pill {
+  background: var(--lilac);
+}
+.workspace:not(.customer-skin) .crm-page .sec-mfa {
+  margin-top: var(--space-7);
+  padding: var(--space-7);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .crm-page .sec-mfa:empty {
+  display: none;
+}
+.workspace:not(.customer-skin) .crm-page .qr-filters button {
+  min-height: var(--touch);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .crm-page .qr-filters button.active {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.workspace:not(.customer-skin) .crm-page .qr-filters button span {
+  color: inherit;
+}
+.workspace:not(.customer-skin) .crm-page .qr-card {
+  border: 0;
+  border-radius: var(--radius-block-lg);
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .crm-page .qr-card .btn {
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .crm-page .qr-card .btn:hover {
+  background: var(--line);
+}
+.workspace:not(.customer-skin) .crm-page .qr-card h3,
+.workspace:not(.customer-skin) .crm-page .qr-card strong {
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .crm-page .qr-search {
+  background: var(--soft);
+}
+
+/* Equipo: «Recuperar una cuenta» en la cabecera del bloque blanco, en gris */
+.workspace:not(.customer-skin) .crm-page #team-content .panel-title .btn {
+  background-color: var(--soft);
+}
+
+/* Actividad: los pasos de la prueba en piezas de color y cada actividad una fila redonda */
+.workspace:not(.customer-skin) .content-page .funnel {
+  margin-bottom: var(--gap-page);
+  padding: var(--pad-card);
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: none;
+}
+.workspace:not(.customer-skin) .content-page .funnel-head h2 {
+  color: var(--ink);
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .content-page .funnel-head small,
+.workspace:not(.customer-skin) .content-page .funnel-how {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .content-page .funnel-steps {
+  gap: var(--space-3);
+}
+.workspace:not(.customer-skin) .content-page .funnel-steps li {
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .content-page .funnel-steps li strong {
+  color: var(--ink);
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-black);
+  font-variant-numeric: tabular-nums;
+}
+.workspace:not(.customer-skin) .content-page .funnel-steps li :is(span, small) {
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .content-page .activity-list {
+  display: grid;
+  gap: var(--space-2);
+}
+.workspace:not(.customer-skin) .content-page .activity-item {
+  align-items: center;
+  padding: var(--space-5) var(--space-7);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .content-page .activity-item :is(small, .activity-name) {
+  color: var(--text-2);
+  font-size: var(--font-md);
+  font-weight: 500;
+}
+
+/* ============ 2. Ventanas ============ */
+
+/* Toda ventana del equipo: cabecera con el título grande; secciones con su rótulo; formularios largos en piezas */
+#modal:not(.pay-page) .modal-inner {
+  padding: var(--space-8) var(--pad-card) var(--pad-card);
+}
+#modal:not(.pay-page) .modal-head {
+  align-items: flex-start;
+  gap: var(--space-5);
+  margin-bottom: var(--space-7);
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+#modal:not(.pay-page) .modal-head .icon-btn {
+  flex: none;
+  width: var(--control);
+  height: var(--control);
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--ink);
+}
+#modal:not(.pay-page) .modal-head .icon-btn:hover {
+  background: var(--line);
+}
+#modal:not(.pay-page) .modal-section-title {
+  margin: var(--space-8) 0 var(--space-3);
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: var(--weight-black);
+}
+#modal:not(.pay-page) .form-grid > .btn.primary:last-child,
+#modal:not(.pay-page) .form-grid > fieldset > .btn.primary:last-child {
+  justify-self: start;
+  min-height: var(--control);
+  padding: 0 var(--space-8);
+}
+#modal:not(.pay-page) .crm-list-row {
+  gap: var(--space-5);
+  margin-bottom: var(--space-2);
+  padding: var(--space-5) var(--space-6);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
+}
+#modal:not(.pay-page) .crm-list-row:hover {
+  background: var(--line);
+}
+#modal:not(.pay-page) :is(.internal-notes, .ops-notes) > article {
+  margin-bottom: var(--space-2);
+  padding: var(--space-5) var(--space-6);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
+}
+#modal:not(.pay-page) :is(.internal-notes, .ops-notes) > article small {
+  color: var(--text-2);
+}
+#modal:not(.pay-page) .summary-grid > div,
+#modal:not(.pay-page) .ops-detail-metrics > span {
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
+}
+#modal:not(.pay-page) .ops-detail-metrics strong {
+  color: var(--ink);
+}
+#modal:not(.pay-page) details {
+  border-radius: var(--radius-block);
+}
+#modal:not(.pay-page) .pill {
+  background: var(--lilac);
+}
+/* El paso del asistente de curso y sus casillas */
+#modal:not(.pay-page) .wz-title {
+  color: var(--ink);
+  font-weight: var(--weight-black);
+}
+
+/* ============ 9. Entrada (iniciar sesión, crear perfil, invitación) ============ */
+
+/* La historia, a la izquierda, es un bloque en tinta con la marca en lima; el formulario, una tarjeta blanca */
+.entry {
+  background: var(--page);
+}
+.entry .entry-story {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--ink);
+  box-shadow: none;
+  color: var(--on-ink);
+  --text-2: var(--on-ink-soft);
+  --text-3: var(--on-ink-muted);
+  --ring: var(--lime);
+}
+.entry .entry-story::before,
+.entry .entry-story::after {
+  content: none;
+}
+.entry .entry-story .brand-mark {
+  border-radius: var(--radius-item);
+  background: var(--lime);
+  box-shadow: none;
+  color: var(--ink);
+}
+.entry .entry-story .brand strong,
+.entry .entry-story h1 {
+  color: var(--on-ink);
+}
+.entry .entry-story .brand small,
+.entry .entry-story > p,
+.entry .entry-story .eyebrow,
+.entry .entry-story .entry-foot {
+  color: var(--on-ink-soft);
+}
+.entry .entry-story .eyebrow {
+  color: var(--lime);
+}
+.entry .entry-story h1 {
+  font-weight: var(--weight-black);
+  letter-spacing: -0.03em;
+}
+/* La conversación de ejemplo: piezas de color, sin imitar ninguna app de mensajería */
+.entry .entry-mini {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--ink-2);
+  box-shadow: none;
+  color: var(--on-ink);
+  transform: none;
+}
+.entry .entry-mini .mini-head {
+  border-bottom-color: var(--ink-3);
+}
+.entry .entry-mini .mini-head strong {
+  color: var(--on-ink);
+}
+.entry .entry-mini .mini-head small,
+.entry .entry-mini .mini-note {
+  color: var(--on-ink-soft);
+}
+.entry .entry-mini .avatar {
+  background: var(--lilac);
+  color: var(--ink);
+}
+.entry .entry-mini .mini-bubble {
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--surface);
+  box-shadow: none;
+  color: var(--ink);
+}
+.entry .entry-mini .mini-bubble.right {
+  background: var(--lime);
+  color: var(--ink);
+}
+.entry .entry-form-wrap {
+  background: transparent;
+}
+.entry .entry-form {
+  padding: var(--space-8) var(--pad-card) var(--pad-card);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.entry .entry-form h2 {
+  color: var(--ink);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.02em;
+}
+.entry .entry-form > p {
+  color: var(--text-2);
+}
+.entry .entry-form .segmented {
+  background: var(--soft);
+}
+.entry .entry-form details {
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+.entry .entry-form summary {
+  min-height: var(--touch);
+  display: flex;
+  align-items: center;
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+.entry .entry-form .btn.primary {
+  min-height: var(--control-lg);
+  color: var(--lime);
+}
+.entry .entry-access-links :is(a, button) {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+}
+.entry .entry-note {
+  padding: var(--space-6) var(--space-7);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--butter);
+  color: var(--ink);
+}
+.entry .entry-note strong {
+  color: var(--ink);
+}
+
+/* Tareas dentro de una ventana (la ficha de la oportunidad): las mismas piezas que en Tareas */
+#modal:not(.pay-page) .crm-task {
+  gap: var(--space-5);
+  margin-bottom: var(--space-2);
+  padding: var(--space-5) var(--space-6);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+#modal:not(.pay-page) .crm-task .task-check {
+  width: var(--touch);
+  height: var(--touch);
+  border: 2px solid var(--line);
+  border-radius: var(--radius-4);
+  background: var(--surface);
+  color: var(--ink);
+  opacity: 1;
+}
+#modal:not(.pay-page) .crm-task.done .task-check {
+  border-color: var(--mint);
+  background: var(--mint);
+}
+#modal:not(.pay-page) .crm-task .task-main strong {
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: var(--weight-bold);
+}
+#modal:not(.pay-page) .crm-task :is(.task-main span, .task-meta, .task-meta span) {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+#modal:not(.pay-page) .crm-task .task-meta time {
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+}
+#modal:not(.pay-page) .crm-task > .icon-btn {
+  width: var(--touch);
+  height: var(--touch);
+  background: var(--surface);
+}
+/* La entrada en celular: las dos opciones del selector miden 40 px */
+.entry .segmented button {
+  min-height: var(--touch);
+}
