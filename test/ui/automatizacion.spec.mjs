@@ -496,7 +496,11 @@ test('automatización: agregar una lista conectada después del saludo, publicar
   await editor.locator('.lz-bar [data-do="ver"][data-pane="canvas"]').click();
   await expect(editor.locator('.lz-canvas')).toBeVisible();
   await pageEl.locator('[data-do="volver"]').click();
+  // Y al volver a abrirlo pide otra vez las listas de la marca: una plantilla recién adoptada o un material recién
+  // aprobado se pueden elegir sin recargar la aplicación (antes se quedaba con las de la primera vez).
+  const listsAgain = page.waitForRequest(request => request.url().includes('/api/chatflows/lists'));
   await card(pageEl, `${name} (copia)`).locator('[data-do="abrir"]').click();
+  await listsAgain;
   await expect(editor.locator('.lz-bar [data-do="ver"][data-pane="canvas"]')).toHaveAttribute('aria-pressed', 'true');
   await editor.locator('.lz-bar [data-do="ver"][data-pane="outline"]').click();
   await expect(editor.locator('.lz-outline .lz-row')).toHaveCount(4);

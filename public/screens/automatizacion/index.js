@@ -517,8 +517,9 @@ export default {
         keep.set('meta', meta);
         marca = uno.flow.brandId;
         keep.set('marca', marca);
-        lists = keep.get('lists:' + marca) ?? (await api.get('/api/chatflows/lists', { brand: marca })).lists;
-        keep.set('lists:' + marca, lists);
+        // Las listas de la marca se piden cada vez que se abre el editor: una plantilla recién adoptada, un material
+        // recién aprobado o un curso nuevo deben poder elegirse sin recargar la aplicación.
+        lists = (await api.get('/api/chatflows/lists', { brand: marca })).lists;
         return uno;
       });
       cargar.then(
@@ -598,7 +599,6 @@ export default {
                   file,
                 });
                 lists = { ...lists, files: [r.file, ...(lists.files || []).filter(f => f.id !== r.file.id)] };
-                keep.set('lists:' + marca, lists);
                 return r.file;
               }
             : undefined,
