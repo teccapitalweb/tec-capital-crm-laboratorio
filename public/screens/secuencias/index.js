@@ -411,11 +411,16 @@ function vistaPrevia(datos, p) {
   };
   const excluidos = Object.entries(p.enter.excluded);
   return html`<div class="k-stack">
-    <p class="k-hint">Nada de esto se envía ni se guarda: es lo que pasaría ahora mismo.</p>
-    <h3 class="sq-titulo">Quién entraría</h3>
+    <p class="k-hint">Nada de esto se envía ni se guarda.</p>
+    <h3 class="sq-titulo">A quién le habría tocado entrar</h3>
     <p>
       ${p.enter.count} ${p.enter.count === 1 ? 'conversación' : 'conversaciones'} de los últimos ${p.sinceDays} días
       ${p.trigger === 'enroll_interest' ? 'preguntaron cómo inscribirse' : 'recibieron la ficha del curso'}.
+    </p>
+    <p class="k-hint">
+      Es una referencia de a quién alcanza la secuencia. Al encenderla sólo entran las conversaciones que
+      ${p.trigger === 'enroll_interest' ? 'pregunten cómo inscribirse' : 'reciban la ficha del curso'}
+      <strong>desde ese momento</strong>: las de esta lista no entran solas.
     </p>
     ${when(p.enter.sample.length, () => html`<ul class="sq-lista">${p.enter.sample.map(x => html`<li>${x.name}</li>`)}</ul>`)}
     ${when(

@@ -98,7 +98,7 @@ Para otros módulos: `host.module('sequences').enroll(conversation, sequenceId, 
 
 ## Visibilidad
 
-- **Vista previa**: quién entraría (conversaciones de los últimos 14 días con el disparador, con cuántas quedan fuera y por qué) y quién recibiría su paso ahora (enviar, esperar, omitir, pausar o detener, con motivo). Usa la misma evaluación que el envío, sin escribir nada.
+- **Vista previa**: a quién le habría tocado entrar (conversaciones de los últimos 14 días con el disparador; es una referencia, porque al encender sólo entran las que cumplan el disparador desde ese momento, con cuántas quedan fuera y por qué) y quién recibiría su paso ahora (enviar, esperar, omitir, pausar o detener, con motivo). Usa la misma evaluación que el envío, sin escribir nada.
 - **Resultados**: inscritas, enviados, respondieron, dijeron sí y no, por estado y motivo de alto, y por paso (enviados, respuestas, sí, no, omitidos por motivo, «se inscribieron en N días después del paso»).
 - **Por conversación**: inscripciones activas, en pausa y detenidas con su motivo; bitácora por inscripción; detener y reanudar.
 
