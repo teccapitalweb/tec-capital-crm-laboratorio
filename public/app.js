@@ -1205,7 +1205,7 @@
         'brand.created': 'Añadió una marca',
       };
       $('#page').innerHTML =
-        `<div class="content-page"><div class="page-heading"><div><span class="eyebrow">Lo que está pasando</span><h1>Una vista de la prueba.</h1><p>Actividad real del laboratorio. ${d.online} participantes conectados ahora.</p></div><button class="btn" data-action="copy-link">${icon('qr-code')} Invitar a probar</button></div><div class="metrics">${[
+        `<div class="content-page"><div class="page-heading"><div><span class="eyebrow">Resultados · lo que está pasando</span><h1>Actividad</h1><p>Actividad real del laboratorio. ${d.online} participantes conectados ahora.</p></div><button class="btn" data-action="copy-link">${icon('qr-code')} Invitar a probar</button></div><div class="metrics">${[
           ['Perfiles creados', d.profiles],
           ['Conversaciones', d.conversations],
           ['Mensajes enviados', d.messages],

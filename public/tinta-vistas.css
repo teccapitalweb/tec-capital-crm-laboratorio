@@ -1,0 +1,965 @@
+/*
+ * Tinta · las vistas de antes por dentro (docs/DISENO_Y_AUDITORIA.md, «Vistas del equipo en Tinta»).
+ *
+ * Operación y todas sus áreas, Tareas, Agenda, Oportunidades, Catálogo, Mis resultados, Analítica, Actividad,
+ * Presentación, Equipo, Mi configuración, la entrada y las ventanas que abren. Se carga justo después de
+ * tinta-atencion.css. Sólo cambia el aspecto: cada botón, filtro, pestaña, campo y acción sigue en su sitio y hace
+ * lo mismo. Reglas de esta hoja:
+ *   - sólo variables de tokens.css (nada de colores, sombras ni tamaños de letra escritos a mano);
+ *   - todo va bajo .workspace:not(.customer-skin), #modal:not(.pay-page) o .entry: la experiencia del cliente
+ *     (chat con aspecto de app de mensajería y la página de pago) conserva su diseño;
+ *   - no toca Mi día ni Conversaciones (tinta-atencion.css);
+ *   - sobre un pastel o sobre lima el texto es tinta; sobre tinta, blanco o --on-ink-soft;
+ *   - nada se mueve salvo el color al pasar el cursor.
+ *
+ * Índice: 1. Piezas comunes (cabecera, marca, áreas y pestañas, cifras, bloques, ajustes, fichas, avisos, vacíos,
+ * tablas) · 2. Ventanas · 3. Operación · 4. Tareas y Agenda · 5. Oportunidades · 6. Catálogo · 7. Resultados ·
+ * 8. Equipo y Mi configuración · 9. Entrada · 10. Celular.
+ */
+
+/* ============ 1. Piezas comunes ============ */
+
+/* Cabecera de la vista: el selector de marca va en una barra de filtros en píldora, como en las pantallas nuevas */
+.workspace:not(.customer-skin) .content-page .crm-brand-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-5);
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 var(--space-7);
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .content-page .crm-brand-filter select {
+  width: auto;
+  min-width: 200px;
+  max-width: 100%;
+  min-height: var(--control);
+  padding-inline: var(--space-7) 40px;
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  background-color: var(--surface);
+  font-weight: var(--weight-bold);
+}
+
+/* Áreas (Atención, Ventas y cobro…) en píldoras grandes; sus pestañas en una pista blanca con la elegida en lima */
+.workspace:not(.customer-skin) .ops-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.workspace:not(.customer-skin) .ops-groups button {
+  min-height: var(--control-lg);
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-lg);
+}
+.workspace:not(.customer-skin) .cat-tabs.ops-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: var(--gap-page);
+  padding: var(--space-2);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .cat-tabs.ops-subtabs button {
+  min-height: var(--touch);
+  padding: 0 var(--space-7);
+  background: transparent;
+}
+.workspace:not(.customer-skin) .cat-tabs.ops-subtabs button:hover {
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .cat-tabs.ops-subtabs button.active,
+.workspace:not(.customer-skin) .cat-tabs.ops-subtabs button.active:hover {
+  background: var(--lime);
+  color: var(--ink);
+}
+
+/* Barra de herramientas: la frase a la izquierda, las acciones a la derecha, sin tarjeta */
+.workspace:not(.customer-skin) .content-page .crm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-7);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.workspace:not(.customer-skin) .content-page .crm-toolbar > p {
+  flex: 1 1 280px;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--font-lead);
+  line-height: 1.5;
+}
+.workspace:not(.customer-skin) .content-page .crm-toolbar .search {
+  flex: 1 1 260px;
+}
+
+/* Cifras: bloques de color con la cifra enorme; la que filtra, encendida, en tinta con la cifra en lima */
+.workspace:not(.customer-skin) .ops-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: var(--space-5);
+  margin-bottom: var(--gap-page);
+}
+.workspace:not(.customer-skin) .ops-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  min-width: 0;
+  min-height: 132px;
+  padding: var(--pad-card);
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--sky);
+  box-shadow: none;
+  color: var(--ink);
+  text-align: left;
+  outline-offset: 3px;
+}
+.workspace:not(.customer-skin) .ops-stat:nth-child(4n + 2) {
+  background: var(--butter);
+}
+.workspace:not(.customer-skin) .ops-stat:nth-child(4n + 3) {
+  background: var(--lilac);
+}
+.workspace:not(.customer-skin) .ops-stat:nth-child(4n + 4) {
+  background: var(--mint);
+}
+.workspace:not(.customer-skin) button.ops-stat:hover {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.workspace:not(.customer-skin) .ops-stat strong {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--font-display);
+  font-weight: var(--weight-black);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+.workspace:not(.customer-skin) .ops-stat span,
+.workspace:not(.customer-skin) .ops-stat small {
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: var(--weight-bold);
+  line-height: 1.3;
+}
+.workspace:not(.customer-skin) button.ops-stat.active,
+.workspace:not(.customer-skin) button.ops-stat.active:hover {
+  border: 0;
+  background: var(--ink);
+  box-shadow: none;
+  color: var(--on-ink);
+}
+.workspace:not(.customer-skin) button.ops-stat.active strong {
+  color: var(--lime);
+}
+.workspace:not(.customer-skin) button.ops-stat.active :is(span, small) {
+  color: var(--on-ink);
+}
+/* Las cifras de un resumen dentro de una tarjeta blanca (eventos, núcleo, vista previa): más bajas */
+.workspace:not(.customer-skin) :is(.crm-panel, .modal-inner) .ops-stats .ops-stat,
+#modal:not(.pay-page) .ops-stats .ops-stat {
+  min-height: 0;
+  padding: var(--space-7) var(--space-8);
+  border-radius: var(--radius-block);
+}
+.workspace:not(.customer-skin) :is(.crm-panel) .ops-stats .ops-stat strong,
+#modal:not(.pay-page) .ops-stats .ops-stat strong {
+  font-size: var(--font-2xl);
+}
+/* Fuera de .workspace (ventanas): mismas piezas */
+#modal:not(.pay-page) .ops-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-7);
+}
+#modal:not(.pay-page) .ops-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 0;
+  background: var(--sky);
+  color: var(--ink);
+  text-align: left;
+}
+#modal:not(.pay-page) .ops-stat:nth-child(4n + 2) {
+  background: var(--butter);
+}
+#modal:not(.pay-page) .ops-stat:nth-child(4n + 3) {
+  background: var(--lilac);
+}
+#modal:not(.pay-page) .ops-stat:nth-child(4n + 4) {
+  background: var(--mint);
+}
+#modal:not(.pay-page) .ops-stat :is(span, small, strong) {
+  color: var(--ink);
+}
+
+/* Bloques: tarjetas blancas de 28 px; lo que va dentro de una tarjeta es una pieza gris sin borde */
+.workspace:not(.customer-skin) .content-page .crm-panel {
+  margin-bottom: var(--gap-page);
+  padding: var(--pad-card);
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: none;
+}
+.workspace:not(.customer-skin) .content-page .crm-panel :is(.crm-panel, article.crm-panel) {
+  margin-bottom: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .content-page :is(.crm-panel, .modal-inner) h3,
+#modal:not(.pay-page) .modal-inner h3 {
+  margin: var(--space-8) 0 var(--space-3);
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.01em;
+}
+.workspace:not(.customer-skin) .ops-card-top,
+#modal:not(.pay-page) .ops-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.workspace:not(.customer-skin) .ops-card-top > h2,
+.workspace:not(.customer-skin) .ops-card-top > strong {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.01em;
+}
+.workspace:not(.customer-skin) .ops-card-top > small,
+#modal:not(.pay-page) .ops-card-top > small {
+  color: var(--text-2);
+  font-size: var(--font-md);
+  font-weight: 600;
+}
+/* Paneles plegables (Automatización por marca, Emisión, Funciones…): la cabecera es una fila que se toca */
+.workspace:not(.customer-skin) .content-page details.crm-panel > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--control);
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: var(--weight-black);
+  cursor: pointer;
+}
+
+/* Ajustes: cada casilla es una pieza con su rótulo; encendida, en lima (como el ciclo de las conversaciones) */
+.workspace:not(.customer-skin) .content-page .checkbox-field,
+#modal:not(.pay-page) .checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  min-height: var(--control);
+  padding: var(--space-4) var(--space-7);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: var(--weight-bold);
+  line-height: 1.35;
+  cursor: pointer;
+}
+.workspace:not(.customer-skin) .content-page .checkbox-field:has(input:checked),
+#modal:not(.pay-page) .checkbox-field:has(input:checked) {
+  background: var(--lime);
+}
+.workspace:not(.customer-skin) .content-page .checkbox-field input,
+#modal:not(.pay-page) .checkbox-field input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+.workspace:not(.customer-skin) .content-page :is(fieldset:disabled, [aria-disabled='true']) .checkbox-field {
+  cursor: default;
+}
+/* Dentro de una pieza gris, la casilla se separa en blanco */
+.workspace:not(.customer-skin)
+  .content-page
+  :is(.crm-panel .crm-panel, .t-piece)
+  .checkbox-field:not(:has(input:checked)) {
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .content-page fieldset,
+#modal:not(.pay-page) fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* Fichas de estado: un color, un significado (docs/GUIA_PANTALLAS.md) */
+.workspace:not(.customer-skin) .ops-chip,
+#modal:not(.pay-page) .ops-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: fit-content;
+  min-height: 24px;
+  padding: 3px 11px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+/* Dentro de una pieza gris, la ficha neutra va en blanco para que se vea */
+.workspace:not(.customer-skin)
+  :is(.crm-panel .crm-panel, .ops-row, .t-piece)
+  .ops-chip:not(.good, .ok, .warn, .high, .urgent, .bad, .sky, .lilac, .lime) {
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .ops-chip:is(.good, .ok),
+#modal:not(.pay-page) .ops-chip:is(.good, .ok) {
+  background: var(--mint);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .ops-chip:is(.warn, .high),
+#modal:not(.pay-page) .ops-chip:is(.warn, .high) {
+  background: var(--butter);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .ops-chip:is(.urgent, .bad),
+#modal:not(.pay-page) .ops-chip:is(.urgent, .bad) {
+  background: var(--peach);
+  color: var(--bad);
+}
+.workspace:not(.customer-skin) .ops-chip.sky,
+#modal:not(.pay-page) .ops-chip.sky {
+  background: var(--sky);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .ops-chip.lilac,
+#modal:not(.pay-page) .ops-chip.lilac {
+  background: var(--lilac);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .ops-chip.lime,
+#modal:not(.pay-page) .ops-chip.lime {
+  background: var(--lime);
+  color: var(--ink);
+}
+
+/* Notas de ayuda: texto secundario legible; los avisos dentro de la vista son bloques de color */
+.workspace:not(.customer-skin) .content-page .crm-hint,
+#modal:not(.pay-page) .crm-hint {
+  color: var(--text-2);
+  font-size: var(--font-md);
+  line-height: 1.55;
+}
+.workspace:not(.customer-skin) .content-page .info-box,
+#modal:not(.pay-page) .info-box {
+  padding: var(--space-6) var(--space-7);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--sky);
+  color: var(--ink);
+}
+
+/* Vacío: un disco lima con el icono, título en tinta y la explicación (como el vacío del kit) */
+.workspace:not(.customer-skin) .content-page .crm-empty,
+#modal:not(.pay-page) .crm-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--pad-card) calc(var(--pad-card) + var(--space-3));
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: center;
+}
+.workspace:not(.customer-skin) .content-page .crm-panel .crm-empty {
+  background: var(--soft);
+  border-radius: var(--radius-block);
+}
+.workspace:not(.customer-skin) .content-page .crm-empty > svg,
+#modal:not(.pay-page) .crm-empty > svg {
+  width: 56px;
+  height: 56px;
+  padding: var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--lime);
+  box-shadow: 14px 0 0 -2px var(--lilac);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .content-page .crm-empty :is(h2, h3),
+#modal:not(.pay-page) .crm-empty :is(h2, h3) {
+  margin: var(--space-3) 0 0;
+  color: var(--ink);
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .content-page .crm-empty p,
+#modal:not(.pay-page) .crm-empty p {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--font-lg);
+}
+/* Cargando: una pieza tranquila, sin animación */
+.workspace:not(.customer-skin) .content-page .loading-message,
+#modal:not(.pay-page) .loading-message {
+  padding: var(--space-7) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: var(--font-lg);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .content-page .crm-panel .loading-message {
+  background: var(--soft);
+}
+/* Mensaje de resultado de un formulario */
+.workspace:not(.customer-skin) .ops-feedback:not(:empty),
+#modal:not(.pay-page) .ops-feedback:not(:empty) {
+  margin-top: var(--space-3);
+  padding: var(--space-4) var(--space-7);
+  border-radius: var(--radius-block);
+  background: var(--mint);
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+}
+
+/* Formularios largos: los campos en una rejilla con aire; las acciones al final, en una fila */
+.workspace:not(.customer-skin) .content-page .form-grid,
+#modal:not(.pay-page) .form-grid {
+  gap: var(--space-6);
+}
+.workspace:not(.customer-skin) .content-page .actions,
+#modal:not(.pay-page) .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Tablas de las vistas de antes: caja redondeada con encabezado gris, la tabla se desplaza dentro */
+.workspace:not(.customer-skin) .content-page :is(.an-table, .leg-table, .ads-sheet, .fin-table),
+#modal:not(.pay-page) :is(.an-table, .leg-table) {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.workspace:not(.customer-skin) .content-page :is(.an-table, .leg-table, .ads-sheet, .fin-table) th,
+#modal:not(.pay-page) :is(.an-table, .leg-table) th {
+  background: var(--soft);
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+  letter-spacing: 0.04em;
+  text-align: left;
+}
+.workspace:not(.customer-skin) .content-page :is(.an-table, .leg-table, .ads-sheet, .fin-table) th:first-child {
+  border-radius: var(--radius-item) 0 0 var(--radius-item);
+}
+.workspace:not(.customer-skin) .content-page :is(.an-table, .leg-table, .ads-sheet, .fin-table) th:last-child {
+  border-radius: 0 var(--radius-item) var(--radius-item) 0;
+}
+.workspace:not(.customer-skin) .content-page :is(.an-table, .leg-table, .ads-sheet, .fin-table) :is(th, td) {
+  border-color: var(--line);
+}
+
+/* Bloques de código (direcciones de webhook, variables de entorno): píldora gris legible */
+.workspace:not(.customer-skin) .content-page code,
+#modal:not(.pay-page) code {
+  padding: 1px 6px;
+  border-radius: var(--radius-1);
+  background: var(--soft);
+  color: var(--ink);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .content-page .crm-panel .crm-panel code {
+  background: var(--surface);
+}
+
+/* La acción principal de la vista, en la cabecera: tinta con letra lima y más alta (como en las pantallas nuevas) */
+.workspace:not(.customer-skin) .content-page .page-heading {
+  align-items: flex-start;
+  gap: var(--space-7);
+  margin-bottom: var(--gap-page);
+}
+.workspace:not(.customer-skin) .content-page .page-heading .btn.primary {
+  min-height: var(--control-lg);
+  padding: 0 var(--space-8);
+  color: var(--lime);
+  font-size: var(--font-lg);
+}
+.workspace:not(.customer-skin) .content-page .page-heading .btn:not(.primary) {
+  min-height: var(--control-lg);
+  padding: 0 var(--space-8);
+  font-size: var(--font-lg);
+}
+
+/* Cifras de resultados (Analítica, Mis resultados, Finanzas, Presentación, Actividad): bloques de color */
+.workspace:not(.customer-skin) .content-page :is(.an-kpis, .metrics) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--space-5);
+  margin-bottom: var(--gap-page);
+}
+.workspace:not(.customer-skin) .content-page :is(.an-kpi, .metric) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--pad-card);
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--sky);
+  box-shadow: none;
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .content-page :is(.an-kpi, .metric):nth-child(4n + 2) {
+  background: var(--butter);
+}
+.workspace:not(.customer-skin) .content-page :is(.an-kpi, .metric):nth-child(4n + 3) {
+  background: var(--lilac);
+}
+.workspace:not(.customer-skin) .content-page :is(.an-kpi, .metric):nth-child(4n + 4) {
+  background: var(--mint);
+}
+.workspace:not(.customer-skin) .content-page :is(.an-kpi, .metric) span {
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .content-page :is(.an-kpi, .metric) strong {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--font-display);
+  font-weight: var(--weight-black);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+.workspace:not(.customer-skin) .content-page :is(.an-kpi, .metric) small {
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: 600;
+}
+/* Dentro de una tarjeta, las cifras son piezas más bajas */
+.workspace:not(.customer-skin) .content-page .crm-panel .an-kpis {
+  margin: var(--space-5) 0 0;
+  gap: var(--space-3);
+}
+.workspace:not(.customer-skin) .content-page .crm-panel .an-kpi {
+  padding: var(--space-7) var(--space-8);
+  border-radius: var(--radius-block);
+}
+.workspace:not(.customer-skin) .content-page .crm-panel .an-kpi strong {
+  font-size: var(--font-2xl);
+  letter-spacing: -0.02em;
+}
+/* Controles de periodo y «Ver a»: una barra de filtros en píldora */
+.workspace:not(.customer-skin) .content-page .an-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-5);
+  margin-bottom: var(--gap-page);
+}
+.workspace:not(.customer-skin) .content-page .an-controls label {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .content-page .an-controls :is(select, input) {
+  min-height: var(--control);
+  padding-inline: var(--space-7);
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  background-color: var(--surface);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .content-page .an-controls .btn {
+  min-height: var(--control);
+}
+
+/* ============ 4. Tareas y Agenda ============ */
+
+/* Tareas: filtros en píldora sobre la página; cada tarea una pieza con su casilla, su hora y «Editar» */
+.workspace:not(.customer-skin) .crm-page > .crm-toolbar > .segmented {
+  padding: var(--space-1);
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .crm-page > .crm-toolbar > .segmented button:not(.active) {
+  min-height: var(--touch);
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel:has(> .crm-task) {
+  display: grid;
+  gap: var(--space-3);
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task {
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-7);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task .task-check {
+  width: var(--touch);
+  height: var(--touch);
+  border: 2px solid var(--line);
+  border-radius: var(--radius-4);
+  background: var(--surface);
+  color: var(--ink);
+  opacity: 1;
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task .task-check:disabled {
+  border-style: dashed;
+  color: var(--text-3);
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task.done .task-check {
+  border-color: var(--mint);
+  background: var(--mint);
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task .task-main {
+  min-height: var(--touch);
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task .task-main strong {
+  color: var(--ink);
+  font-size: var(--font-lead);
+  font-weight: var(--weight-bold);
+  line-height: 1.4;
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task :is(.task-main span, .task-meta span) {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task .task-meta {
+  flex: 0 1 34%;
+  min-width: 0;
+  text-align: right;
+  white-space: normal;
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task .task-meta time {
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task .task-meta time.overdue {
+  width: fit-content;
+  margin-left: auto;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--peach);
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task > .icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: auto;
+  min-height: var(--control);
+  padding: 0 var(--space-7);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task > .icon-btn:hover {
+  background: var(--line);
+}
+.workspace:not(.customer-skin) .crm-page > .crm-panel > .crm-task .task-edit-text {
+  display: inline;
+}
+
+/* Agenda: barra de semana en píldoras; cada día una columna blanca, hoy en tinta; cada cita en el color de su estado */
+.workspace:not(.customer-skin) .agenda-page .agd-bar {
+  gap: var(--space-5);
+  margin-bottom: var(--gap-page);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-nav .btn {
+  min-width: var(--control);
+  min-height: var(--control);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-range {
+  color: var(--ink);
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+  letter-spacing: -0.01em;
+}
+.workspace:not(.customer-skin) .agenda-page .agd-scope {
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-scope button {
+  min-height: var(--touch);
+  padding: 0 var(--space-7);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-scope button.active {
+  background: var(--ink);
+  box-shadow: none;
+  color: var(--on-ink);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-count {
+  padding: var(--space-2) var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-week {
+  gap: var(--space-3);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-day {
+  padding: var(--space-5);
+  border: 0;
+  border-radius: var(--radius-block-lg);
+  background: var(--surface);
+  box-shadow: none;
+}
+.workspace:not(.customer-skin) .agenda-page .agd-day header {
+  align-items: baseline;
+  margin-bottom: var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-3);
+  border-bottom: 0;
+}
+.workspace:not(.customer-skin) .agenda-page .agd-day header span {
+  color: var(--text-2);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+  text-transform: capitalize;
+}
+.workspace:not(.customer-skin) .agenda-page .agd-day header b {
+  color: var(--ink);
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-day header small {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--lime);
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-day.agd-today {
+  border: 0;
+  outline: 0;
+  background: var(--ink);
+  box-shadow: none;
+}
+.workspace:not(.customer-skin) .agenda-page .agd-day.agd-today header :is(span, b) {
+  color: var(--on-ink);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-day.agd-today .agd-none {
+  color: var(--on-ink-soft);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-day.agd-pastday {
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-none {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-card {
+  gap: var(--space-1);
+  padding: var(--space-5);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--sky);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-card:hover {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-card.agd-done {
+  background: var(--mint);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-card.agd-no_show {
+  background: var(--peach);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-card.agd-over {
+  background: var(--butter);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-card :is(time, strong, small) {
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-card time {
+  font-size: var(--font-md);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-card small {
+  font-size: var(--font-sm);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-tag {
+  width: fit-content;
+  padding: 2px 9px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-tag.agd-warn {
+  color: var(--warn);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-hint {
+  margin-top: var(--space-7);
+  padding: var(--space-6) var(--space-7);
+  border-radius: var(--radius-block);
+  background: var(--sky);
+  color: var(--ink);
+  font-size: var(--font-lg);
+}
+.workspace:not(.customer-skin) .agenda-page .agd-empty {
+  background: var(--peach);
+  color: var(--ink);
+}
+
+/* ============ 5. Oportunidades ============ */
+
+/* Tablero: cada etapa es una columna con el pastel de su estado; cada oportunidad una tarjeta blanca.
+   Nuevo interés: blanco (sin decidir) · En conversación: cielo · Inscripción: lima (en curso) · Ganada: menta ·
+   No continuó: durazno (docs/GUIA_PANTALLAS.md). */
+.workspace:not(.customer-skin) .pipeline {
+  gap: var(--space-5);
+  grid-auto-columns: minmax(196px, 1fr);
+}
+.workspace:not(.customer-skin) .pipeline-column {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-height: 330px;
+  padding: var(--space-5);
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .pipeline-column:nth-child(2) {
+  background: var(--sky);
+}
+.workspace:not(.customer-skin) .pipeline-column:nth-child(3) {
+  background: var(--lime);
+}
+.workspace:not(.customer-skin) .pipeline-column:nth-child(4) {
+  background: var(--mint);
+}
+.workspace:not(.customer-skin) .pipeline-column:nth-child(5) {
+  background: var(--peach);
+}
+.workspace:not(.customer-skin) .pipeline-heading {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+.workspace:not(.customer-skin) .pipeline-heading h2 {
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .pipeline-heading h2::before {
+  content: none;
+}
+.workspace:not(.customer-skin) .pipeline-heading > span {
+  min-width: 32px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--on-ink);
+  font-size: var(--font-md);
+  font-weight: var(--weight-black);
+  text-align: center;
+}
+.workspace:not(.customer-skin) .opportunity-card {
+  margin: 0;
+  padding: var(--space-7);
+  border: 0;
+  border-radius: var(--radius-block-lg);
+  background: var(--surface);
+  box-shadow: none;
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .pipeline-column:nth-child(1) .opportunity-card {
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .opportunity-card:hover {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.workspace:not(.customer-skin) .opportunity-card .course-brand {
+  display: inline-flex;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--lilac);
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+  letter-spacing: 0.02em;
+}
+.workspace:not(.customer-skin) .opportunity-card > strong {
+  margin: var(--space-3) 0 var(--space-1);
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: var(--weight-black);
+  line-height: 1.3;
+}
+.workspace:not(.customer-skin) .opportunity-card p,
+.workspace:not(.customer-skin) .opportunity-footer {
+  color: var(--text-2);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .opportunity-footer {
+  margin: var(--space-5) 0 var(--space-3);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .opportunity-card > small {
+  padding-top: var(--space-3);
+  border-top: 2px solid var(--soft);
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: 600;
+}
+.workspace:not(.customer-skin) .pipeline-column:nth-child(1) .opportunity-card > small {
+  border-top-color: var(--surface);
+}
+.workspace:not(.customer-skin) .opportunity-card > small.overdue {
+  color: var(--bad);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .column-empty {
+  padding: var(--space-8) 0;
+  color: var(--ink);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+}
