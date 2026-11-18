@@ -152,6 +152,8 @@ test('La entrada del equipo (/crm): la historia en tinta con la marca en lima y 
   await expect(page.locator('.entry')).toHaveClass(/entry--team/);
   await expect(page.locator('.entry-story')).toHaveCSS('background-color', INK);
   await expect(page.locator('.entry-story .brand-mark')).toHaveCSS('background-color', LIME);
+  await expect(page.locator('.entry-story .brand-mark .tinta-mark')).toBeVisible();
+  await expect(page.locator('.entry-story .brand strong')).toHaveText('Tinta');
   await expect(page.locator('.entry-form')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   for (const selector of ['[data-value="register"]', '[data-value="login"]', '[data-action="crm-recover-entry"]'])
     await expect(page.locator(selector)).toBeVisible();
@@ -174,6 +176,9 @@ test('La entrada de los clientes (/) conserva su aspecto: sin bloque en tinta ni
   await expect(page.locator('.entry')).not.toHaveClass(/entry--team/);
   await expect(page.locator('.entry-story')).not.toHaveCSS('background-color', INK);
   await expect(page.locator('.entry-story .brand-mark')).not.toHaveCSS('background-color', LIME);
+  // …ni la marca del equipo: sigue con la suya
+  await expect(page.locator('.entry-story .brand-mark')).toHaveText('tc');
+  await expect(page.locator('.entry-story .tinta-mark')).toHaveCount(0);
   // Pintada igual con y sin la hoja de las vistas del equipo
   const story = () =>
     page.evaluate(() => {

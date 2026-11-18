@@ -983,3 +983,41 @@ dialog:where(:not(.k-dialog, .k-side, .pay-page))::backdrop {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: var(--space-7);
 }
+
+/* ---- La marca del equipo: la gota de Tinta. La gota toma el color de la letra de su caja y el acento, el del fondo
+   de la caja: lima con gota en tinta (menú oscuro y entrada) o tinta con gota en lima (menú claro). */
+.tinta-mark {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+.tinta-mark-drop {
+  fill: currentColor;
+}
+.tinta-mark-accent {
+  fill: none;
+  stroke: var(--mark-accent, var(--lime));
+  stroke-linecap: round;
+  stroke-width: 4.6;
+}
+.tinta-mark-dot {
+  fill: var(--mark-accent, var(--lime));
+}
+.workspace:not(.customer-skin) .sidebar .brand-mark--tinta {
+  --mark-accent: var(--m-mark-bg);
+}
+.workspace:not(.customer-skin) .sidebar .brand .brand-name {
+  font-size: var(--font-xl);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.entry.entry--team .entry-story .brand .brand-name {
+  font-size: var(--font-xl);
+  letter-spacing: -0.01em;
+}
+@media (max-width: 760px) {
+  .tinta-mark {
+    width: 25px;
+    height: 25px;
+  }
+}

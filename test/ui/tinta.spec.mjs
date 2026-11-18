@@ -76,6 +76,9 @@ test('menú lateral: oscuro por omisión, claro a elección, recordado y medido 
   await expect(active).toHaveCSS('background-color', LIME);
   await expect(active).toHaveCSS('color', INK);
   await expect(page.locator('.sidebar .brand-mark')).toHaveCSS('background-color', LIME);
+  // La marca del equipo es la gota de Tinta: gota en tinta sobre lima, con su acento del color de la caja
+  await expect(page.locator('.sidebar .brand-mark .tinta-mark-drop')).toHaveCSS('fill', INK);
+  await expect(page.locator('.sidebar .brand-mark .tinta-mark-accent')).toHaveCSS('stroke', LIME);
   if (testInfo.project.name === 'escritorio') {
     // El menú flota: separado del borde y con esquinas de 28 px
     await expect(sidebar).toHaveCSS('border-top-left-radius', '28px');
