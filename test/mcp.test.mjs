@@ -10,7 +10,7 @@ import { TOOLS, MCP_VERSIONS, invalid } from '../server/mcp.mjs';
 
 // Conector MCP para Claude (docs/PLAN_MCP_CLAUDE.md): protocolo, permisos de la llave, alcance por marca y cambios con revisión.
 test('las herramientas del conector están bien descritas: nombre, permiso, esquema y si leen o escriben', () => {
-  assert.ok(TOOLS.length >= 20 && TOOLS.length <= 30);
+  assert.ok(TOOLS.length >= 55 && TOOLS.length <= 70);
   assert.equal(new Set(TOOLS.map(t => t.name)).size, TOOLS.length);
   for (const t of TOOLS) {
     assert.match(t.name, /^[a-z_]{3,40}$/);
@@ -23,13 +23,27 @@ test('las herramientas del conector están bien descritas: nombre, permiso, esqu
   const writes = TOOLS.filter(t => !t.annotations.readOnlyHint)
     .map(t => t.name)
     .sort();
+  // Las de configuración (server/lib/mcp-config.mjs) sólo guardan borradores; sus pruebas, en mcp-configuracion.test.mjs.
   assert.deepEqual(writes, [
     'actualizar_apertura',
+    'actualizar_apertura_borrador',
     'actualizar_curso',
+    'actualizar_difusion_borrador',
+    'actualizar_plantilla_whatsapp',
+    'actualizar_promocion_borrador',
     'actualizar_recorrido',
+    'actualizar_regla',
     'actualizar_secuencia',
+    'actualizar_texto_borrador',
+    'crear_apertura_borrador',
+    'crear_difusion_borrador',
+    'crear_plantilla_whatsapp',
+    'crear_promocion_borrador',
     'crear_recorrido',
+    'crear_regla',
     'crear_secuencia',
+    'crear_segmento',
+    'crear_texto_borrador',
     'escribir_acceso',
     'proponer_conocimiento',
   ]);

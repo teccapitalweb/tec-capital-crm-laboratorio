@@ -33,7 +33,11 @@ export const SCOPES = {
   knowledge: 'Claude: leer el conocimiento del asistente y proponer borradores',
   catalog_write: 'Claude: MODIFICAR cursos y aperturas (fecha, docente, precio, cupo, temario)',
   automation_drafts:
-    'Claude: armar recorridos, secuencias y accesos del curso en BORRADOR (sin contactos ni mensajes; nunca publica, activa, enciende, inscribe ni envía)',
+    'Claude: armar recorridos, reglas por mensaje, secuencias y accesos del curso en BORRADOR (sin contactos ni mensajes; nunca publica, activa, enciende, inscribe ni envía)',
+  insights:
+    'Claude: ver cifras y resultados de la marca (ventas, atención, recorridos, difusiones, WhatsApp; sólo totales, sin nombres, teléfonos, correos ni mensajes)',
+  config_drafts:
+    'Claude: preparar en BORRADOR aperturas, promociones, textos, plantillas de WhatsApp, difusiones y segmentos (nunca publica, aprueba, envía a Meta, programa ni envía)',
   // API v1 ampliada (docs/PLAN_API_ESCRITURA.md).
   templates: 'Plantillas de WhatsApp aprobadas y sus datos',
   contacts_write:
@@ -53,6 +57,8 @@ export const SCOPE_KINDS = Object.freeze({
   knowledge: 'read',
   catalog_write: 'write',
   automation_drafts: 'write',
+  insights: 'read',
+  config_drafts: 'write',
   templates: 'read',
   contacts_write: 'write',
   consent_write: 'write',
