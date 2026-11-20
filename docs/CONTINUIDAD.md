@@ -34,7 +34,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Cobertura completa de Tinta (construida el 20 nov 2026, sin publicar)
+## Cobertura completa de Tinta (publicada en `main`, 20 nov 2026)
 
 - **Por qué:** el dueño notó partes donde el rediseño «no se actualizó por completo».
 - **Qué se hizo:** auditoría de todas las pantallas del equipo sobre una base de demostración local: 184 vistas (las 29 del menú, cada área y pestaña de Operación, las secciones del Catálogo, Conversaciones con un chat abierto, las pantallas nuevas y la entrada del equipo) y 42 ventanas, a 1366×800 y 375×812, con captura, medidas y revisión a ojo. Las correcciones son sólo CSS, en la sección 11 de `public/tinta-vistas.css`, con variables de `tokens.css`. Sin cambios de marcado ni de comportamiento: ninguna opción se pierde ni se inventa.
@@ -43,7 +43,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **No se alcanzó:** las filas de Pauta y Aliados (la base de demostración no trae datos) y las ventanas «Cobrar», «Programar» y «Agendar cita» del chat.
 - **Queda a decisión del dueño (no aplicado):** dónde domina el negro y una alternativa para cada caso (menú claro por omisión, «Por atender» en lila, cifra activa y áreas activas en lima, entrada del equipo en lila).
 - **Verificado en local:** `npm run check`, 737 pruebas de servidor y 79 de navegador; la línea base de la auditoría (`niebla-baseline.json`) no cambió.
-- **Falta:** publicarlo («Sí, publicar»).
+- **Publicado:** commit `6fa9159`.
 
 ## Paso «Inscribir en secuencia» de los recorridos (publicado en `main`, 20 nov 2026)
 
