@@ -1,0 +1,9 @@
+{
+  "id": "accesos",
+  "title": "Accesos del curso",
+  "visibility": "live",
+  "nav": { "group": "Ventas", "icon": "key-round", "label": "Accesos", "order": 60 },
+  "roles": ["admin", "agent"],
+  "entry": "index.js",
+  "styles": ["screen.css"]
+}
