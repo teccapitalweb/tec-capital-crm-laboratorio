@@ -34,13 +34,14 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Cierre de la venta: del comprobante al acceso (construido el 20 nov 2026, sin publicar)
+## Cierre de la venta: del comprobante al acceso (publicado en `main`, 20 nov 2026)
 
 - **Qué había:** el comprobante por el chat (también por WhatsApp real), su cola en Operación → Pagos y la confirmación con inscripción ya existían. Faltaba entregar los accesos (la confirmación sólo decía que «el equipo coordinador» los enviaría) y validar sin salir del chat.
 - **Qué se hizo:** módulo `server/modules/course-access/` con la migración `course-access/0001-course-access` (`course_access`, `course_access_deliveries`); pantalla `public/screens/accesos/` (Ventas → Accesos: texto por apertura con datos que se llenan solos, vista previa, «Antes de encender», entregas y «Enviar a quienes faltan»); franja del chat `public/sale.js` (ver comprobante, validar pago, no es válido; después, estado de los accesos y reenviar); la confirmación del pago dice «enseguida te mando tus accesos» sólo cuando van a salir (`useAccessHint` en `server/payments.mjs`); paso «Accesos del curso» en Preparar marca; permiso `sales.access.manage`.
 - **Reglas que no se rompen:** el módulo no confirma pagos (sólo escucha `inscripcion.activada`); nace apagado por apertura; un pago de prueba no entrega accesos salvo que la apertura lo permita; una entrega automática por inscripción; para encender, el texto tiene que poder enviarse tal cual.
 - **Verificado en local:** `npm run check`, 734 pruebas de servidor y 77 de navegador (computadora y celular), y el recorrido a mano en la base de demostración: comprobante → «Validar pago» en el chat → confirmación y accesos en la conversación, en computadora y celular.
-- **Falta:** publicarlo («Sí, publicar») y probarlo con WhatsApp real (comprobante enviado desde el teléfono, validación y llegada de los accesos). Detalle y lo que queda fuera: [PLAN_CIERRE_DE_VENTA.md](PLAN_CIERRE_DE_VENTA.md).
+- **Publicado:** commits `853a151` (módulo y chat), `204b569` (pantalla) y `5e5ceb8` (documentación); producción respondió con el esquema `41+25.01b45189`, sirve `/sale.js` y la pantalla `accesos` (11 pantallas visibles), la ruta nueva pide sesión (401) y las pruebas de GitHub (`verify` y `ui`) pasaron.
+- **Falta:** probarlo con WhatsApp real (comprobante enviado desde el teléfono, validación y llegada de los accesos). Detalle y lo que queda fuera: [PLAN_CIERRE_DE_VENTA.md](PLAN_CIERRE_DE_VENTA.md).
 
 ## Rediseño «Tinta» del CRM del equipo (publicado en `main`, 18 nov 2026)
 

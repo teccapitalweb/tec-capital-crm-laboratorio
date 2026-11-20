@@ -1,6 +1,6 @@
 # Cierre de la venta: del comprobante al acceso
 
-Qué pasa después de que la persona recibe su pedido. Construido el 20 nov 2026 (rama local `chore/f0-01-codificacion`; **sin publicar** hasta el «Sí, publicar»). Esquema: una migración con nombre nueva, `course-access/0001-course-access`.
+Qué pasa después de que la persona recibe su pedido. **Publicado en `main` el 20 nov 2026** (commits `853a151` y `204b569`); falta probarlo con WhatsApp real. Esquema: una migración con nombre nueva, `course-access/0001-course-access`.
 
 ## Qué había y qué faltaba
 
