@@ -34,6 +34,14 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Paso «¿Qué curso te interesa?» ejecutable (construido el 20 nov 2026, sin publicar)
+
+- **Qué había:** el paso existía en el editor, pero el servidor lo rechazaba al publicar («todavía no lo ejecuta el servidor») y la paleta lo marcaba «Todavía no disponible». El dueño se topó con ese aviso al armar un recorrido real.
+- **Qué se hizo:** `EXEC.choose_course` en `server/modules/chatflows/engine.mjs`, con lo que necesita en `runtime.mjs`, `repo.mjs` y el simulador de `module.mjs`. Reutiliza lo del asistente en `server/replies.mjs` (ahora exporta `courseList`, `pickCourse` y `courseSwitch`; `route()` se comporta igual). Se quitó de `flow-support.js` y de la lista de tipos no disponibles. No se añadieron campos, salidas ni textos al editor.
+- **Cómo se comporta:** pasa de largo si la conversación ya tiene curso (`skipIfKnown`); toma el curso que nombra el mensaje que inició el recorrido (`useMessage`); si no, pregunta con la lista numerada del asistente, en texto, y entiende el número o el nombre. Una respuesta que no es un curso vuelve a preguntar hasta los intentos configurados y sale por «Ninguno»; un «no» claro sale por «Ninguno» de inmediato; sin respuesta, por la salida de tiempo. Con una sola oferta en la marca la toma sin preguntar; sin cursos, «Ninguno». Con un pedido vigente de otro curso no cambia nada: explica el pedido pendiente y sale por «Ninguno». Los pasos siguientes usan el curso elegido.
+- **Verificado en local:** `npm run check`, 743 pruebas de servidor y 81 de navegador; en la base de demostración el simulador pregunta con la lista de cursos de la marca y el recorrido valida sin errores.
+- **Falta:** publicarlo («Sí, publicar») y probarlo con un número real que atienda toda la marca.
+
 ## Cobertura completa de Tinta (publicada en `main`, 20 nov 2026)
 
 - **Por qué:** el dueño notó partes donde el rediseño «no se actualizó por completo».
