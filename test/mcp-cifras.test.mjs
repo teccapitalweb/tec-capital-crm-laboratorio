@@ -8,7 +8,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { TOOLS, invalid } from '../server/mcp.mjs';
-import { INSIGHTS_SCOPE, INSIGHT_ROUTES, INSIGHT_TOOLS } from '../server/lib/mcp-insights.mjs';
+import {
+  INSIGHTS_SCOPE,
+  INSIGHT_ROUTES,
+  INSIGHT_TOOLS,
+  OTHER_REASONS,
+  lostReasons,
+} from '../server/lib/mcp-insights.mjs';
 import { FEW, createRouteCaller, people } from '../server/lib/mcp-call.mjs';
 import { startServer } from './helpers/server.mjs';
 import { PASSWORD, call, openDb, registerAdmin, until } from './helpers/crm.mjs';
@@ -56,6 +62,24 @@ test('cifras: permiso propio, sólo lecturas y regla «menos de 3»', () => {
     assert.equal(allowed(name, method, path), false, method + ' ' + path);
   // la regla: 1 y 2 se ocultan; 0 y 3 o más se muestran
   assert.deepEqual([0, 1, 2, 3, 40].map(people), [0, FEW, FEW, 3, 40]);
+  // motivos de pérdida escritos a mano: el texto sólo sale si lo comparten 3 o más; los demás, juntos y con la regla
+  const leak = 'Ana Pérez (tel 5512345678) dice que su esposo no la deja';
+  assert.deepEqual(
+    lostReasons(
+      new Map([
+        ['Precio', 4],
+        [leak, 1],
+        ['Horario', 2],
+        ['Sin motivo', 1],
+      ]),
+    ),
+    [
+      { motivo: 'Precio', cantidad: 4 },
+      { motivo: 'Sin motivo', cantidad: FEW },
+      { motivo: OTHER_REASONS, cantidad: 3 },
+    ],
+  );
+  assert.deepEqual(lostReasons(new Map([[leak, 1]])), [{ motivo: OTHER_REASONS, cantidad: FEW }]);
   // el periodo es parte del esquema
   const sales = INSIGHT_TOOLS.find(t => t.name === 'cifras_ventas').inputSchema;
   assert.equal(invalid(sales, { desde: '2026-01-01', hasta: '2026-01-31', agrupar: 'mes' }), null);
@@ -311,7 +335,8 @@ test('cifras de la marca de punta a punta: ventas, atención, recorridos, secuen
     { ...att.embudo },
     { creadas: 5, interesado: 3, inscripcion: 3, ganadas: 3, perdidas: FEW, abiertas: FEW, conversion: 60 },
   );
-  assert.deepEqual(att.motivosDePerdida, [{ motivo: 'Precio', cantidad: FEW }]);
+  // un motivo escrito por una sola oportunidad no sale tal cual: va con «otros motivos» (antes salía «Precio»)
+  assert.deepEqual(att.motivosDePerdida, [{ motivo: OTHER_REASONS, cantidad: FEW }]);
   const stage = s => att.ahora.oportunidadesPorEtapa.find(x => x.etapa === s).cantidad;
   assert.deepEqual([stage('ganada'), stage('perdida'), stage('nuevo'), stage('interesado')], [3, FEW, FEW, 0]);
   assert.equal(
@@ -387,6 +412,7 @@ test('cifras de la marca de punta a punta: ventas, atención, recorridos, secuen
 
   // ---- quien creó la llave deja de administrar la marca: la llave ya no ve cifras
   const adminId = db.prepare("SELECT id FROM users WHERE username='admin'").get().id;
+  db.prepare('INSERT INTO brand_members(user_id,brand_id) VALUES(?,?)').run(adminId, 'globalvet'); // sigue en el equipo
   db.prepare("UPDATE users SET role='agent' WHERE id=?").run(adminId);
   assert.match((await tool(insights, 'cifras_ventas')).error, /ya no administra la marca/);
   db.prepare("UPDATE users SET role='admin' WHERE id=?").run(adminId);

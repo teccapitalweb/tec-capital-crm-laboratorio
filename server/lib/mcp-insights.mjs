@@ -100,7 +100,7 @@ export const INSIGHT_TOOLS = [
     scope: INSIGHTS_SCOPE,
     annotations: read('Embudo y atención'),
     description:
-      'Atención y embudo de la marca en un periodo: conversaciones abiertas y resueltas (por canal y en el tiempo), embudo de oportunidades creadas en el periodo (interesado, inscripción, ganada, perdida y motivos), tiempos de respuesta del equipo, y ahora mismo: conversaciones esperando a una persona y oportunidades por etapa. Sólo cifras.',
+      'Atención y embudo de la marca en un periodo: conversaciones abiertas y resueltas (por canal y en el tiempo), embudo de oportunidades creadas en el periodo (interesado, inscripción, ganada, perdida y motivos: un motivo escrito sólo aparece si lo comparten 3 o más; los demás, juntos como «otros motivos»), tiempos de respuesta del equipo, y ahora mismo: conversaciones esperando a una persona y oportunidades por etapa. Sólo cifras.',
     inputSchema: obj({ ...PERIOD, agrupar: GROUP }),
   },
   {
@@ -155,6 +155,23 @@ export const INSIGHT_TOOLS = [
     inputSchema: obj({}),
   },
 ];
+
+// Motivos de pérdida: el CRM no tiene una lista fija, los escribe el equipo a mano (pueden llevar el nombre o el teléfono
+// de alguien). Un texto sólo sale si lo comparten 3 o más oportunidades, tal cual; los demás se juntan en «otros
+// motivos», cuya cifra sigue la regla «menos de 3». «Sin motivo» es una etiqueta del CRM, no un texto del equipo.
+const NO_REASON = 'Sin motivo';
+export const OTHER_REASONS = 'otros motivos';
+export function lostReasons(counts) {
+  const out = [];
+  let others = 0;
+  for (const [motivo, n] of counts) {
+    if (motivo === NO_REASON) out.push({ motivo, cantidad: people(n) });
+    else if (n >= 3) out.push({ motivo, cantidad: n });
+    else others += n;
+  }
+  if (others) out.push({ motivo: OTHER_REASONS, cantidad: people(others) });
+  return out;
+}
 
 export function createInsightTools({ db, module, actorOf }) {
   const routes = createRouteCaller({ routes: INSIGHT_ROUTES, module });
@@ -428,7 +445,7 @@ export function createInsightTools({ db, module, actorOf }) {
       const lost = new Map();
       for (const o of opps)
         if (o.stage === 'perdida')
-          lost.set(o.lost_reason || 'Sin motivo', (lost.get(o.lost_reason || 'Sin motivo') || 0) + 1);
+          lost.set(o.lost_reason || NO_REASON, (lost.get(o.lost_reason || NO_REASON) || 0) + 1);
       // Tiempos de respuesta del equipo (operation_events «response», como Resultados): de reloj.
       const responses = all(
         "SELECT details FROM operation_events WHERE kind='response' AND brand_id=? AND created_at>=? AND created_at<?",
@@ -495,12 +512,10 @@ export function createInsightTools({ db, module, actorOf }) {
           .sort(
             (x, y) => (typeof y.creadas === 'number' ? y.creadas : 0) - (typeof x.creadas === 'number' ? x.creadas : 0),
           ),
-        motivosDePerdida: [...lost]
-          .map(([motivo, n]) => ({ motivo, cantidad: people(n) }))
-          .sort(
-            (x, y) =>
-              (typeof y.cantidad === 'number' ? y.cantidad : 0) - (typeof x.cantidad === 'number' ? x.cantidad : 0),
-          ),
+        motivosDePerdida: lostReasons(lost).sort(
+          (x, y) =>
+            (typeof y.cantidad === 'number' ? y.cantidad : 0) - (typeof x.cantidad === 'number' ? x.cantidad : 0),
+        ),
         tiemposDeRespuesta: {
           primera: dist(responses.filter(r => r.kind === 'first')),
           siguientes: dist(responses.filter(r => r.kind === 'next')),

@@ -790,7 +790,9 @@ export function createCatalogue({
         };
         save(table, row, old);
         record(kind, row, user, old ? 'updated' : 'created');
-        if (old) {
+        // Una apertura que era y sigue en borrador no la ve ningún cliente: cambiar su precio o su cupo no es un hecho
+        // del negocio (no avisa al equipo ni sale por webhooks). Al publicarla, o en una publicada, sí.
+        if (old && !(old.status === 'draft' && row.status === 'draft')) {
           const key = row.id + ':' + row.revision;
           publishPriceChange(events, old, row, { actorId: user.id, source: 'catalogo', dedupeKey: key });
           publishSeatChange(events, row, old.available_seats, row.available_seats, {

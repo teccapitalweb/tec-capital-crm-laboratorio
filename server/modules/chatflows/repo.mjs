@@ -9,6 +9,8 @@ const json = (text, fallback) => {
     return fallback;
   }
 };
+// La referencia de una creación, por marca (el ref admite sólo letras, números y guiones: no choca con «:»).
+const refKey = (brandId, ref) => brandId + ':' + ref;
 
 export function createRepo(db) {
   const one = (sql, ...args) => db.prepare(sql).get(...args);
@@ -35,8 +37,17 @@ export function createRepo(db) {
     // ---- recorridos
     brandOf: id => one('SELECT brand_id FROM chatflows WHERE id=?', id)?.brand_id ?? null,
     flow: (brandId, id) => flowRow(one('SELECT * FROM chatflows WHERE brand_id=? AND id=?', brandId, id)),
+    // client_ref es único en toda la tabla: se guarda como «marca:ref» para que el mismo ref en otra marca no choque
+    // ni revele que existe. Los guardados antes, sin marca, se siguen encontrando.
     flowByRef: (brandId, ref) =>
-      flowRow(one('SELECT * FROM chatflows WHERE brand_id=? AND client_ref=?', brandId, ref)),
+      flowRow(
+        one(
+          'SELECT * FROM chatflows WHERE brand_id=? AND client_ref IN (?,?) ORDER BY created_at LIMIT 1',
+          brandId,
+          refKey(brandId, ref),
+          ref,
+        ),
+      ),
     flows: (brandIds, { archived = false } = {}) =>
       brandIds.length
         ? all(
@@ -56,7 +67,7 @@ export function createRepo(db) {
         JSON.stringify(f.draft),
         JSON.stringify(f.settings),
         JSON.stringify(f.start),
-        f.clientRef ?? null,
+        f.clientRef === undefined || f.clientRef === null ? null : refKey(brandId, f.clientRef),
         f.userId,
         f.userId,
         f.at,

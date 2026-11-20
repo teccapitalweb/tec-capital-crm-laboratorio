@@ -6,6 +6,7 @@
 // un módulo más por su nombre; `module(name)` devuelve la API de un módulo nuevo (server/modules/) al usarla.
 import { Readable } from 'node:stream';
 import { fail } from '../app/http.mjs';
+import { markConnector } from './connector-call.mjs';
 
 export const FEW = 'menos de 3';
 // Regla de «menos de 3»: una cifra de personas (o de cosas que equivalen a personas: pedidos, ventas, conversaciones)
@@ -27,7 +28,10 @@ export function createRouteCaller({ routes, module, services = {} }) {
     const chunks = input === undefined ? [] : [Buffer.from(JSON.stringify(input))];
     const url = new URL('http://mcp.local' + path);
     for (const [k, v] of Object.entries(query || {})) url.searchParams.set(k, v);
-    const req = Object.assign(Readable.from(chunks), { method, url: url.pathname + url.search, headers: {} });
+    // Marcada como del conector (server/lib/connector-call.mjs): el módulo sabe que no debe consultar a la IA de pago.
+    const req = markConnector(
+      Object.assign(Readable.from(chunks), { method, url: url.pathname + url.search, headers: {} }),
+    );
     let status = 0,
       payload = null;
     const res = {

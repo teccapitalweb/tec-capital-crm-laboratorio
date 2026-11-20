@@ -9,6 +9,8 @@ const json = (text, fallback) => {
 };
 const RETENTION_MS = 90 * 24 * 3600_000; // conciliación, fila 48: ejecuciones de reglas, 90 días
 const DEFAULT_CONSECUTIVE = 3;
+// La referencia de una creación, por marca (el ref admite sólo letras, números y guiones: no choca con «:»).
+const refKey = (brandId, ref) => brandId + ':' + ref;
 
 export function createRepo(db) {
   const one = (sql, ...args) => db.prepare(sql).get(...args);
@@ -20,9 +22,17 @@ export function createRepo(db) {
     // ---- reglas
     brandOf: id => one('SELECT brand_id FROM automation_rules WHERE id=?', id)?.brand_id ?? null,
     rule: (brandId, id) => ruleRow(one('SELECT * FROM automation_rules WHERE brand_id=? AND id=?', brandId, id)),
+    // client_ref es único en toda la tabla: se guarda como «marca:ref» para que el mismo ref en otra marca no choque
+    // ni revele que existe allí. Los guardados antes, sin marca, se siguen encontrando en su marca.
     ruleByRef: (brandId, ref) =>
-      ruleRow(one('SELECT * FROM automation_rules WHERE brand_id=? AND client_ref=?', brandId, ref)),
-    refTaken: ref => Boolean(one('SELECT 1 FROM automation_rules WHERE client_ref=?', ref)),
+      ruleRow(
+        one(
+          'SELECT * FROM automation_rules WHERE brand_id=? AND client_ref IN (?,?) ORDER BY created_at LIMIT 1',
+          brandId,
+          refKey(brandId, ref),
+          ref,
+        ),
+      ),
     rules: (brandId, { archived = false } = {}) =>
       all(
         `SELECT * FROM automation_rules WHERE brand_id=?${archived ? '' : " AND status!='archived'"} ORDER BY position,created_at,id`,
@@ -48,7 +58,7 @@ export function createRepo(db) {
         JSON.stringify(r.definition),
         'draft',
         r.position,
-        r.clientRef,
+        refKey(brandId, r.clientRef),
         r.userId,
         r.userId,
         r.at,

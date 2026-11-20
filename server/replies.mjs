@@ -1223,7 +1223,9 @@ export function createReplies({
   }
 
   // Simulación para administración: mismo plan, sin escribir y con la llamada al proveedor incluida.
-  async function test(user, input) {
+  // `options.provider: false` (sólo en el mismo proceso, nunca desde el cuerpo de una petición): no se consulta a la IA;
+  // si el plan la necesitaba, la respuesta lo dice con `providerSkipped` (simulador de recorridos desde el conector).
+  async function test(user, input, { provider: useProvider = true } = {}) {
     const brandId = input.brandId;
     if (typeof brandId !== 'string' || !db.prepare('SELECT 1 FROM brands WHERE id=?').get(brandId))
       throw fail(404, 'Marca no disponible.');
@@ -1260,7 +1262,10 @@ export function createReplies({
       trigger = { id: 'simulacion', text: message, created_at: now() };
     const p = plan(fake, trigger);
     let draft = null;
-    if (p.needsProvider || (input.forceProvider && p.intent === 'unknown' && p.knowledge.length)) {
+    const wantsProvider = Boolean(
+      p.needsProvider || (input.forceProvider && p.intent === 'unknown' && p.knowledge.length),
+    );
+    if (wantsProvider && useProvider !== false) {
       const ctx = catalogue.info(course.id, fake.edition_id);
       draft = await provider.draft({
         brand: ctx.brand,
@@ -1293,6 +1298,7 @@ export function createReplies({
       confidence: p.confidence,
       mode: p.mode,
       reply,
+      providerSkipped: wantsProvider && useProvider === false,
       handoff: answered ? false : p.handoff,
       buttons: (answered ? p.ifAnswered.buttons : p.buttons) || null,
       stage: p.stage,

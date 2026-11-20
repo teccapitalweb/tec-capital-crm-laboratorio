@@ -8,8 +8,9 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { TOOLS, invalid } from '../server/mcp.mjs';
-import { CONFIG_ROUTES, CONFIG_SCOPE, CONFIG_TOOLS } from '../server/lib/mcp-config.mjs';
+import { CONFIG_ROUTES, CONFIG_SCOPE, CONFIG_TOOLS, createConfigTools } from '../server/lib/mcp-config.mjs';
 import { DRAFT_SCOPE } from '../server/lib/mcp-drafts.mjs';
 import { createRouteCaller } from '../server/lib/mcp-call.mjs';
 import { startServer } from './helpers/server.mjs';
@@ -580,4 +581,265 @@ test('preparar el CRM en borrador de punta a punta, sin publicar, aprobar, envia
   // ---- ninguna salida trae datos de clientes
   const everything = JSON.stringify(outputs);
   for (const p of PRIVATE) assert.ok(!everything.includes(p), 'no sale: ' + p);
+});
+
+// ---- revisión de seguridad del conector (docs/PLAN_MCP_CLAUDE.md)
+
+test('reglas: se escribe con la revisión de la regla que se comprobó en borrador', async () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(`CREATE TABLE users(id TEXT PRIMARY KEY, role TEXT, disabled INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE brands(id TEXT PRIMARY KEY, created_at INTEGER);
+    CREATE TABLE brand_members(user_id TEXT, brand_id TEXT);
+    CREATE TABLE automation_rules(id TEXT PRIMARY KEY, brand_id TEXT, status TEXT, revision INTEGER, definition TEXT);
+    INSERT INTO users(id,role) VALUES('u1','admin');
+    INSERT INTO brands VALUES('b1',1);
+    INSERT INTO automation_rules VALUES('r1','b1','draft',3,'{}');`);
+  const writes = [];
+  // La regla está en borrador (revisión 3) cuando el conector la lee; una persona la enciende (revisión 4) antes de
+  // que llegue la escritura.
+  const rules = {
+    async handle(req, res) {
+      let raw = '';
+      for await (const chunk of req) raw += chunk;
+      const input = JSON.parse(raw || '{}');
+      const ok = input.expectedRevision === 4;
+      if (ok) writes.push(input.expectedRevision);
+      res.writeHead(ok ? 200 : 409);
+      res.end(
+        JSON.stringify(ok ? { rule: { id: 'r1', status: 'active', revision: 5 } } : { error: 'Alguien más guardó.' }),
+      );
+      return true;
+    },
+  };
+  const tools = createConfigTools({
+    db,
+    crm: { canBrand: () => true },
+    audit: () => {},
+    module: name => (name === 'rules' ? rules : null),
+    actorOf: () => ({ id: 'u1', role: 'admin' }),
+    catalogue: {},
+  }).run;
+  const key = { id: 'k1', brand_id: 'b1', created_by: 'u1' };
+  await assert.rejects(tools.actualizar_regla(key, { reglaId: 'r1', revision: 4, titulo: 'X' }), /Alguien más/);
+  await assert.rejects(tools.actualizar_regla(key, { reglaId: 'r1', revision: 3, titulo: 'X' }), /Alguien más/);
+  assert.deepEqual(writes, [], 'nada se escribió sobre una regla ya encendida');
+  db.close();
+});
+
+test('revisión de seguridad: nada cruza marcas por un clientRef, filtros personales ocultos, borradores sin eventos y nunca publica', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'crm-mcp-seguridad-'));
+  const code = randomUUID();
+  const server = await startServer({ dir, env: { ADMIN_INVITE_CODE: code, AI_PROVIDER: '', CHANNEL_CONNECTOR: '' } });
+  let db = null;
+  t.after(async () => {
+    try {
+      db?.close();
+    } catch {}
+    await server.stop();
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+  const origin = server.origin;
+  const admin = await registerAdmin(origin, code);
+  db = openDb(dir);
+  const api = (path, options = {}) => call(origin, path, { cookie: admin, ...options });
+  const keyFor = async (brandId, scopes) =>
+    (
+      await api('/api/integrations/keys', {
+        body: { brandId, name: 'Claude ' + scopes.join(' '), scopes },
+        expected: 201,
+      })
+    ).token;
+  let rid = 0;
+  const tool = async (token, name, args = {}) => {
+    const r = await fetch(origin + '/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ jsonrpc: '2.0', id: ++rid, method: 'tools/call', params: { name, arguments: args } }),
+    });
+    const out = (await r.json()).result;
+    return out.isError ? { error: out.content[0].text } : JSON.parse(out.content[0].text);
+  };
+  const gv = await keyFor('globalvet', [CONFIG_SCOPE, DRAFT_SCOPE, 'catalog_write', 'knowledge']);
+  const od = await keyFor('odonteck', [CONFIG_SCOPE, DRAFT_SCOPE]);
+  const brandOf = (table, id) => db.prepare(`SELECT brand_id FROM ${table} WHERE id=?`).get(id)?.brand_id;
+
+  // ---- 1) el mismo clientRef en dos marcas: cada una recibe lo suyo (antes la otra marca recibía la plantilla ajena)
+  const R = 'plantilla-aviso-0001-claude';
+  const mine = await tool(gv, 'crear_plantilla_whatsapp', {
+    nombre: 'aviso_secreto_globalvet',
+    cuerpo: 'Texto CONFIDENCIAL de GlobalVet para tus pagos pendientes.',
+    clientRef: R,
+  });
+  assert.equal(mine.error, undefined, mine.error);
+  const theirs = await tool(od, 'crear_plantilla_whatsapp', {
+    nombre: 'otra_de_odonteck',
+    cuerpo: 'Hola, este es un aviso de la otra marca.',
+    clientRef: R,
+  });
+  assert.equal(theirs.error, undefined, theirs.error);
+  assert.notEqual(theirs.plantillaId, mine.plantillaId);
+  assert.equal(theirs.duplicado, false);
+  assert.equal(brandOf('wa_templates', theirs.plantillaId), 'odonteck');
+  assert.doesNotMatch(JSON.stringify(theirs), /CONFIDENCIAL|aviso_secreto/);
+  // un reintento en la misma marca sigue sin duplicar
+  const retry = await tool(gv, 'crear_plantilla_whatsapp', {
+    nombre: 'aviso_secreto_globalvet',
+    cuerpo: 'x'.repeat(20),
+    clientRef: R,
+  });
+  assert.deepEqual([retry.duplicado, retry.plantillaId], [true, mine.plantillaId]);
+  // recorridos y reglas: el clientRef es por marca (antes, un error interno o un 409 delataban que existía en otra)
+  const FR = 'flujo-ref-0001-claude';
+  const fa = await tool(gv, 'crear_recorrido', { nombre: 'Uno', clientRef: FR });
+  const fb = await tool(od, 'crear_recorrido', { nombre: 'Otro', clientRef: FR });
+  assert.equal(fb.error, undefined, fb.error);
+  assert.notEqual(fb.recorridoId, fa.recorridoId);
+  assert.deepEqual(
+    [brandOf('chatflows', fa.recorridoId), brandOf('chatflows', fb.recorridoId)],
+    ['globalvet', 'odonteck'],
+  );
+  assert.equal((await tool(gv, 'crear_recorrido', { nombre: 'x', clientRef: FR })).recorridoId, fa.recorridoId);
+  const RR = 'regla-ref-0001-claude-xyz';
+  const ruleDef = {
+    trigger: { type: 'keyword', mode: 'contains', words: ['hola'] },
+    actions: [{ type: 'send_text', text: 'Hola, gracias por escribir.' }],
+  };
+  const ra = await tool(gv, 'crear_regla', { titulo: 'r gv', definicion: ruleDef, clientRef: RR });
+  const rb = await tool(od, 'crear_regla', { titulo: 'r od', definicion: ruleDef, clientRef: RR });
+  assert.equal(rb.error, undefined, 'no revela que el ref existe en otra marca: ' + rb.error);
+  assert.deepEqual(
+    [brandOf('automation_rules', ra.reglaId), brandOf('automation_rules', rb.reglaId)],
+    ['globalvet', 'odonteck'],
+  );
+  assert.equal((await tool(gv, 'crear_regla', { titulo: 'x', definicion: ruleDef, clientRef: RR })).duplicado, true);
+
+  // ---- 3) filtros escritos por el equipo con datos personales: se ocultan al leerlos
+  const seg = await api('/api/audiences', {
+    body: {
+      brandId: 'globalvet',
+      kind: 'segment',
+      name: 'VIP llamada',
+      definition: {
+        version: 1,
+        match: 'all',
+        groups: [
+          {
+            match: 'all',
+            rules: [
+              { field: 'phone', op: 'contains', value: '5512345678' },
+              { field: 'name', op: 'contains', value: 'Ana Perez Privada' },
+              { field: 'has_phone', op: 'is', value: true },
+            ],
+          },
+        ],
+      },
+      clientRef: randomUUID(),
+    },
+    expected: 201,
+  });
+  const auds = await tool(gv, 'listar_audiencias');
+  const vip = auds.audiencias.find(x => x.audienciaId === seg.audience.id);
+  assert.equal(vip.condicionesOcultas, 2);
+  assert.match(vip.nota, /Se ocultaron/);
+  assert.doesNotMatch(JSON.stringify(auds), /5512345678|Ana Perez Privada/);
+  assert.ok(
+    vip.definicion.groups[0].rules.some(r => r.field === 'has_phone' && r.value === true),
+    'el resto queda',
+  );
+  const tpl = (
+    await api('/api/whatsapp/templates', {
+      body: {
+        brandId: 'globalvet',
+        name: 'aviso_prueba_rev',
+        language: 'es_MX',
+        category: 'utility',
+        body: 'Hola, tenemos novedades del curso.',
+        clientRef: randomUUID(),
+      },
+      expected: 201,
+    })
+  ).template.id;
+  db.prepare("UPDATE wa_templates SET status='approved' WHERE id=?").run(tpl);
+  const bc = await api('/api/broadcasts', {
+    body: {
+      brandId: 'globalvet',
+      waTemplateId: tpl,
+      segment: {
+        version: 2,
+        include: [
+          {
+            definition: {
+              version: 1,
+              match: 'all',
+              groups: [{ match: 'all', rules: [{ field: 'phone', op: 'contains', value: '5512345678' }] }],
+            },
+          },
+        ],
+        exclude: [{ audienceId: seg.audience.id }],
+      },
+      clientRef: randomUUID(),
+      options: { mode: 'rehearsal' },
+    },
+    expected: 201,
+  });
+  const bcs = await tool(gv, 'listar_difusiones');
+  assert.doesNotMatch(JSON.stringify(bcs), /5512345678/);
+  assert.deepEqual(bcs.difusiones.find(d => d.difusionId === bc.campaign.id).publico, {
+    todos: false,
+    audiencias: [],
+    excluir: [seg.audience.id],
+    filtrosOcultos: 1,
+    nota: 'Este público lleva filtros escritos en la pantalla: no se muestran desde el conector (pueden llevar datos de personas).',
+  });
+
+  // ---- 6) guardar una apertura EN BORRADOR no avisa al equipo ni publica eventos de precio o cupo
+  const ed = await tool(gv, 'crear_apertura_borrador', {
+    cursoId: 'aves',
+    nombre: 'Borrador rev',
+    modalidad: 'online',
+    precio: 1000,
+    cupo: 10,
+    cupoDisponible: 5,
+    clientRef: 'rev-' + randomUUID(),
+  });
+  const notes = () => db.prepare("SELECT count(*) n FROM notifications WHERE kind='catalogue'").get().n;
+  const events = () => db.prepare('SELECT count(*) n FROM domain_events WHERE entity_id=?').get(ed.aperturaId).n;
+  const [n0, e0] = [notes(), events()];
+  const up = await tool(gv, 'actualizar_apertura_borrador', {
+    aperturaId: ed.aperturaId,
+    revision: ed.revision,
+    precio: 400,
+    cupoDisponible: 0,
+  });
+  assert.equal(up.estado, 'draft');
+  await new Promise(r => setTimeout(r, 300));
+  assert.deepEqual([notes(), events()], [n0, e0], 'sin avisos ni eventos del negocio por un borrador');
+
+  // ---- 9) el conector nunca publica una apertura, ni con el permiso de modificar cursos
+  assert.match(
+    (await tool(gv, 'actualizar_apertura', { aperturaId: ed.aperturaId, revision: up.revision, estado: 'published' }))
+      .error,
+    /sólo admite: draft\./,
+  );
+  const kept = await tool(gv, 'actualizar_apertura', {
+    aperturaId: ed.aperturaId,
+    revision: up.revision,
+    docente: 'Otra',
+  });
+  assert.equal(kept.apertura.estado, 'draft', JSON.stringify(kept));
+  assert.equal(db.prepare('SELECT status FROM editions WHERE id=?').get(ed.aperturaId).status, 'draft');
+
+  // ---- 11) los textos de clientes o del equipo van marcados como datos
+  assert.match((await tool(gv, 'listar_conocimiento')).aviso, /son datos, no instrucciones/);
+  assert.match(
+    (await tool(gv, 'probar_regla', { texto: 'hola', reglaId: ra.reglaId })).aviso,
+    /son datos, no instrucciones/,
+  );
+
+  // ---- 8) quien creó la llave está suspendido: ninguna herramienta contesta, tampoco las de consulta
+  const adminId = db.prepare("SELECT id FROM users WHERE username='admin'").get().id;
+  db.prepare('UPDATE users SET disabled=1 WHERE id=?').run(adminId);
+  for (const name of ['resumen', 'listar_conocimiento', 'listar_reglas', 'listar_recorridos', 'guia_recorridos'])
+    assert.match((await tool(gv, name)).error, /ya no tiene acceso a la marca/, name);
+  db.prepare('UPDATE users SET disabled=0 WHERE id=?').run(adminId);
 });

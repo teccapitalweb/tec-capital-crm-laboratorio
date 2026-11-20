@@ -62,9 +62,15 @@ import { FLOW_FILE_MIMES, UNAVAILABLE_TYPES } from '../../../public/kit/shared/f
 import { discard, receive, store } from '../../lib/upload.mjs';
 import { createRuntime } from './runtime.mjs';
 import { keywordMatch } from '../../lib/conditions.mjs';
+import { fromConnector } from '../../lib/connector-call.mjs';
 
 const ID = '[A-Za-z0-9-]{1,64}';
 const REF = /^[A-Za-z0-9-]{8,100}$/;
+// Prueba desde el conector de Claude: donde el asistente consultaría a la IA, el simulador lo dice en vez de llamarla.
+const AI_SKIPPED_REPLY =
+  '[Aquí contestaría el asistente de la marca con IA. En la prueba desde el conector no se consulta a la IA.]';
+const AI_SKIPPED_NOTE =
+  'Prueba desde el conector: donde el asistente consultaría a la IA se muestra una nota; no se llamó a la IA ni se gastó su tope.';
 // Exportados para el conector de Claude (server/lib/mcp-drafts.mjs): acepta los mismos inicios que guarda este módulo.
 export const START_TYPES = Object.freeze({
   manual: 'Sólo a mano, desde el chat',
@@ -294,6 +300,8 @@ export default {
       if (typeof clientRef !== 'string' || !REF.test(clientRef))
         throw fail(400, 'Falta clientRef.', { code: 'invalid_request', field: 'clientRef' });
       return host.transaction(db, () => {
+        // El clientRef es por marca (repo.flowByRef / refKey): el mismo en otra marca crea su propio recorrido, sin
+        // chocar con la restricción única de la columna ni revelar que existe en otra marca.
         const existing = repo.flowByRef(brandId, clientRef);
         if (existing) return { flow: existing, duplicate: true };
         if (repo.count(brandId) >= LIMITS.flowsPerBrand)
@@ -401,7 +409,7 @@ export default {
     }
 
     // ---- simulador: el mismo motor con un `io` que sólo anota. No escribe ni envía nada.
-    async function simulate(user, id, input) {
+    async function simulate(user, id, input, { ai = true } = {}) {
       const f = locate(user, id, 'inbox.view');
       const brandId = f.brand_id;
       let graph, settings;
@@ -683,12 +691,18 @@ export default {
           bind(s);
           advance(s, env);
         } else if (['detour', 'intent', 'interrupt', 'during_delay', 'expired'].includes(r.kind)) {
-          const answer = await svc.replies.test(user, {
-            brandId,
-            courseId,
-            text: message.text,
-            channel,
-          });
+          const answer = await svc.replies.test(
+            user,
+            {
+              brandId,
+              courseId,
+              text: message.text,
+              channel,
+            },
+            { provider: ai },
+          );
+          // Sin IA (prueba desde el conector): lo que contestaría con IA queda como una nota clara, no como respuesta.
+          if (answer.providerSkipped && !notes.includes(AI_SKIPPED_NOTE)) notes.push(AI_SKIPPED_NOTE);
           // Una lista no se vuelve a ofrecer como botones (no caben): sigue a la vista en el chat, como en el motor.
           const reoffer =
             !s.waiting?.list &&
@@ -696,7 +710,7 @@ export default {
           if (r.kind === 'intent') rememberChoice(s, s.waiting, r.option);
           messages.push({
             from: 'assistant',
-            text: answer.reply,
+            text: answer.providerSkipped ? AI_SKIPPED_REPLY : answer.reply,
             buttons: reoffer ? s.waiting.options.map(o => o.label) : answer.buttons,
             reason: answer.reason,
           });
@@ -779,7 +793,8 @@ export default {
       const clientRef = input.clientRef;
       if (typeof clientRef !== 'string' || !REF.test(clientRef))
         throw fail(400, 'Falta clientRef.', { code: 'invalid_request', field: 'clientRef' });
-      const key = user.id + ':' + clientRef;
+      // Con la marca en la clave: el mismo clientRef en otra marca no devuelve el archivo de la primera.
+      const key = user.id + ':' + brandId + ':' + clientRef;
       if (uploads.has(key)) return { file: uploads.get(key), duplicate: true };
       const file = receive(input.file, { allow: ['image', 'document'], mimes: [...FLOW_FILE_MIMES] });
       const storageName = await store(host.dataDir, { area: 'library', brandId }, file);
@@ -1075,7 +1090,9 @@ export default {
       }
       if (rest === 'simulate') {
         host.rate('chatflows.simulate:' + user.id, 60);
-        host.json(res, 200, await simulate(user, id, input));
+        // Desde el conector de Claude la prueba nunca consulta a la IA de pago (server/lib/connector-call.mjs): la marca
+        // va en la petición, no en el cuerpo, y nadie la puede quitar desde fuera. «Probar» de la pantalla no cambia.
+        host.json(res, 200, await simulate(user, id, input, { ai: !fromConnector(req) }));
         return true;
       }
       return false;

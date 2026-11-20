@@ -118,12 +118,15 @@ export default {
         host.realtime.emit('templates.changed', { brandId, data: { id } });
       } catch {}
     };
-    const remember = (user, clientRef, value) => {
+    // La clave lleva la persona Y la marca: el mismo clientRef en otra marca no devuelve lo creado en la primera
+    // (antes, una llave de otra marca recibía la plantilla ajena con su nombre y su texto).
+    const refKey = (user, brandId, clientRef) => user.id + ':' + brandId + ':' + clientRef;
+    const remember = (user, brandId, clientRef, value) => {
       if (!clientRef) return;
-      refs.set(user.id + ':' + clientRef, value);
+      refs.set(refKey(user, brandId, clientRef), value);
       if (refs.size > 2000) refs.delete(refs.keys().next().value);
     };
-    const recalled = (user, clientRef) => (clientRef ? refs.get(user.id + ':' + clientRef) : undefined);
+    const recalled = (user, brandId, clientRef) => (clientRef ? refs.get(refKey(user, brandId, clientRef)) : undefined);
     const refOf = input => {
       const ref = input?.clientRef === undefined || input?.clientRef === null ? '' : String(input.clientRef);
       if (ref && !REF.test(ref)) throw fail(400, 'Referencia no válida.', { code: 'invalid_client_ref' });
@@ -295,11 +298,12 @@ export default {
     // ---- alta, edición y copia
     function create(input, user, { copiedFrom = null } = {}) {
       const clientRef = refOf(input);
-      const before = recalled(user, clientRef);
-      if (before) return { template: view(repo.byId(before)), duplicate: true };
       const brandId = String(input.brandId || '');
       if (!repo.brandExists(brandId)) throw fail(400, 'Elige la marca de la plantilla.', { field: 'brandId' });
       host.access.require(user, PERM, brandId);
+      const before = recalled(user, brandId, clientRef);
+      const again = before ? repo.byId(before) : null;
+      if (again?.brand_id === brandId) return { template: view(again), duplicate: true };
       const name = String(input.name || '')
         .trim()
         .toLowerCase();
@@ -337,7 +341,7 @@ export default {
           syncedAt: null,
         });
       });
-      remember(user, clientRef, id);
+      remember(user, brandId, clientRef, id);
       audit(user, 'whatsapp.template.created', id);
       emit(brandId, id);
       return { template: view(repo.byId(id)), warnings };
@@ -420,10 +424,14 @@ export default {
 
     function duplicate(id, input, user) {
       const clientRef = refOf(input);
-      const before = recalled(user, clientRef);
-      if (before) return { template: view(repo.byId(before)), duplicate: true };
       const row = getRow(id, user);
       const brandId = input.brandId ? String(input.brandId) : row.brand_id;
+      const before = recalled(user, brandId, clientRef);
+      const again = before ? repo.byId(before) : null;
+      if (again?.brand_id === brandId) {
+        host.access.require(user, PERM, brandId);
+        return { template: view(again), duplicate: true };
+      }
       const def = definitionOf(row);
       const editor = toEditor(def);
       // un archivo de muestra es de la biblioteca de su marca: en otra marca hay que elegirlo de nuevo
@@ -440,7 +448,7 @@ export default {
         user,
         { copiedFrom: row.id },
       );
-      remember(user, clientRef, out.template.id);
+      remember(user, brandId, clientRef, out.template.id);
       return out;
     }
 
@@ -1003,11 +1011,11 @@ export default {
     // ---- archivo de muestra del encabezado (biblioteca de la marca, subida única)
     async function upload(input, user) {
       const clientRef = refOf(input);
-      const before = recalled(user, clientRef);
-      if (before) return { file: before, duplicate: true };
       const brandId = String(input.brandId || '');
       if (!repo.brandExists(brandId)) throw fail(400, 'Elige la marca del archivo.', { field: 'brandId' });
       host.access.require(user, PERM, brandId);
+      const before = recalled(user, brandId, clientRef);
+      if (before) return { file: before, duplicate: true };
       const file = receive(input.file, {
         allow: ['image', 'document'],
         mimes: [...HEADER_FILE_TYPES.image, ...HEADER_FILE_TYPES.document],
@@ -1023,7 +1031,7 @@ export default {
         throw error;
       }
       const out = { id, filename: file.filename, mime: file.mime, size: file.size, kind: file.kind };
-      remember(user, clientRef, out);
+      remember(user, brandId, clientRef, out);
       audit(user, 'whatsapp.template.file', id);
       return { file: out };
     }

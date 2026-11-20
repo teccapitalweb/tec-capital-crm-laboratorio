@@ -19,6 +19,8 @@
 import { Readable } from 'node:stream';
 import { fail } from '../app/http.mjs';
 import { createAccess } from './access.mjs';
+import { markConnector } from './connector-call.mjs';
+import { people } from './mcp-call.mjs';
 import { EXAMPLE_GRAPH, flowGuide } from './flow-guide.mjs';
 import {
   CHANNELS,
@@ -256,7 +258,7 @@ export const DRAFT_TOOLS = [
     scope: DRAFT_SCOPE,
     annotations: read('Probar un recorrido'),
     description:
-      'Corre el simulador del CRM sobre el borrador guardado con las respuestas que daría una persona, una por turno (texto libre o el texto de un botón), y devuelve lo que vería paso a paso. No envía nada, no inscribe a nadie y no mueve ninguna conversación.',
+      'Corre el simulador del CRM sobre el borrador guardado con las respuestas que daría una persona, una por turno (texto libre o el texto de un botón), y devuelve lo que vería paso a paso. No envía nada, no inscribe a nadie, no mueve ninguna conversación y nunca consulta a la IA: donde el asistente de la marca contestaría con IA, la prueba lo indica con una nota.',
     inputSchema: obj(
       {
         recorridoId: { type: 'string' },
@@ -389,7 +391,10 @@ export function createDraftTools({ db, crm, audit, module, actorOf }) {
     const chunks = input === undefined ? [] : [Buffer.from(JSON.stringify(input))];
     const url = new URL('http://mcp.local' + path);
     for (const [k, v] of Object.entries(query || {})) url.searchParams.set(k, v);
-    const req = Object.assign(Readable.from(chunks), { method, url: url.pathname + url.search, headers: {} });
+    // Marcada como del conector (server/lib/connector-call.mjs): el simulador no consulta a la IA de pago.
+    const req = markConnector(
+      Object.assign(Readable.from(chunks), { method, url: url.pathname + url.search, headers: {} }),
+    );
     let status = 0,
       payload = null;
     const res = {
@@ -412,6 +417,10 @@ export function createDraftTools({ db, crm, audit, module, actorOf }) {
     return payload;
   }
 
+  // ---- alcance por marca: lo creado (o recordado por su clientRef) que se devuelve es de la marca de la llave
+  const ownBrand = (key, owner) => {
+    if (owner !== key.brand_id) throw fail(409, 'Ese clientRef ya se usó: manda uno nuevo.');
+  };
   // ---- alcance por marca: el id debe ser de la marca de la llave (y tener forma de id) antes de llamar al módulo
   const flowIdOf = (key, id) => {
     const owner = typeof id === 'string' && ID.test(id) ? api('chatflows').repo?.brandOf?.(id) : null;
@@ -452,7 +461,8 @@ export function createDraftTools({ db, crm, audit, module, actorOf }) {
     inicio: f.start,
     revision: f.revision,
     actualizado: iso(f.updatedAt),
-    metricas: f.metrics,
+    // Cifras de conversaciones: la misma regla «menos de 3» que las de cifras_* (server/lib/mcp-call.mjs).
+    metricas: f.metrics ? Object.fromEntries(Object.entries(f.metrics).map(([k, n]) => [k, people(n)])) : f.metrics,
     ...extra,
   });
   // Un grafo sin posiciones se acomoda como el botón «Acomodar» (las posiciones no cambian lo que hace el recorrido).
@@ -494,8 +504,8 @@ export function createDraftTools({ db, crm, audit, module, actorOf }) {
     inicio: iso(e.startsAt),
     estadoApertura: e.status,
     tieneEnlaceDeGrupo: e.hasGroup,
-    inscritos: e.enrolled,
-    entregados: e.delivered,
+    inscritos: people(e.enrolled),
+    entregados: people(e.delivered),
     acceso: {
       estado: e.access.state,
       encendido: e.access.enabled,
@@ -557,6 +567,8 @@ export function createDraftTools({ db, crm, audit, module, actorOf }) {
         start: startOf(a.inicio),
         clientRef: a.clientRef,
       });
+      // Lo que se devuelve debe ser de la marca de la llave, también si el módulo lo reconoció como un reintento.
+      ownBrand(key, api('chatflows').repo?.brandOf?.(made.flow?.id));
       if (!made.duplicate) audit(actor, 'mcp.flow.create', made.flow.id);
       const r = await readFlow(actor, made.flow.id);
       return {
@@ -651,7 +663,8 @@ export function createDraftTools({ db, crm, audit, module, actorOf }) {
       }
       return {
         recorridoId: id,
-        aviso: 'Prueba del borrador: no se envió nada, nadie se inscribió y ninguna conversación cambió.',
+        aviso:
+          'Prueba del borrador: no se envió nada, nadie se inscribió, ninguna conversación cambió y no se consultó a la IA.',
         conversacion,
         notas,
         termino: Boolean(r.ended),
@@ -697,6 +710,7 @@ export function createDraftTools({ db, crm, audit, module, actorOf }) {
         settings: a.ajustes ?? {},
         clientRef: a.clientRef,
       });
+      ownBrand(key, api('sequences').repo?.brandOf?.(made.sequence?.id));
       if (!made.duplicate) audit(actor, 'mcp.sequence.create', made.sequence.id);
       return {
         guardado: true,
@@ -715,13 +729,16 @@ export function createDraftTools({ db, crm, audit, module, actorOf }) {
       // Encendida, un cambio afectaría a quien entre desde ese momento: eso lo decide una persona en el CRM.
       if (current.enabled)
         throw fail(409, 'La secuencia está encendida: los cambios los hace una persona en el CRM (Secuencias).');
-      const input = { expectedRevision: a.revision };
+      // Se escribe con la revisión de la fila que se acaba de comprobar apagada, no con la que trae quien llama: si
+      // alguien la enciende entretanto, la revisión ya no coincide y el módulo rechaza el cambio.
+      if (a.revision !== current.revision)
+        throw fail(409, 'Alguien más guardó la secuencia: vuelve a leerla (ver_secuencia) y usa su revisión vigente.');
+      const input = { expectedRevision: current.revision };
       if (a.titulo !== undefined) input.title = a.titulo;
       if (a.descripcion !== undefined) input.description = a.descripcion;
       if (a.cursoId !== undefined) input.courseId = courseOf(key, a.cursoId);
       if (a.pasos !== undefined) input.steps = a.pasos;
       if (a.ajustes !== undefined) input.settings = a.ajustes;
-      // Si alguien la enciende entre la lectura y este cambio, la revisión ya no coincide y el módulo lo rechaza.
       const saved = await moduleCall(actor, 'sequences', 'PUT', '/api/sequences/' + id, input);
       audit(actor, 'mcp.sequence.update', id);
       return {
@@ -761,11 +778,18 @@ export function createDraftTools({ db, crm, audit, module, actorOf }) {
           409,
           'La entrega de accesos de esta apertura está encendida: el texto lo cambia una persona en el CRM (Accesos).',
         );
+      // Con la revisión de la entrega que se acaba de comprobar apagada (no la de quien llama): si alguien la enciende
+      // entretanto, la revisión ya no coincide y el módulo rechaza el cambio.
+      if (a.revision !== card.access.revision)
+        throw fail(
+          409,
+          'Los accesos de esta apertura cambiaron: vuelve a leerlos (listar_accesos) y usa su revisión vigente.',
+        );
       // Sin `enabled` ni `onTestPayment`: la entrega se queda como está (apagada).
       const saved = (
         await moduleCall(actor, 'course-access', 'PUT', '/api/course-access/editions/' + edition.id, {
           body: a.texto,
-          expectedRevision: a.revision,
+          expectedRevision: card.access.revision,
         })
       ).edition;
       audit(actor, 'mcp.access.text', edition.id);

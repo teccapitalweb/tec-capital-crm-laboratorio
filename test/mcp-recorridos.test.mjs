@@ -4,11 +4,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { TOOLS, invalid } from '../server/mcp.mjs';
-import { DRAFT_SCOPE, DRAFT_TOOLS, ROUTES, routeAllowed } from '../server/lib/mcp-drafts.mjs';
+import { DRAFT_SCOPE, DRAFT_TOOLS, ROUTES, createDraftTools, routeAllowed } from '../server/lib/mcp-drafts.mjs';
+import { FEW } from '../server/lib/mcp-call.mjs';
 import { EXAMPLE_GRAPH, flowGuide } from '../server/lib/flow-guide.mjs';
 import { NODE_TYPES, repairGraph, validateGraph } from '../public/kit/shared/flow-model.js';
 import { unsupportedProblems } from '../public/kit/shared/flow-support.js';
@@ -605,7 +608,8 @@ test('armar recorridos, secuencias y accesos en borrador de punta a punta, sin p
     'el conector no envió, no inscribió, no creó pedidos ni sesiones (la única versión la publicó una persona)',
   );
 
-  // ---- 13) si quien creó la llave deja de administrar la marca, la llave ya no escribe
+  // ---- 13) si quien creó la llave deja de administrar la marca (sigue en su equipo), la llave ya no escribe
+  db.prepare('INSERT INTO brand_members(user_id,brand_id) VALUES(?,?)').run(adminId, 'globalvet');
   db.prepare("UPDATE users SET role='agent' WHERE id=?").run(adminId);
   assert.match(
     (await tool(drafts, 'crear_recorrido', { nombre: 'No debe', clientRef: 'mcp-' + randomUUID() })).error,
@@ -613,4 +617,244 @@ test('armar recorridos, secuencias y accesos en borrador de punta a punta, sin p
   );
   assert.ok((await tool(drafts, 'guia_recorridos', { tipos: ['enroll'] })).tiposDePaso.length > 0, 'la guía sigue');
   db.prepare("UPDATE users SET role='admin' WHERE id=?").run(adminId);
+});
+
+// ---- revisión de seguridad del conector (docs/PLAN_MCP_CLAUDE.md)
+
+// Módulos falsos en memoria para reproducir lo que una prueba de punta a punta no puede ordenar: que una persona
+// encienda algo justo entre la comprobación del conector y su escritura.
+async function bodyOf(req) {
+  let raw = '';
+  for await (const chunk of req) raw += chunk;
+  return raw ? JSON.parse(raw) : {};
+}
+function fakeDb() {
+  const db = new DatabaseSync(':memory:');
+  db.exec(`CREATE TABLE users(id TEXT PRIMARY KEY, role TEXT, disabled INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE brands(id TEXT PRIMARY KEY, created_at INTEGER);
+    CREATE TABLE brand_members(user_id TEXT, brand_id TEXT);
+    CREATE TABLE editions(id TEXT PRIMARY KEY, brand_id TEXT);
+    INSERT INTO users(id,role) VALUES('u1','admin');
+    INSERT INTO brands VALUES('b1',1);
+    INSERT INTO editions VALUES('e1','b1');`);
+  return db;
+}
+
+test('borradores: cifras con «menos de 3» y escritura con la revisión de la fila que se comprobó apagada', async () => {
+  const db = fakeDb();
+  const key = { id: 'k1', brand_id: 'b1', created_by: 'u1' };
+  const send = (res, status, data) => {
+    res.writeHead(status);
+    res.end(JSON.stringify(data));
+    return true;
+  };
+  // Secuencia apagada (revisión 5); al leerla, una persona la enciende (revisión 6).
+  let seq = {
+    id: 's1',
+    brandId: 'b1',
+    enabled: false,
+    archived: false,
+    revision: 5,
+    title: 'T',
+    steps: [],
+    settings: {},
+  };
+  // Accesos apagados (revisión 7); al leerlos, una persona enciende la entrega (revisión 8).
+  let access = { state: 'off', enabled: false, body: 'Hola', revision: 7, problems: [] };
+  const card = () => ({
+    editionId: 'e1',
+    courseId: 'c1',
+    courseTitle: 'Curso',
+    editionName: 'Marzo',
+    startsAt: null,
+    status: 'published',
+    hasGroup: false,
+    enrolled: 1,
+    delivered: 2,
+    access,
+  });
+  const writes = [];
+  const modules = {
+    chatflows: {
+      repo: { brandOf: () => 'b1' },
+      async handle(req, res) {
+        return send(res, 200, {
+          brands: [],
+          flows: [
+            {
+              id: 'f1',
+              brandId: 'b1',
+              name: 'R',
+              status: 'active',
+              publishedVersion: 1,
+              start: { type: 'manual' },
+              revision: 1,
+              metrics: { sessions: 4, inProgress: 1, completed: 2, handoff: 0, left: 0, dropped: 1, excluded: 0 },
+            },
+          ],
+        });
+      },
+    },
+    sequences: {
+      repo: { brandOf: () => 'b1' },
+      async handle(req, res) {
+        if (req.method === 'GET') {
+          const out = { sequence: { ...seq } };
+          seq = { ...seq, enabled: true, revision: 6 };
+          return send(res, 200, out);
+        }
+        const input = await bodyOf(req);
+        if (input.expectedRevision !== seq.revision) return send(res, 409, { error: 'Alguien más guardó.' });
+        writes.push(['sequence', input.expectedRevision, seq.enabled]);
+        return send(res, 200, { sequence: { ...seq, title: input.title, revision: seq.revision + 1 } });
+      },
+    },
+    'course-access': {
+      async handle(req, res, path) {
+        if (req.method === 'GET') {
+          const out = { editions: [card()], variables: [], limits: {} };
+          access = { ...access, enabled: true, state: 'on', revision: 8 };
+          return send(res, 200, out);
+        }
+        const input = await bodyOf(req);
+        if (path.endsWith('/preview')) return send(res, 200, { text: input.body });
+        if (input.expectedRevision !== access.revision) return send(res, 409, { error: 'Los accesos cambiaron.' });
+        writes.push(['access', input.expectedRevision, access.enabled]);
+        return send(res, 200, { edition: { ...card(), access: { ...access, body: input.body } } });
+      },
+    },
+  };
+  const tools = createDraftTools({
+    db,
+    crm: { canBrand: () => true },
+    audit: () => {},
+    module: name => modules[name],
+    actorOf: () => ({ id: 'u1', role: 'admin' }),
+  }).run;
+
+  // «menos de 3» también aquí: 1 o 2 conversaciones no se dan exactas; 1 inscrito y 2 entregados, tampoco
+  const flows = await tools.listar_recorridos(key, {});
+  assert.deepEqual(flows.recorridos[0].metricas, {
+    sessions: 4,
+    inProgress: FEW,
+    completed: FEW,
+    handoff: 0,
+    left: 0,
+    dropped: FEW,
+    excluded: 0,
+  });
+  const acc = await tools.listar_accesos(key);
+  assert.deepEqual([acc.aperturas[0].inscritos, acc.aperturas[0].entregados], [FEW, FEW]);
+
+  // una persona la enciende entre la lectura y la escritura: quien llama manda la revisión «nueva» (6) y no pasa
+  seq = { ...seq, enabled: false, revision: 5 };
+  await assert.rejects(tools.actualizar_secuencia(key, { secuenciaId: 's1', revision: 6, titulo: 'X' }), /Alguien más/);
+  // con la revisión que sí leyó (5), el módulo la rechaza porque ya cambió (encendida, revisión 6)
+  seq = { ...seq, enabled: false, revision: 5 };
+  await assert.rejects(tools.actualizar_secuencia(key, { secuenciaId: 's1', revision: 5, titulo: 'X' }), /Alguien más/);
+  access = { ...access, enabled: false, state: 'off', revision: 7 };
+  await assert.rejects(tools.escribir_acceso(key, { aperturaId: 'e1', revision: 8, texto: 'Nuevo' }), /cambiaron/);
+  access = { ...access, enabled: false, state: 'off', revision: 7 };
+  await assert.rejects(tools.escribir_acceso(key, { aperturaId: 'e1', revision: 7, texto: 'Nuevo' }), /cambiaron/);
+  assert.deepEqual(writes, [], 'nada se escribió sobre una secuencia o una entrega ya encendidas');
+  db.close();
+});
+
+test('probar un recorrido desde el conector nunca consulta a la IA; «Probar» de la pantalla sigue igual', async t => {
+  let aiCalls = 0;
+  const stub = createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      aiCalls += 1;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          id: 'm',
+          type: 'message',
+          role: 'assistant',
+          model: 'x',
+          content: [{ type: 'text', text: 'Sí: el curso es en línea.' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }),
+      );
+    });
+  });
+  await new Promise(r => stub.listen(0, '127.0.0.1', r));
+  const dir = await mkdtemp(join(tmpdir(), 'crm-mcp-sin-ia-'));
+  const code = randomUUID();
+  const server = await startServer({
+    dir,
+    env: {
+      ADMIN_INVITE_CODE: code,
+      AI_PROVIDER: 'claude',
+      ANTHROPIC_API_KEY: 'sk-ant-api03-prueba',
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:' + stub.address().port,
+      CHANNEL_CONNECTOR: '',
+    },
+  });
+  let db = null;
+  t.after(async () => {
+    try {
+      db?.close();
+    } catch {}
+    await server.stop();
+    await new Promise(r => stub.close(r));
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+  const origin = server.origin;
+  const admin = await registerAdmin(origin, code);
+  db = openDb(dir);
+  const api = (path, options = {}) => call(origin, path, { cookie: admin, ...options });
+  const rs = (await api('/api/replies/settings')).settings.find(x => x.brand_id === 'globalvet');
+  await api('/api/replies/brands/globalvet', {
+    method: 'PATCH',
+    body: { mode: 'autonomous', providerEnabled: true, expectedRevision: rs.revision },
+  });
+  const token = (
+    await api('/api/integrations/keys', {
+      body: { brandId: 'globalvet', name: 'Claude borradores', scopes: [DRAFT_SCOPE] },
+      expected: 201,
+    })
+  ).token;
+  let rid = 0;
+  const tool = async (name, args = {}) => {
+    const r = await fetch(origin + '/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ jsonrpc: '2.0', id: ++rid, method: 'tools/call', params: { name, arguments: args } }),
+    });
+    const out = (await r.json()).result;
+    return out.isError ? { error: out.content[0].text } : JSON.parse(out.content[0].text);
+  };
+  const flow = await tool('crear_recorrido', {
+    nombre: 'Sin IA',
+    grafo: JSON.parse(JSON.stringify(EXAMPLE_GRAPH)),
+    clientRef: 'mcp-' + randomUUID(),
+  });
+  const questions = [
+    'Vivo en Colombia, ¿puedo tomar el curso desde allá?',
+    '¿Sirve si trabajo en otro estado de la república y viajo mucho?',
+    '¿Y si me mudo a Perú a medio curso puedo seguir tomando el curso?',
+  ];
+  const aiAudit = () => db.prepare("SELECT count(*) n FROM audit WHERE action='ai.call'").get().n;
+  const audit0 = aiAudit();
+  const sim = await tool('probar_recorrido', { recorridoId: flow.recorridoId, cursoId: 'aves', respuestas: questions });
+  assert.equal(sim.error, undefined, sim.error);
+  assert.equal(aiCalls, 0, 'el conector no llamó a la IA');
+  assert.equal(aiAudit(), audit0, 'ni gastó del tope');
+  const fromAssistant = sim.conversacion.filter(m => m.de === 'asistente');
+  assert.ok(fromAssistant.length >= 1, JSON.stringify(sim.conversacion));
+  assert.ok(fromAssistant.every(m => /Aquí contestaría el asistente de la marca/.test(m.texto)));
+  assert.ok(sim.notas.some(n => /no se llamó a la IA/.test(n)));
+  assert.match(sim.aviso, /no se consultó a la IA/);
+  // la pantalla («Probar») sí consulta a la IA como siempre; un dato de más en el cuerpo no cambia nada
+  let r = await api('/api/chatflows/' + flow.recorridoId + '/simulate', { body: { courseId: 'aves', ai: false } });
+  for (const said of questions) {
+    if (r.ended || !r.waiting) break;
+    r = await api('/api/chatflows/' + flow.recorridoId + '/simulate', {
+      body: { courseId: 'aves', state: r.state, input: { text: said }, ai: false, provider: false },
+    });
+  }
+  assert.ok(aiCalls >= 1, 'la pantalla sigue consultando a la IA');
 });

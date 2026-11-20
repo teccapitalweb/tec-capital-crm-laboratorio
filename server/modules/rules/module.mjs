@@ -214,9 +214,10 @@ export default {
       const title = cleanTitle(input.title);
       const definition = cleanDefinition(input.definition);
       return host.transaction(db, () => {
+        // El clientRef es por marca (repo.ruleByRef): el mismo en otra marca crea su propia regla; no se dice si existe
+        // en otra marca (antes un 409 lo revelaba a una llave de otra marca).
         const existing = repo.ruleByRef(brandId, clientRef);
         if (existing) return { rule: existing, duplicate: true };
-        if (repo.refTaken(clientRef)) throw fail(409, 'Referencia ya utilizada.', { code: 'client_ref_reused' });
         if (repo.count(brandId) >= LIMITS.rulesPerBrand)
           throw fail(409, `Una marca admite hasta ${LIMITS.rulesPerBrand} reglas.`, { code: 'rule_limit' });
         const id = randomUUID();
