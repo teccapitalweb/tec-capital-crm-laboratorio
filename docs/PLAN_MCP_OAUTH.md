@@ -1,6 +1,8 @@
 # Conectar un asistente con un clic (OAuth del conector MCP) · 20 nov 2026
 
-**Sin publicar** (rama de trabajo). **Esquema nuevo:** migración con nombre `mcp-oauth/0001-tables`. Encendido por omisión; `MCP_OAUTH_DISABLED=1` lo apaga (las llaves de la API siguen igual). Falta probarlo con una aplicación de asistente real contra el servidor público.
+**Sin publicar** (rama de trabajo). **Esquema nuevo:** migración con nombre `mcp-oauth/0001-tables`. `MCP_OAUTH_DISABLED=1` lo apaga (las llaves de la API siguen igual). Falta probarlo con una aplicación de asistente real contra el servidor público.
+
+**Activación: en producción hace falta `APP_ORIGIN`** (la dirección pública del CRM, por ejemplo `https://crm-laboratorio-production.up.railway.app`). Sin ella OAuth queda **apagado**: los documentos `/.well-known/…` responden 404, el 401 de `/mcp` no invita a iniciar sesión y `/oauth/authorize`, `/oauth/token`, `/oauth/register`, `/oauth/revoke` y `/oauth/decision` responden 503; el registro del servidor dice «mcp-oauth: APP_ORIGIN es obligatorio en producción…» al arrancar y, como mucho una vez por minuto, al rechazar. Así la dirección que se anuncia nunca sale de la cabecera `Host`, que la escribe quien llama. Fuera de producción (pruebas, uso local) se deduce del pedido.
 
 ## Para qué
 
@@ -25,7 +27,7 @@ Fuentes leídas el 20 nov 2026:
 | Identificación de la aplicación: documento de metadatos (preferido), registro dinámico (compatibilidad) | Los dos (ver abajo) |
 | Regreso por coincidencia exacta; HTTPS o `localhost` | Exacta; `http` sólo hacia `127.0.0.1`, `localhost` o `[::1]`, y ahí el puerto no cuenta (lo exige la documentación de Claude para Claude Code) |
 | Fichas sólo en la cabecera `Authorization` | La ficha nunca se lee de la dirección ni de una cookie |
-| Rotación de fichas de renovación en clientes públicos; `invalid_grant` cuando ya no vale | Cada renovación da un par nuevo; reutilizar una vieja revoca todo el permiso |
+| Rotación de fichas de renovación en clientes públicos; `invalid_grant` cuando ya no vale | Cada renovación da un par nuevo; reutilizar una vieja revoca todo el permiso, salvo la inmediatamente anterior dentro de los 10 s de su rotación (renovaciones en paralelo de la propia aplicación), que sólo recibe `invalid_grant` |
 | Mostrar en el permiso el dominio de regreso y avisar si es local | La página muestra «Regresará a», «Identidad publicada en» (documento) y un aviso si el regreso es local |
 | Claude recomienda no rechazar por cabecera `Origin` estricta | `/mcp` sigue rechazando cualquier petición con `Origin` (como hasta ahora): las aplicaciones de Claude llaman desde su servidor o desde la terminal, sin `Origin`. Si una prueba real mostrara lo contrario, se revisará aquí |
 
@@ -41,8 +43,8 @@ Diferencias con lo que se suponía al empezar:
 1. La aplicación llama a `/mcp` sin ficha → `401` con `WWW-Authenticate` → lee los dos documentos de metadatos.
 2. Se identifica: con su documento (`client_id` = dirección HTTPS que el CRM descarga) o registrándose (`POST /oauth/register`).
 3. Abre en el navegador `GET /oauth/authorize?response_type=code&client_id=…&redirect_uri=…&code_challenge=…&code_challenge_method=S256&state=…&resource=…`.
-4. El CRM comprueba la aplicación y la dirección de regreso. **Hasta ese punto cualquier error se muestra en la página del CRM** (nunca redirige a una dirección sin comprobar); después, los errores vuelven a la aplicación (`error=…&state=…&iss=…`).
-5. Sin sesión, la página pide entrar con el usuario del equipo (las rutas de siempre, `/api/auth/login` y la verificación en dos pasos si la cuenta la tiene). Un cliente o una cuenta suspendida ve «Esta cuenta no puede conectar asistentes».
+4. El CRM comprueba la aplicación, la dirección de regreso, `response_type`, PKCE, `state` y `resource`. **Cualquier error antes del permiso se muestra en la página del CRM, sin redirigir** (RFC 9700 §4.11.2: una aplicación que se registró sola puede haber declarado cualquier regreso, y el CRM no debe mandar ahí a nadie que no haya hecho nada). Sólo se vuelve a la aplicación después de que la persona pulsa «Permitir» o «Cancelar».
+5. Sin sesión, la página pide entrar con el usuario del equipo (las rutas de siempre, `/api/auth/login` y la verificación en dos pasos si la cuenta la tiene). Quien no es administración (asesoras, clientes, cuentas suspendidas) ve «Por ahora sólo administración puede conectar asistentes al CRM…», sin marcas ni permisos, y no se abre ninguna solicitud.
 6. La página de permiso muestra la aplicación (nombre que **ella declara**, marcado como no comprobado; dominio que publica su documento; dónde regresará), un selector de **una** marca y los permisos agrupados como en la pantalla de llaves («Puede consultar» / «Puede cambiar»). Sólo vienen marcados los que no dejan ver datos personales (hoy, «Aperturas, precios y cupos»); lo que la aplicación pida en `scope` no marca nada.
 7. «Permitir» manda `POST /oauth/decision` (misma sesión, mismo origen, código contra falsificación ligado a esa solicitud). El servidor vuelve a comprobar la marca y cada permiso, crea el permiso concedido y un **código de un solo uso de 60 segundos**, y la página vuelve a la aplicación. «Cancelar» vuelve con `error=access_denied`.
 8. La aplicación canjea el código en `POST /oauth/token` (formulario) con su `code_verifier`: recibe una ficha de acceso (una hora) y una de renovación (30 días, rota en cada uso).
@@ -50,17 +52,7 @@ Diferencias con lo que se suponía al empezar:
 
 ## Quién puede dar qué
 
-Los permisos que se ofrecen son los del conector (los que usa alguna herramienta). Cada uno exige a la persona, **en esa marca**, lo mismo que la pantalla:
-
-| Permiso | Hace falta |
-| --- | --- |
-| Aperturas, precios y cupos (`editions`) | Atender la marca (`inbox.view`) |
-| Claude: ver conversaciones y mensajes (`conversations`) | Atender la marca (`inbox.view`) |
-| Contactos (`contacts`) | Ver teléfono y correo (`contacts.phone`) |
-| Pedidos (`orders`) | Cobrar (`sales.charge`) |
-| Conocimiento, modificar cursos y aperturas, armar borradores, y cualquier permiso nuevo del conector | Lo mismo que crear una llave de la API: administración (`developer.keys.manage`) |
-
-Escribir exige administración, igual que las herramientas que escriben exigen que quien firma siga siendo administrador. Una asesora puede conectar un asistente de consulta en sus marcas; nada más.
+**Por ahora, conectar un asistente es cosa de administración, exactamente como crear una llave de la API**: cualquier permiso del conector (los que usa alguna herramienta), también los de lectura, exige `developer.keys.manage` en esa marca. Una asesora no puede conectar asistentes ni aprobar forjando el formulario (la solicitud es de quien abrió la página y el servidor vuelve a comprobar el permiso al aprobar y en cada uso). Si quien conectó deja de ser administración, sus fichas dejan de servir.
 
 ## Garantías
 
@@ -69,7 +61,10 @@ Escribir exige administración, igual que las herramientas que escriben exigen q
 | PKCE S256 obligatorio; sin flujo implícito ni de contraseña | `code_challenge_method=S256` y reto de 43 caracteres; `grant_type` sólo `authorization_code` y `refresh_token` | §4 sin reto o `plain` → `invalid_request`; §9 `password` y `client_credentials` → `unsupported_grant_type`; verificador equivocado → `invalid_grant` |
 | Código de un solo uso, 60 s, ligado a aplicación, regreso, reto y recurso | Huella del código; se gasta en el primer intento, acierte o no | §9 reutilizado, otra aplicación, otro regreso, otro recurso, sin verificador, vencido |
 | Reutilizar un código revoca lo que emitió | `code_reuse` revoca el permiso entero | §9 la ficha del primer canje deja de servir |
-| Regreso exacto; nunca una redirección abierta | Comparación exacta (local: sin puerto); errores previos en la página del CRM | §4 aplicación desconocida, regreso ajeno o distinto: 400 sin `Location`; unidad de `redirectAllowed` |
+| Regreso exacto; nunca una redirección abierta | Comparación exacta (local: sin puerto); TODOS los errores antes del permiso en la página del CRM, sin `Location`; sólo se vuelve a la aplicación tras «Permitir» o «Cancelar» | §4 aplicación desconocida, regreso ajeno o distinto; y la repetición del revisor (aplicación registrada con regreso a un sitio de engaño, `response_type`, PKCE, `resource`, `state` o parámetro repetido mal puestos, con y sin sesión): 400 sin `Location`; unidad de `redirectAllowed` |
+| Un documento en caché no se bloquea por el tráfico de otros | El límite (30 por minuto) cuenta sólo descargas reales y va por dirección y documento | «un documento de metadatos en caché…»: 40 visitas anónimas, una sola descarga, y administración llega a la página de permiso |
+| La dirección anunciada no sale de `Host` | En producción sólo `APP_ORIGIN`; sin ella, apagado. Metadatos con `Cache-Control: no-store` | «en producción OAuth sólo se anuncia con APP_ORIGIN…»: sin ella 404, 401 sin invitación, 503 y la línea del registro; con ella, `Host: evil.example` no cambia `resource` ni `issuer`; §1 `no-store` |
+| Renovaciones en paralelo no desconectan | La inmediatamente anterior, dentro de 10 s de su rotación → `invalid_grant` sin revocar; otra más vieja o fuera del margen → revoca todo | §8 cuatro renovaciones a la vez: una gana y sigue sirviendo; ficha más vieja → revoca; la anterior pasados 11 s → revoca |
 | Fichas opacas de 256 bits, sólo su huella, una hora | `tca_`/`tcr_` + 32 bytes aleatorios; SHA-256 en la base | §7 la base y la bitácora no contienen ninguna ficha, código ni el código de la página; §10 ficha vencida → 401 `invalid_token` |
 | Renovación con rotación y detección de reutilización | Se gasta de forma atómica al emitir; una vieja revoca el permiso | §8 nueva ficha distinta; la vieja → `invalid_grant` y todo revocado; no se amplía al renovar |
 | Los permisos van en cada ficha | Cada ficha guarda con qué permisos se emitió; al usarla vale la intersección con lo que la persona puede dar hoy. Al renovar se conservan o se acotan (`scope`), nunca se amplían | §8b ficha acotada no usa `orders`; renovar pidiendo de más → `invalid_scope`; renovar sin `scope` conserva lo acotado; la persona deja de poder «modificar cursos» → la ficha lo pierde y no lo recupera |
@@ -77,8 +72,9 @@ Escribir exige administración, igual que las herramientas que escriben exigen q
 | Ligadas a `/mcp` | El permiso guarda el recurso y `/mcp` lo compara | §7 la ficha en `/api/v1/me` y `/api/crm` → 401 |
 | La sesión del CRM nunca autentica `/mcp` | `/mcp` sólo lee `Authorization: Bearer tca_…` o `tcw_…` | §2 cookie o valor de la cookie como ficha → 401 |
 | Página de permiso contra CSRF y marcos | Decisión por `POST` con la sesión, `Origin` del mismo sitio, código ligado a la solicitud y a la persona, de un solo uso; `X-Frame-Options: DENY`, `frame-ancestors 'none'`, `no-store` | §5 cabeceras; §6 otro origen, sin `Origin`, código falso o ausente, solicitud de otra persona, sin sesión, segunda decisión |
-| Marca y permisos se comprueban al aprobar y en cada uso | `grantable()` al decidir; `effective()` en cada canje, renovación y llamada | §6 marca inexistente, permiso inventado; §11 asesora: no se le ofrecen los de administración, pedir de más → 403, marca ajena → 404; pierde la marca o la suspenden → 401 y la renovación falla; §14 deja de ser administración → 401 |
-| Cliente o cuenta suspendida no autorizan | `isStaff()` | §5 la página de un cliente no abre solicitud; §11 suspendida |
+| Marca y permisos se comprueban al aprobar y en cada uso | `grantable()` al decidir; `effective()` en cada canje, renovación y llamada | §6 marca inexistente, permiso inventado; §8b y §14 deja de ser administración → 401 y no se renueva; §11 suspendida → 401 y la renovación falla |
+| Sólo administración conecta asistentes | Todo permiso exige `developer.keys.manage` en la marca | §11 la asesora ve el aviso sin marcas ni permisos, no se abre solicitud, la de otra persona o una inventada → 400; ascendida conecta, vuelta a asesora → 401 |
+| Cliente o cuenta suspendida no autorizan | `isStaff()` y el mismo permiso | §5 la página de un cliente no abre solicitud; §11 suspendida |
 | Mismo trato que una llave | Objeto con la forma de la llave: misma marca, permisos, firma (`created_by`), bitácora y límite (`api:` 120/min, `mcp-call:` 60/min) | §7 `resumen`, permiso que falta, otra marca, `actualizar_curso` firmado por quien autorizó |
 | Registro dinámico acotado | 20 por hora por dirección, 1000 en total, 16 KB, campos validados (regresos, tipos de concesión y de respuesta, nombre y sitio), sin secreto, nunca descarga nada; las que no obtienen permiso se borran al día | §3 regresos no válidos, sin nombre, `client_credentials`, tipo de contenido, 413; §16 el límite por dirección |
 | Documento de metadatos sin SSRF | Sólo `https` al puerto 443, con ruta, sin usuario, sin fragmento ni IP literal ni nombres internos; la dirección se comprueba **al conectar** (un DNS que cambia no cuela una red privada); sin redirecciones; 5 s y 16 KB como máximo; `client_id` del documento igual a su dirección; caché de 100 entradas entre 1 minuto y 1 hora | Prueba de unidad: direcciones no válidas, dominio que resuelve a red interna, redirección, documento grande, `client_id` distinto; §13 flujo completo con documento |
@@ -88,7 +84,7 @@ Escribir exige administración, igual que las herramientas que escriben exigen q
 
 ## «Asistentes conectados»
 
-Pantalla `asistentes` (Ajustes, visible): la dirección `/mcp` con «Copiar dirección» y tres pasos para conectar; una tarjeta por conexión con la aplicación, la marca, los permisos, quién la autorizó, desde cuándo y su último uso; «Desconectar» la revoca al instante. Administración ve todas las conexiones de sus marcas; los demás, sólo las suyas. API: `GET /api/mcp-oauth/connections` y `POST /api/mcp-oauth/connections/<id>/revoke`.
+Pantalla `asistentes` (Ajustes, visible): la dirección `/mcp` con «Copiar dirección» y tres pasos para conectar; una tarjeta por conexión con la aplicación, la marca, los permisos, quién la autorizó, desde cuándo y su último uso; «Desconectar» la revoca al instante. Sólo administración conecta; administración ve todas las conexiones de sus marcas y los demás sólo las suyas (por ejemplo, las que hicieron cuando eran administración, ya sin efecto). API: `GET /api/mcp-oauth/connections` y `POST /api/mcp-oauth/connections/<id>/revoke`.
 
 ## Límites
 
@@ -96,7 +92,8 @@ Pantalla `asistentes` (Ajustes, visible): la dirección `/mcp` con «Copiar dire
 - Una conexión ve una marca. Para otra marca, otra conexión.
 - No hay ampliación de permisos sobre la marcha (`insufficient_scope`): si una herramienta pide un permiso que no se dio, contesta como con una llave («no tiene el permiso») y la persona vuelve a conectar marcando más.
 - No es OpenID Connect: no hay `id_token` ni `/.well-known/openid-configuration`.
-- La dirección pública sale de `APP_ORIGIN`; sin ella, del nombre del pedido (y `https` en producción). En producción conviene fijar `APP_ORIGIN`.
+- La dirección pública sale de `APP_ORIGIN`; en producción es obligatoria (sin ella, apagado). Fuera de producción se deduce del pedido.
+- Por ahora sólo administración conecta asistentes; abrirlo a otros roles sería otra decisión.
 - Sin probar contra una aplicación de asistente real ni contra el servidor público.
 
 ## Dónde está
@@ -110,5 +107,5 @@ Pantalla `asistentes` (Ajustes, visible): la dirección `/mcp` con «Copiar dire
 
 ## Verificación
 
-- `test/mcp-oauth.test.mjs` (4 pruebas): la migración sobre una base ya publicada; validación de regresos y metadatos; descarga del documento sin SSRF; y de punta a punta con el servidor real (17 secciones, citadas en la tabla de garantías).
+- `test/mcp-oauth.test.mjs` (6 pruebas): la migración sobre una base ya publicada; el documento en caché no se bloquea; producción con y sin `APP_ORIGIN`; validación de regresos y metadatos; descarga del documento sin SSRF; y de punta a punta con el servidor real (17 secciones, citadas en la tabla de garantías).
 - `test/ui/asistentes.spec.mjs` (escritorio y celular): la página sin sesión, la página de permiso (marcas, permisos, «Permitir» y regreso con código y `state`) y «Asistentes conectados» con la conexión y «Desconectar», con Tinta medido (`expectNiebla`).

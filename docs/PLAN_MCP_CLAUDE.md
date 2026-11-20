@@ -92,12 +92,12 @@ Ganchos: `server/index.mjs` entrega los módulos al conector en una línea (`mcp
 
 1. En el CRM, abre **Ajustes → Asistentes conectados** y pulsa «Copiar dirección» (es `https://<dominio>/mcp`).
 2. En la aplicación de Claude, agrega un **conector personalizado** y pega esa dirección. No hace falta llenar nada más.
-3. Se abre el CRM en el navegador. Si te lo pide, entra con tu usuario del equipo.
+3. Se abre el CRM en el navegador. Si te lo pide, entra con tu usuario de administración.
 4. Elige **una** marca, deja marcados sólo los permisos que necesitas (los que dejan ver datos personales vienen sin marcar) y pulsa **Permitir**. Vuelves a la aplicación y el conector ya funciona.
 
 Para desconectarlo: **Ajustes → Asistentes conectados → Desconectar**. Deja de funcionar al instante. También deja de funcionar solo si pierdes el acceso a esa marca o te suspenden.
 
-Lo que puedes dar depende de tu acceso: escribir (cursos, conocimiento, borradores) sólo lo da administración; una asesora puede conectar un asistente de consulta en sus marcas. Claude Code también puede conectarse así (`claude mcp add --transport http crm https://<dominio>/mcp`, sin cabecera); la llave de abajo sigue funcionando igual.
+Por ahora **sólo administración** puede conectar asistentes, igual que crear una llave de la API. En producción hace falta que el servidor tenga `APP_ORIGIN`; sin ella la conexión con un clic queda apagada. Claude Code también puede conectarse así (`claude mcp add --transport http crm https://<dominio>/mcp`, sin cabecera); la llave de abajo sigue funcionando igual.
 
 ## Cómo conectarlo
 

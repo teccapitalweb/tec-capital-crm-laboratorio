@@ -86,7 +86,7 @@ export default {
             <h1>Asistentes conectados</h1>
             <p class="k-lead">
               Conecta un asistente (por ejemplo Claude) al CRM con un clic, sin copiar llaves. Cada conexión ve UNA marca y sólo
-              lo que permitas.
+              lo que permitas. Por ahora sólo administración puede conectarlos, igual que crear una llave de la API.
             </p>
           </div>
         </header>
@@ -112,7 +112,7 @@ export default {
                   </div>
                   <ol class="as-pasos">
                     <li>En la aplicación del asistente, agrega un conector personalizado y pega esta dirección.</li>
-                    <li>Se abrirá esta página del CRM: entra con tu usuario si te lo pide.</li>
+                    <li>Se abrirá esta página del CRM: entra con tu usuario de administración si te lo pide.</li>
                     <li>Elige la marca, marca sólo los permisos que necesitas y pulsa «Permitir».</li>
                   </ol>`,
               () =>

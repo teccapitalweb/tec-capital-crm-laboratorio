@@ -34,6 +34,10 @@ export function createRepo(db) {
       'INSERT INTO mcp_oauth_tokens(token_hash,grant_id,kind,scopes,created_at,expires_at) VALUES(?,?,?,?,?,?)',
     ),
     tokenByHash: db.prepare('SELECT * FROM mcp_oauth_tokens WHERE token_hash=?'),
+    // La última ficha de renovación gastada del permiso (la «inmediatamente anterior» a la vigente).
+    lastSpentRefresh: db.prepare(
+      "SELECT token_hash,used_at FROM mcp_oauth_tokens WHERE grant_id=? AND kind='refresh' AND used_at IS NOT NULL ORDER BY used_at DESC,created_at DESC LIMIT 1",
+    ),
     tokenSpend: db.prepare('UPDATE mcp_oauth_tokens SET used_at=? WHERE token_hash=? AND used_at IS NULL'),
   };
   const sweeps = {

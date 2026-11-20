@@ -248,10 +248,13 @@ export function createMetadataFetcher({
   };
 
   // { name, uri, redirects, host }: el nombre declarado y el dominio que publica el documento (ése sí es verificable).
-  async function fetchClient(clientId) {
+  // `beforeDownload()` se llama sólo cuando de verdad hay que descargar (no hay copia vigente en la caché): ahí va el
+  // límite, para que el tráfico de otros nunca bloquee un documento que ya está guardado.
+  async function fetchClient(clientId, { beforeDownload } = {}) {
     const u = documentUrl(clientId);
     const hit = cache.get(clientId);
     if (hit && hit.until > now()) return hit.client;
+    beforeDownload?.();
     const { text, cacheControl } = await download(u);
     let doc;
     try {

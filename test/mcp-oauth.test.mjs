@@ -82,6 +82,116 @@ test('la migración mcp-oauth llega a una base ya publicada sin tocar lo que hab
   assert.ok(!columns.includes('contact_id') && !columns.includes('person_id'), 'sin datos de personas del negocio');
 });
 
+test('un documento de metadatos en caché no se bloquea por el tráfico anónimo de otros', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'crm-oauth-doc-'));
+  let downloads = 0,
+    docBase = '';
+  const docs = await documentServer({
+    '/client.json': (req, res) => {
+      downloads++;
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=600' });
+      res.end(
+        JSON.stringify({
+          client_id: docBase + '/client.json',
+          client_name: 'Asistente publicado',
+          redirect_uris: ['http://localhost/callback'],
+          token_endpoint_auth_method: 'none',
+        }),
+      );
+    },
+  });
+  docBase = docs.base;
+  const invite = randomUUID();
+  const server = await startServer({ dir, env: { ADMIN_INVITE_CODE: invite, MCP_OAUTH_TEST_LOCAL_CLIENTS: '1' } });
+  t.after(async () => {
+    await server.stop();
+    await docs.close();
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+  const admin = (
+    await call(server.origin, '/api/auth/register', {
+      body: { username: 'admin', name: 'Administración', password: PASSWORD, inviteCode: invite },
+    })
+  ).cookie;
+  const query = new URLSearchParams({
+    response_type: 'code',
+    client_id: docBase + '/client.json',
+    redirect_uri: 'http://localhost:9999/callback',
+    code_challenge: pkce().challenge,
+    code_challenge_method: 'S256',
+    state: 'x',
+  });
+  // 40 visitas anónimas al mismo documento (antes: a la 31.ª quedaba bloqueado para todos)
+  for (let i = 0; i < 40; i++) {
+    const r = await fetch(server.origin + '/oauth/authorize?' + query, { redirect: 'manual' });
+    assert.equal(r.status, 200, 'visita ' + (i + 1));
+    assert.match(await r.text(), /Entra al CRM para continuar/);
+  }
+  assert.equal(downloads, 1, 'el documento se descargó una sola vez (caché)');
+  const signed = await fetch(server.origin + '/oauth/authorize?' + query, {
+    redirect: 'manual',
+    headers: { Cookie: admin },
+  });
+  assert.equal(signed.status, 200);
+  assert.match(await signed.text(), /¿Permitir que este asistente use el CRM\?/);
+});
+
+test('en producción OAuth sólo se anuncia con APP_ORIGIN, y nunca toma la dirección de la cabecera Host', async t => {
+  const env = { NODE_ENV: 'production', ADMIN_INVITE_CODE: randomUUID() };
+  // sin APP_ORIGIN: apagado y diciendo por qué
+  const dirOff = await mkdtemp(join(tmpdir(), 'crm-oauth-off-'));
+  const off = await startServer({ dir: dirOff, env });
+  t.after(async () => {
+    await off.stop();
+    await rm(dirOff, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+  for (const path of ['/.well-known/oauth-protected-resource/mcp', '/.well-known/oauth-authorization-server'])
+    assert.equal((await fetch(off.origin + path)).status, 404, path);
+  const noAuth = await fetch(off.origin + '/mcp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }),
+  });
+  assert.equal(noAuth.status, 401);
+  assert.equal(noAuth.headers.get('www-authenticate'), null, 'sin invitación a OAuth');
+  const reg = await fetch(off.origin + '/oauth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_name: 'X', redirect_uris: ['https://a.example/cb'] }),
+  });
+  assert.equal(reg.status, 503);
+  assert.equal((await fetch(off.origin + '/oauth/authorize?client_id=x', { redirect: 'manual' })).status, 503);
+  assert.equal((await fetch(off.origin + '/oauth/token', { method: 'POST' })).status, 503);
+  assert.match(off.logs(), /APP_ORIGIN es obligatorio/);
+
+  // con APP_ORIGIN: lo anuncia con esa dirección aunque la cabecera Host diga otra cosa, y sin caché
+  const dirOn = await mkdtemp(join(tmpdir(), 'crm-oauth-on-'));
+  const on = await startServer({ dir: dirOn, env: { ...env, APP_ORIGIN: 'https://crm.example.com' } });
+  t.after(async () => {
+    await on.stop();
+    await rm(dirOn, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+  const get = path =>
+    new Promise((resolve, reject) => {
+      const u = new URL(on.origin + path);
+      http
+        .get({ host: u.hostname, port: u.port, path, headers: { Host: 'evil.example' } }, res => {
+          let text = '';
+          res.on('data', c => (text += c));
+          res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text }));
+        })
+        .on('error', reject);
+    });
+  const prm = await get('/.well-known/oauth-protected-resource/mcp');
+  assert.equal(prm.status, 200);
+  assert.equal(prm.headers['cache-control'], 'no-store');
+  assert.equal(JSON.parse(prm.text).resource, 'https://crm.example.com/mcp');
+  const as = await get('/.well-known/oauth-authorization-server');
+  assert.equal(as.headers['cache-control'], 'no-store');
+  assert.equal(JSON.parse(as.text).issuer, 'https://crm.example.com');
+  assert.ok(!prm.text.includes('evil.example') && !as.text.includes('evil.example'));
+});
+
 test('las direcciones de regreso y los metadatos de una aplicación se validan estrictamente', () => {
   const ok = 'https://app.example.com/cb';
   assert.equal(redirectAllowed([ok], ok), true);
@@ -358,6 +468,7 @@ test('conectar un asistente con un clic: descubrimiento, permiso, fichas, renova
   assert.deepEqual(as.token_endpoint_auth_methods_supported, ['none']);
   assert.equal(as.client_id_metadata_document_supported, true);
   assert.equal((await rawFetch('/.well-known/otra-cosa')).status, 404);
+  assert.equal((await rawFetch('/.well-known/oauth-authorization-server')).headers.get('cache-control'), 'no-store');
 
   // ---- 2) el 401 de /mcp dice dónde empezar
   const anon = await mcp(null, 'ping');
@@ -425,16 +536,27 @@ test('conectar un asistente con un clic: descubrimiento, permiso, fichas, renova
     assert.equal(r.location, null, 'sin redirección a una dirección sin comprobar');
     assert.match(r.text, /No se pudo conectar el asistente/);
   }
-  // …y después, vuelven a la aplicación con el error de OAuth
-  const errorOf = async params => new URL((await page(params, admin)).location).searchParams.get('error');
-  assert.equal(await errorOf({ ...base, response_type: 'token' }), 'unsupported_response_type');
-  assert.equal(await errorOf({ ...base, code_challenge: undefined }), 'invalid_request');
-  assert.equal(await errorOf({ ...base, code_challenge_method: 'plain' }), 'invalid_request');
-  assert.equal(await errorOf({ ...base, resource: 'https://otro.example/mcp' }), 'invalid_target');
-  assert.equal(
-    (await page({ ...base, response_type: 'token' }, admin)).location.startsWith('http://127.0.0.1:5555/callback?'),
-    true,
-  );
+  // …y TODOS los demás errores antes del permiso también: nunca se redirige sola a una aplicación que se registró sola
+  // (RFC 9700 §4.11.2). La repetición del revisor: una «aplicación» con regreso a un sitio de engaño y una dirección
+  // de autorización mal formada a propósito, abierta por alguien sin sesión.
+  const phish = await (await register({ client_name: 'Trampa', redirect_uris: ['https://evil.example/phish'] })).json();
+  const phishBase = { ...base, client_id: phish.client_id, redirect_uri: 'https://evil.example/phish' };
+  for (const [what, params] of [
+    ['response_type', { response_type: 'token' }],
+    ['sin PKCE', { code_challenge: '' }],
+    ['PKCE plain', { code_challenge_method: 'plain' }],
+    ['otro recurso', { resource: 'https://otro.example/mcp' }],
+    ['state largo', { state: 'x'.repeat(501) }],
+  ])
+    for (const cookie of ['', admin]) {
+      const r = await page({ ...phishBase, ...params }, cookie);
+      assert.equal(r.status, 400, what);
+      assert.equal(r.location, null, what + ': sin Location');
+      assert.match(r.text, /No se pudo conectar el asistente/, what);
+    }
+  const twice = await rawFetch(authorizePath(phishBase) + '&response_type=code', { headers: { Cookie: admin } });
+  assert.equal(twice.status, 400, 'parámetro repetido');
+  assert.equal(twice.headers.get('location'), null);
 
   // ---- 5) sin sesión: entrar; cliente: no puede; página protegida contra marcos y caché
   const noSession = await page(base);
@@ -582,12 +704,33 @@ test('conectar un asistente con un clic: descubrimiento, permiso, fichas, renova
   assert.equal(t2.status, 200, JSON.stringify(t2.body));
   assert.notEqual(t2.body.refresh_token, t1.body.refresh_token);
   assert.equal((await mcp(t2.body.access_token, 'ping')).status, 200);
+  // la inmediatamente anterior, dentro de los 10 s: se rechaza SIN revocar (renovación en paralelo de la aplicación)
+  const graced = await refresh(t1.body.refresh_token);
+  assert.equal(graced.status, 400);
+  assert.equal(graced.body.error, 'invalid_grant');
+  assert.equal((await mcp(t2.body.access_token, 'ping')).status, 200, 'la ganadora sigue conectada');
+  // cuatro renovaciones a la vez de la misma ficha: una gana y las demás no desconectan a nadie
+  const racers = await Promise.all([1, 2, 3, 4].map(() => refresh(t2.body.refresh_token)));
+  const winners = racers.filter(r => r.status === 200);
+  assert.equal(winners.length, 1, 'gana una');
+  assert.ok(racers.filter(r => r.status !== 200).every(r => r.body.error === 'invalid_grant'));
+  const tWin = winners[0];
+  assert.equal((await mcp(tWin.body.access_token, 'ping')).status, 200, 'la ganadora sigue sirviendo');
+  assert.ok(!db.prepare("SELECT 1 FROM audit WHERE action='mcp.oauth.refresh_reuse'").get(), 'nada revocado');
+  // una ficha MÁS VIEJA que la anterior: robo → se revoca todo
   const reuse = await refresh(t1.body.refresh_token);
   assert.equal(reuse.status, 400);
   assert.equal(reuse.body.error, 'invalid_grant');
-  assert.equal((await mcp(t2.body.access_token, 'ping')).status, 401, 'la reutilización revocó el permiso entero');
-  assert.equal((await refresh(t2.body.refresh_token)).body.error, 'invalid_grant');
+  assert.equal((await mcp(tWin.body.access_token, 'ping')).status, 401, 'la reutilización revocó el permiso entero');
+  assert.equal((await refresh(tWin.body.refresh_token)).body.error, 'invalid_grant');
   assert.ok(db.prepare("SELECT 1 FROM audit WHERE action='mcp.oauth.refresh_reuse'").get());
+  // la inmediatamente anterior pero fuera de los 10 s: también se revoca todo
+  const gw = await grant({ client: client.client_id, redirect: loop });
+  const tw1 = (await exchange(gw)).body;
+  const tw2 = (await refresh(tw1.refresh_token)).body;
+  db.prepare('UPDATE mcp_oauth_tokens SET used_at=used_at-11000 WHERE token_hash=?').run(sha(tw1.refresh_token));
+  assert.equal((await refresh(tw1.refresh_token)).body.error, 'invalid_grant');
+  assert.equal((await mcp(tw2.access_token, 'ping')).status, 401, 'pasado el margen, reutilizar revoca');
 
   // ---- 8b) los permisos van en cada ficha: una ficha acotada no recupera los demás, renovar no amplía y lo que la
   // persona pierde después también se le quita a la ficha
@@ -624,22 +767,18 @@ test('conectar un asistente con un clic: descubrimiento, permiso, fichas, renova
   assert.equal(kept.status, 200, JSON.stringify(kept.body));
   assert.equal(kept.body.scope, 'editions catalog_write', 'sin scope, la renovación conserva lo de la ficha anterior');
   assert.match((await tool(kept.body.access_token, 'listar_pedidos')).error, /no tiene el permiso/);
-  // la persona deja de poder dar «modificar cursos» (deja de ser administración, sigue atendiendo la marca)
+  // la persona deja de ser administración (sigue atendiendo la marca): conectar asistentes es de administración, así
+  // que la ficha deja de servir y no se renueva; al volver, la ficha sigue acotada a lo que se emitió
   const adminRow = db.prepare("SELECT id FROM users WHERE username='admin'").get().id;
   db.prepare("UPDATE users SET role='agent' WHERE id=?").run(adminRow);
   db.prepare("INSERT INTO brand_members(user_id,brand_id) VALUES(?,'globalvet')").run(adminRow);
-  assert.deepEqual((await tool(kept.body.access_token, 'resumen')).permisos, ['editions']);
-  assert.match(
-    (await tool(kept.body.access_token, 'actualizar_curso', { cursoId: 'aves', version: 1 })).error,
-    /no tiene el permiso/,
-  );
-  const after = await refresh(kept.body.refresh_token);
-  assert.equal(after.body.scope, 'editions', 'tampoco vuelve al renovar');
+  assert.equal((await mcp(kept.body.access_token, 'ping')).status, 401, 'sin el permiso, la ficha ya no sirve');
+  assert.equal((await refresh(kept.body.refresh_token)).body.error, 'invalid_grant', 'ni se renueva');
   db.prepare("UPDATE users SET role='admin' WHERE id=?").run(adminRow);
   db.prepare("DELETE FROM brand_members WHERE user_id=? AND brand_id='globalvet'").run(adminRow);
   assert.deepEqual(
-    (await tool(after.body.access_token, 'resumen')).permisos,
-    ['editions'],
+    (await tool(kept.body.access_token, 'resumen')).permisos,
+    ['editions', 'catalog_write'],
     'una ficha emitida con menos no recupera nada aunque la persona vuelva a poder',
   );
 
@@ -711,69 +850,36 @@ test('conectar un asistente con un clic: descubrimiento, permiso, fichas, renova
     'revocar algo desconocido no dice nada',
   );
 
-  // ---- 11) la asesora: sólo lo que puede dar, sólo en su marca, y deja de servir si pierde el acceso
+  // ---- 11) conectar asistentes es de administración: la asesora ve un aviso claro y no puede aprobar forjando el
+  // formulario; quien conectó deja de poder usarlo si la suspenden o deja de ser administración
   const agentConsent = await page(base, agent);
-  assert.match(agentConsent.text, /value="editions"/);
-  for (const adminOnly of ['catalog_write', 'knowledge', 'automation_drafts'])
-    assert.ok(!agentConsent.text.includes(`value="${adminOnly}"`), adminOnly + ' no se ofrece');
-  assert.ok(!agentConsent.text.includes('value="odonteck"'), 'sólo sus marcas');
-  const ar = attr(agentConsent.text, 'request'),
-    ac = attr(agentConsent.text, 'csrf');
-  const escalate = await decide(agent, {
-    request: ar,
-    csrf: ac,
+  assert.equal(agentConsent.status, 200);
+  assert.match(agentConsent.text, /sólo administración puede conectar asistentes/);
+  assert.equal(attr(agentConsent.text, 'request'), undefined, 'no se abre ninguna solicitud');
+  assert.ok(!/name="brand"|name="scope"/.test(agentConsent.text), 'sin marcas ni permisos');
+  const adminPage = await page(base, admin);
+  const forged = {
+    request: attr(adminPage.text, 'request'),
+    csrf: attr(adminPage.text, 'csrf'),
     decision: 'allow',
     brandId: 'globalvet',
-    scopes: ['editions', 'catalog_write'],
-  });
-  assert.equal(escalate.status, 403, 'pedir de más');
-  assert.equal(
-    (await decide(agent, { request: ar, csrf: ac, decision: 'allow', brandId: 'odonteck', scopes: ['editions'] }))
-      .status,
-    404,
-    'marca ajena',
-  );
-  const ga = await grant({
-    cookie: agent,
-    client: client.client_id,
-    redirect: loop,
-    scopes: ['editions', 'conversations'],
-  });
-  const ta = (await exchange(ga)).body;
-  assert.equal(ta.scope, 'editions conversations');
-  assert.deepEqual((await tool(ta.access_token, 'resumen')).permisos, ['editions', 'conversations']);
+    scopes: ['editions'],
+  };
+  assert.equal((await decide(agent, forged)).status, 400, 'la solicitud de otra persona no le sirve');
+  assert.equal((await decide(agent, { ...forged, request: randomUUID() })).status, 400, 'una inventada tampoco');
   const agentId = db.prepare("SELECT id FROM users WHERE username='asesora'").get().id;
-  // pierde la marca → la ficha deja de servir; la renovación también
-  await call(origin, '/api/team/members/' + agentId, {
-    cookie: admin,
-    method: 'PATCH',
-    body: { brandIds: ['odonteck'] },
-  });
-  assert.equal((await mcp(ta.access_token, 'ping')).status, 401);
-  assert.equal((await refresh(ta.refresh_token)).body.error, 'invalid_grant');
-  // suspendida → tampoco (otro permiso, de antes de suspenderla)
-  await call(origin, '/api/team/members/' + agentId, {
-    cookie: admin,
-    method: 'PATCH',
-    body: { brandIds: ['globalvet'] },
-  });
-  agent = (await call(origin, '/api/auth/login', { body: { username: 'asesora', password: PASSWORD } })).cookie;
-  const gb = await grant({ cookie: agent, client: client.client_id, redirect: loop });
+  // la asesora pasa a administración, conecta, y luego la suspenden o vuelve a ser asesora
+  db.prepare("UPDATE users SET role='admin' WHERE id=?").run(agentId);
+  const gb = await grant({ cookie: agent, client: client.client_id, redirect: loop, scopes: ['editions', 'contacts'] });
   const tb = (await exchange(gb)).body;
-  assert.equal((await mcp(tb.access_token, 'ping')).status, 200);
-  await call(origin, '/api/team/members/' + agentId, {
-    cookie: admin,
-    method: 'PATCH',
-    body: { brandIds: ['globalvet'], disabled: true },
-  });
-  assert.equal((await mcp(tb.access_token, 'ping')).status, 401);
-  await call(origin, '/api/team/members/' + agentId, {
-    cookie: admin,
-    method: 'PATCH',
-    body: { brandIds: ['globalvet'] },
-  });
-  agent = (await call(origin, '/api/auth/login', { body: { username: 'asesora', password: PASSWORD } })).cookie;
+  assert.deepEqual((await tool(tb.access_token, 'resumen')).permisos, ['contacts', 'editions']);
+  db.prepare('UPDATE users SET disabled=1 WHERE id=?').run(agentId);
+  assert.equal((await mcp(tb.access_token, 'ping')).status, 401, 'suspendida');
+  assert.equal((await refresh(tb.refresh_token)).body.error, 'invalid_grant');
+  db.prepare('UPDATE users SET disabled=0 WHERE id=?').run(agentId);
   assert.equal((await mcp(tb.access_token, 'ping')).status, 200, 'el acceso se mira en cada uso');
+  db.prepare("UPDATE users SET role='agent' WHERE id=?").run(agentId);
+  assert.equal((await mcp(tb.access_token, 'ping')).status, 401, 'una asesora no puede tener asistentes conectados');
 
   // ---- 12) «Asistentes conectados»: administración ve todo lo de sus marcas; los demás, lo suyo
   const adminList = await call(origin, '/api/mcp-oauth/connections', { cookie: admin });

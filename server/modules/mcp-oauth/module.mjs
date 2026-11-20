@@ -38,15 +38,12 @@ export const OAUTH_LIMITS = Object.freeze({
   revokePerMinute: 60,
 });
 
-// Lo que necesita en la marca quien concede cada permiso. Lo que no está aquí (escribir, el conocimiento y cualquier
-// permiso nuevo del conector) pide lo mismo que crear una llave de la API: administración.
-const NEEDS = {
-  editions: 'inbox.view',
-  conversations: 'inbox.view',
-  contacts: 'contacts.phone',
-  orders: 'sales.charge',
-};
+// Conectar un asistente es, por ahora, cosa de administración, igual que crear una llave de la API: cualquier
+// permiso, también los de lectura, exige este permiso del catálogo en esa marca.
 const ADMIN_PERMISSION = 'developer.keys.manage';
+// Una renovación en paralelo de la MISMA ficha (la aplicación lo hace a veces) no se trata como robo durante este
+// rato: la perdedora recibe invalid_grant sin revocar nada. Fuera de él, o con una ficha más vieja, se revoca todo.
+const REFRESH_GRACE_MS = 10_000;
 // Permisos que dejan ver datos personales: nunca vienen marcados.
 const PERSONAL = new Set(['contacts', 'conversations', 'orders']);
 const PRECHECKED = ['editions'];
@@ -75,24 +72,32 @@ export default {
     const { db, transaction, fail, json, audit, rate, access } = host;
     const repo = createRepo(db);
     const now = () => Date.now();
-    const disabled = process.env.MCP_OAUTH_DISABLED === '1';
+    // ---- dirección pública. En producción sale SÓLO de APP_ORIGIN: sin ella no se anuncia OAuth (nada de tomar la
+    // dirección de la cabecera Host, que la escribe quien llama). Fuera de producción (pruebas, uso local) se deduce del
+    // pedido.
+    const configured = String(process.env.APP_ORIGIN || '')
+      .split(',')[0]
+      .trim()
+      .replace(/\/+$/, '');
+    const fixedOrigin = /^https?:\/\/[^\s/]+$/.test(configured) ? new URL(configured).origin : null;
+    const missingOrigin = Boolean(host.production) && !fixedOrigin;
+    const disabled = process.env.MCP_OAUTH_DISABLED === '1' || missingOrigin;
+    const REQUIRED =
+      'mcp-oauth: APP_ORIGIN es obligatorio en producción para conectar asistentes con OAuth; queda apagado (las llaves de la API siguen funcionando).';
+    if (missingOrigin) console.error(REQUIRED);
+    let lastRefusalLog = 0;
     // Sólo las pruebas: la aplicación de mentira publica su documento en http://127.0.0.1.
     const allowLocal = process.env.NODE_ENV === 'test' && process.env.MCP_OAUTH_TEST_LOCAL_CLIENTS === '1';
     const fetcher = createMetadataFetcher({ allowLocal });
     // Los permisos del conector: los de sus herramientas, en el orden de la pantalla de llaves.
     const MCP_SCOPES = Object.keys(SCOPES).filter(s => TOOLS.some(t => t.scope === s));
 
-    // ---- dirección pública: APP_ORIGIN o, sin ella, la del propio pedido (https en producción).
     function originOf(req) {
-      const set = String(process.env.APP_ORIGIN || '')
-        .split(',')[0]
-        .trim()
-        .replace(/\/+$/, '');
-      if (/^https?:\/\/[^\s/]+$/.test(set)) return new URL(set).origin;
+      if (fixedOrigin) return fixedOrigin;
       const name = String(req.headers.host || '')
         .toLowerCase()
         .replace(/[^a-z0-9.:\-\[\]]/g, '');
-      const secure = host.production || req.socket?.encrypted || req.headers['x-forwarded-proto'] === 'https';
+      const secure = req.socket?.encrypted || req.headers['x-forwarded-proto'] === 'https';
       return (secure ? 'https' : 'http') + '://' + name;
     }
     const resourceOf = req => originOf(req) + '/mcp';
@@ -113,8 +118,7 @@ export default {
     // ---- quién puede conceder qué
     const userRow = id => db.prepare('SELECT * FROM users WHERE id=?').get(id);
     const isStaff = u => u && !u.disabled && ['admin', 'agent'].includes(u.role);
-    const grantable = (user, brandId) =>
-      MCP_SCOPES.filter(s => access.can(user, NEEDS[s] ?? ADMIN_PERMISSION, brandId));
+    const grantable = (user, brandId) => (access.can(user, ADMIN_PERMISSION, brandId) ? [...MCP_SCOPES] : []);
     // Los permisos que siguen valiendo HOY de un permiso concedido: [] si la persona ya no puede nada en esa marca.
     function effective(grant) {
       const u = userRow(grant.user_id);
@@ -184,10 +188,13 @@ export default {
     };
 
     // ---- aplicaciones
-    async function resolveClient(clientId) {
+    async function resolveClient(clientId, ip) {
       if (/^https?:\/\//.test(clientId)) {
-        rate('oauth-document:' + sha(clientId).slice(0, 16), 30);
-        const c = await fetcher.fetchClient(clientId);
+        // El límite cuenta sólo descargas reales, por dirección y documento: un documento en caché nunca se bloquea
+        // por el tráfico de otras personas.
+        const c = await fetcher.fetchClient(clientId, {
+          beforeDownload: () => rate('oauth-document:' + ip + ':' + sha(clientId).slice(0, 16), 30),
+        });
         return { id: clientId, kind: 'document', name: c.name, uri: c.uri, host: c.host, redirects: c.redirects };
       }
       const row = /^tcc_[A-Za-z0-9_-]{22,64}$/.test(clientId) ? repo.clientById.get(clientId) : null;
@@ -237,10 +244,10 @@ export default {
         sendOauth(res, 405, { error: 'invalid_request' }, { Allow: 'GET' });
         return true;
       }
-      // Metadatos públicos: se pueden leer desde cualquier origen.
+      // Metadatos públicos: se pueden leer desde cualquier origen; nunca se guardan en cachés intermedias.
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': 'public, max-age=300',
+        'Cache-Control': 'no-store',
         'Access-Control-Allow-Origin': '*',
       });
       res.end(req.method === 'HEAD' ? undefined : JSON.stringify(doc));
@@ -256,66 +263,49 @@ export default {
         if (all.length > 1) throw fail(400, 'El parámetro «' + name + '» viene repetido.');
         return all[0] ?? '';
       };
-      // Hasta comprobar la aplicación y su dirección de regreso, los errores se muestran AQUÍ (nunca se redirige a una
-      // dirección sin comprobar).
-      let client, redirectUri;
+      // TODOS los errores antes del permiso se muestran AQUÍ, sin redirigir: la aplicación pudo registrarse sola con
+      // cualquier dirección de regreso, así que mandar a alguien ahí sin que haya hecho nada sería prestar el CRM como
+      // redirector (RFC 9700 §4.11.2). Sólo se vuelve a la aplicación después de «Permitir» o «Cancelar».
+      let client, redirectUri, challenge, state, resource;
       try {
         const clientId = one('client_id');
         if (!clientId) throw fail(400, 'Falta el identificador de la aplicación (client_id).');
-        client = await resolveClient(clientId);
+        client = await resolveClient(clientId, ip);
         redirectUri = one('redirect_uri');
         if (!redirectUri || !redirectAllowed(client.redirects, redirectUri))
           throw fail(400, 'La dirección de regreso no coincide con la que registró la aplicación.');
+        state = one('state');
+        if (state.length > 500) throw fail(400, 'El dato «state» es demasiado largo.');
+        for (const name of ['response_type', 'code_challenge', 'code_challenge_method', 'resource', 'scope']) one(name);
+        if (p.get('response_type') !== 'code')
+          throw fail(400, 'La aplicación pidió un tipo de respuesta que el CRM no admite (sólo «code»).');
+        challenge = p.get('code_challenge') ?? '';
+        if (p.get('code_challenge_method') !== 'S256' || !/^[A-Za-z0-9_-]{43}$/.test(challenge))
+          throw fail(400, 'La aplicación no usó PKCE con S256, que el CRM exige.');
+        resource = resourceOf(req);
+        if (p.has('resource') && canonical(p.get('resource')) !== resource)
+          throw fail(400, 'La aplicación pidió permiso para otro servicio; este CRM sólo autoriza ' + resource + '.');
       } catch (e) {
         if (!e.status) throw e;
         sendHtml(res, 400, errorPage(e.message));
         return;
       }
-      const state = p.get('state') ?? '';
-      const back = (error, description) => {
-        res.writeHead(302, {
-          Location: withParams(redirectUri, {
-            error,
-            error_description: description,
-            state,
-            iss: originOf(req),
-          }),
-        });
-        res.end();
-      };
-      if (state.length > 500 || p.getAll('state').length > 1) return back('invalid_request', 'state no válido.');
-      for (const name of ['response_type', 'code_challenge', 'code_challenge_method', 'resource', 'scope'])
-        if (p.getAll(name).length > 1) return back('invalid_request', 'Parámetro repetido: ' + name);
-      if (p.get('response_type') !== 'code') return back('unsupported_response_type', 'Sólo response_type=code.');
-      const challenge = p.get('code_challenge') ?? '';
-      if (p.get('code_challenge_method') !== 'S256' || !/^[A-Za-z0-9_-]{43}$/.test(challenge))
-        return back('invalid_request', 'PKCE es obligatorio: code_challenge con code_challenge_method=S256.');
-      const resource = resourceOf(req);
-      if (p.has('resource') && canonical(p.get('resource')) !== resource)
-        return back('invalid_target', 'Este servidor sólo autoriza el recurso ' + resource + '.');
 
       const user = host.readSession(req);
       if (!user) return sendHtml(res, 200, loginPage(client));
-      if (!isStaff(user))
-        return sendHtml(
-          res,
-          200,
-          notAllowedPage(
-            user,
-            'Sólo el equipo de una marca puede conectar asistentes. Las cuentas de clientes y las suspendidas no pueden.',
-          ),
-        );
-      const brands = access
-        .brandIds(user)
-        .map(id => ({ id, scopes: grantable(user, id) }))
-        .filter(b => b.scopes.length);
+      const brands = isStaff(user)
+        ? access
+            .brandIds(user)
+            .map(id => ({ id, scopes: grantable(user, id) }))
+            .filter(b => b.scopes.length)
+        : [];
       if (!brands.length)
         return sendHtml(
           res,
           200,
           notAllowedPage(
             user,
-            'Tu acceso no permite conectar asistentes en ninguna marca. Pide ayuda a administración.',
+            'Por ahora sólo administración puede conectar asistentes al CRM, igual que crear una llave de la API. Pide a una persona de administración que lo conecte.',
           ),
         );
       const csrf = newToken('');
@@ -532,7 +522,12 @@ export default {
         if (!clientId || clientId !== grant.client_id)
           throw oauthError(400, 'invalid_grant', 'Ficha de otra aplicación.');
         // Rotación: cada ficha de renovación sirve una vez. Si llega una ya usada, alguien la copió: se revoca todo.
+        // Excepción: la inmediatamente anterior, dentro de los 10 segundos de su rotación, es una renovación en paralelo
+        // de la propia aplicación; se rechaza sin revocar, para no desconectar a quien ganó.
         const reused = () => {
+          const last = repo.lastSpentRefresh.get(grant.id);
+          if (last && last.token_hash === row.token_hash && now() - last.used_at <= REFRESH_GRACE_MS)
+            return oauthError(400, 'invalid_grant', 'Esta ficha de renovación acaba de usarse; usa la nueva.');
           revokeGrant(grant.id, null, 'refresh_reuse');
           audit(null, 'mcp.oauth.refresh_reuse', grant.id);
           return oauthError(400, 'invalid_grant', 'Esta ficha de renovación ya se usó; el permiso quedó revocado.');
@@ -614,6 +609,18 @@ export default {
     }
 
     async function handlePublic(req, res, path, url, ip) {
+      if (missingOrigin && /^\/oauth\/(authorize|decision|token|register|revoke)$/.test(path)) {
+        // Producción sin APP_ORIGIN: apagado y diciendo por qué (en el registro, como mucho una vez por minuto).
+        if (now() - lastRefusalLog > 60_000) {
+          lastRefusalLog = now();
+          console.error(REQUIRED);
+        }
+        sendOauth(res, 503, {
+          error: 'temporarily_unavailable',
+          error_description: 'La conexión con un clic está apagada en este servidor.',
+        });
+        return true;
+      }
       if (disabled) return false;
       const routes = {
         '/oauth/authorize': ['GET', () => authorize(req, res, url, ip)],
