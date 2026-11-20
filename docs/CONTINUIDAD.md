@@ -34,6 +34,15 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Paso «Inscribir en secuencia» de los recorridos (construido el 20 nov 2026, sin publicar)
+
+- **Qué había:** una persona entraba a una secuencia de seguimiento sólo por su disparador o a mano desde el chat. El módulo de secuencias ya ofrecía `enrollInTx` para inscribir desde otro módulo, pero ningún paso de los recorridos lo usaba.
+- **Qué se hizo:** tipo de paso `sequence` en `public/kit/shared/flow-model.js` (grupo Contacto; un campo, la secuencia; una salida, «Sigue»); lo ejecuta `server/modules/chatflows/engine.mjs` y lo inscribe `runtime.mjs` dentro de la transacción del recorrido, con la referencia `flow:<sesión>:<paso>` para no inscribir dos veces. Cómo salió queda en el detalle de la salida del paso (`enrolled`, `duplicate`, `refused:<motivo>`). La lista `sequences` llega al editor por `/api/chatflows/lists`.
+- **Reglas:** sin secuencia elegida, de otra marca o archivada, el recorrido no se publica; una secuencia apagada sólo avisa (se puede encender después). En marcha, ninguna negativa detiene el recorrido. «Probar» no inscribe a nadie: lo dice en una nota.
+- **Cambio en secuencias:** una secuencia ya no habla mientras un recorrido atiende la conversación: el paso espera con el motivo `flow_active` y vuelve a mirar cada 10 minutos (un recorrido termina como mucho a las 24 horas). Vale para todas las secuencias, no sólo para las que inscribe un recorrido.
+- **Verificado en local:** `npm run check`, 737 pruebas de servidor y 79 de navegador; el paso se revisó a mano en el editor (lista de tipos, formulario, aviso sin secuencias y error «Elige la secuencia»).
+- **Falta:** publicarlo («Sí, publicar») y probarlo con WhatsApp real.
+
 ## Cierre de la venta: del comprobante al acceso (publicado en `main`, 20 nov 2026)
 
 - **Qué había:** el comprobante por el chat (también por WhatsApp real), su cola en Operación → Pagos y la confirmación con inscripción ya existían. Faltaba entregar los accesos (la confirmación sólo decía que «el equipo coordinador» los enviaría) y validar sin salir del chat.
