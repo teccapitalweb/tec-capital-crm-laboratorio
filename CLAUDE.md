@@ -98,11 +98,11 @@ npm start
 
 `npm run check` comprueba codificación (UTF-8, LF), sintaxis y formato (Prettier); antes de entregar, `npx prettier --write` sobre lo que tocaste.
 
-La referencia vigente es **737 pruebas aprobadas** más 79 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **743 pruebas aprobadas** más 81 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
 
-**20 nov 2026 (paso «¿Qué curso te interesa?»):** el paso de los recorridos que pregunta el curso ya lo ejecuta el servidor (antes se rechazaba al publicar): pasa de largo si la conversación ya tiene curso, toma el que nombra el mensaje inicial o pregunta con la misma lista numerada del asistente; salidas «Curso elegido», «Ninguno» y sin respuesta. Sin esquema nuevo ni opciones nuevas en el editor. Construido en la rama local y **sin publicar**. Guía en [GUIA_RECORRIDOS.md](docs/GUIA_RECORRIDOS.md); decisiones en [PLAN_RECORRIDOS.md](docs/PLAN_RECORRIDOS.md) y [PLAN_NUMERO_POR_CONSULTORA.md](docs/PLAN_NUMERO_POR_CONSULTORA.md).
+**20 nov 2026 (paso «¿Qué curso te interesa?»):** el paso de los recorridos que pregunta el curso ya lo ejecuta el servidor (antes se rechazaba al publicar): pasa de largo si la conversación ya tiene curso, toma el que nombra el mensaje inicial o pregunta con la misma lista numerada del asistente; salidas «Curso elegido», «Ninguno» y sin respuesta. Sin esquema nuevo ni opciones nuevas en el editor. Se **publicó** en `main` (commit `822114d`); falta probarlo con un número real que atienda toda la marca. Guía en [GUIA_RECORRIDOS.md](docs/GUIA_RECORRIDOS.md); decisiones en [PLAN_RECORRIDOS.md](docs/PLAN_RECORRIDOS.md) y [PLAN_NUMERO_POR_CONSULTORA.md](docs/PLAN_NUMERO_POR_CONSULTORA.md).
 
 **20 nov 2026 (cobertura completa de Tinta):** pasada de diseño sobre todas las pantallas del equipo (184 vistas y 42 ventanas medidas en computadora y celular): se corrigió lo que conservaba el aspecto anterior (Preparar marca, Flujo de bienvenida, asistente de curso, ficha de contacto, horarios, cola, Mi configuración, avatares y más). Sólo CSS, en la sección 11 de `public/tinta-vistas.css`; ninguna opción cambia. Se **publicó** en `main` (commit `6fa9159`). Detalle en [DISENO_Y_AUDITORIA.md](docs/DISENO_Y_AUDITORIA.md).
 
