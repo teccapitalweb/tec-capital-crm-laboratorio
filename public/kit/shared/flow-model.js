@@ -296,6 +296,15 @@ export const REF_SOURCES = Object.freeze({
     notReady: 'ya no tiene acceso a esta marca',
   },
   courses: { id: 'id', name: 'title', noun: 'el curso' },
+  // Secuencias de seguimiento de la marca. Una archivada ya no recibe a nadie; una apagada sí se puede elegir (se
+  // avisa al revisar: mientras siga apagada nadie entra y el recorrido sigue).
+  sequences: {
+    id: 'id',
+    name: 'name',
+    noun: 'la secuencia',
+    ready: s => s.archived !== true,
+    notReady: 'está archivada',
+  },
   attributes: {
     id: 'key',
     name: 'label',
@@ -1738,6 +1747,38 @@ const TYPES = {
     ],
   },
 
+  // Inscribe la conversación en una secuencia de seguimiento de la marca (server/modules/sequences) y el recorrido
+  // sigue. Si la persona no puede entrar, el recorrido sigue igual y el motivo queda anotado en el paso.
+  sequence: {
+    label: 'Inscribir en secuencia',
+    group: 'contacto',
+    icon: 'send',
+    hint: 'Inscribe a la persona en una secuencia de seguimiento y el recorrido sigue.',
+    defaults: () => ({ sequenceId: '' }),
+    clean: d => ({ sequenceId: text(d.sequenceId) }),
+    ports: () => [NEXT],
+    refs: d => [['sequences', d.sequenceId, 'sequenceId']],
+    validate: (d, env) =>
+      refProblems(
+        d.sequenceId,
+        'sequences',
+        { field: 'sequenceId', missing: 'Elige la secuencia en la que entra la persona.' },
+        env,
+      ),
+    summary: (d, ctx) =>
+      refName(ctx, 'sequences', d.sequenceId) || (d.sequenceId ? 'Secuencia elegida' : 'Sin secuencia elegida'),
+    fields: [
+      {
+        key: 'sequenceId',
+        kind: 'ref',
+        label: 'Secuencia',
+        source: 'sequences',
+        none: 'La marca todavía no tiene secuencias de seguimiento: créalas en la pantalla Secuencias.',
+        help: 'Si la persona no puede entrar (ya está en esa secuencia, ya se inscribió al curso, pidió no recibir mensajes, la secuencia es de otro curso o está apagada), el recorrido sigue igual.',
+      },
+    ],
+  },
+
   consent: {
     label: 'Suscribir · Dar de baja',
     group: 'contacto',
@@ -2963,6 +3004,18 @@ export function validateGraph(graph, ctx = {}) {
         nodeId: n.id,
         message: `Se suscribe a la persona sin que haya respondido nada en este recorrido: ${tip}.`,
       });
+    }
+    if (n.type === 'sequence') {
+      // Apagada no impide publicar (se puede encender después), pero mientras siga así nadie entra.
+      const seq = findRef(context, 'sequences', data(n).sequenceId);
+      if (seq && seq.archived !== true && seq.enabled === false) {
+        const what = `La secuencia ${quote(String(seq.name ?? ''))} está apagada`;
+        warnings.push({
+          code: 'sequence_off',
+          nodeId: n.id,
+          message: `${what}: mientras siga así nadie entra y el recorrido sigue al paso siguiente. Se enciende en Secuencias.`,
+        });
+      }
     }
     if (otherChannels && (n.type === 'list' || n.type === 'template')) {
       const what = n.type === 'list' ? 'esta lista' : 'esta plantilla';

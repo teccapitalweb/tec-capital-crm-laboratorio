@@ -325,6 +325,19 @@ const RUN = {
     go(env, s, node, 'next');
   },
 
+  sequence(env, s, node) {
+    const found = findRef(env.catalogue, 'sequences', node.data.sequenceId);
+    const name = found ? `la secuencia «${found.name}»` : 'la secuencia elegida';
+    note(
+      s,
+      node,
+      found?.enabled === false
+        ? `Aquí la persona entraría a ${name}, pero está apagada: hoy no entraría nadie y el recorrido seguiría.`
+        : `Aquí la persona entraría a ${name}.`,
+    );
+    go(env, s, node, 'next');
+  },
+
   consent(env, s, node) {
     const subscribe = node.data.action === 'subscribe';
     note(

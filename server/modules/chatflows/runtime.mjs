@@ -307,6 +307,28 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
         }
         for (const tag of remove) svc.contacts.removeTag(id, tag);
       },
+      // Inscribir en una secuencia por la puerta que da el módulo de secuencias (enrollInTx), dentro de ESTA
+      // transacción: sus mismas reglas (marca, curso, baja, ya inscrita o pagada, secuencia apagada). La referencia
+      // es la sesión y el paso: un reintento, o volver a este paso en la misma sesión, no inscribe dos veces.
+      // → {enrolled, duplicate} | {refused: motivo}. Nunca lanza: lo que falle queda anotado y el recorrido sigue.
+      sequence(sequenceId, nodeId) {
+        let api = null;
+        try {
+          api = host.module('sequences');
+        } catch {
+          api = null;
+        }
+        if (!api?.enrollInTx) return { refused: 'unavailable' };
+        const r = savepoint('chatflow_sequence', () =>
+          api.enrollInTx(conv(), String(sequenceId || ''), { source: 'flow', clientRef: `flow:${s.id}:${nodeId}` }),
+        );
+        if (!r.ok) {
+          ctx.log('error', { nodeId, detail: 'No se inscribió en la secuencia: ' + r.error?.message });
+          return { refused: 'error' };
+        }
+        if (r.out?.refused) return { refused: r.out.refused };
+        return { enrolled: true, duplicate: Boolean(r.out?.duplicate) };
+      },
       lastMessageText: () => repo.lastCustomerMessage(brandId, ctx.c.id)?.text || '',
       schedule(kind, at) {
         svc.automation.enqueueInTx({

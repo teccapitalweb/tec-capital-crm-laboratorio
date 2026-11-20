@@ -542,3 +542,117 @@ test('automatización: agregar una lista conectada después del saludo, publicar
   }
   watcher.done();
 });
+
+// «Inscribir en secuencia»: se agrega después del saludo como cualquier otro paso, se elige la secuencia de la marca en
+// su panel y su nombre se ve en la lista de pasos y en el lienzo. La secuencia y el recorrido son propios de la prueba
+// (nombre por proyecto y referencia nueva en cada vuelta) y se archivan al terminar.
+test('automatización: inscribir en una secuencia desde un recorrido', async ({ page, baseURL }, testInfo) => {
+  test.setTimeout(90_000);
+  const watcher = watch(page);
+  const phone = testInfo.project.name === 'celular';
+  // Nombres únicos en cada vuelta: la base de las pruebas de navegador es compartida y puede traer restos.
+  const suffix = Date.now().toString(36);
+  const name = `Secuencia UI ${testInfo.project.name} ${suffix}`;
+  const title = `Seguimiento UI ${testInfo.project.name} ${suffix}`;
+  const pageEl = page.locator('#page');
+  const headers = { Origin: baseURL };
+  const brands = (await (await page.request.get('/api/chatflows')).json()).brands;
+  const brandId = brands.find(b => b.canManage).id;
+  const made = await page.request.post('/api/sequences', {
+    headers,
+    data: {
+      brandId,
+      title,
+      steps: [{ timing: { base: 'enrolled', amount: 1, unit: 'days' }, send: { kind: 'text', text: 'Hola' } }],
+      clientRef: crypto.randomUUID(),
+    },
+  });
+  expect(made.status()).toBe(201);
+  const sequenceId = (await made.json()).sequence.id;
+  const graph = {
+    v: 1,
+    start: 's',
+    variables: [],
+    nodes: [
+      { id: 's', type: 'start', x: 0, y: 0, data: {} },
+      { id: 'g', type: 'message', title: 'Saludo', x: 300, y: 0, data: { parts: [{ kind: 'text', text: 'Hola' }] } },
+      { id: 'f', type: 'end', x: 600, y: 0, data: { text: 'Gracias' } },
+    ],
+    edges: [
+      { from: 's', port: 'next', to: 'g' },
+      { from: 'g', port: 'next', to: 'f' },
+    ],
+  };
+  await page.goto('/crm');
+  await expect(page.locator('#breadcrumb-title')).toHaveText('Mi día');
+  const created = await page.request.post('/api/chatflows', {
+    headers,
+    data: { brandId, name, graph, start: { type: 'manual' }, clientRef: crypto.randomUUID() },
+  });
+  expect(created.status()).toBe(201);
+  const flowId = (await created.json()).flow.id;
+
+  await page.locator('.nav [data-view="automatizacion"]').click();
+  await expect(pageEl.locator('h1')).toHaveText('Recorridos');
+  await pickBrand(pageEl, brandId);
+  await card(pageEl, name).first().locator('[data-do="abrir"]').click();
+  const editor = pageEl.locator('.lz');
+  const rows = editor.locator('.lz-outline .lz-row');
+  await expect(rows).toHaveCount(3);
+
+  // Elegir el saludo y agregar «Inscribir en secuencia» (con «Ver todos los tipos de paso»): queda conectado
+  await editor.locator('.lz-outline [data-node="g"] [data-do="fila"]').click();
+  if (phone) {
+    await page.keyboard.press('Escape');
+    await editor.locator('.lz-bar [data-do="paleta"]').click();
+  }
+  await editor.locator('[data-do="paleta-todos"]').click();
+  const option = editor.locator('[data-do="paleta-tipo"][data-type="sequence"]');
+  await expect(option).toContainText('Inscribir en secuencia');
+  await expect(option).not.toHaveAttribute('aria-disabled', 'true');
+  await option.click();
+  await expect(rows).toHaveCount(4);
+  await expect(editor.locator('.lz-outline-title'), 'nada quedó suelto').toHaveCount(0);
+
+  // Sin secuencia elegida no se puede publicar; al elegirla, su nombre es el resumen del paso
+  const panel = editor.locator('[data-slot="panel"]');
+  await expect(panel.locator('.lz-panel-step')).toHaveText(/Paso 3 · Inscribir en secuencia/i);
+  await expect(editor.locator('.lz-bar [data-slot="problemas"]')).toHaveAttribute('data-level', 'error');
+  const picker = panel.locator('select[data-do="ref"]');
+  await expect(picker.locator(`option[value="${sequenceId}"]`)).toHaveText(title);
+  await picker.selectOption(sequenceId);
+  await expect(panel).toContainText('el recorrido sigue igual');
+  // La secuencia nace apagada: ya no impide publicar, sólo queda el aviso de que mientras siga así nadie entra
+  await expect(editor.locator('.lz-bar [data-slot="problemas"]')).toHaveAttribute('data-level', 'warn');
+  await expect(panel).toContainText('está apagada');
+  if (phone) await page.keyboard.press('Escape');
+  await expect(rows.nth(2)).toContainText('Inscribir en secuencia');
+  await expect(rows.nth(2).locator('.lz-row-sum')).toHaveText(title);
+  await settled(page);
+  await expectNiebla(page, 'automatizacion-secuencia', testInfo);
+
+  // Guardar: el paso queda entre el saludo y el Fin, con la secuencia elegida
+  await editor.locator('.lz-bar [data-do="guardar"]').click();
+  await expect(editor.locator('[data-slot="estado"]')).toHaveText('Guardado');
+  const saved = (await (await page.request.get(`/api/chatflows/${flowId}`)).json()).flow.graph;
+  const step = saved.nodes.find(n => n.type === 'sequence');
+  expect(step.data).toEqual({ sequenceId });
+  expect(saved.edges.find(e => e.from === 'g').to).toBe(step.id);
+  expect(saved.edges.find(e => e.from === step.id).to).toBe('f');
+
+  // Dejar limpio: el recorrido y la secuencia de la prueba, archivados
+  {
+    const current = (await (await page.request.get(`/api/chatflows/${flowId}`)).json()).flow;
+    await page.request.post(`/api/chatflows/${flowId}/archive`, {
+      headers,
+      data: { expectedRevision: current.revision },
+    });
+  }
+  const seq = (await (await page.request.get(`/api/sequences/${sequenceId}`)).json()).sequence;
+  const archived = await page.request.post(`/api/sequences/${sequenceId}/archive`, {
+    headers,
+    data: { expectedRevision: seq.revision },
+  });
+  expect(archived.status()).toBe(200);
+  watcher.done();
+});

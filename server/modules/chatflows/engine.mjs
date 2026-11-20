@@ -448,6 +448,14 @@ const EXEC = {
     env.io.tags(d.add, d.remove);
     return { next: 'next' };
   },
+  // Inscribe en una secuencia de seguimiento y sigue SIEMPRE por «Sigue»: una negativa (ya está en ella, ya pagó,
+  // pidió la baja, secuencia apagada…) no detiene el recorrido. Cómo salió queda en el detalle de la salida del paso:
+  // `enrolled`, `duplicate` (esta misma sesión ya la inscribió en este paso) o `refused:<motivo>`.
+  sequence(node, d, env) {
+    const r = env.io.sequence(d.sequenceId, node.id);
+    const detail = r.refused ? 'refused:' + r.refused : r.duplicate ? 'duplicate' : 'enrolled';
+    return { next: 'next', detail };
+  },
   handoff(node, d, env, s) {
     if (d.text.trim()) say(env, s, { text: renderText(d.text, env, s) });
     return { end: 'handoff', handoff: { to: d.to, userId: d.userId || null } };
@@ -577,7 +585,7 @@ export function advance(s, env) {
         end(s, env, r.end, node.id);
         break;
       }
-      env.io.log('exit', { nodeId: node.id, nodeType: node.type, port: r.next });
+      env.io.log('exit', { nodeId: node.id, nodeType: node.type, port: r.next, detail: r.detail ?? null });
       const to = env.target(node.id, r.next);
       if (!to) {
         end(s, env, 'completed', node.id);

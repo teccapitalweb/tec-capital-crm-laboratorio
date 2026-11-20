@@ -761,3 +761,146 @@ test('la palabra clave otra vez, con el recorrido esperando una respuesta, lo em
   assert.equal(still.id, only.id);
   assert.equal(JSON.parse(still.waiting).misses, 1);
 });
+
+// Paso «Inscribir en secuencia»: valida contra las secuencias de la marca, inscribe dentro de la transacción del
+// recorrido una sola vez por sesión y paso, sigue aunque la persona no pueda entrar y el simulador no inscribe a nadie.
+test('Inscribir en secuencia: valida, inscribe una vez, sigue si no puede entrar y la prueba no inscribe', async t => {
+  const L = await lab(t);
+  const { api, db } = L;
+  await L.enableAutomation();
+  // Una secuencia de GlobalVet (encendida, su primer paso al día siguiente) y otra de OdonTeck.
+  async function sequence(brandId, title) {
+    let { sequence: seq } = await api('/api/sequences', {
+      body: {
+        brandId,
+        title,
+        steps: [{ timing: { base: 'enrolled', amount: 1, unit: 'days' }, send: { kind: 'text', text: 'Hola' } }],
+        clientRef: ref(),
+      },
+      expected: 201,
+    });
+    ({ sequence: seq } = await api('/api/sequences/' + seq.id + '/enable', {
+      body: { expectedRevision: seq.revision },
+    }));
+    return seq;
+  }
+  const mine = await sequence('globalvet', 'Seguimiento de aves');
+  const theirs = await sequence('odonteck', 'Seguimiento de OdonTeck');
+  // Saludo → Inscribir en secuencia → «¿Algo más?» (volver a inscribir o terminar).
+  const graph = sequenceId => ({
+    v: 1,
+    start: 'n1',
+    variables: [],
+    nodes: [
+      node('n1', 'start'),
+      node('n2', 'message', { parts: [{ kind: 'text', text: 'Hola, {{nombre}}.' }] }),
+      node('n3', 'sequence', { sequenceId }),
+      node('n4', 'buttons', {
+        header: { kind: 'none' },
+        text: '¿Algo más?',
+        footer: '',
+        options: [
+          { id: 'otra', label: 'Otra vez', do: { type: 'goto' } },
+          { id: 'listo', label: 'Listo', do: { type: 'goto' } },
+        ],
+      }),
+      node('n5', 'end', { text: 'Gracias.' }),
+    ],
+    edges: [
+      ['n1', 'next', 'n2'],
+      ['n2', 'next', 'n3'],
+      ['n3', 'next', 'n4'],
+      ['n4', 'opt:otra', 'n3'],
+      ['n4', 'opt:listo', 'n5'],
+    ].map(([from, port, to]) => ({ from, port, to })),
+  });
+
+  // Validación con las listas reales de la marca: sin elegir o de otra marca impiden publicar.
+  const draft = (
+    await api('/api/chatflows', {
+      body: { brandId: 'globalvet', name: 'Con secuencia', graph: graph(''), clientRef: ref() },
+      expected: 201,
+    })
+  ).flow;
+  const check = async sequenceId =>
+    (await api('/api/chatflows/' + draft.id + '/validate', { body: { graph: graph(sequenceId) } })).issues;
+  assert.ok((await check('')).errors.some(e => e.nodeId === 'n3' && /Elige la secuencia/.test(e.message)));
+  assert.ok((await check(theirs.id)).errors.some(e => e.nodeId === 'n3' && /no existe en esta marca/.test(e.message)));
+  assert.deepEqual((await check(mine.id)).errors, []);
+  const lists = (await api('/api/chatflows/lists?brand=globalvet')).lists;
+  assert.deepEqual(lists.sequences, [{ id: mine.id, name: 'Seguimiento de aves', enabled: true, archived: false }]);
+
+  // Corre de verdad: inscribe con el origen «recorrido» y una referencia de la sesión y el paso, y sigue.
+  const flow = await L.publishFlow({ name: 'Inscribe en secuencia', graph: graph(mine.id) });
+  const enrollments = conv =>
+    db.prepare('SELECT * FROM sequence_enrollments WHERE conversation_id=? ORDER BY started_at').all(conv);
+  const exits = conv =>
+    db
+      .prepare(
+        "SELECT e.detail FROM chatflow_events e JOIN chatflow_sessions s ON s.id=e.session_id WHERE s.conversation_id=? AND e.node_id='n3' AND e.event='exit' ORDER BY e.seq",
+      )
+      .all(conv)
+      .map(r => r.detail);
+  const ana = await L.customer('Ana Pérez');
+  await ana.say('Hola');
+  let s = L.session(ana.conv);
+  assert.equal(s.state, 'waiting', 'siguió hasta los botones');
+  assert.deepEqual(L.outgoing(ana.conv).at(-1).buttons, ['Otra vez', 'Listo']);
+  let rows = enrollments(ana.conv);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(
+    [rows[0].sequence_id, rows[0].source, rows[0].state, rows[0].client_ref],
+    [mine.id, 'flow', 'active', `flow:${s.id}:n3`],
+  );
+  assert.deepEqual(exits(ana.conv), ['enrolled']);
+  // Su primer paso queda para el día siguiente: no habla en medio del recorrido.
+  const due = db
+    .prepare("SELECT scheduled_at FROM automation_steps WHERE conversation_id=? AND kind='sequence.send'")
+    .get(ana.conv).scheduled_at;
+  assert.ok(due > Date.now() + 23 * 3600_000);
+  // Volver al mismo paso en la misma sesión no inscribe otra vez.
+  await ana.say('Otra vez');
+  assert.equal(enrollments(ana.conv).length, 1);
+  assert.deepEqual(exits(ana.conv), ['enrolled', 'duplicate']);
+  assert.equal(L.session(ana.conv).state, 'waiting');
+  await ana.say('Listo');
+  s = L.session(ana.conv);
+  assert.deepEqual([s.state, s.outcome], ['ended', 'completed']);
+  assert.equal(L.outgoing(ana.conv).at(-1).text, 'Gracias.');
+
+  // La misma persona empieza otra vez el recorrido (otra sesión, a mano desde el chat): ya está en esa secuencia,
+  // así que no entra otra vez, y el recorrido sigue igual.
+  await api('/api/chatflows/conversations/' + ana.conv, { body: { flowId: flow.id, clientRef: ref() }, expected: 201 });
+  rows = enrollments(ana.conv);
+  assert.equal(rows.length, 1);
+  assert.equal(exits(ana.conv).at(-1), 'refused:already_enrolled');
+  assert.equal(L.session(ana.conv).state, 'waiting', 'una negativa no detiene el recorrido');
+
+  // Secuencia apagada: nadie entra y el recorrido sigue; el motivo queda en la salida del paso.
+  const current = (await api('/api/sequences/' + mine.id)).sequence;
+  await api('/api/sequences/' + mine.id + '/disable', { body: { expectedRevision: current.revision } });
+  const beto = await L.customer('Beto Ruiz');
+  await beto.say('Hola');
+  assert.equal(enrollments(beto.conv).length, 0);
+  assert.deepEqual(exits(beto.conv), ['refused:sequence_off']);
+  assert.equal(L.session(beto.conv).state, 'waiting');
+  assert.deepEqual(L.outgoing(beto.conv).at(-1).buttons, ['Otra vez', 'Listo']);
+  // Apagada sólo avisa al revisar; publicar sigue permitido.
+  const off = await check(mine.id);
+  assert.deepEqual(off.errors, []);
+  assert.ok(off.warnings.some(w => w.code === 'sequence_off' && w.nodeId === 'n3'));
+
+  // Probar no inscribe a nadie: lo dice en una nota.
+  const count = () => db.prepare('SELECT count(*) n FROM sequence_enrollments').get().n;
+  const before = count();
+  const sim = await api('/api/chatflows/' + flow.id + '/simulate', { body: {} });
+  assert.ok(sim.notes.some(n => /entraría a la secuencia «Seguimiento de aves»/.test(n)));
+  assert.equal(sim.waiting.kind, 'choice');
+  assert.equal(count(), before);
+
+  // Archivada: ya no se ofrece en el editor y no se puede publicar.
+  const latest = (await api('/api/sequences/' + mine.id)).sequence;
+  await api('/api/sequences/' + mine.id + '/archive', { body: { expectedRevision: latest.revision } });
+  assert.ok((await check(mine.id)).errors.some(e => e.nodeId === 'n3' && /está archivada/.test(e.message)));
+  assert.deepEqual((await api('/api/chatflows/lists?brand=globalvet')).lists.sequences, []);
+});

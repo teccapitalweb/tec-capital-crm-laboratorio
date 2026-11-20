@@ -50,6 +50,7 @@ async function lab(t, { hours = ALWAYS } = {}) {
       'tpl-util': { text: 'Tu curso empieza pronto', category: 'utility' },
     },
     hours,
+    flows: new Set(), // conversaciones con un recorrido en curso
   };
   const sent = [];
   const makeAutomation = () => createAutomation({ db, now, leaseMs: 60_000, baseDelayMs: 1000, log: quiet });
@@ -63,6 +64,7 @@ async function lab(t, { hours = ALWAYS } = {}) {
     realText: (b, text) => text,
     windowOpen: () => state.window,
     canSend: () => (state.listen ? { ok: false, code: 'number_listen_only' } : { ok: true }),
+    flowActive: c => state.flows.has(c.id),
     template: (c, id) =>
       state.templates[id]
         ? { ...state.templates[id], template: { name: id, language: 'es_MX' }, buttons: ['Sí, deseo inscribirme'] }
@@ -978,6 +980,37 @@ test('antes del primer paso: quien dice que no o pide la baja no recibe ni el pr
       ['active', null],
     ],
   );
+});
+
+// Un recorrido que inscribe en una secuencia y sigue conversando: la secuencia no habla a la vez. Su paso espera a que
+// el recorrido termine (la espera se anota una sola vez) y lo que la persona contesta al recorrido antes del primer
+// paso no cuenta como respuesta a la secuencia (sólo una baja o una frase de alto).
+test('un recorrido atiende la conversación: el paso espera a que termine y la espera se anota una vez', async t => {
+  const L = await lab(t);
+  const seq = L.sequence('globalvet', { steps: [text(0, 'minutes', 'Hola {{nombre}}, te dejo el temario')] });
+  const p = L.person();
+  L.state.flows.add(p.conv);
+  const r = L.enroll(p, seq, { source: 'flow', clientRef: 'flow:sesion:n3' });
+  await L.run();
+  assert.equal(L.messagesOf(p.conv).length, 0, 'no habla en medio del recorrido');
+  await L.at(T0 + 10 * MINUTE + 1);
+  await L.at(T0 + 20 * MINUTE + 2);
+  assert.equal(L.messagesOf(p.conv).length, 0);
+  assert.equal(L.events(r.enrollment.id).filter(e => e.detail === 'flow_active').length, 1, 'la espera, una vez');
+  assert.equal(L.enrollment(r).state, 'active');
+  // Contesta los botones del recorrido: no es una respuesta a la secuencia.
+  L.says(p.conv, 'Sí, me interesa');
+  L.sweep();
+  assert.equal(L.enrollment(r).state, 'active');
+  // El recorrido terminó: el paso sale en su siguiente vuelta.
+  L.state.flows.delete(p.conv);
+  await L.at(T0 + 30 * MINUTE + 3);
+  const out = L.messagesOf(p.conv);
+  assert.equal(out.length, 1);
+  assert.match(out[0].text, /te dejo el temario/);
+  assert.equal(L.enrollment(r).state, 'completed');
+  // Con el mismo clientRef no se inscribe otra vez (un reintento del recorrido).
+  assert.equal(L.enroll(p, seq, { source: 'flow', clientRef: 'flow:sesion:n3' }).duplicate, true);
 });
 
 test('un paso que agotó sus intentos detiene la inscripción en lugar de reprogramarse sin fin', async t => {

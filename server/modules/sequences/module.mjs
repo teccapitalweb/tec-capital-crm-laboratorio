@@ -105,6 +105,8 @@ export default {
         return !(w.enforced && !w.open);
       },
       canSend: c => svc.whatsapp?.canSendFrom?.(c.wa_number, { to: c.wa_peer || null }) ?? { ok: true },
+      // ¿Un recorrido atiende ahora esta conversación? (sólo lectura, por el módulo de recorridos y con la marca)
+      flowActive: c => Boolean(optional('chatflows')?.repo?.activeSession?.(c.brand_id, c.id)),
       template(c, templateId) {
         const api = optional('wa-templates');
         if (!api?.forConversation) return { reason: 'Las plantillas de WhatsApp no están disponibles' };

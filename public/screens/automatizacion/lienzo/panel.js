@@ -235,10 +235,14 @@ ${value ?? ''}</textarea>
                 <span aria-hidden="true">Subir archivo</span>
               </label>`
             : '';
-        const none =
-          field.source === 'files' && !items.length
+        // Sin nada que elegir se dice por qué y dónde se crea (el campo lo trae en `none`).
+        const none = items.length
+          ? ''
+          : field.source === 'files'
             ? html`<p class="lz-hint">La marca todavía no tiene imágenes ni PDF en su biblioteca.</p>`
-            : '';
+            : field.none
+              ? html`<p class="lz-hint">${field.none}</p>`
+              : '';
         return html`<div class="lz-field">
           ${label}
           <select id="${id}" data-do="ref" data-f="${path}">

@@ -118,7 +118,7 @@ const shuffled = (items, rnd) => {
 
 // ---- Registro de tipos -----------------------------------------------------------------------------------------------
 
-test('registro: están los 24 tipos del diseño, con nombre, grupo, salidas, ajustes de fábrica y campos del panel', () => {
+test('registro: están los 25 tipos del diseño, con nombre, grupo, salidas, ajustes de fábrica y campos del panel', () => {
   const expected = {
     start: ['next'],
     message: ['next'],
@@ -130,6 +130,7 @@ test('registro: están los 24 tipos del diseño, con nombre, grupo, salidas, aju
     delay: ['next'],
     set_attribute: ['next'],
     tags: ['next'],
+    sequence: ['next'],
     consent: ['next'],
     handoff: [],
     status: ['next'],
@@ -2167,4 +2168,35 @@ test('resultado de una sesión: una sola clasificación para la lista de recorri
   assert.deepEqual(rates, { sessions: 18, base: 10, completion: 0.4, dropOff: 0.2 });
   assert.deepEqual(flowRates({}), { sessions: 0, base: 0, completion: 0, dropOff: 0 });
   assert.deepEqual(flowRates(null), { sessions: 0, base: 0, completion: 0, dropOff: 0 });
+});
+
+test('Inscribir en secuencia: elegida, de esta marca y no archivada; apagada sólo avisa; el resumen dice su nombre', () => {
+  const ctx = {
+    sequences: [
+      { id: 'sq1', name: 'Seguimiento de aves', enabled: true, archived: false },
+      { id: 'sq2', name: 'Recordatorio viejo', enabled: false, archived: true },
+      { id: 'sq3', name: 'En pausa', enabled: false, archived: false },
+    ],
+  };
+  fails(around('sequence', { sequenceId: '' }, ctx), 'node', /Elige la secuencia/, 'x');
+  fails(around('sequence', { sequenceId: 'de-otra-marca' }, ctx), 'ref', /secuencia de este paso no existe/, 'x');
+  fails(around('sequence', { sequenceId: 'sq2' }, ctx), 'ref', /«Recordatorio viejo» está archivada/, 'x');
+  const ok = around('sequence', { sequenceId: 'sq1' }, ctx);
+  passes(ok, 'ref');
+  passes(ok, 'node');
+  assert.deepEqual(warningsOf(ok, 'sequence_off'), []);
+  const off = around('sequence', { sequenceId: 'sq3' }, ctx);
+  passes(off, 'ref');
+  passes(off, 'node');
+  assert.match(
+    warningsOf(off, 'sequence_off', 'x')[0].message,
+    /«En pausa» está apagada: mientras siga así nadie entra/,
+  );
+  // Sin la lista de la marca (editor sin conexión) sólo se exige elegir una.
+  passes(around('sequence', { sequenceId: 'cualquiera' }), 'ref');
+  const def = typeOf('sequence');
+  assert.equal(def.summary(def.clean({ sequenceId: 'sq1' }), ctx), 'Seguimiento de aves');
+  assert.equal(def.summary(def.defaults(), ctx), 'Sin secuencia elegida');
+  assert.deepEqual(def.refs(def.clean({ sequenceId: 'sq1' })), [['sequences', 'sq1', 'sequenceId']]);
+  assert.equal(def.group, 'contacto');
 });

@@ -423,7 +423,8 @@ export default {
         graph = f.draft;
         settings = normalizeSettings(f.settings);
       }
-      const courses = repo.validationLists(brandId).courses;
+      const brandLists = repo.validationLists(brandId);
+      const courses = brandLists.courses;
       const courseId = courses.some(k => k.id === input.courseId) ? input.courseId : courses[0]?.id || null;
       const channel = ['whatsapp', 'instagram', 'facebook'].includes(input.channel) ? input.channel : 'whatsapp';
       const conv = {
@@ -561,6 +562,20 @@ export default {
           stage: stage => notes.push(`La etapa comercial pasaría a «${stage}».`),
           setAttribute: (key, value) => notes.push(`Guardaría el dato «${key}»: ${String(value).slice(0, 80)}.`),
           tags: (add, remove) => notes.push(`Etiquetas: +${add.length} / −${remove.length}.`),
+          // En la prueba no se inscribe a nadie: sólo se dice qué pasaría.
+          sequence(sequenceId) {
+            const found = brandLists.sequences.find(x => x.id === sequenceId && !x.archived);
+            if (!found) {
+              notes.push('La secuencia elegida ya no está disponible: nadie entraría y el recorrido seguiría.');
+              return { refused: 'sequence_off' };
+            }
+            notes.push(
+              found.enabled
+                ? `Aquí la persona entraría a la secuencia «${found.name}» (en la prueba no se inscribe a nadie).`
+                : `Aquí la persona entraría a la secuencia «${found.name}», pero está apagada: hoy no entraría nadie y el recorrido seguiría.`,
+            );
+            return found.enabled ? { enrolled: true } : { refused: 'sequence_off' };
+          },
           lastMessageText: () => input.input?.text || '',
           schedule(kind, at) {
             if (kind === 'delay') notes.push(`Esperaría ${Math.round((at - now()) / 1000)} s.`);
@@ -709,6 +724,7 @@ export default {
         users: lists.users,
         flows: lists.flows,
         files: lists.files,
+        sequences: lists.sequences.filter(s => !s.archived),
         waTemplates: waTemplatesOf(brandId),
         realWhatsApp: lists.realWhatsApp,
         attributes,

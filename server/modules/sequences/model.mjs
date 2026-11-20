@@ -93,6 +93,7 @@ export const REASONS = Object.freeze({
   frequency_cap: 'Ya recibió el máximo de mensajes automáticos del día',
   monthly_cap: 'La secuencia llegó a su tope del mes',
   not_due: 'Todavía no es su momento',
+  flow_active: 'Un recorrido atiende la conversación',
 });
 export const reasonLabel = code => REASONS[code] ?? code ?? '';
 

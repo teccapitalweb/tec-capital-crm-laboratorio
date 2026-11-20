@@ -62,6 +62,8 @@ En este orden; la primera que aplica decide:
 | `completed` | Se enviaron u omitieron todos los pasos. |
 | `manual` | Alguien del equipo la detuvo. |
 
+Esperas (no detienen): fuera de horario (`outside_hours`), tope por persona (`frequency_cap`), tope del mes (`monthly_cap`) y **un recorrido atiende la conversación** (`flow_active`): mientras la conversación tenga una sesión de recorrido viva (`chatflows.repo.activeSession`, por la marca), el paso que ya toca no sale; vuelve a mirar cada 10 minutos y la espera se anota una sola vez en la bitácora. Así una secuencia nunca habla en medio de un recorrido. Como un recorrido termina como mucho a las 24 horas, el paso sale dentro de su holgura de dos días.
+
 Reanudar: una pausa por respuesta o por toma humana se reanuda sola cuando la conversación vuelve a la automatización (sin responsable, asistente encendido, abierta) y la persona lleva `resumeAfterHours` sin escribir; o a mano («reanudar»).
 
 ## Protecciones
@@ -105,7 +107,7 @@ Para otros módulos: `host.module('sequences').enroll(conversation, sequenceId, 
 ## Archivos fuera del módulo
 
 - `server/migrations/registry.mjs`: una importación y una entrada (`...sequences` al final).
-- Lecturas (sin cambios) de `server/modules/chatflows/engine.mjs` (`CONDITION_FIELDS`) y `server/modules/broadcasts/model.mjs` (`inQuietHours`). No se editó `server/app/dispatch.mjs`.
+- Lecturas (sin cambios) de `server/modules/chatflows/engine.mjs` (`CONDITION_FIELDS`), de la sesión viva de un recorrido (`host.module('chatflows').repo.activeSession`, para la espera `flow_active`) y `server/modules/broadcasts/model.mjs` (`inQuietHours`). No se editó `server/app/dispatch.mjs`.
 
 ## Pruebas
 
@@ -113,7 +115,7 @@ Para otros módulos: `host.module('sequences').enroll(conversation, sequenceId, 
 
 ## Lo que falta
 
-- **Entrada desde un recorrido o una regla**: la API del módulo existe (`enrollInTx`), pero el paso «Inscribir en una secuencia» del recorrido y la acción de regla no se añadieron (son de `chatflows` y `rules`, que no se tocaron).
+- **Entrada desde una regla**: la API del módulo existe (`enrollInTx`), pero la acción de regla no se añadió (es de `rules`). La entrada desde un recorrido ya existe (abajo).
 - **Inscribir desde el chat**: las rutas existen; falta el botón en la bandeja.
 - **Condición por paso en la pantalla** (la API la acepta).
 - La pausa al responder se ve en el barrido (cada 5 s) o al despertar el paso, no en el mismo instante del mensaje (sin gancho en el entrante, a propósito).
@@ -125,3 +127,11 @@ Para otros módulos: `host.module('sequences').enroll(conversation, sequenceId, 
 - **Un «no» o una baja antes del primer paso también detienen:** a quien ya dijo que no, no se le manda ni el primer mensaje. Cualquier otra cosa escrita antes del primer paso sigue sin contar como respuesta.
 - **Un paso que agotó sus intentos detiene la inscripción** (motivo «un paso falló varias veces») en lugar de reprogramarse cada pocos segundos.
 - **«Recibió la ficha del curso» no incluye archivos sueltos** que mande un recorrido (un reglamento, un PDF): sólo la ficha de verdad.
+
+## Entrada desde un recorrido (paso «Inscribir en secuencia»)
+
+- El paso del recorrido inscribe con `enrollInTx(conversación, id, {source: 'flow', clientRef: 'flow:<sesión>:<paso>'})` dentro de la transacción del recorrido: mismas reglas de entrada (`refusal`) que a mano o por disparador, y la misma referencia devuelve la inscripción existente (un reintento o volver al paso en la misma sesión no inscribe dos veces). Una negativa no detiene el recorrido; su motivo queda en la bitácora del recorrido. Detalle en [PLAN_RECORRIDOS.md](PLAN_RECORRIDOS.md).
+- **Secuencia apagada**: al publicar el recorrido sólo se avisa (se puede encender después); al correr es la negativa `sequence_off`. **Archivada**: el recorrido no se publica.
+- **Respuestas**: lo que la persona contesta al recorrido después de inscribirse y antes del primer mensaje de la secuencia no cuenta como «respondió» (regla de siempre); una baja o una frase de alto sí la detienen. Lo que escriba después de un mensaje de la secuencia sí cuenta, aunque lo atienda un recorrido (p. ej. el botón de una plantilla que arranca un recorrido por palabra clave).
+- **No hablan a la vez**: la espera `flow_active` de arriba.
+- Pruebas: `test/sequences-engine.test.mjs` («un recorrido atiende la conversación…») y `test/chatflows.test.mjs` («Inscribir en secuencia…»).

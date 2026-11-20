@@ -34,6 +34,7 @@ import {
 
 export const STEP_KIND = 'sequence.send';
 const SWEEP_ROWS = 100;
+const FLOW_RECHECK = 10 * MINUTE; // cada cuánto vuelve a mirar un paso que espera a que termine un recorrido
 
 export function createEngine({ db, repo, deps, now = Date.now, log = console }) {
   const settingsOf = seq => normalizeSettings(seq?.settings ?? {});
@@ -233,6 +234,10 @@ export function createEngine({ db, repo, deps, now = Date.now, log = console }) 
     if (timing.reason) return done({ skip: timing.reason });
     if (t > timing.latest) return done({ skip: 'too_late' });
     if (t < timing.due) return done({ wait: { at: timing.due, reason: 'not_due' } });
+    // Un recorrido atiende la conversación (enviando o esperando la respuesta de la persona): la secuencia no habla a
+    // la vez. Vuelve a mirar en unos minutos; un recorrido termina como mucho a las 24 horas (su tiempo límite), dentro
+    // de la holgura del paso.
+    if (deps.flowActive?.(c)) return done({ wait: { at: t + FLOW_RECHECK, reason: 'flow_active' } });
     if (step.condition) {
       let ok = false;
       try {
@@ -294,7 +299,11 @@ export function createEngine({ db, repo, deps, now = Date.now, log = console }) 
       return { skipped: v.skip };
     }
     if (v.wait) {
-      if (v.wait.reason !== 'not_due') event(e, { event: 'waiting', detail: v.wait.reason, stepIndex: v.index }, t);
+      // La espera a que termine un recorrido se anota una vez, no en cada vuelta.
+      const last = v.wait.reason === 'flow_active' ? repo.lastEvent(e.id) : null;
+      const again = last?.event === 'waiting' && last.detail === 'flow_active' && last.step_index === v.index;
+      if (v.wait.reason !== 'not_due' && !again)
+        event(e, { event: 'waiting', detail: v.wait.reason, stepIndex: v.index }, t);
       arm(e, v.wait.at, t);
       return { waiting: v.wait.reason, at: v.wait.at };
     }

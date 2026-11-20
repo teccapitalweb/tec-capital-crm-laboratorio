@@ -433,6 +433,12 @@ export function createRepo(db) {
           brandId,
           ...FLOW_FILE_MIMES,
         ),
+        // Secuencias de seguimiento de la marca (sólo lectura: inscribir es cosa del módulo de secuencias). Las
+        // archivadas vienen marcadas para decir «está archivada» al publicar; el editor sólo ofrece las demás.
+        sequences: all(
+          'SELECT id,title name,enabled,archived_at FROM sequences WHERE brand_id=? ORDER BY archived_at IS NOT NULL, title LIMIT 200',
+          brandId,
+        ).map(s => ({ id: s.id, name: s.name, enabled: Boolean(s.enabled), archived: s.archived_at !== null })),
         // ¿La marca tiene un número real de WhatsApp activo? Sin él, una Plantilla de WhatsApp no tiene por dónde salir.
         realWhatsApp: Boolean(one('SELECT 1 FROM wa_numbers WHERE brand_id=? AND enabled=1', brandId)),
       };
