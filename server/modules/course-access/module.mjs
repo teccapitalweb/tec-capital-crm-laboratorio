@@ -18,6 +18,7 @@
 import { randomUUID } from 'node:crypto';
 import { fillTemplate, templateValues } from '../../catalogue.mjs';
 import { isRealBrand } from '../../lib/real-mode.mjs';
+import { startText } from '../../reply-copy.mjs';
 import { createRepo } from './repo.mjs';
 
 const MANAGE = 'sales.access.manage';
@@ -113,6 +114,9 @@ export default {
       }
       return fillTemplate(text, {
         ...Object.fromEntries(KEYS.map(k => [k, values[k] ?? ''])),
+        // la fecha, como la dice el asistente en el chat: «lunes, 23 de noviembre de 2026, 5:00 p.m. (hora del centro de
+        // México)», no con el nombre técnico de la zona horaria
+        fecha: startText(edition) ?? values.fecha ?? 'Por confirmar',
         grupo: String(edition.group_url || '').trim() || 'Por confirmar',
         pedido: reference || '',
       }).trim();

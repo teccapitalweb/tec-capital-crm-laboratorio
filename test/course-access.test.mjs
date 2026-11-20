@@ -169,6 +169,22 @@ test('accesos de punta a punta: comprobante validado, entrega automática, pago 
   assert.match(preview.text, /TC-EJEMPLO/);
   assert.doesNotMatch(preview.text, /\{\{/);
   assert.deepEqual(preview.problems, []);
+  // la fecha de inicio sale como la dice el asistente, sin el nombre técnico de la zona horaria
+  db.prepare('UPDATE editions SET starts_at=?,timezone=? WHERE id=?').run(
+    Date.UTC(2026, 10, 23, 23, 0),
+    'America/Mexico_City',
+    editionId,
+  );
+  const dated = await call(origin, '/api/course-access/editions/' + editionId + '/preview', {
+    cookie: agent,
+    body: { body: 'Hola {{nombre}}, tu curso empieza: {{fecha}}' },
+  });
+  assert.ok(
+    dated.text.endsWith('empieza: lunes, 23 de noviembre de 2026, 5:00 p.m. (hora del centro de México)'),
+    dated.text,
+  );
+  assert.doesNotMatch(dated.text, /America/);
+  db.prepare('UPDATE editions SET starts_at=NULL WHERE id=?').run(editionId);
 
   // ---- el cliente manda su comprobante: el chat del equipo lo muestra por revisar
   assert.equal((await chat(agent, first.conv.id)).receipt, null);
