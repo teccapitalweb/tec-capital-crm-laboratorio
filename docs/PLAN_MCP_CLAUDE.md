@@ -109,7 +109,7 @@ Una llave por marca: para otra consultora, crea otra llave y agrégala con otro 
 - Secuencias: sólo apagadas; no muestra inscripciones ni resultados. Accesos: sólo el texto, con la entrega apagada.
 - No hay herramienta para aprobar conocimiento: es a propósito.
 - Las consultas devuelven como máximo 100 pedidos, 50 contactos, 50 conversaciones y 100 mensajes por llamada.
-- **Sin probar en producción.** Se probó con el cliente real de Claude Code contra un servidor local.
+- **Probado en producción el 20 nov 2026, sólo para armar borradores:** con una llave real de GlobalVet (permiso de borradores) y Claude Code, el asistente leyó la guía y las listas, creó el recorrido «Información general» en borrador, lo revisó sin errores ni avisos y probó tres caminos; el borrador apareció en Automatización y nada se publicó (captura del dueño). Las demás herramientas (cursos, pedidos, contactos, conversaciones, conocimiento) siguen probadas sólo en local.
 
 ## Dónde está
 
