@@ -34,13 +34,13 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Conector: armar borradores con un asistente (construido el 20 nov 2026, sin publicar)
+## Conector: armar borradores con un asistente (publicado en `main`, 20 nov 2026)
 
 - **Para qué:** el dueño quiere que cualquier persona pueda configurar la automatización platicando con un asistente, de forma segura.
 - **Qué se hizo:** `server/lib/mcp-drafts.mjs` (14 herramientas: guía generada del modelo de pasos, listas de la marca, listar/ver/crear/actualizar/revisar/probar recorridos, listar/ver/crear/actualizar secuencias, listar y escribir accesos) y `server/lib/flow-guide.mjs`; `server/mcp.mjs` las monta y valida la entrada también por dentro de los objetos. Permiso nuevo `automation_drafts` en `server/integrations.mjs` (aparece en la pantalla de llaves). Una línea en `server/index.mjs` (`mcp.useModules`) para que el conector alcance a los módulos, que se crean después.
 - **Garantías:** el conector sólo llama a una lista cerrada de rutas de los módulos (leer, crear borrador, guardar borrador, revisar, probar): publicar, activar, pausar, archivar, iniciar en una conversación, encender, inscribir y enviar no están en la lista. La entrada se arma campo por campo; un `status` o `enabled` de más se rechaza. Todo id se comprueba contra la marca de la llave. Las escrituras van firmadas por quien creó la llave, que debe seguir siendo administrador con el permiso de la pantalla. No devuelve datos de clientes.
 - **Verificado en local:** `npm run check`, 746 pruebas de servidor y 81 de navegador; un guion de punta a punta contra un servidor de usar y tirar (guía → listas → crear → revisar → probar) terminó con el recorrido en borrador y sin publicar.
-- **Falta:** publicarlo («Sí, publicar»), usarlo con una llave real en producción y con un asistente de verdad (hasta ahora, sólo llamadas del protocolo en local). La app de chat de Claude sigue fuera: pide otro inicio de sesión (segunda entrega).
+- **Publicado:** commit `51b6a48`. **Falta:** usarlo con una llave real en producción y con un asistente de verdad (hasta ahora, sólo llamadas del protocolo en local). La app de chat de Claude sigue fuera: pide otro inicio de sesión (segunda entrega).
 
 ## Paso «¿Qué curso te interesa?» ejecutable (publicado en `main`, 20 nov 2026)
 
