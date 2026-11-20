@@ -1,0 +1,212 @@
+/* Página de permiso de un asistente (server/modules/mcp-oauth/page.mjs). Tinta: sólo variables de tokens.css. */
+.oa-body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--ink);
+  font-family: Manrope, ui-sans-serif, system-ui, sans-serif;
+  font-size: var(--font-lead);
+  line-height: 1.5;
+}
+.oa-page {
+  box-sizing: border-box;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.oa-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.oa-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-item);
+  background: var(--ink);
+  color: var(--lime);
+  font-weight: 800;
+}
+.oa-card {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  --k-fill: var(--soft);
+}
+.oa-card--bad {
+  background: var(--peach);
+  --k-fill: var(--surface);
+}
+.oa-card--warn {
+  background: var(--butter);
+  --k-fill: var(--surface);
+}
+.oa-card h1 {
+  margin: 0;
+  font-size: var(--font-2xl);
+  line-height: 1.2;
+  font-weight: 800;
+}
+.oa-card p {
+  margin: 0;
+}
+.oa-eyebrow {
+  font-size: var(--font-sm);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.oa-muted {
+  color: var(--text-3);
+  font-size: var(--font-md);
+}
+.oa-app {
+  background: var(--lilac);
+  border-radius: var(--radius-block-lg);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.oa-app .oa-muted {
+  color: var(--text-2);
+}
+.oa-app__name {
+  font-size: var(--font-2xl);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.oa-facts {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.oa-facts div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.oa-facts dt {
+  font-weight: 700;
+}
+.oa-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.oa-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.oa-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+.oa-field input {
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--ink);
+  font: inherit;
+}
+.oa-field input:focus-visible,
+.oa-option input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.oa-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.oa-group legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-weight: 800;
+  font-size: var(--font-section);
+}
+.oa-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.oa-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  cursor: pointer;
+}
+.oa-option--scope {
+  border-radius: var(--radius-block);
+  align-items: flex-start;
+}
+.oa-option--scope input {
+  margin-top: 4px;
+}
+.oa-option:has(input:checked) {
+  background: var(--lime);
+}
+.oa-option--off {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.oa-option input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--ink);
+}
+.oa-option .k-chip {
+  margin-left: 6px;
+}
+.oa-message {
+  min-height: 1em;
+  color: var(--bad);
+  font-weight: 600;
+}
+.oa-message:empty {
+  display: none;
+}
+.oa-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.oa-actions .k-btn,
+.oa-card > .k-btn,
+.oa-form > .k-btn {
+  min-height: 44px;
+}
+@media (max-width: 480px) {
+  .oa-card {
+    padding: 18px;
+    border-radius: var(--radius-block-lg);
+  }
+  .oa-actions .k-btn {
+    flex: 1 1 auto;
+  }
+}

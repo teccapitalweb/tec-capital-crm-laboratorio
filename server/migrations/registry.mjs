@@ -21,6 +21,7 @@ import identity from './named/identity/index.mjs';
 import inbox from './named/inbox/index.mjs';
 import jobs from './named/jobs/index.mjs';
 import lifecycle from './named/lifecycle/index.mjs';
+import mcpOauth from './named/mcp-oauth/index.mjs';
 import messages from './named/messages/index.mjs';
 import queues from './named/queues/index.mjs';
 import realMode from './named/real-mode/index.mjs';
@@ -42,6 +43,7 @@ import waCutover from './named/wa-cutover/index.mjs';
 // «conversations» va después de las publicadas: la bandeja nueva (vistas guardadas e índices); usa conversations.state
 // de «lifecycle». «rules» y «sequences» van al final: tablas propias (reglas por mensaje y secuencias de seguimiento).
 // «course-access» va al final: tablas propias (accesos del curso) y llegó después de todas las publicadas.
+// «mcp-oauth» va al final: tablas propias (conectar un asistente con un clic) y llegó después de todas las publicadas.
 export const NAMED = defineRegistry([
   ...attributes,
   ...broadcasts,
@@ -63,4 +65,5 @@ export const NAMED = defineRegistry([
   ...rules,
   ...sequences,
   ...courseAccess,
+  ...mcpOauth,
 ]);

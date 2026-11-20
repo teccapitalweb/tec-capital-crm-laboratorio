@@ -1,0 +1,67 @@
+/*
+ * Pantalla «Asistentes conectados»: sólo lo que el kit no trae, con el prefijo as- y variables de public/tokens.css.
+ * La dirección del conector va en una pieza blanca con su botón de copiar; cada conexión es una tarjeta del kit.
+ */
+
+.as-direccion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.as-url {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: var(--space-5) var(--space-7);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
+  font-size: var(--font-lg);
+  overflow-wrap: anywhere;
+}
+
+.as-pasos {
+  margin: 0;
+  padding-left: var(--space-8);
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-2);
+}
+
+.as-subtitulo {
+  margin: 0;
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+}
+
+.as-datos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.as-datos dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.as-permisos {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.as-grupo {
+  margin: 0;
+  font-weight: var(--weight-bold);
+}
+
+.as-lista {
+  margin: 0;
+  padding-left: var(--space-8);
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-2);
+}

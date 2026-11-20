@@ -86,7 +86,22 @@ Cómo se garantiza:
 
 Ganchos: `server/index.mjs` entrega los módulos al conector en una línea (`mcp.useModules(name => modules.get(name))`), porque el conector se crea antes que ellos; `server/modules/chatflows/module.mjs` exporta `START_TYPES` y `KEYWORD_MODES` para que el conector acepte exactamente los mismos inicios.
 
+## Conectarlo con un clic
+
+**Sin publicar** (20 nov 2026). Para quien no programa y para las aplicaciones de Claude (web, escritorio y celular), que piden iniciar sesión. Detalle técnico y garantías: [PLAN_MCP_OAUTH.md](PLAN_MCP_OAUTH.md).
+
+1. En el CRM, abre **Ajustes → Asistentes conectados** y pulsa «Copiar dirección» (es `https://<dominio>/mcp`).
+2. En la aplicación de Claude, agrega un **conector personalizado** y pega esa dirección. No hace falta llenar nada más.
+3. Se abre el CRM en el navegador. Si te lo pide, entra con tu usuario del equipo.
+4. Elige **una** marca, deja marcados sólo los permisos que necesitas (los que dejan ver datos personales vienen sin marcar) y pulsa **Permitir**. Vuelves a la aplicación y el conector ya funciona.
+
+Para desconectarlo: **Ajustes → Asistentes conectados → Desconectar**. Deja de funcionar al instante. También deja de funcionar solo si pierdes el acceso a esa marca o te suspenden.
+
+Lo que puedes dar depende de tu acceso: escribir (cursos, conocimiento, borradores) sólo lo da administración; una asesora puede conectar un asistente de consulta en sus marcas. Claude Code también puede conectarse así (`claude mcp add --transport http crm https://<dominio>/mcp`, sin cabecera); la llave de abajo sigue funcionando igual.
+
 ## Cómo conectarlo
+
+Con una llave de la API (Claude Code y otros clientes que mandan una cabecera fija):
 
 1. En el CRM: **Operación → Sistema → API y webhooks → Llaves de la API**. Elige la marca, ponle nombre (por ejemplo «Claude») y marca los permisos. Para armar recorridos basta «Claude: armar recorridos, secuencias y accesos del curso en BORRADOR» (grupo Escritura). Copia la llave: sólo se muestra una vez.
 2. En una terminal, **fuera de la carpeta del repositorio** (el repositorio es público y la llave no debe quedar en él):
@@ -103,7 +118,7 @@ Una llave por marca: para otra consultora, crea otra llave y agrégala con otro 
 
 ## Límites de esta primera versión
 
-- **Sólo Claude Code** (y cualquier cliente MCP que mande una cabecera fija). La app de Claude (claude.ai, escritorio y celular) pide inicio de sesión con OAuth para la mayoría de las cuentas; eso sería una segunda entrega.
+- Con llave, **sólo Claude Code** (y cualquier cliente MCP que mande una cabecera fija). Para la app de Claude (claude.ai, escritorio y celular), que pide inicio de sesión con OAuth, está [Conectarlo con un clic](#conectarlo-con-un-clic) (sin publicar).
 - No crea cursos ni aperturas nuevas (para eso está Catálogo → Importar), no maneja promociones, cupones, pedidos ni mensajes.
 - Recorridos: sólo borradores. Revisar un grafo exige un recorrido ya creado (se revisa contra él); probar usa el borrador guardado. No sube archivos a la biblioteca (usa los que ya tiene la marca) ni pide sugerencias con IA. Probar admite hasta 10 respuestas por llamada y cuenta, además, para el límite del simulador (60 por minuto por persona). Si una respuesta se desvía del recorrido, el simulador consulta al asistente de la marca como en la pantalla (con IA, si está encendida).
 - Secuencias: sólo apagadas; no muestra inscripciones ni resultados. Accesos: sólo el texto, con la entrega apagada.
