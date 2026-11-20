@@ -65,13 +65,14 @@ import { keywordMatch } from '../../lib/conditions.mjs';
 
 const ID = '[A-Za-z0-9-]{1,64}';
 const REF = /^[A-Za-z0-9-]{8,100}$/;
-const START_TYPES = Object.freeze({
+// Exportados para el conector de Claude (server/lib/mcp-drafts.mjs): acepta los mismos inicios que guarda este módulo.
+export const START_TYPES = Object.freeze({
   manual: 'Sólo a mano, desde el chat',
   first_message: 'Primer mensaje de la conversación',
   keyword: 'Mensaje con una palabra clave',
   any_message: 'Cualquier mensaje (si no hay otro recorrido en curso)',
 });
-const KEYWORD_MODES = ['contains', 'exact', 'fuzzy'];
+export const KEYWORD_MODES = Object.freeze(['contains', 'exact', 'fuzzy']);
 
 export default {
   name: 'chatflows',

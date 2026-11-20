@@ -32,6 +32,8 @@ export const SCOPES = {
   conversations: 'Claude: ver conversaciones y mensajes (datos personales)',
   knowledge: 'Claude: leer el conocimiento del asistente y proponer borradores',
   catalog_write: 'Claude: MODIFICAR cursos y aperturas (fecha, docente, precio, cupo, temario)',
+  automation_drafts:
+    'Claude: armar recorridos, secuencias y accesos del curso en BORRADOR (sin contactos ni mensajes; nunca publica, activa, enciende, inscribe ni envía)',
   // API v1 ampliada (docs/PLAN_API_ESCRITURA.md).
   templates: 'Plantillas de WhatsApp aprobadas y sus datos',
   contacts_write:
@@ -50,6 +52,7 @@ export const SCOPE_KINDS = Object.freeze({
   conversations: 'read',
   knowledge: 'read',
   catalog_write: 'write',
+  automation_drafts: 'write',
   templates: 'read',
   contacts_write: 'write',
   consent_write: 'write',

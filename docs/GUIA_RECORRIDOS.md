@@ -103,4 +103,15 @@ Para algo de un solo paso no hace falta dibujar un recorrido: basta una **regla*
 
 **Probar.** «Probar con un mensaje» dice quién contestaría y qué haría cada regla, sin enviar ni guardar nada. Una regla nueva nace en **borrador**; enciéndela cuando esté lista. Detalle técnico: [PLAN_REGLAS.md](PLAN_REGLAS.md).
 
+## 9. Con un asistente
+
+Puedes pedirle a Claude, conectado al CRM, que te arme el recorrido: «arma un recorrido que salude, pregunte el curso, mande la ficha y ofrezca inscribirse». Claude lo deja como **borrador** en Automatización, lo revisa con la misma revisión de la pantalla, lo prueba con el simulador y te muestra los errores, los avisos y cómo se vería la conversación. **No publica ni activa nada**: eso lo haces tú aquí, como con cualquier recorrido.
+
+1. Administración crea una llave en **Operación → Sistema → API y webhooks → Llaves de la API** con el permiso «Claude: armar recorridos, secuencias y accesos del curso en BORRADOR». Ese permiso no deja ver contactos, teléfonos, pedidos ni mensajes.
+2. Se conecta Claude con esa llave (pasos en [PLAN_MCP_CLAUDE.md](PLAN_MCP_CLAUDE.md#cómo-conectarlo)).
+3. Pídele el recorrido con tus palabras. Usa los cursos, materiales, etiquetas y personas reales de la marca.
+4. Abre el recorrido en Automatización: revísalo en el lienzo, pruébalo tú en «Probar» y, si te convence, **Publicar** y **Activar**.
+
+Si le pides cambios a un recorrido que ya está publicado, Claude cambia el **borrador**: la versión publicada sigue atendiendo igual hasta que tú publiques la nueva. Un recorrido archivado no lo toca. Con el mismo permiso también puede armar **secuencias** (quedan apagadas) y escribir el **mensaje de accesos** de una apertura (con la entrega apagada); encenderlas sigue siendo cosa tuya.
+
 Detalle técnico: [PLAN_RECORRIDOS.md](PLAN_RECORRIDOS.md).

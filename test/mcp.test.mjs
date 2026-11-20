@@ -10,7 +10,7 @@ import { TOOLS, MCP_VERSIONS, invalid } from '../server/mcp.mjs';
 
 // Conector MCP para Claude (docs/PLAN_MCP_CLAUDE.md): protocolo, permisos de la llave, alcance por marca y cambios con revisión.
 test('las herramientas del conector están bien descritas: nombre, permiso, esquema y si leen o escriben', () => {
-  assert.ok(TOOLS.length >= 10 && TOOLS.length <= 15);
+  assert.ok(TOOLS.length >= 20 && TOOLS.length <= 30);
   assert.equal(new Set(TOOLS.map(t => t.name)).size, TOOLS.length);
   for (const t of TOOLS) {
     assert.match(t.name, /^[a-z_]{3,40}$/);
@@ -23,9 +23,18 @@ test('las herramientas del conector están bien descritas: nombre, permiso, esqu
   const writes = TOOLS.filter(t => !t.annotations.readOnlyHint)
     .map(t => t.name)
     .sort();
-  assert.deepEqual(writes, ['actualizar_apertura', 'actualizar_curso', 'proponer_conocimiento']);
+  assert.deepEqual(writes, [
+    'actualizar_apertura',
+    'actualizar_curso',
+    'actualizar_recorrido',
+    'actualizar_secuencia',
+    'crear_recorrido',
+    'crear_secuencia',
+    'escribir_acceso',
+    'proponer_conocimiento',
+  ]);
   assert.ok(
-    TOOLS.filter(t => /^actualizar_/.test(t.name)).every(
+    TOOLS.filter(t => ['actualizar_apertura', 'actualizar_curso'].includes(t.name)).every(
       t => t.scope === 'catalog_write' && t.annotations.destructiveHint === true,
     ),
     'modificar el catálogo exige su propio permiso',

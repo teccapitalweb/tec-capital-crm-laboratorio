@@ -548,6 +548,7 @@ const modules = await loadModules({
     },
   },
 });
+mcp.useModules(name => modules.get(name)); // el conector de Claude arma borradores con las rutas de los módulos (server/lib/mcp-drafts.mjs)
 async function body(req) {
   let size = 0;
   const chunks = [];
