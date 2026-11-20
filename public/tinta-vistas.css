@@ -2485,3 +2485,600 @@
     font-size: var(--font-md);
   }
 }
+
+/* ============ 11. Cobertura completa (20 nov 2026) ============ */
+/*
+ * Lo que quedaba de Niebla en las vistas de antes, encontrado con una auditoría superficie por superficie (cada vista,
+ * área, pestaña y ventana a 1366 × 800 y 375 × 812): campos de 1 px con radio pequeño, piezas blancas con borde fino,
+ * fichas cuadradas, el pastel azul petróleo y colores escritos a mano. Sólo aspecto: nada se quita, nada se añade.
+ */
+
+/* Títulos de vista: polish.css los dejaba en un gris azulado; en Tinta son tinta */
+.workspace:not(.customer-skin) .page-heading h1 {
+  color: var(--ink);
+}
+/* Las listas de marca de las cabeceras llevaban su letra en gris: en Tinta, tinta */
+.workspace:not(.customer-skin) :is(#ops-brand, #crm-brand-picker, #pr-brand, #ctc-tag-filter) {
+  color: var(--ink);
+}
+
+/* Botón desactivado: sin transparencia (como el kit); relleno del sitio, borde --line y letra --text-3 */
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .btn:disabled,
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .btn[disabled] {
+  opacity: 1;
+  border-color: var(--line);
+  background: var(--soft);
+  color: var(--text-3);
+}
+
+/* Movimiento: la tarjeta de oportunidad ya no sube al pasar el cursor (sólo cambia su borde) */
+.workspace:not(.customer-skin) .opportunity-card:hover {
+  transform: none;
+}
+
+/* Personas: el tono por persona pasa a los pasteles de Tinta, con iniciales en tinta (antes, tonos de Niebla) */
+.workspace:not(.customer-skin) .avatar,
+#modal:not(.pay-page) .avatar {
+  box-shadow: none;
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .avatar[data-h] {
+  --av-fg: var(--ink);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .avatar[data-h='0'] {
+  --av-bg: var(--sky);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .avatar[data-h='1'] {
+  --av-bg: var(--mint);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .avatar[data-h='2'] {
+  --av-bg: var(--butter);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .avatar[data-h='3'] {
+  --av-bg: var(--lilac);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .avatar[data-h='4'] {
+  --av-bg: var(--peach);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .avatar[data-h='5'] {
+  --av-bg: var(--soft);
+}
+
+/* Sin conversación elegida: las dos burbujas de Niebla (degradado, borde y sombra) pasan a bloques lila y lima */
+.workspace:not(.customer-skin) .empty-art::before,
+.workspace:not(.customer-skin) .empty-art::after {
+  border: 0;
+  border-radius: var(--radius-block);
+  box-shadow: none;
+}
+.workspace:not(.customer-skin) .empty-art::before {
+  background: var(--lilac);
+}
+.workspace:not(.customer-skin) .empty-art::after {
+  background: var(--lime);
+}
+
+/* Distintivo de canal en las filas (la cola de atención, …): píldora en el pastel del canal, como en Mi día */
+.workspace:not(.customer-skin) .channel-chip {
+  justify-self: start;
+  width: fit-content;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .channel-chip.whatsapp {
+  background: var(--mint);
+}
+.workspace:not(.customer-skin) .channel-chip.instagram {
+  background: var(--rose);
+}
+.workspace:not(.customer-skin) .channel-chip.facebook {
+  background: var(--sky);
+}
+
+/* Fichas de contacto (etiquetas, consentimiento, verificación): píldoras sin borde con los colores de estado */
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .ctc-tag {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .ctc-tag.blue {
+  background: var(--sky);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .ctc-tag.green {
+  background: var(--mint);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .ctc-tag.amber {
+  background: var(--butter);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .ctc-tag.red {
+  background: var(--peach);
+  color: var(--bad);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .ctc-tag.violet {
+  background: var(--lilac);
+}
+
+/* Campos que sus hojas dejaban con 1 px y radio pequeño: borde de 2 px y radio de campo, como todos */
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page))
+  :is(
+    .ops-hours-row input:not([type='checkbox']),
+    .ctc-newtag input[name='name'],
+    .ctc-newtag select,
+    .ctc-consent-form input,
+    .rcp-reply-mode,
+    .rcp-action input[type='text'],
+    .rcp-action input:not([type]),
+    .rcp-action input[type='number'],
+    .rcp-action select
+  ) {
+  border: 2px solid var(--line);
+  border-radius: var(--radius-control);
+  background-color: var(--surface);
+  color: var(--ink);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page))
+  :is(
+    .ops-hours-row input:not([type='checkbox']),
+    .ctc-newtag input[name='name'],
+    .ctc-newtag select,
+    .ctc-consent-form input,
+    .rcp-reply-mode,
+    .rcp-action input[type='text'],
+    .rcp-action input:not([type]),
+    .rcp-action input[type='number'],
+    .rcp-action select
+  ):focus-visible {
+  border-color: var(--ink);
+}
+
+/* Buscador de respuestas rápidas: píldora como los demás buscadores */
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .qr-search {
+  min-height: var(--control);
+  padding: 0 var(--space-7);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--text-2);
+}
+
+/* Barra de filtros (Certificados): campos y botón en una fila; el botón no se estira */
+.workspace:not(.customer-skin) .co-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.workspace:not(.customer-skin) .co-filters .field {
+  flex: 1 1 200px;
+}
+.workspace:not(.customer-skin) .co-filters > .btn {
+  flex: none;
+  min-height: var(--control);
+}
+
+/* Piezas que seguían blancas o grises con borde fino y radio pequeño: pieza gris redonda, sin borde */
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page))
+  :is(
+    .cat-quote,
+    .cat-detail-edition,
+    .cat-preview-text,
+    .cat-version-copy,
+    .ct-sheet-wrap,
+    .ev-result,
+    .imp-row,
+    .message-match,
+    .ops-transfer,
+    .rcp-action-preview,
+    .rcp-checklist li,
+    .rcp-fieldset,
+    .reply-log-item,
+    .sec-code-list,
+    .sec-secret,
+    .tl-row,
+    .tl-summary > div,
+    .wz-summary,
+    .brand-checks,
+    .ais-usage,
+    .ais-ping,
+    .sch-material,
+    .qr-row,
+    .qr-preview,
+    .qr-empty,
+    .cmp-message
+  ) {
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  box-shadow: none;
+  color: var(--ink);
+}
+/* Su estado, con los colores de siempre: bien en menta, mal en durazno, aviso en mantequilla */
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .ais-ping.ok {
+  background: var(--mint);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) :is(.ev-result.fail, .imp-row.bad, .ais-ping.bad) {
+  background: var(--peach);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .cmp-message {
+  background: var(--lilac);
+}
+/* Su letra secundaria, en los grises de Tinta (sus hojas la escribían a mano) */
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page))
+  :is(.cat-quote, .cat-quote strong, .timeline-event p, .co-payload) {
+  color: var(--text-2);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .cat-quote strong {
+  color: var(--ink);
+}
+/* Lo que va dentro de una de estas piezas (botones, códigos, campos) se separa en blanco */
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page))
+  :is(.qr-row, .rcp-fieldset, .brand-checks, .sec-secret, .tl-row)
+  .btn:not(.primary, .accent) {
+  background: var(--surface);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page))
+  :is(.qr-row, .rcp-fieldset, .brand-checks, .sec-secret, .tl-row)
+  .btn:not(.primary, .accent):hover {
+  background: var(--line);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .int-secret code {
+  border: 0;
+  border-radius: var(--radius-item);
+  background: var(--soft);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .cat-variable-list button {
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--ink);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) .ais-head code {
+  border-radius: var(--radius-1);
+  background: var(--soft);
+}
+/* Medidores (uso de la IA, avance de la demo): pista gris, barra en tinta; cerca del tope, en los tonos de estado */
+.workspace:not(.customer-skin) :is(.ais-bar, .sim-progress) {
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .ais-bar span {
+  background: var(--ink);
+}
+.workspace:not(.customer-skin) .ais-bar span.warm {
+  background: var(--warn);
+}
+.workspace:not(.customer-skin) .ais-bar span.hot {
+  background: var(--bad);
+}
+.workspace:not(.customer-skin) .ais-warn {
+  color: var(--bad);
+}
+.workspace:not(.customer-skin) .ais-mark {
+  border: 2px solid var(--line);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .ais-mark.ok {
+  border-color: var(--lime);
+  background: var(--lime);
+  color: var(--ink);
+}
+/* Línea de tiempo de la oportunidad: el punto en tinta (era el azul de Niebla) */
+#modal:not(.pay-page) .timeline-dot {
+  background: var(--ink);
+}
+#modal:not(.pay-page) .timeline-event {
+  border-bottom-color: var(--line);
+}
+
+/* Archivo (Importar catálogo desde CSV, Históricos): la misma zona que el kit, borde discontinuo de 2 px y radio de bloque */
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) label.field input[type='file'] {
+  border: 2px dashed var(--line);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+
+/* Asistente de alta de curso: los pasos en píldora; el actual en tinta con su número en lima, los hechos con el número en menta */
+#modal:not(.pay-page) .wz-steps {
+  gap: var(--space-3);
+}
+#modal:not(.pay-page) .wz-steps li {
+  min-height: var(--control);
+  padding: var(--space-2) var(--space-5) var(--space-2) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--text-2);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+}
+#modal:not(.pay-page) .wz-steps li span {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: var(--line);
+  color: var(--ink);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+}
+#modal:not(.pay-page) .wz-steps li.on {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+#modal:not(.pay-page) .wz-steps li.on span {
+  background: var(--lime);
+  color: var(--ink);
+}
+#modal:not(.pay-page) .wz-steps li.done {
+  color: var(--ink);
+}
+#modal:not(.pay-page) .wz-steps li.done span {
+  background: var(--mint);
+  color: var(--ink);
+}
+
+/* Preparar marca: cada paso una fila redonda sin borde dentro de su pieza gris; hecho en menta, el siguiente en lima */
+.workspace:not(.customer-skin) .rdy-progress {
+  height: 10px;
+  border: 0;
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .rdy-progress span {
+  background: var(--ok);
+}
+.workspace:not(.customer-skin) .rdy-group h3 {
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+  letter-spacing: 0.06em;
+}
+.workspace:not(.customer-skin) .rdy-step {
+  padding: var(--space-4) var(--space-5);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--surface);
+  box-shadow: none;
+}
+.workspace:not(.customer-skin) .rdy-step.done {
+  background: var(--mint);
+}
+.workspace:not(.customer-skin) .rdy-step.next {
+  background: var(--lime);
+}
+.workspace:not(.customer-skin) .content-page .crm-panel .rdy-group .rdy-step .btn:not(.primary, .accent) {
+  background-color: var(--soft);
+}
+.workspace:not(.customer-skin)
+  .content-page
+  .crm-panel
+  .rdy-group
+  .rdy-step:is(.done, .next)
+  .btn:not(.primary, .accent) {
+  background-color: var(--surface);
+}
+.workspace:not(.customer-skin) .content-page .crm-panel .rdy-group .rdy-step .btn:not(.primary, .accent):hover {
+  background-color: var(--line);
+}
+.workspace:not(.customer-skin) .rdy-mark {
+  border: 2px solid var(--line);
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .rdy-step.done .rdy-mark {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: var(--on-ink);
+}
+.workspace:not(.customer-skin) .rdy-copy strong {
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .rdy-copy small {
+  color: var(--text-2);
+}
+
+/* Flujo de bienvenida: cada paso una tarjeta blanca sin raya; cada botón una pieza gris; ajustes en tarjeta */
+.workspace:not(.customer-skin) .fl-step {
+  padding: var(--pad-card);
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: none;
+}
+.workspace:not(.customer-skin) .fl-step::before {
+  content: none;
+}
+.workspace:not(.customer-skin) .fl-step-top strong {
+  color: var(--ink);
+  font-size: var(--font-xl);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .fl-step-top small {
+  color: var(--text-2);
+}
+.workspace:not(.customer-skin) .fl-step-n {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background: var(--lime);
+  color: var(--ink);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .fl-button {
+  padding: var(--space-5);
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+.workspace:not(.customer-skin) .fl-button .icon-btn {
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-2);
+}
+.workspace:not(.customer-skin) .fl-button .icon-btn:hover {
+  background: var(--peach);
+  color: var(--bad);
+}
+.workspace:not(.customer-skin) .btn.fl-quiet:hover {
+  border-color: transparent;
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .btn.fl-add {
+  border: 0;
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .btn.fl-add:hover {
+  background: var(--line);
+}
+.workspace:not(.customer-skin) .fl-settings {
+  padding: var(--pad-card);
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .fl-check input {
+  accent-color: var(--ink);
+}
+.workspace:not(.customer-skin) .fl-check small {
+  color: var(--text-2);
+}
+/* La vista previa: un bloque redondo, cabecera en tinta; la persona en blanco y el asistente en lila, como en Conversaciones */
+.workspace:not(.customer-skin) .fl-phone {
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: none;
+}
+.workspace:not(.customer-skin) .fl-phone-top {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.workspace:not(.customer-skin) .fl-phone-top .avatar {
+  background: var(--lime) !important;
+  color: var(--ink) !important;
+}
+.workspace:not(.customer-skin) .fl-phone-top small {
+  color: var(--on-ink-soft);
+}
+.workspace:not(.customer-skin) .fl-chat {
+  background-color: var(--soft);
+  background-image: none;
+}
+.workspace:not(.customer-skin) .fl-bubble {
+  border-radius: var(--radius-block);
+  box-shadow: none;
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .fl-bubble.out {
+  background: var(--lilac);
+}
+.workspace:not(.customer-skin) .fl-bubble.in {
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .fl-flyer {
+  border-radius: var(--radius-item);
+  background: var(--lime);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .fl-option {
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .fl-option:hover {
+  background: var(--line);
+}
+.workspace:not(.customer-skin) .fl-note {
+  border-radius: var(--radius-item);
+  background: var(--surface);
+  color: var(--text-2);
+}
+.workspace:not(.customer-skin) .fl-phone-bottom {
+  border-top: 0;
+}
+
+/* Mi día: el selector «Marca» (visible en celular) es la misma píldora blanca que en las demás vistas */
+.workspace:not(.customer-skin) .content-page:has(> .day-summary) .crm-brand-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-5);
+  color: var(--ink);
+  font-size: var(--font-lg);
+  font-weight: var(--weight-black);
+}
+.workspace:not(.customer-skin) .content-page:has(> .day-summary) .crm-brand-filter select {
+  width: auto;
+  min-width: 200px;
+  max-width: 100%;
+  min-height: var(--control);
+  padding-inline: var(--space-7) 40px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  background-color: var(--surface);
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+}
+
+@media (max-width: 680px) {
+  /* Mi día, «Por atender»: el nombre ocupa el renglón y el canal baja debajo, alineado con el texto
+     (antes el nombre se partía en una columna angosta, una palabra por renglón) */
+  .workspace:not(.customer-skin) .day-attend .attention-row > span:nth-child(2) {
+    flex: 1 1 calc(100% - 50px);
+  }
+  .workspace:not(.customer-skin) .day-attend .attention-row .channel-chip {
+    margin-left: 50px;
+  }
+}
+
+/* Dentro de esas piezas grises, la ficha neutra va en blanco para que se vea */
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page))
+  :is(.reply-log-item, .qr-row, .tl-row, .imp-row, .message-match)
+  .ctc-tag:not(.blue, .green, .amber, .red, .violet) {
+  background: var(--surface);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) :is(.rcp-fieldset, .brand-checks) legend {
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+}
+
+/* Contactos: el filtro «Etiqueta» sobre la página es una píldora blanca, como «Marca» */
+.workspace:not(.customer-skin) .ctc-filter select {
+  min-height: var(--control);
+  padding-inline: var(--space-7) 40px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  background-color: var(--surface);
+  color: var(--ink);
+  font-weight: var(--weight-bold);
+}
+
+/* Conversaciones, pestaña «Todos»: su insignia llevaba el degradado azul petróleo de Niebla; ahora lima con tinta */
+.workspace:not(.customer-skin) .provider.all {
+  --channel-fill: var(--lime);
+  color: var(--ink);
+}
+@media (max-width: 480px) {
+  /* En celular cada paso del asistente lleva el número encima del nombre: un bloque redondo, no una píldora */
+  #modal:not(.pay-page) .wz-steps li {
+    padding: var(--space-3) var(--space-2);
+    border-radius: var(--radius-block);
+  }
+}
+
+/* Grupos de una receta y marcas de una invitación: la pieza gris con aire por dentro, el rótulo encima */
+.workspace:not(.customer-skin) :is(.rcp-fieldset, .brand-checks),
+#modal:not(.pay-page) :is(.rcp-fieldset, .brand-checks) {
+  padding: var(--space-5) var(--space-6);
+}
+:where(.workspace:not(.customer-skin), #modal:not(.pay-page)) :is(.rcp-fieldset, .brand-checks) legend {
+  float: left;
+  width: 100%;
+  margin-bottom: var(--space-3);
+  padding: 0;
+}

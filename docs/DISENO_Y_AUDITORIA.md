@@ -183,6 +183,21 @@ Las vistas de antes que no estaban hechas con el kit (Operación y todas sus ár
 
 La prueba `test/ui/vistas.spec.mjs` recorre cada área y pestaña de Operación y cada una de estas vistas en computadora y celular, con la auditoría en cero (sin línea base) y sus acciones clave a la vista.
 
+## Cobertura completa (20 nov 2026)
+
+Una pasada superficie por superficie para encontrar lo que el rediseño no había alcanzado: las 29 vistas del menú, cada área y pestaña de Operación, las ocho secciones del Catálogo, el chat abierto, las pestañas de las pantallas del kit y unas 40 ventanas (las del chat, las de Operación, el asistente «Nuevo curso», fichas, altas e invitaciones), a 1366 × 800 y 375 × 812, con el menú oscuro y el claro, sobre la base de pruebas local. Por cada superficie se midió: piezas blancas con borde fino, radios por debajo de los de Tinta, botones que no son píldora, campos de 1 px o radio pequeño, letra que no es Manrope, colores y sombras fuera de `tokens.css` (el azul petróleo en particular) y las reglas de siempre (11 px, contraste, 40 px, desborde); después se revisó cada captura a ojo. Lo corregido vive en `public/tinta-vistas.css`, §11, sólo con variables de `tokens.css`:
+
+- **Preparar marca:** cada paso era una fila blanca con borde y radio de 12 px; ahora una fila redonda sin borde dentro de su pieza gris, hecha en menta y la siguiente en lima.
+- **Flujo de bienvenida:** no tenía capa de Tinta. Los pasos son tarjetas blancas sin la raya de acento, cada botón una pieza gris, los ajustes una tarjeta; la vista previa usa la cabecera en tinta, el fondo gris sin el punteado azul petróleo, la persona en blanco y el asistente en lila (como en Conversaciones), sin sombras.
+- **Asistente «Nuevo curso»:** los pasos eran pestañas subrayadas; ahora píldoras como las del kit (el actual en tinta con el número en lima, los hechos con el número en menta).
+- **Campos que seguían en 1 px y radio pequeño:** las horas de Horarios y reparto, la ficha del contacto (nueva etiqueta, color, nota de consentimiento), el nivel de respuestas de Seguimientos y las acciones de una receta. El filtro «Etiqueta» de Contactos y el selector «Marca» de Mi día en celular pasan a la píldora blanca de las demás vistas.
+- **Fichas:** las de contacto (`ctc-tag`: etiquetas, consentimiento, verificación, resultado de una respuesta automática) pierden el borde y toman los colores de estado; la etiqueta «Azul» se veía lima y ahora es cielo. El distintivo de canal de la cola de atención era un recuadro de 5 px estirado a lo ancho; ahora la píldora del canal de Mi día.
+- **Piezas con borde fino:** «Última información enviada» de la oportunidad, el registro de respuestas automáticas, «Uso del mes» y el resultado de la prueba de la IA, las respuestas rápidas de Mi configuración (y su buscador, ahora píldora), la vista previa de una respuesta, filas de importación e historial de catálogo, resúmenes del asistente, secretos y códigos: pieza gris redonda sin borde.
+- **Colores de Niebla:** los avatares con tono por persona usan los pasteles de Tinta con iniciales en tinta; el punto de la línea de tiempo de la oportunidad, el medidor de la IA, la insignia de la pestaña «Todos» de Conversaciones (ahora lima con tinta) y las burbujas de «Sin conversación elegida» dejan el azul petróleo y el degradado; los títulos de vista pasan del gris azulado de `polish.css` a tinta.
+- **Otros:** el botón desactivado ya no es translúcido (como en el kit); la tarjeta de oportunidad ya no sube al pasar el cursor; en Certificados el botón «Buscar» ya no se estira a toda la columna; en Mi día (celular) el nombre de «Por atender» ya no se parte en una columna angosta.
+
+Quedan como estaban, a propósito: la vista previa de pago (`.pay-page`, experiencia del cliente), los bloques de código en monoespaciada, la lista de la Bandeja (filas separadas por línea dentro de su tarjeta, como una tabla), la raya lima de los avisos sin leer (es de Tinta) y la paleta de gráficas. Pauta y Aliados no tenían filas con los datos de la base de pruebas; sus filas no se tocaron.
+
 ## Auditoría reproducible
 
 La auditoría automática está en `test/ui/niebla-audit.mjs` (el nombre del archivo es de Niebla; mide reglas, no colores) y se ejecuta en las pruebas de navegador (`npm run test:ui`) a 1366 × 800 (`escritorio`) y 375 × 812 (`celular`):
