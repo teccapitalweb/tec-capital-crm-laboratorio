@@ -72,6 +72,7 @@ Escribir exige administración, igual que las herramientas que escriben exigen q
 | Regreso exacto; nunca una redirección abierta | Comparación exacta (local: sin puerto); errores previos en la página del CRM | §4 aplicación desconocida, regreso ajeno o distinto: 400 sin `Location`; unidad de `redirectAllowed` |
 | Fichas opacas de 256 bits, sólo su huella, una hora | `tca_`/`tcr_` + 32 bytes aleatorios; SHA-256 en la base | §7 la base y la bitácora no contienen ninguna ficha, código ni el código de la página; §10 ficha vencida → 401 `invalid_token` |
 | Renovación con rotación y detección de reutilización | Se gasta de forma atómica al emitir; una vieja revoca el permiso | §8 nueva ficha distinta; la vieja → `invalid_grant` y todo revocado; no se amplía al renovar |
+| Los permisos van en cada ficha | Cada ficha guarda con qué permisos se emitió; al usarla vale la intersección con lo que la persona puede dar hoy. Al renovar se conservan o se acotan (`scope`), nunca se amplían | §8b ficha acotada no usa `orders`; renovar pidiendo de más → `invalid_scope`; renovar sin `scope` conserva lo acotado; la persona deja de poder «modificar cursos» → la ficha lo pierde y no lo recupera |
 | Revocación | `POST /oauth/revoke` (RFC 7009) revoca el permiso; «Desconectar» igual | §10 y §12 |
 | Ligadas a `/mcp` | El permiso guarda el recurso y `/mcp` lo compara | §7 la ficha en `/api/v1/me` y `/api/crm` → 401 |
 | La sesión del CRM nunca autentica `/mcp` | `/mcp` sólo lee `Authorization: Bearer tca_…` o `tcw_…` | §2 cookie o valor de la cookie como ficha → 401 |
@@ -109,5 +110,5 @@ Pantalla `asistentes` (Ajustes, visible): la dirección `/mcp` con «Copiar dire
 
 ## Verificación
 
-- `test/mcp-oauth.test.mjs` (3 pruebas): validación de regresos y metadatos; descarga del documento sin SSRF; y de punta a punta con el servidor real (16 secciones, citadas en la tabla de garantías).
+- `test/mcp-oauth.test.mjs` (4 pruebas): la migración sobre una base ya publicada; validación de regresos y metadatos; descarga del documento sin SSRF; y de punta a punta con el servidor real (17 secciones, citadas en la tabla de garantías).
 - `test/ui/asistentes.spec.mjs` (escritorio y celular): la página sin sesión, la página de permiso (marcas, permisos, «Permitir» y regreso con código y `state`) y «Asistentes conectados» con la conexión y «Desconectar», con Tinta medido (`expectNiebla`).

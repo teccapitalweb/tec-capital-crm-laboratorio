@@ -9,7 +9,8 @@
 //   mcp_oauth_grants    lo que la persona permitió: UNA marca, los permisos marcados, la aplicación y el recurso (/mcp).
 //                       «Desconectar» la revoca. Es la fila que ve «Asistentes conectados».
 //   mcp_oauth_codes     el código de un solo uso (60 segundos) que se canjea por las fichas; sólo su huella.
-//   mcp_oauth_tokens    fichas de acceso (una hora) y de renovación (rotan en cada uso); sólo su huella.
+//   mcp_oauth_tokens    fichas de acceso (una hora) y de renovación (rotan en cada uso); sólo su huella, con los
+//                       permisos con que se emitió cada una (nunca más que los del permiso concedido).
 //
 // Ninguna tabla guarda una ficha, un código ni un secreto en claro, ni datos de clientes del negocio.
 export default {
@@ -77,6 +78,7 @@ export default {
         token_hash TEXT PRIMARY KEY,
         grant_id TEXT NOT NULL REFERENCES mcp_oauth_grants(id),
         kind TEXT NOT NULL CHECK(kind IN ('access','refresh')),
+        scopes TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         expires_at INTEGER NOT NULL,
         used_at INTEGER

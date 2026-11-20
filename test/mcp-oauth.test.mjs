@@ -589,6 +589,60 @@ test('conectar un asistente con un clic: descubrimiento, permiso, fichas, renova
   assert.equal((await refresh(t2.body.refresh_token)).body.error, 'invalid_grant');
   assert.ok(db.prepare("SELECT 1 FROM audit WHERE action='mcp.oauth.refresh_reuse'").get());
 
+  // ---- 8b) los permisos van en cada ficha: una ficha acotada no recupera los demás, renovar no amplía y lo que la
+  // persona pierde después también se le quita a la ficha
+  const gs = await grant({ client: client.client_id, redirect: loop, scopes: ['editions', 'orders', 'catalog_write'] });
+  const ts = (await exchange(gs)).body;
+  assert.equal(ts.scope, 'orders editions catalog_write');
+  assert.deepEqual(
+    JSON.parse(db.prepare('SELECT scopes FROM mcp_oauth_tokens WHERE token_hash=?').get(sha(ts.access_token)).scopes),
+    ['orders', 'editions', 'catalog_write'],
+    'la ficha guarda sus permisos',
+  );
+  const narrow = await form('/oauth/token', {
+    grant_type: 'refresh_token',
+    refresh_token: ts.refresh_token,
+    client_id: client.client_id,
+    scope: 'editions catalog_write',
+  });
+  assert.equal(narrow.status, 200, JSON.stringify(narrow.body));
+  assert.equal(narrow.body.scope, 'editions catalog_write');
+  assert.deepEqual((await tool(narrow.body.access_token, 'resumen')).permisos, ['editions', 'catalog_write']);
+  assert.match(
+    (await tool(narrow.body.access_token, 'listar_pedidos')).error,
+    /no tiene el permiso/,
+    'la ficha acotada no usa un permiso que el permiso concedido sí tiene',
+  );
+  const widen = await form('/oauth/token', {
+    grant_type: 'refresh_token',
+    refresh_token: narrow.body.refresh_token,
+    client_id: client.client_id,
+    scope: 'editions orders',
+  });
+  assert.equal(widen.body.error, 'invalid_scope', 'renovar no recupera lo que se dejó fuera');
+  const kept = await refresh(narrow.body.refresh_token);
+  assert.equal(kept.status, 200, JSON.stringify(kept.body));
+  assert.equal(kept.body.scope, 'editions catalog_write', 'sin scope, la renovación conserva lo de la ficha anterior');
+  assert.match((await tool(kept.body.access_token, 'listar_pedidos')).error, /no tiene el permiso/);
+  // la persona deja de poder dar «modificar cursos» (deja de ser administración, sigue atendiendo la marca)
+  const adminRow = db.prepare("SELECT id FROM users WHERE username='admin'").get().id;
+  db.prepare("UPDATE users SET role='agent' WHERE id=?").run(adminRow);
+  db.prepare("INSERT INTO brand_members(user_id,brand_id) VALUES(?,'globalvet')").run(adminRow);
+  assert.deepEqual((await tool(kept.body.access_token, 'resumen')).permisos, ['editions']);
+  assert.match(
+    (await tool(kept.body.access_token, 'actualizar_curso', { cursoId: 'aves', version: 1 })).error,
+    /no tiene el permiso/,
+  );
+  const after = await refresh(kept.body.refresh_token);
+  assert.equal(after.body.scope, 'editions', 'tampoco vuelve al renovar');
+  db.prepare("UPDATE users SET role='admin' WHERE id=?").run(adminRow);
+  db.prepare("DELETE FROM brand_members WHERE user_id=? AND brand_id='globalvet'").run(adminRow);
+  assert.deepEqual(
+    (await tool(after.body.access_token, 'resumen')).permisos,
+    ['editions'],
+    'una ficha emitida con menos no recupera nada aunque la persona vuelva a poder',
+  );
+
   // ---- 9) el código: un solo uso, ligado a la aplicación, al regreso, a PKCE y al recurso; caduca
   const g2 = await grant({ client: client.client_id, redirect: loop });
   assert.equal(

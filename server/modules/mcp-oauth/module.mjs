@@ -456,12 +456,28 @@ export default {
       return done;
     }
 
+    // Cada ficha guarda los permisos con que se emitió: al usarla vale la INTERSECCIÓN de esos y los que la persona
+    // sigue pudiendo dar hoy (effective). Así una ficha acotada no recupera lo que no pidió y una pérdida de acceso
+    // posterior también la recorta.
+    const scopesOf = row => {
+      try {
+        const list = JSON.parse(row.scopes);
+        return Array.isArray(list) ? list : [];
+      } catch {
+        return [];
+      }
+    };
+    const within = (grant, row) => {
+      const own = scopesOf(row);
+      return effective(grant).filter(s => own.includes(s));
+    };
     function issue(grant, scopes) {
       const access_token = newToken('tca_'),
         refresh_token = newToken('tcr_'),
-        t = now();
-      repo.tokenInsert.run(sha(access_token), grant.id, 'access', t, t + OAUTH_LIMITS.accessMs);
-      repo.tokenInsert.run(sha(refresh_token), grant.id, 'refresh', t, t + OAUTH_LIMITS.refreshMs);
+        t = now(),
+        list = JSON.stringify(scopes);
+      repo.tokenInsert.run(sha(access_token), grant.id, 'access', list, t, t + OAUTH_LIMITS.accessMs);
+      repo.tokenInsert.run(sha(refresh_token), grant.id, 'refresh', list, t, t + OAUTH_LIMITS.refreshMs);
       return {
         access_token,
         token_type: 'Bearer',
@@ -525,7 +541,8 @@ export default {
         if (row.expires_at < now()) throw oauthError(400, 'invalid_grant', 'La ficha de renovación venció.');
         if (p.resource !== undefined && canonical(p.resource) !== grant.resource)
           throw oauthError(400, 'invalid_target', 'El recurso no coincide.');
-        let scopes = effective(grant);
+        // Lo que tenía la ficha que se renueva (nunca más) y que la persona todavía puede dar; se puede acotar más.
+        let scopes = within(grant, row);
         if (!scopes.length) throw oauthError(400, 'invalid_grant', 'Quien lo autorizó ya no tiene ese acceso.');
         if (typeof p.scope === 'string' && p.scope.trim()) {
           const asked = p.scope
@@ -644,7 +661,7 @@ export default {
       const grant = repo.grantById.get(row.grant_id);
       if (!grant || grant.revoked_at) throw unauthorized('Permiso revocado.');
       if (grant.resource !== resourceOf(req)) throw unauthorized('Este permiso es para otro recurso.');
-      const scopes = effective(grant);
+      const scopes = within(grant, row);
       if (!scopes.length)
         throw unauthorized('Quien autorizó este asistente ya no tiene acceso a la marca: hay que volver a conectarlo.');
       rate('api:oauth:' + grant.id, API_LIMITS.perKeyPerMinute);

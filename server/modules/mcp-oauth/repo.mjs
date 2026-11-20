@@ -31,7 +31,7 @@ export function createRepo(db) {
     codeByHash: db.prepare('SELECT * FROM mcp_oauth_codes WHERE code_hash=?'),
     codeSpend: db.prepare('UPDATE mcp_oauth_codes SET used_at=? WHERE code_hash=? AND used_at IS NULL'),
     tokenInsert: db.prepare(
-      'INSERT INTO mcp_oauth_tokens(token_hash,grant_id,kind,created_at,expires_at) VALUES(?,?,?,?,?)',
+      'INSERT INTO mcp_oauth_tokens(token_hash,grant_id,kind,scopes,created_at,expires_at) VALUES(?,?,?,?,?,?)',
     ),
     tokenByHash: db.prepare('SELECT * FROM mcp_oauth_tokens WHERE token_hash=?'),
     tokenSpend: db.prepare('UPDATE mcp_oauth_tokens SET used_at=? WHERE token_hash=? AND used_at IS NULL'),
