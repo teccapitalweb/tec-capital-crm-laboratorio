@@ -69,6 +69,19 @@ export function createPayments({
   const useConnector = fn => {
     connectorOf = fn;
   };
+  // Accesos del curso (server/modules/course-access): dice si, al confirmar este pedido, los accesos salen solos enseguida.
+  // Sólo cambia una frase de la confirmación; si la consulta falla, la confirmación sale con el texto de siempre.
+  let accessSoonOf = null;
+  const useAccessHint = fn => {
+    accessSoonOf = fn;
+  };
+  const accessSoon = o => {
+    try {
+      return accessSoonOf?.(o) === true;
+    } catch {
+      return false;
+    }
+  };
   const event = (orderId, kind, details, actor, t) =>
     db
       .prepare('INSERT INTO payment_events(order_id,kind,details,actor_id,created_at) VALUES(?,?,?,?,?)')
@@ -457,6 +470,7 @@ export function createPayments({
             course: n.course,
             edition: n.edition,
             perSession: plan === 'per_session',
+            accessSoon: accessSoon(get(o.id)),
           }),
       'order:' + o.id + ':paid',
     );
@@ -1352,6 +1366,7 @@ export function createPayments({
     linkMessage,
     confirm,
     attachReceipt,
+    useAccessHint,
     tick,
     openOrder,
     view,

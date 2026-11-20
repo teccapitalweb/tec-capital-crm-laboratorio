@@ -16,6 +16,7 @@ import channelHealth from './named/channel-health/index.mjs';
 import chatflows from './named/chatflows/index.mjs';
 import contactImport from './named/contact-import/index.mjs';
 import contacts from './named/contacts/index.mjs';
+import courseAccess from './named/course-access/index.mjs';
 import identity from './named/identity/index.mjs';
 import inbox from './named/inbox/index.mjs';
 import jobs from './named/jobs/index.mjs';
@@ -40,6 +41,7 @@ import waCutover from './named/wa-cutover/index.mjs';
 // «chatflows» va al final: tablas propias (recorridos) y llegó después de todas las publicadas.
 // «conversations» va después de las publicadas: la bandeja nueva (vistas guardadas e índices); usa conversations.state
 // de «lifecycle». «rules» y «sequences» van al final: tablas propias (reglas por mensaje y secuencias de seguimiento).
+// «course-access» va al final: tablas propias (accesos del curso) y llegó después de todas las publicadas.
 export const NAMED = defineRegistry([
   ...attributes,
   ...broadcasts,
@@ -60,4 +62,5 @@ export const NAMED = defineRegistry([
   ...conversations,
   ...rules,
   ...sequences,
+  ...courseAccess,
 ]);

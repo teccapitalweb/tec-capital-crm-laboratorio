@@ -2196,3 +2196,109 @@
     padding: 0 var(--space-6);
   }
 }
+
+/* Cierre de la venta (public/sale.js): franja sobre el compositor. Mantequilla = hay algo por hacer (comprobante por
+   revisar, accesos sin enviar); menta = hecho (accesos enviados). Sin borde ni sombra: es una pieza, como las citas. */
+.workspace:not(.customer-skin) .chat-bottom > .conv-sale:empty {
+  display: none;
+}
+.workspace:not(.customer-skin) .chat-bottom > .conv-sale {
+  margin-bottom: var(--space-3);
+}
+.workspace:not(.customer-skin) .sale-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3) var(--space-5);
+  align-items: center;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-6);
+  border-radius: var(--radius-block);
+  background: var(--warn-soft);
+  color: var(--ink);
+  font-size: var(--font-md);
+}
+.workspace:not(.customer-skin) .sale-strip.sale-done {
+  background: var(--ok-soft);
+}
+.workspace:not(.customer-skin) .sale-what {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  min-width: 0;
+}
+.workspace:not(.customer-skin) .sale-what svg {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+}
+.workspace:not(.customer-skin) .sale-what > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.workspace:not(.customer-skin) .sale-what b {
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .sale-what small {
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  overflow-wrap: anywhere;
+}
+.workspace:not(.customer-skin) .sale-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+.workspace:not(.customer-skin) .sale-strip .btn {
+  min-height: var(--touch);
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .sale-strip .btn.primary {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.workspace:not(.customer-skin) .sale-reason {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--space-2);
+}
+.workspace:not(.customer-skin) .sale-reason label {
+  color: var(--text-2);
+  font-size: var(--font-sm);
+}
+.workspace:not(.customer-skin) .sale-reason input {
+  min-height: var(--touch);
+  padding: 0 var(--space-6);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--font-lg);
+}
+.workspace:not(.customer-skin) .sale-reason > span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+@media (max-width: 680px) {
+  .workspace:not(.customer-skin) .sale-strip {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-4);
+  }
+  .workspace:not(.customer-skin) .sale-actions,
+  .workspace:not(.customer-skin) .sale-reason > span {
+    justify-content: stretch;
+  }
+  .workspace:not(.customer-skin) .sale-actions > *,
+  .workspace:not(.customer-skin) .sale-reason > span > * {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .workspace:not(.customer-skin) .sale-reason input {
+    font-size: var(--font-xl);
+  }
+}
+.workspace:not(.customer-skin) .sale-strip a.btn {
+  text-decoration: none;
+}

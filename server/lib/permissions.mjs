@@ -51,6 +51,7 @@ export const PERMISSIONS = Object.freeze(
       'sales.opportunities': 'Gestionar oportunidades y tareas',
       'sales.charge': 'Crear pedidos con el botón Cobrar',
       'sales.payments.confirm': 'Marcar como pagado un pedido de una marca en modo real',
+      'sales.access.manage': 'Escribir los accesos que recibe el alumno al confirmarse su pago',
     }),
     ...define('Equipo', {
       'team.view': 'Ver integrantes, equipos y disponibilidad',

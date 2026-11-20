@@ -75,6 +75,7 @@ const CATALOGUE = [
   'inbox.views.share',
   'privacy.person.erase',
   'privacy.person.export',
+  'sales.access.manage',
   'sales.payments.confirm',
   'security.manage',
   'settings.costs',

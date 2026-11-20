@@ -313,7 +313,8 @@ export function orderLink({ reference, course, edition, amount, note = '', coupo
     '\nSi prefieres transferencia, envía tu comprobante por este chat y una persona lo valida.\n\nPago de prueba: no se cobra nada real.'
   );
 }
-export function paymentConfirmed({ name, reference, course, edition, perSession = false }) {
+// `accessSoon`: la apertura entrega sus accesos sola al confirmar (server/modules/course-access); si no, llegan después.
+export function paymentConfirmed({ name, reference, course, edition, perSession = false, accessSoon = false }) {
   return (
     '✅ ¡Pago confirmado' +
     hi(name) +
@@ -327,7 +328,10 @@ export function paymentConfirmed({ name, reference, course, edition, perSession 
       : '') +
     '. Pedido ' +
     reference +
-    '.\nEl equipo coordinador te enviará por aquí los accesos y los recordatorios antes de empezar.\n\nPago de prueba: no se realizó ningún cobro real.'
+    (accessSoon
+      ? '.\nEnseguida te mando por aquí tus accesos; los recordatorios llegarán antes de empezar.'
+      : '.\nEl equipo coordinador te enviará por aquí los accesos y los recordatorios antes de empezar.') +
+    '\n\nPago de prueba: no se realizó ningún cobro real.'
   );
 }
 
