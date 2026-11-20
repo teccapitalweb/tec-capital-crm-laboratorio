@@ -16,6 +16,8 @@ import {
   unsupportedProblems,
 } from '../server/modules/chatflows/engine.mjs';
 import { createNode, normalizeGraph } from '../public/kit/shared/flow-model.js';
+import { UNAVAILABLE_TYPES } from '../public/kit/shared/flow-support.js';
+import { byNumber, matchCourse } from '../server/course-match.mjs';
 
 const NOW = Date.UTC(2026, 10, 16, 15, 0);
 
@@ -78,10 +80,11 @@ test('al publicar se rechaza con su motivo cada tipo de paso que el servidor tod
     ],
     [],
   );
-  // La Lista, la Plantilla, los archivos y «guardar el botón elegido» ya los ejecuta el motor; el material por espacio
-  // sigue rechazado.
+  // La Lista, la Plantilla, los archivos, «guardar el botón elegido» y «¿Qué curso te interesa?» ya los ejecuta el
+  // motor; el material por espacio sigue rechazado.
   const problems = unsupportedProblems(graph);
-  assert.deepEqual(problems.map(p => p.nodeId).sort(), ['b', 'e', 'f', 'g', 'i', 'k']);
+  assert.deepEqual(problems.map(p => p.nodeId).sort(), ['b', 'e', 'g', 'i', 'k']);
+  assert.equal(UNAVAILABLE_TYPES.choose_course, undefined, 'la paleta ya no lo marca «Todavía no disponible»');
   assert.ok(problems.every(p => p.code === 'unsupported' && p.message.length > 20));
   assert.match(problems.find(p => p.nodeId === 'b').message, /servicios externos/);
   assert.match(problems.find(p => p.nodeId === 'k').message, /material por espacio/);
@@ -101,6 +104,165 @@ test('al publicar se rechaza con su motivo cada tipo de paso que el servidor tod
     [],
   );
   assert.deepEqual(unsupportedProblems(media), []);
+});
+
+// «¿Qué curso te interesa?» con un `io` de mentira que lee las respuestas como el asistente (course-match: número de
+// la lista mostrada o nombre del curso) y anota los cambios de curso en lugar de mover una conversación.
+const COURSES = [
+  { id: 'nutricion', title: 'Nutrición en perros y gatos', editionId: 'e-n' },
+  { id: 'aves', title: 'Plan sanitario para aves', editionId: 'e-a' },
+];
+function courseIo({ list = COURSES, known = false, start = '', order = false, taken = [] } = {}) {
+  const state = { course: known ? 'nutricion' : null, known, moves: [] };
+  const f = fakeIo({
+    courses: () => ({ list, known: state.known }),
+    courseFrom: (text, { titles = null, strict = false } = {}) =>
+      (titles?.length && byNumber(list, text, titles.map((t, i) => i + 1 + '. ' + t).join('\n'))) ||
+      matchCourse(list, text, { strict }) ||
+      null,
+    startText: () => start,
+    chooseCourse(course) {
+      if (taken.includes(course.id)) return { refused: 'taken' };
+      if (order && state.known && course.id !== state.course)
+        return { blocked: { current: 'Nutrición en perros y gatos', other: course.title } };
+      state.moves.push(course.id);
+      state.course = course.id;
+      state.known = true;
+      return { ok: true, moved: true };
+    },
+    brandName: () => 'GlobalVet',
+  });
+  return { ...f, state };
+}
+const courseGraph = (data = {}) =>
+  graphOf(
+    [
+      ['c', 'choose_course', { skipIfKnown: true, useMessage: true, attempts: 2, ...data }],
+      ['ok', 'end', { text: 'Curso elegido' }],
+      ['no', 'end', { text: 'Sin curso' }],
+    ],
+    [
+      ['n1', 'next', 'c'],
+      ['c', 'next', 'ok'],
+      ['c', 'none', 'no'],
+    ],
+  );
+function courseRun(data, options) {
+  const f = courseIo(options);
+  const env = makeEnv({ graph: courseGraph(data), settings: {}, io: f.io, now: NOW });
+  const s = session(env);
+  advance(s, env);
+  const answer = text => input(s, env, route(s, env, { text }, classify));
+  const exits = () => f.logs.filter(l => l[0] === 'exit' && l[1] === 'c').map(l => [l[2], l[3]]);
+  return { ...f, env, s, answer, exits, texts: () => f.sent.map(p => p.text) };
+}
+
+test('«¿Qué curso te interesa?»: pasa de largo, toma el del mensaje, uno solo o ninguno, sin preguntar', () => {
+  // 1) ya tiene curso: no pregunta
+  let r = courseRun({}, { known: true });
+  assert.deepEqual(r.texts(), ['Curso elegido']);
+  assert.deepEqual(r.exits(), [['next', 'known']]);
+  assert.deepEqual(r.state.moves, []);
+  // sin «pasar de largo» sí pregunta aunque lo tenga
+  r = courseRun({ skipIfKnown: false }, { known: true });
+  assert.equal(r.s.waiting.kind, 'course');
+  // 2) el mensaje que inició el recorrido nombra un curso: lo toma
+  r = courseRun({}, { start: 'Hola, quiero información del curso de aves' });
+  assert.deepEqual(r.state.moves, ['aves']);
+  assert.deepEqual(r.exits(), [['next', 'message']]);
+  assert.deepEqual(r.texts(), ['Curso elegido']);
+  // … salvo que la opción esté apagada
+  r = courseRun({ useMessage: false }, { start: 'Hola, quiero información del curso de aves' });
+  assert.equal(r.s.waiting.kind, 'course');
+  assert.deepEqual(r.state.moves, []);
+  // a media conversación (ya con curso) una palabra suelta no basta: hace falta una señal, como con el asistente
+  r = courseRun({ skipIfKnown: false }, { known: true, start: 'tengo 200 aves ponedoras' });
+  assert.equal(r.s.waiting.kind, 'course');
+  // 8) un solo curso: lo toma; ninguno: sale por «Ninguno»
+  r = courseRun({}, { list: COURSES.slice(1) });
+  assert.deepEqual(r.state.moves, ['aves']);
+  assert.deepEqual(r.exits(), [['next', 'single']]);
+  r = courseRun({}, { list: [] });
+  assert.deepEqual(r.exits(), [['none', 'no_courses']]);
+  assert.deepEqual(r.texts(), ['Sin curso']);
+});
+
+test('«¿Qué curso te interesa?»: pregunta como el asistente, entiende número o nombre, reintenta y sale por «Ninguno»', () => {
+  // 3) y 4) la pregunta del asistente; «2» es el renglón 2 de la lista mostrada
+  let r = courseRun();
+  assert.equal(r.s.state, 'waiting');
+  assert.deepEqual(r.s.waiting, {
+    kind: 'course',
+    nodeId: 'c',
+    titles: COURSES.map(k => k.title),
+    attempts: 2,
+    tries: 0,
+  });
+  assert.equal(
+    r.texts()[0],
+    copy.chooseCourse(
+      'GlobalVet',
+      COURSES.map(k => k.title),
+    ),
+  );
+  assert.equal(route(r.s, r.env, { text: '2' }, classify).course.id, 'aves');
+  assert.equal(route(r.s, r.env, { text: 'el de perros' }, classify).course.id, 'nutricion');
+  r.answer('2');
+  assert.deepEqual(r.state.moves, ['aves']);
+  assert.deepEqual(r.exits(), [['next', 'answer']]);
+  assert.equal(r.texts().at(-1), 'Curso elegido');
+  r = courseRun();
+  r.answer('Plan sanitario para aves');
+  assert.deepEqual(r.state.moves, ['aves']);
+  // 5) lo que no es un curso: otra vez la pregunta (la del asistente «otra vez»), y al agotar los intentos, «Ninguno»
+  r = courseRun();
+  r.answer('no sé');
+  assert.equal(r.s.state, 'waiting');
+  assert.equal(r.s.waiting.tries, 1);
+  assert.equal(
+    r.texts().at(-1),
+    copy.chooseCourse(
+      'GlobalVet',
+      COURSES.map(k => k.title),
+      { again: true },
+    ),
+  );
+  r.answer('¿cuánto cuesta?');
+  assert.deepEqual(r.exits(), [['none', 'invalid']]);
+  assert.equal(r.texts().at(-1), 'Sin curso');
+  assert.equal(r.texts().length, 3, 'dos preguntas en total y el final');
+  // con un solo intento no se repite
+  r = courseRun({ attempts: 1 });
+  r.answer('mmm');
+  assert.deepEqual(r.exits(), [['none', 'invalid']]);
+  // un «no» (la intención «decline» del asistente) sale por «Ninguno» en seguida; pedir una persona interrumpe
+  r = courseRun();
+  const classifyNo = text => ({ intent: /^no/.test(text) ? 'decline' : /asesor/.test(text) ? 'human' : 'unknown' });
+  assert.equal(route(r.s, r.env, { text: 'no gracias' }, classifyNo).kind, 'course_none');
+  assert.equal(route(r.s, r.env, { text: 'quiero un asesor' }, classifyNo).kind, 'interrupt');
+  input(r.s, r.env, route(r.s, r.env, { text: 'no gracias' }, classifyNo));
+  assert.deepEqual(r.exits(), [['none', 'declined']]);
+  // otra conversación abierta de ese curso: no se puede pasar a él y se pregunta otra vez
+  r = courseRun({}, { taken: ['aves'] });
+  r.answer('aves');
+  assert.equal(r.s.state, 'waiting');
+  assert.deepEqual(r.state.moves, []);
+});
+
+test('«¿Qué curso te interesa?» con un pedido vigente: no cambia de curso, lo explica y sale por «Ninguno»', () => {
+  const r = courseRun({ skipIfKnown: false }, { known: true, order: true });
+  r.answer('aves');
+  assert.deepEqual(r.state.moves, []);
+  assert.equal(
+    r.texts().at(-2),
+    copy.switchBlocked({ course: { title: 'Nutrición en perros y gatos' } }, 'Plan sanitario para aves'),
+  );
+  assert.deepEqual(r.exits(), [['none', 'blocked']]);
+  assert.equal(r.texts().at(-1), 'Sin curso');
+  // el mismo curso que ya tiene no es un cambio: sigue por «Curso elegido»
+  const same = courseRun({ skipIfKnown: false }, { known: true, order: true });
+  same.answer('el de perros');
+  assert.deepEqual(same.exits(), [['next', 'answer']]);
 });
 
 // Una lista de seis cursos: tres secciones de dos filas.

@@ -324,6 +324,27 @@ export function createReplies({
   // ---- Número de WhatsApp que atiende toda la marca (docs/PLAN_NUMERO_POR_CONSULTORA.md). Decide, sin escribir nada, si este mensaje elige o cambia el
   // curso de la conversación: por el número de la lista que se le acaba de ofrecer o porque nombra un curso de la marca. Con el curso todavía por elegir
   // basta una palabra propia del curso; a media conversación hace falta además una señal («el de aves», «también…»), y un pedido vigente lo impide.
+  // ¿Se puede pasar la conversación al curso `hit`? 'same' (ya es su curso), 'taken' (la persona ya tiene otra conversación abierta de ese curso en
+  // el mismo canal), 'blocked' (tiene un pedido vigente del curso actual: no se cambia solo) u 'ok'. Sólo lee: quien cambia es crm.moveConversation.
+  function courseSwitch(c, hit) {
+    const pending = Boolean(c.course_pending);
+    if (!pending && hit.id === c.course_id) return 'same';
+    if (
+      db
+        .prepare(
+          "SELECT 1 FROM conversations WHERE customer_id=? AND course_id=? AND edition_id=? AND channel=? AND status!='resolved' AND id!=?",
+        )
+        .get(c.customer_id, hit.id, hit.editionId, c.channel, c.id)
+    )
+      return 'taken';
+    if (!pending && payments?.openOrder(c.id)) return 'blocked';
+    return 'ok';
+  }
+  // El curso que nombra una respuesta: el número de la lista que se le mostró (`titles`, en el orden en que salieron) o el nombre del curso. La misma
+  // lectura que route() hace con la lista del asistente; `strict` pide además una señal («el de…», «curso») cuando la persona no está eligiendo.
+  const pickCourse = (list, text, { titles = null, strict = false } = {}) =>
+    (titles?.length && byNumber(list, text, titles.map((t, i) => i + 1 + '. ' + t).join('\n'))) ||
+    matchCourse(list, text, { strict });
   // Devuelve null si no aplica (laboratorio, o número de un solo curso); si no, {list, pending, course? | ask? | blocked?}.
   function route(c, trigger) {
     if (!c.wa_number) return null;
@@ -337,15 +358,9 @@ export function createReplies({
       hit =
         (shown && byNumber(list, trigger.text, shown.text)) || matchCourse(list, trigger.text, { strict: !pending });
     if (hit && (pending || hit.id !== c.course_id)) {
-      if (
-        db
-          .prepare(
-            "SELECT 1 FROM conversations WHERE customer_id=? AND course_id=? AND edition_id=? AND channel=? AND status!='resolved' AND id!=?",
-          )
-          .get(c.customer_id, hit.id, hit.editionId, c.channel, c.id)
-      )
-        return { ...base, ask: pending && list.length > 1 };
-      if (!pending && payments?.openOrder(c.id)) return { ...base, blocked: hit };
+      const verdict = courseSwitch(c, hit);
+      if (verdict === 'taken') return { ...base, ask: pending && list.length > 1 };
+      if (verdict === 'blocked') return { ...base, blocked: hit };
       return { ...base, course: hit };
     }
     // Nombró algo que comparten varios cursos y ninguno gana: se le preguntará sólo por ésos (sin cambiar nada todavía).
@@ -1645,6 +1660,11 @@ export function createReplies({
     // ¿Este mensaje elige o cambia el curso? (número que atiende toda la marca). Sin escribir: lo usa también el motor
     // de recorridos para empezar ya con el curso que la persona nombró.
     routeCourse: route,
+    // Las piezas de la pregunta «¿sobre qué curso?» para el paso «¿Qué curso te interesa?» de los recorridos: la lista que se ofrece (cursos
+    // activos de la marca con una edición disponible), cómo se lee la respuesta y si se puede cambiar de curso. Ninguna escribe.
+    courseList: brandId => brandCourses(db, catalogue, brandId),
+    pickCourse,
+    courseSwitch,
     settings,
     resumeIfPausedByMode,
     suggestion,

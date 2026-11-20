@@ -656,3 +656,101 @@ test('automatización: inscribir en una secuencia desde un recorrido', async ({ 
   expect(archived.status()).toBe(200);
   watcher.done();
 });
+
+// «¿Qué curso te interesa?» ya lo ejecuta el servidor: la paleta no lo marca «Todavía no disponible», se agrega
+// conectado después del saludo, el recorrido no muestra el problema «no disponible» y se publica. El recorrido es
+// propio de la prueba (nombre por proyecto y vuelta) y se archiva al terminar.
+test('automatización: agregar «¿Qué curso te interesa?» y publicarlo', async ({ page, baseURL }, testInfo) => {
+  test.setTimeout(90_000);
+  const watcher = watch(page);
+  const phone = testInfo.project.name === 'celular';
+  const name = `Curso UI ${testInfo.project.name} ${Date.now().toString(36)}`;
+  const pageEl = page.locator('#page');
+  const headers = { Origin: baseURL };
+  const brands = (await (await page.request.get('/api/chatflows')).json()).brands;
+  const brandId = brands.find(b => b.canManage).id;
+  const graph = {
+    v: 1,
+    start: 's',
+    variables: [],
+    nodes: [
+      { id: 's', type: 'start', x: 0, y: 0, data: {} },
+      { id: 'g', type: 'message', title: 'Saludo', x: 300, y: 0, data: { parts: [{ kind: 'text', text: 'Hola' }] } },
+      { id: 'f', type: 'end', x: 600, y: 0, data: { text: 'Gracias' } },
+    ],
+    edges: [
+      { from: 's', port: 'next', to: 'g' },
+      { from: 'g', port: 'next', to: 'f' },
+    ],
+  };
+  await page.goto('/crm');
+  await expect(page.locator('#breadcrumb-title')).toHaveText('Mi día');
+  const created = await page.request.post('/api/chatflows', {
+    headers,
+    data: { brandId, name, graph, start: { type: 'manual' }, clientRef: crypto.randomUUID() },
+  });
+  expect(created.status()).toBe(201);
+  const flowId = (await created.json()).flow.id;
+
+  await page.locator('.nav [data-view="automatizacion"]').click();
+  await expect(pageEl.locator('h1')).toHaveText('Recorridos');
+  await pickBrand(pageEl, brandId);
+  await card(pageEl, name).first().locator('[data-do="abrir"]').click();
+  const editor = pageEl.locator('.lz');
+  const rows = editor.locator('.lz-outline .lz-row');
+  await expect(rows).toHaveCount(3);
+
+  // Elegir el saludo y agregar «¿Qué curso te interesa?»: ya no dice «Todavía no disponible» y queda conectado
+  await editor.locator('.lz-outline [data-node="g"] [data-do="fila"]').click();
+  if (phone) {
+    await page.keyboard.press('Escape');
+    await editor.locator('.lz-bar [data-do="paleta"]').click();
+  }
+  await editor.locator('[data-do="paleta-todos"]').click();
+  const option = editor.locator('[data-do="paleta-tipo"][data-type="choose_course"]');
+  await expect(option).toContainText('¿Qué curso te interesa?');
+  await expect(option).not.toContainText('Todavía no disponible');
+  await expect(option).not.toHaveAttribute('aria-disabled', 'true');
+  await option.click();
+  await expect(rows).toHaveCount(4);
+  await expect(editor.locator('.lz-outline-title'), 'nada quedó suelto').toHaveCount(0);
+  const panel = editor.locator('[data-slot="panel"]');
+  await expect(panel.locator('.lz-panel-step')).toHaveText(/Paso 3 · ¿Qué curso te interesa\?/i);
+  // los tres ajustes de siempre, sin el aviso de que el servidor no lo ejecuta
+  await expect(panel).toContainText('Pasar de largo si la conversación ya tiene curso');
+  await expect(panel).toContainText('Tomar el curso si el mensaje que inició el recorrido lo nombra');
+  await expect(panel).not.toContainText('todavía no lo ejecuta el servidor');
+  await expect(panel).not.toContainText('el curso lo decide el anuncio o el asistente');
+  await expect(editor.locator('.lz-bar [data-slot="problemas"]')).not.toHaveAttribute('data-level', 'error');
+  if (phone) await page.keyboard.press('Escape');
+  await expect(rows.nth(2)).toContainText('¿Qué curso te interesa?');
+  await settled(page);
+  await expectNiebla(page, 'automatizacion-elige-curso', testInfo);
+
+  // Guardar: el servidor no lo rechaza y se publica
+  await editor.locator('.lz-bar [data-do="guardar"]').click();
+  await expect(editor.locator('[data-slot="estado"]')).toHaveText('Guardado');
+  const saved = (await (await page.request.get(`/api/chatflows/${flowId}`)).json()).flow;
+  const step = saved.graph.nodes.find(n => n.type === 'choose_course');
+  expect(step.data).toEqual({ skipIfKnown: true, useMessage: true, attempts: 2 });
+  expect(saved.graph.edges.find(e => e.from === 'g').to).toBe(step.id);
+  const checked = await (
+    await page.request.post(`/api/chatflows/${flowId}/validate`, { headers, data: { graph: saved.graph } })
+  ).json();
+  expect(checked.issues.errors.filter(e => e.code === 'unsupported')).toEqual([]);
+  const published = await page.request.post(`/api/chatflows/${flowId}/publish`, {
+    headers,
+    data: { expectedRevision: saved.revision },
+  });
+  expect(published.status()).toBe(200);
+
+  // Dejar limpio
+  {
+    const current = (await (await page.request.get(`/api/chatflows/${flowId}`)).json()).flow;
+    await page.request.post(`/api/chatflows/${flowId}/archive`, {
+      headers,
+      data: { expectedRevision: current.revision },
+    });
+  }
+  watcher.done();
+});

@@ -92,7 +92,26 @@ test('simulador: «Venta de curso» con dos cursos distintos da la ficha y el ma
   }
   const lost = run(env(null), [{ text: 'no sé' }, { text: 'cuánto cuesta' }]);
   assert.equal(lost.outcome, 'handoff', 'agotados los intentos sale por «Ninguno», que lleva a una persona');
-  assert.equal(asked.transcript.length, 1, 'el estado recibido no se altera');
+  assert.equal(
+    asked.transcript.length,
+    2,
+    'el estado recibido no se altera (la nota del mensaje inicial y la pregunta)',
+  );
+  assert.match(notes(asked)[0], /mensaje que inició el recorrido nombra un curso/);
+  assert.match(outs(asked)[0], /^¡Hola! Soy el asistente de .*¿Sobre qué curso te gustaría información\?/);
+
+  // Como el motor: con un solo curso lo toma sin preguntar; sin cursos sale por «Ninguno».
+  const one = { ...DEMO_CATALOGUE, courses: DEMO_CATALOGUE.courses.slice(1, 2) };
+  const single = simStart(
+    simulationEnv({ graph: venta.graph, settings: venta.settings, catalogue: one, courseId: null }),
+  );
+  assert.equal(single.courseId, one.courses[0].id);
+  assert.equal(single.waiting.nodeId, 'b');
+  assert.ok(notes(single).some(n => /un solo curso/.test(n)));
+  const none = simStart(
+    simulationEnv({ graph: venta.graph, settings: venta.settings, catalogue: { ...DEMO_CATALOGUE, courses: [] } }),
+  );
+  assert.equal(none.outcome, 'handoff', 'sin cursos sale por «Ninguno»');
 });
 
 test('simulador: botones por id, por texto y por intención; texto libre, repetir y sin respuesta', () => {

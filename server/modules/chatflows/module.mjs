@@ -425,7 +425,18 @@ export default {
       }
       const brandLists = repo.validationLists(brandId);
       const courses = brandLists.courses;
-      const courseId = courses.some(k => k.id === input.courseId) ? input.courseId : courses[0]?.id || null;
+      // «Sin curso (como un chat nuevo)» en la prueba: los pasos del catálogo usan el primer curso, pero «¿Qué curso
+      // te interesa?» lo trata como una conversación que todavía no lo sabe. El curso que la persona elige en la prueba
+      // vuelve en el estado (`courseId`) y sólo vale si es de esta marca; no se mueve ninguna conversación real.
+      const ofBrand = v => typeof v === 'string' && courses.some(k => k.id === v);
+      const given = input.state && typeof input.state === 'object' ? input.state : null;
+      let known = ofBrand(given?.courseId) || ofBrand(input.courseId);
+      let courseId = ofBrand(given?.courseId)
+        ? given.courseId
+        : ofBrand(input.courseId)
+          ? input.courseId
+          : courses[0]?.id || null;
+      const offered = () => svc.replies.courseList(brandId);
       const channel = ['whatsapp', 'instagram', 'facebook'].includes(input.channel) ? input.channel : 'whatsapp';
       const conv = {
         id: 'simulacion',
@@ -576,6 +587,27 @@ export default {
             );
             return found.enabled ? { enrolled: true } : { refused: 'sequence_off' };
           },
+          // «¿Qué curso te interesa?» con la lista y la lectura reales del asistente; elegir sólo cambia el curso
+          // de la prueba (lo que muestran los pasos siguientes), nunca una conversación.
+          courses: () => ({ list: offered(), known }),
+          courseFrom: (said, opts) =>
+            String(said || '').trim() ? svc.replies.pickCourse(offered(), said, opts) || null : null,
+          startText() {
+            notes.push(
+              'En la prueba no hay un mensaje inicial: si el recorrido empezara con un mensaje que nombra un curso, lo tomaría sin preguntar.',
+            );
+            return '';
+          },
+          chooseCourse(course) {
+            courseId = course.id;
+            conv.course_id = course.id;
+            known = true;
+            notes.push(
+              `La conversación quedaría en el curso «${course.title}» (en la prueba no se cambia ninguna conversación).`,
+            );
+            return { ok: true, moved: true };
+          },
+          brandName: () => repo.brandName(brandId),
           lastMessageText: () => input.input?.text || '',
           schedule(kind, at) {
             if (kind === 'delay') notes.push(`Esperaría ${Math.round((at - now()) / 1000)} s.`);
@@ -590,13 +622,18 @@ export default {
       // los contadores. Lo que espera ese paso (opciones, tipo de respuesta, expresión) se vuelve a armar desde el
       // grafo, nunca desde lo que mande el cliente.
       let s = null;
-      if (input.state && typeof input.state === 'object') {
-        const given = input.state;
+      if (given) {
         const nodeId = typeof given.nodeId === 'string' ? given.nodeId : '';
         const waitingNode = env.byId.get(nodeId);
         const count = v => Math.min(Math.max(Number.isInteger(v) ? v : 0, 0), 3);
+        // La lista de cursos que espera «¿Qué curso te interesa?» se vuelve a armar con la vigente de la marca.
+        const titles = waitingNode?.type === 'choose_course' ? offered().map(k => k.title) : [];
         const waiting = waitingNode
-          ? waitOf(waitingNode, env, { misses: count(given.waiting?.misses), tries: count(given.waiting?.tries) })
+          ? waitOf(waitingNode, env, {
+              misses: count(given.waiting?.misses),
+              tries: count(given.waiting?.tries),
+              titles,
+            })
           : null;
         if (!waiting)
           throw fail(400, 'El estado de la prueba no es válido: vuelve a empezar.', { code: 'invalid_request' });
@@ -687,7 +724,7 @@ export default {
       }
       return {
         messages,
-        state: s,
+        state: { ...s, courseId: known ? courseId : null },
         trace,
         waiting:
           s.state === 'waiting'

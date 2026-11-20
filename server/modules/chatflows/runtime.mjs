@@ -329,6 +329,35 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
         if (r.out?.refused) return { refused: r.out.refused };
         return { enrolled: true, duplicate: Boolean(r.out?.duplicate) };
       },
+      // «¿Qué curso te interesa?»: la lista, la lectura de la respuesta y la regla de cambio son las del asistente
+      // (server/replies.mjs); el cambio, el de siempre (crm.moveConversation: nunca a un curso de otra marca, el
+      // interés de relleno pasa al curso elegido). Después de mover, todo lo que sigue lee la conversación de nuevo.
+      courses() {
+        const c = conv();
+        return { list: svc.replies.courseList(brandId), known: !c.course_pending };
+      },
+      courseFrom(text, opts) {
+        if (!String(text || '').trim()) return null;
+        return svc.replies.pickCourse(svc.replies.courseList(brandId), text, opts) || null;
+      },
+      startText() {
+        if (ctx.startText === undefined) ctx.startText = repo.startMessageText(brandId, s.id);
+        return ctx.startText;
+      },
+      chooseCourse(course) {
+        const c = conv();
+        const verdict = svc.replies.courseSwitch(c, course);
+        if (verdict === 'blocked')
+          return { blocked: { current: repo.courseTitle(brandId, c.course_id), other: course.title } };
+        if (verdict === 'taken') return { refused: 'taken' };
+        // «same» también pasa por aquí: si era el curso de relleno, deja de serlo; si ya era el suyo, no cambia nada.
+        const target = verdict === 'same' ? { id: c.course_id, editionId: c.edition_id } : course;
+        if (!svc.crm.moveConversation(c, target.id, target.editionId, { placeholder: Boolean(c.course_pending) }))
+          return { refused: 'taken' };
+        values = null;
+        return { ok: true, moved: verdict !== 'same' };
+      },
+      brandName: () => repo.brandName(brandId),
       lastMessageText: () => repo.lastCustomerMessage(brandId, ctx.c.id)?.text || '',
       schedule(kind, at) {
         svc.automation.enqueueInTx({
@@ -466,6 +495,8 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
     });
     const ctx = context(brandId, c, s, { trigger, depth });
     if (sent) ctx.sent = sent;
+    // El mensaje que inició el recorrido (paso «¿Qué curso te interesa?»): sólo si lo inició un mensaje de la persona.
+    ctx.startText = startedBy === 'message' ? String(trigger?.text || '') : '';
     ctx.flowName = flow.name;
     ctx.log('start', { detail: startedBy });
     const env = { ...env0, io: ctx.io };
@@ -843,8 +874,10 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
     } else if (kind === 'reminder') {
       if (s.state !== 'waiting' || !env.settings.reminder?.text) return { skipped: 'not_waiting' };
       if (!ctx.io.windowOpen()) return { skipped: 'window_closed' };
-      const options = s.waiting?.options || [];
-      if (s.waiting?.list) ctx.io.send({ text: env.settings.reminder.text + '\n\n' + numberedOptions(options) });
+      // «¿Qué curso te interesa?» recuerda con la misma lista numerada que se le mostró.
+      const options = s.waiting?.options || (s.waiting?.titles || []).map(label => ({ label }));
+      if (s.waiting?.list || s.waiting?.kind === 'course')
+        ctx.io.send({ text: env.settings.reminder.text + '\n\n' + numberedOptions(options) });
       else
         ctx.io.send({ text: env.settings.reminder.text, buttons: options.length ? options.map(o => o.label) : null });
     }

@@ -504,22 +504,31 @@ const RUN = {
       note(s, node, `La conversación ya tiene curso («${known.title}»): pasa de largo.`);
       return go(env, s, node, 'next');
     }
+    // Como el motor: sin cursos que ofrecer sale por «Ninguno»; con uno solo lo toma sin preguntar.
     if (!courses.length) {
-      note(s, node, 'No hay cursos entre los datos de ejemplo: el paso sigue sin preguntar.');
+      note(s, node, 'No hay cursos que ofrecer: sale por «Ninguno».');
+      return go(env, s, node, 'none');
+    }
+    if (courses.length === 1) {
+      s.courseId = courses[0].id;
+      note(s, node, `La marca ofrece un solo curso: la conversación queda en «${courses[0].title}» sin preguntar.`);
       return go(env, s, node, 'next');
     }
+    if (d.useMessage) note(s, node, 'Si el mensaje que inició el recorrido nombra un curso, lo tomaría sin preguntar.');
     say(s, node, { text: askCourse(env, courses, false) });
     return hold(s, node, { kind: 'course' });
   },
 };
 
+// La misma pregunta que hace el asistente (server/reply-copy.mjs, chooseCourse).
 const askCourse = (env, courses, again) =>
   (again
     ? 'Para darte la información correcta necesito saber qué curso te interesa:'
-    : `¿Sobre qué curso de ${shown(env.catalogue.brand?.name, 'marca')} te gustaría información?`) +
+    : `¡Hola! Soy el asistente de ${shown(env.catalogue.brand?.name, 'marca')}. ¿Sobre qué curso te gustaría información?`) +
   '\n\n' +
   courses.map((c, i) => `${i + 1}. ${c.title}`).join('\n') +
-  '\n\nResponde con el número o el nombre del curso.';
+  '\n\nResponde con el número o el nombre del curso.' +
+  (again ? ' Si prefieres que te atienda una persona, escribe «asesor».' : '');
 
 function readPath(value, path) {
   let at = value;

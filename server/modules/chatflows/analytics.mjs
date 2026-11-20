@@ -103,7 +103,7 @@ export function createAnalytics(db) {
       at(row.node).ports[row.port] = row.n;
     }
 
-    // Cuánto tarda la persona en contestar una pregunta o unos botones: del «se quedó esperando» a lo siguiente que
+    // Cuánto tarda la persona en contestar una pregunta, unos botones o «¿Qué curso te interesa?»: del «se quedó esperando» a lo siguiente que
     // escribió en ese mismo paso (una respuesta válida o no). Las esperas de tiempo no cuentan.
     const waits = new Map();
     for (const row of all(
@@ -114,7 +114,7 @@ export function createAnalytics(db) {
          WHERE e.brand_id=? AND e.flow_id=? AND e.event IN ('wait','input','miss') AND ${SCOPE}
          WINDOW w AS (PARTITION BY e.session_id ORDER BY e.seq))
        SELECT node,at-prev_at ms FROM ev
-       WHERE event IN ('input','miss') AND prev_event='wait' AND prev_node=node AND prev_detail IN ('choice','question')
+       WHERE event IN ('input','miss') AND prev_event='wait' AND prev_node=node AND prev_detail IN ('choice','question','course')
        LIMIT 20000`,
       brandId,
       flowId,

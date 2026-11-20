@@ -315,6 +315,18 @@ export function createRepo(db) {
         brandId,
         conversationId,
       ),
+    // El texto del mensaje de la persona que inició la sesión (clave de origen `msg:<id>`), de la misma conversación y
+    // de la marca; '' si la sesión no empezó con un mensaje.
+    startMessageText(brandId, sessionId) {
+      const row = one(
+        "SELECT m.text FROM chatflow_sessions s JOIN messages m ON 'msg:' || m.id = s.source_key AND m.conversation_id=s.conversation_id WHERE s.brand_id=? AND s.id=? AND s.started_by='message' AND m.sender_kind='customer'",
+        brandId,
+        sessionId,
+      );
+      return row?.text || '';
+    },
+    courseTitle: (brandId, courseId) =>
+      one('SELECT title FROM courses WHERE brand_id=? AND id=?', brandId, courseId)?.title ?? '',
     messageByRef: ref => one('SELECT id,conversation_id FROM messages WHERE client_ref=?', ref),
     refsWithPrefix: prefix =>
       one('SELECT count(*) n FROM messages WHERE client_ref >= ? AND client_ref < ?', prefix, prefix + '￿').n,

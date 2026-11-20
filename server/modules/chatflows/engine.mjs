@@ -9,6 +9,7 @@
 // limpia con ese mismo archivo, no con una copia.
 import { defineFields, evaluate, normalizeText } from '../../lib/conditions.mjs';
 import {
+  LIMITS,
   matchesPattern,
   safePattern,
   normalizeGraph,
@@ -298,10 +299,20 @@ function cannotSend(node, env, s, reason) {
 // limpio (clean del modelo): el simulador lo reconstruye así en lugar de confiar en un estado que manda el navegador.
 // Una Lista espera como unos Botones con más opciones (sus filas, en orden) y `list: true`: sus opciones no se vuelven
 // a ofrecer como botones (WhatsApp admite 3), sino como lista o como texto numerado.
-export function waitOf(node, env, { misses = 0, tries = 0 } = {}) {
+// «¿Qué curso te interesa?» espera una respuesta de curso (`kind: 'course'`): `titles` son los cursos que se le
+// mostraron, en orden, para entender «2» como el renglón 2 de ESA lista aunque el catálogo cambie mientras contesta.
+export function waitOf(node, env, { misses = 0, tries = 0, titles = [] } = {}) {
   const def = typeOf(node?.type);
-  if (!def || !['buttons', 'list', 'template', 'question'].includes(node.type)) return null;
+  if (!def || !['buttons', 'list', 'template', 'question', 'choose_course'].includes(node.type)) return null;
   const d = def.clean(node.data);
+  if (node.type === 'choose_course')
+    return {
+      kind: 'course',
+      nodeId: node.id,
+      titles: titles.map(t => String(t)),
+      attempts: Math.min(Math.max(d.attempts || 2, 1), LIMITS.attempts),
+      tries,
+    };
   if (node.type === 'buttons')
     return {
       kind: 'choice',
@@ -368,6 +379,27 @@ export function listMessage(node, d, env, s) {
     },
   };
 }
+
+// ---- «¿Qué curso te interesa?»: las piezas son las del asistente (server/replies.mjs: courseList, pickCourse,
+// courseSwitch) y su misma pregunta (reply-copy: chooseCourse). El `io` las expone:
+//   courses()                   {list: [{id, title, editionId}], known}  known: la conversación ya tiene un curso real
+//   startText()                 el mensaje con el que empezó el recorrido ('' si no empezó con un mensaje)
+//   courseFrom(text, opts)      el curso que nombra el texto (por número de la lista mostrada o por nombre) o null
+//   chooseCourse(course)        {ok, moved} | {blocked: {current, other}} | {refused: 'taken'}  (el real mueve la conversación)
+//   brandName()
+// Toma un curso: sigue por «Curso elegido»; con un pedido vigente de otro curso no lo cambia, lo explica como el
+// asistente y sale por «Ninguno». null si no se pudo (otra conversación abierta de ese curso): quien llama decide.
+function takeCourse(env, s, course, how) {
+  const r = env.io.chooseCourse(course);
+  if (r.ok) return { next: 'next', detail: how };
+  if (r.blocked) {
+    say(env, s, { text: env.io.copy.switchBlocked({ course: { title: r.blocked.current } }, r.blocked.other) });
+    return { next: 'none', detail: 'blocked' };
+  }
+  return null;
+}
+const askCourse = (env, s, titles, again = false) =>
+  say(env, s, { text: env.io.copy.chooseCourse(env.io.brandName(), titles, { again }) });
 
 // Qué hace cada tipo de paso. Devuelve {next: salida} | {wait} | {delay: ms} | {end: resultado, …acciones finales}.
 const EXEC = {
@@ -455,6 +487,25 @@ const EXEC = {
     const r = env.io.sequence(d.sequenceId, node.id);
     const detail = r.refused ? 'refused:' + r.refused : r.duplicate ? 'duplicate' : 'enrolled';
     return { next: 'next', detail };
+  },
+  // 1) Con «pasar de largo» y un curso real (no el de relleno), no pregunta. 2) Sin cursos que ofrecer sale por
+  // «Ninguno»; con uno solo lo toma sin preguntar. 3) Con «tomar el curso del mensaje», si el mensaje que inició el
+  // recorrido nombra un curso de la marca, lo toma. 4) Si no, pregunta como el asistente y espera la respuesta.
+  // Detalle de la salida: known, single, message, answer, blocked, no_courses, taken.
+  choose_course(node, d, env, s) {
+    const { list, known } = env.io.courses();
+    if (d.skipIfKnown && known) return { next: 'next', detail: 'known' };
+    if (!list.length) return { next: 'none', detail: 'no_courses' };
+    if (list.length === 1) return takeCourse(env, s, list[0], 'single') || { next: 'none', detail: 'taken' };
+    if (d.useMessage) {
+      // A media conversación (ya con curso) hace falta además una señal, como al cambiar de curso con el asistente.
+      const hit = env.io.courseFrom(env.io.startText(), { strict: known });
+      const taken = hit ? takeCourse(env, s, hit, 'message') : null;
+      if (taken) return taken;
+    }
+    const titles = list.map(k => k.title);
+    askCourse(env, s, titles);
+    return { wait: waitOf(node, env, { titles }) };
   },
   handoff(node, d, env, s) {
     if (d.text.trim()) say(env, s, { text: renderText(d.text, env, s) });
@@ -603,9 +654,9 @@ export function advance(s, env) {
 }
 
 // Sigue desde el paso actual por una salida (la del botón elegido, «Sin respuesta», «No válida»…).
-export function follow(s, env, port) {
+export function follow(s, env, port, detail = null) {
   const node = env.byId.get(s.nodeId);
-  env.io.log('exit', { nodeId: s.nodeId, nodeType: node?.type, port });
+  env.io.log('exit', { nodeId: s.nodeId, nodeType: node?.type, port, detail });
   s.waiting = null;
   s.expiresAt = null;
   const to = node ? env.target(node.id, port) : null;
@@ -649,14 +700,26 @@ const PAID = /comprobante|pague|ya pague|transferi|deposite/;
 //   {kind:'interrupt'}              pide una persona, se queja, pide reembolso o avisa que ya pagó
 //   {kind:'intent', stay}           pulsó una opción que contesta el asistente
 //   {kind:'detour'} {kind:'repeat'} {kind:'default'}   escribió otra cosa (según «si escribe otra cosa»)
+//   {kind:'course', course}         nombró un curso de la marca («¿Qué curso te interesa?»)
+//   {kind:'course_none'}            dijo que no («no», «ya no me interesa»: la intención «decline» del asistente)
 //   {kind:'during_delay'}           llegó mientras el recorrido espera unos segundos
 //   {kind:'expired'}
 export function route(s, env, message, classify) {
   if (s.expiresAt !== null && s.expiresAt <= env.now) return { kind: 'expired' };
   const w = s.waiting;
-  if (s.state === 'delayed' || !w || (w.kind !== 'choice' && w.kind !== 'question')) return { kind: 'during_delay' };
+  if (s.state === 'delayed' || !w || !['choice', 'question', 'course'].includes(w.kind))
+    return { kind: 'during_delay' };
   const text = String(message.text ?? '');
   const key = normalizeText(text);
+  if (w.kind === 'course') {
+    // Pedir una persona, una queja o avisar que ya pagó siguen su camino, como con unos botones. Lo demás se lee con
+    // la lógica del asistente: el número de la lista que se le mostró o el nombre del curso.
+    const cls = classify(text);
+    if (INTERRUPT.includes(cls.intent) || (cls.intent === 'payment' && PAID.test(key))) return { kind: 'interrupt' };
+    const course = env.io.courseFrom(text, { titles: w.titles, strict: false });
+    if (course) return { kind: 'course', course };
+    return cls.intent === 'decline' ? { kind: 'course_none' } : { kind: 'invalid' };
+  }
   if (w.kind === 'question') {
     const value = checkAnswer(w.answer, text);
     return value === null ? { kind: 'invalid' } : { kind: 'answer', value };
@@ -684,6 +747,21 @@ export function input(s, env, r) {
     return follow(s, env, r.port);
   }
   if (r.kind === 'default') return follow(s, env, 'default');
+  if (w?.kind === 'course') {
+    if (r.kind === 'course_none') return follow(s, env, 'none', 'declined');
+    if (r.kind === 'course') {
+      const taken = takeCourse(env, s, r.course, 'answer');
+      if (taken) return follow(s, env, taken.next, taken.detail);
+    }
+    // No era un curso (o no se puede pasar a ése): otra vez la pregunta, con la lista vigente, hasta los intentos.
+    w.tries += 1;
+    const titles = env.io.courses().list.map(k => k.title);
+    if (w.tries >= w.attempts || !titles.length) return follow(s, env, 'none', 'invalid');
+    w.titles = titles;
+    askCourse(env, s, titles, true);
+    env.io.log('miss', { nodeId: s.nodeId, detail: 'invalid' });
+    return {};
+  }
   if (r.kind === 'answer') {
     if (w.saveTo.kind === 'attribute') env.io.setAttribute(w.saveTo.key, r.value);
     else s.vars[w.saveTo.name] = r.value;

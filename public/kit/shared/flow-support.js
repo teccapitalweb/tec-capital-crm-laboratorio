@@ -40,9 +40,6 @@ export function unsupportedProblems(graph, ctx = {}) {
       case 'webhook':
         push(node, `«${name}»: un recorrido no llama a servicios externos por ahora.`);
         break;
-      case 'choose_course':
-        push(node, `«${name}»: «¿Qué curso te interesa?» ${NOT_YET}; el curso lo decide el anuncio o el asistente.`);
-        break;
       case 'assistant':
         if (d.mode !== 'handover')
           push(
@@ -121,5 +118,4 @@ export const FLOW_FILE_MIMES = Object.freeze(['image/jpeg', 'image/png', 'applic
 export const UNAVAILABLE_TYPES = Object.freeze({
   consent: 'Suscribir o dar de baja todavía no está disponible; la baja la registra el asistente cuando la piden.',
   webhook: 'Un recorrido todavía no llama a servicios externos.',
-  choose_course: '«¿Qué curso te interesa?» todavía no está disponible; el curso lo decide el anuncio o el asistente.',
 });

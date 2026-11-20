@@ -904,3 +904,301 @@ test('Inscribir en secuencia: valida, inscribe una vez, sigue si no puede entrar
   assert.ok((await check(mine.id)).errors.some(e => e.nodeId === 'n3' && /está archivada/.test(e.message)));
   assert.deepEqual((await api('/api/chatflows/lists?brand=globalvet')).lists.sequences, []);
 });
+
+// Paso «¿Qué curso te interesa?» (docs/PLAN_RECORRIDOS.md): con las piezas del asistente (su lista de cursos, su
+// pregunta y su forma de leer la respuesta) y el cambio de curso de siempre (crm.moveConversation). Una conversación
+// con el curso «por elegir» se prepara como la de un número que atiende toda la marca (course_pending = 1).
+test('«¿Qué curso te interesa?»: pasa de largo, toma el del mensaje, pregunta, entiende la respuesta y lo usa después', async t => {
+  const L = await lab(t);
+  const { api, db } = L;
+  await L.enableAutomation();
+  const graph = (data = {}) => ({
+    v: 1,
+    start: 'n1',
+    variables: [],
+    nodes: [
+      node('n1', 'start'),
+      node('c', 'choose_course', { skipIfKnown: true, useMessage: true, attempts: 2, ...data }),
+      node('card', 'course_card', { text: '', flyer: false }),
+      node('ok', 'end', { text: 'Listo con {{curso}}.' }),
+      node('no', 'end', { text: 'Sin curso: te escribe una persona.' }),
+      node('late', 'end', { text: 'Se acabó el tiempo.' }),
+    ],
+    edges: [
+      ['n1', 'next', 'c'],
+      ['c', 'next', 'card'],
+      ['c', 'none', 'no'],
+      ['c', 'timeout', 'late'],
+      ['card', 'next', 'ok'],
+    ].map(([from, port, to]) => ({ from, port, to })),
+  });
+  // 10) ya no se rechaza al publicar
+  const draft = (
+    await api('/api/chatflows', {
+      body: { brandId: 'globalvet', name: 'Curso', graph: graph(), clientRef: ref() },
+      expected: 201,
+    })
+  ).flow;
+  const issues = (await api('/api/chatflows/' + draft.id + '/validate', { body: { graph: graph() } })).issues;
+  assert.deepEqual(
+    issues.errors.filter(e => e.nodeId === 'c'),
+    [],
+  );
+  const flow = await L.publishFlow({ name: 'Elige curso', graph: graph() });
+  const titles = Object.fromEntries(
+    db
+      .prepare("SELECT id,title FROM courses WHERE brand_id='globalvet'")
+      .all()
+      .map(k => [k.id, k.title]),
+  );
+  const pending = async name => {
+    const who = await L.customer(name);
+    db.prepare('UPDATE conversations SET course_pending=1 WHERE id=?').run(who.conv);
+    return who;
+  };
+  const texts = conv => L.outgoing(conv).map(m => m.text);
+  const exits = conv =>
+    db
+      .prepare(
+        "SELECT e.port,e.detail FROM chatflow_events e JOIN chatflow_sessions s ON s.id=e.session_id WHERE s.conversation_id=? AND e.node_id='c' AND e.event='exit' ORDER BY e.seq",
+      )
+      .all(conv)
+      .map(r => [r.port, r.detail]);
+
+  // 1) ya tiene un curso real: no pregunta y la ficha es la de su curso
+  const ana = await L.customer('Ana Pérez');
+  await ana.say('Hola');
+  assert.deepEqual(exits(ana.conv), [['next', 'known']]);
+  assert.ok(texts(ana.conv)[0].includes(titles.aves));
+  assert.equal(texts(ana.conv).at(-1), `Listo con ${titles.aves}.`);
+
+  // 2) curso por elegir y el primer mensaje lo nombra: lo toma sin preguntar y todo lo siguiente es de ese curso
+  const beto = await pending('Beto Ruiz');
+  await beto.say('Hola, quiero información del curso de nutrición');
+  assert.deepEqual(exits(beto.conv), [['next', 'message']]);
+  assert.deepEqual(
+    { ...db.prepare('SELECT course_id,course_pending FROM conversations WHERE id=?').get(beto.conv) },
+    { course_id: 'nutricion', course_pending: 0 },
+  );
+  assert.ok(texts(beto.conv)[0].includes(titles.nutricion), 'la ficha es la del curso elegido');
+  assert.equal(texts(beto.conv).at(-1), `Listo con ${titles.nutricion}.`);
+  assert.equal(
+    db
+      .prepare(
+        'SELECT o.course_id FROM conversation_opportunities x JOIN opportunities o ON o.id=x.opportunity_id WHERE x.conversation_id=?',
+      )
+      .get(beto.conv).course_id,
+    'nutricion',
+    'el interés de relleno pasa al curso elegido',
+  );
+
+  // 3) y 4) no lo nombra: la pregunta del asistente, una sola vez; «el número» de la lista elige y la ficha es la suya
+  const caro = await pending('Caro Díaz');
+  const asked = await caro.say('Hola');
+  assert.match(asked.reply.text, /Soy el asistente de GlobalVet\. ¿Sobre qué curso te gustaría información\?/);
+  assert.equal(JSON.parse(L.session(caro.conv).waiting).kind, 'course');
+  const line = asked.reply.text.split('\n').find(l => l.endsWith(titles.nutricion));
+  await caro.say(line.split('.')[0]);
+  assert.deepEqual(exits(caro.conv), [['next', 'answer']]);
+  assert.equal(L.conversation(caro.conv).course_id, 'nutricion');
+  assert.equal(texts(caro.conv).filter(x => /¿Sobre qué curso/.test(x)).length, 1, 'la pregunta salió una vez');
+  assert.ok(texts(caro.conv).at(-2).includes(titles.nutricion));
+  assert.equal(texts(caro.conv).at(-1), `Listo con ${titles.nutricion}.`);
+  assert.equal(L.session(caro.conv).outcome, 'completed');
+
+  // … o por su nombre
+  const dani = await pending('Dani Gómez');
+  await dani.say('Hola');
+  await dani.say(titles.aves);
+  assert.deepEqual(exits(dani.conv), [['next', 'answer']]);
+  assert.deepEqual(
+    { ...db.prepare('SELECT course_id,course_pending FROM conversations WHERE id=?').get(dani.conv) },
+    { course_id: 'aves', course_pending: 0 },
+  );
+
+  // 5) lo que no es un curso: otra vez la pregunta; agotados los intentos, «Ninguno» y el curso sigue por elegir
+  const eva = await pending('Eva Luna');
+  await eva.say('Hola');
+  await eva.say('no sé');
+  assert.match(texts(eva.conv).at(-1), /^Para darte la información correcta necesito saber qué curso te interesa:/);
+  await eva.say('lo que sea');
+  assert.deepEqual(exits(eva.conv), [['none', 'invalid']]);
+  assert.equal(texts(eva.conv).at(-1), 'Sin curso: te escribe una persona.');
+  assert.equal(L.conversation(eva.conv).course_pending, 1);
+  // un «no» sale por «Ninguno» en seguida
+  const fer = await pending('Fer Soto');
+  await fer.say('Hola');
+  await fer.say('no gracias');
+  assert.deepEqual(exits(fer.conv), [['none', 'declined']]);
+
+  // 6) sin respuesta: la salida «Sin respuesta»
+  const gil = await pending('Gil Mora');
+  await gil.say('Hola');
+  await L.wake(gil.conv, 'timeout');
+  assert.equal(texts(gil.conv).at(-1), 'Se acabó el tiempo.');
+  assert.equal(L.conversation(gil.conv).course_pending, 1);
+
+  // 8) un solo curso que ofrecer: lo toma sin preguntar
+  const hugo = await pending('Hugo Paz');
+  db.prepare("UPDATE courses SET active=0 WHERE id='nutricion'").run();
+  try {
+    await hugo.say('Hola');
+  } finally {
+    db.prepare("UPDATE courses SET active=1 WHERE id='nutricion'").run();
+  }
+  assert.deepEqual(exits(hugo.conv), [['next', 'single']]);
+  assert.equal(L.conversation(hugo.conv).course_pending, 0);
+  assert.ok(!texts(hugo.conv).some(x => /¿Sobre qué curso/.test(x)));
+
+  // 9) la prueba pregunta y deja contestar, sin mover ninguna conversación
+  const snapshot = () => db.prepare('SELECT id,course_id,course_pending FROM conversations ORDER BY id').all();
+  const before = JSON.stringify(snapshot());
+  let sim = await api('/api/chatflows/' + flow.id + '/simulate', { body: {} });
+  assert.equal(sim.waiting.kind, 'course');
+  const simLine = sim.messages[0].text.split('\n').find(l => l.endsWith(titles.nutricion));
+  sim = await api('/api/chatflows/' + flow.id + '/simulate', {
+    body: { state: sim.state, input: { text: simLine.split('.')[0] } },
+  });
+  assert.ok(sim.notes.some(n => n.includes(`quedaría en el curso «${titles.nutricion}»`)));
+  assert.ok(sim.messages.some(m => m.from === 'flow' && m.text.includes(titles.nutricion)));
+  assert.equal(sim.outcome, 'completed');
+  // con un curso elegido en la prueba, pasa de largo
+  sim = await api('/api/chatflows/' + flow.id + '/simulate', { body: { courseId: 'aves' } });
+  assert.equal(sim.waiting, null);
+  assert.ok(sim.messages.some(m => m.text.includes(titles.aves)));
+  assert.equal(JSON.stringify(snapshot()), before, 'la prueba no movió ninguna conversación');
+});
+
+// 7) Con un pedido vigente no se cambia de curso: se explica como lo hace el asistente y sale por «Ninguno».
+test('«¿Qué curso te interesa?» con un pedido vigente: no cambia de curso y sale por «Ninguno»', async t => {
+  const L = await lab(t);
+  const { api } = L;
+  await L.enableAutomation();
+  const ps = (await api('/api/payments/settings')).settings.find(x => x.brand_id === 'globalvet');
+  await api('/api/payments/brands/globalvet', {
+    method: 'PATCH',
+    body: { enabled: true, expectedRevision: ps.revision },
+  });
+  const enroll = await L.publishFlow({
+    name: 'Inscribe',
+    start: { type: 'manual' },
+    graph: {
+      v: 1,
+      start: 'n1',
+      variables: [],
+      nodes: [node('n1', 'start'), node('e', 'enroll'), node('f', 'end', { text: '' })],
+      edges: [
+        { from: 'n1', port: 'next', to: 'e' },
+        { from: 'e', port: 'order', to: 'f' },
+      ],
+    },
+  });
+  const choose = await L.publishFlow({
+    name: 'Cambia de curso',
+    start: { type: 'manual' },
+    graph: {
+      v: 1,
+      start: 'n1',
+      variables: [],
+      nodes: [
+        node('n1', 'start'),
+        node('c', 'choose_course', { skipIfKnown: false, useMessage: false, attempts: 2 }),
+        node('ok', 'end', { text: 'Listo.' }),
+        node('no', 'end', { text: 'Seguimos con tu pedido.' }),
+      ],
+      edges: [
+        { from: 'n1', port: 'next', to: 'c' },
+        { from: 'c', port: 'next', to: 'ok' },
+        { from: 'c', port: 'none', to: 'no' },
+      ],
+    },
+  });
+  const ana = await L.customer('Ana Pérez');
+  await api('/api/chatflows/conversations/' + ana.conv, {
+    body: { flowId: enroll.id, clientRef: ref() },
+    expected: 201,
+  });
+  assert.match(L.outgoing(ana.conv).at(-1).text, /Pedido TC-/);
+  await api('/api/chatflows/conversations/' + ana.conv, {
+    body: { flowId: choose.id, clientRef: ref() },
+    expected: 201,
+  });
+  assert.match(L.outgoing(ana.conv).at(-1).text, /¿Sobre qué curso te gustaría información\?/);
+  await ana.say('el de nutrición');
+  const texts = L.outgoing(ana.conv).map(m => m.text);
+  assert.match(texts.at(-2), /^Tienes un pedido pendiente de .*Para cambiarte a .*escribe «asesor»/);
+  assert.equal(texts.at(-1), 'Seguimos con tu pedido.');
+  assert.equal(L.conversation(ana.conv).course_id, 'aves', 'el curso no cambió');
+  assert.equal(L.session(ana.conv).outcome, 'completed');
+});
+
+// WhatsApp real, con un número que atiende toda la marca: la pregunta sale a Meta como texto, igual que la del
+// asistente (la persona contesta con el número o el nombre); un webhook repetido no la manda dos veces y la respuesta
+// mueve la conversación al curso elegido.
+test('WhatsApp real: «¿Qué curso te interesa?» pregunta por texto y la respuesta elige el curso', async t => {
+  const lab = await whatsappLab(t, { AI_PROVIDER: '' });
+  const origin = lab.origin();
+  const api = (path, options = {}) => call(origin, path, { cookie: lab.admin, ...options });
+  const { db } = lab;
+  db.prepare('UPDATE wa_numbers SET multi=1 WHERE phone_number_id=?').run(NUMBER);
+  const current = (await api('/api/automation')).brands.find(b => b.id === 'globalvet');
+  await api('/api/automation/brands/globalvet', {
+    method: 'PATCH',
+    body: { enabled: true, expectedRevision: current.revision },
+  });
+  let { flow } = await api('/api/chatflows', {
+    body: {
+      brandId: 'globalvet',
+      name: 'Elige curso',
+      graph: {
+        v: 1,
+        start: 'n1',
+        variables: [],
+        nodes: [
+          node('n1', 'start'),
+          node('c', 'choose_course', { skipIfKnown: true, useMessage: true, attempts: 2 }),
+          node('ok', 'end', { text: 'Listo con {{curso}}.' }),
+        ],
+        edges: [
+          { from: 'n1', port: 'next', to: 'c' },
+          { from: 'c', port: 'next', to: 'ok' },
+        ],
+      },
+      start: { type: 'first_message' },
+      clientRef: ref(),
+    },
+    expected: 201,
+  });
+  ({ flow } = await api('/api/chatflows/' + flow.id + '/publish', { body: { expectedRevision: flow.revision } }));
+  await api('/api/chatflows/' + flow.id + '/activate', { body: { expectedRevision: flow.revision } });
+  const from = '5215522223333';
+  assert.equal((await metaText(origin, from, 'wamid.curso.1', 'Hola')).status, 200);
+  assert.equal((await metaText(origin, from, 'wamid.curso.1', 'Hola')).status, 200);
+  const conv = await until(
+    () => db.prepare("SELECT conversation_id id FROM chatflow_sessions WHERE brand_id='globalvet'").get()?.id,
+    'el recorrido inició con el mensaje real',
+  );
+  assert.equal(db.prepare('SELECT course_pending FROM conversations WHERE id=?').get(conv).course_pending, 1);
+  const question = await until(
+    () => lab.meta.sent.find(b => b.to === from && /¿Sobre qué curso/.test(b.text?.body || '')),
+    'la pregunta salió a Meta',
+  );
+  assert.equal(question.type, 'text', 'como la lista del asistente: texto numerado, sin lista interactiva');
+  assert.equal(question.interactive, undefined);
+  const nutricion = db.prepare("SELECT title FROM courses WHERE id='nutricion'").get().title;
+  const line = question.text.body.split('\n').find(l => l.endsWith(nutricion));
+  assert.equal((await metaText(origin, from, 'wamid.curso.2', line.split('.')[0])).status, 200);
+  await until(
+    () => lab.meta.sent.find(b => b.to === from && b.text?.body === `Listo con ${nutricion}.`),
+    'el recorrido siguió con el curso elegido',
+  );
+  assert.deepEqual(
+    { ...db.prepare('SELECT course_id,course_pending FROM conversations WHERE id=?').get(conv) },
+    { course_id: 'nutricion', course_pending: 0 },
+  );
+  assert.equal(
+    lab.meta.sent.filter(b => b.to === from && /¿Sobre qué curso/.test(b.text?.body || '')).length,
+    1,
+    'el webhook repetido no repitió la pregunta',
+  );
+});

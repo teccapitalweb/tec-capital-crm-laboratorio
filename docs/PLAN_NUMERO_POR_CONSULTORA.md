@@ -18,6 +18,7 @@ Una marca con un solo curso disponible nunca pregunta.
 
 ## Cambiar de curso en el mismo chat
 
+- **El paso «¿Qué curso te interesa?» de un recorrido** (20 nov 2026) hace esta misma pregunta dentro del recorrido, con las mismas piezas: la lista de cursos de la marca (`courseList`), la pregunta (`copy.chooseCourse`, como texto numerado también en WhatsApp real), la lectura de la respuesta (`pickCourse`: el número de la lista que se le mostró o el nombre), la regla de cambio (`courseSwitch`, la que usa `route()`) y `crm.moveConversation`. **Cómo conviven:** mientras un recorrido atiende la conversación, la pregunta la hace el paso y la respuesta la lee el recorrido; el asistente no vuelve a preguntar porque un recorrido en curso contesta antes que él. Sin recorrido (o cuando el recorrido termina sin curso, por «Ninguno»), el asistente sigue preguntando como siempre. Las diferencias: el paso pregunta tantas veces como diga su campo «Intentos» y luego sale por «Ninguno» (el asistente pasa a una persona a la tercera), y con un pedido vigente da el mismo aviso y sale por «Ninguno». Detalle en [PLAN_RECORRIDOS.md](PLAN_RECORRIDOS.md).
 - **Con un recorrido activo también** (18 nov 2026): si el mensaje arranca un recorrido por palabra clave («info del curso de aves»), el motor de recorridos aplica estas mismas reglas antes de empezar, y el saludo, la ficha y el precio salen ya del curso nombrado.
 
 - «¿Y el de aves cuánto cuesta?» contesta de aves y la conversación **pasa a aves**. A media conversación hace falta una señal además de la palabra («el de…», «curso», «también», «mejor») o dos palabras propias del curso: «tengo 200 aves, ¿me sirve?» no cambia nada.
@@ -60,7 +61,7 @@ Migrar no cambia ningún dato existente. Copia previa: `backups/before-crm-v41-*
 - `server/course-match.mjs`: `brandCourses`, `matchCourse`, `byNumber`.
 - `server/whatsapp.mjs`: `adOf`, `adCourse`, alta de la conversación con curso por elegir, `saveAd`, `PUT /api/whatsapp/ads`.
 - `server/crm.mjs`: `moveConversation`.
-- `server/replies.mjs`: `route`, intención `choose_course`, `out.move`.
+- `server/replies.mjs`: `route`, intención `choose_course`, `out.move`; `courseList`, `pickCourse` y `courseSwitch` para el paso «¿Qué curso te interesa?» de los recorridos (`server/modules/chatflows/engine.mjs`).
 - `server/reply-copy.mjs`: `chooseCourse`, `courseMenu`, `switchBlocked`.
 - `public/connectors.js`: opción del número y lista de anuncios.
 
