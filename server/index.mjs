@@ -494,6 +494,8 @@ const modules = await loadModules({
     staff,
     requireStaff,
     requireAdmin,
+    readSession, // la página de permiso de un asistente (módulo mcp-oauth) usa la sesión normal del equipo
+    originAllowed,
     accessConversation,
     canSee,
     insertMessage,
@@ -977,6 +979,7 @@ const server = http.createServer(async (req, res) => {
     if (await privacy.handlePublic(req, res, path)) return;
     if (await payments.handlePublic(req, res, path, ip)) return; // pago sin sesion de un pedido de WhatsApp real (/api/pay/<pedido>)
     if (await certificates.handlePublic(req, res, path, ip)) return; // verificación pública de certificados por folio, con límite por IP
+    if (path.startsWith('/.well-known/') && (await modules.get('mcp-oauth')?.wellKnown(req, res, path))) return; // descubrimiento OAuth del conector (server/modules/mcp-oauth)
     if (await mcp.handle(req, res, path, ip)) return; // conector de Claude (MCP): llave propia, sin sesion
     if (await integrations.handlePublic(req, res, path, url, ip)) return; // API v1 de lectura: llave propia, sin sesión ni Origin
     if (await allies.handlePublic(req, res, path, ip)) return; // postulación pública de aliados (/aliados), apagada por omisión, con límite por IP

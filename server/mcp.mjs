@@ -727,6 +727,20 @@ export function createMcp({
     }
   }
 
+  // Quién llama: una llave de la API (`tcw_…`, como siempre) o el permiso que una persona dio a un asistente con OAuth
+  // (módulo server/modules/mcp-oauth, docs/PLAN_MCP_OAUTH.md), que devuelve un objeto con la forma de una llave. Un 401
+  // lleva WWW-Authenticate con la dirección de los metadatos, para que la aplicación del asistente empiece el permiso.
+  function authenticateRequest(req, res, ip) {
+    const oauth = moduleOf('mcp-oauth');
+    const viaOauth = oauth?.enabled && !/^Bearer\s+tcw_/.test(String(req.headers.authorization || ''));
+    try {
+      return viaOauth ? oauth.authenticate(req, ip) : integrations.authenticate(req, ip);
+    } catch (e) {
+      if (e.status === 401 && oauth?.enabled) res.setHeader('WWW-Authenticate', oauth.challenge(req, e));
+      throw e;
+    }
+  }
+
   // POST /mcp. Devuelve false si la ruta no es suya.
   async function handle(req, res, path, ip) {
     if (path !== '/mcp') return false;
@@ -736,7 +750,7 @@ export function createMcp({
       return true;
     }
     if (req.headers.origin) throw fail(403, 'El conector no se usa desde un navegador.'); // Claude llama desde su servidor o desde la terminal, sin Origin: una página web no debe poder usar la llave de alguien
-    const key = integrations.authenticate(req, ip);
+    const key = authenticateRequest(req, res, ip);
     let msg;
     try {
       msg = await body(req);
