@@ -1,6 +1,6 @@
 # Cierre de la venta: del comprobante al acceso
 
-Qué pasa después de que la persona recibe su pedido. **Publicado en `main` el 20 nov 2026** (commits `853a151` y `204b569`); falta probarlo con WhatsApp real. Esquema: una migración con nombre nueva, `course-access/0001-course-access`.
+Qué pasa después de que la persona recibe su pedido. **Publicado en `main` el 20 nov 2026** (commits `853a151` y `204b569`) y comprobado con WhatsApp real el 20 nov 2026 (4:10–4:13 p.m., número de prueba de Meta en GlobalVet, capturas del dueño): imagen enviada desde WhatsApp con un pedido vigente → acuse «Recibimos tu comprobante» → franja «Comprobante por revisar» en el chat → «Validar pago» → confirmación con «Enseguida te mando por aquí tus accesos» y, en el mismo minuto, el mensaje de accesos con la fecha en palabras; la franja pasó a «Pago confirmado · accesos enviados» y la oportunidad a ganada. Esquema: una migración con nombre nueva, `course-access/0001-course-access`.
 
 ## Qué había y qué faltaba
 
