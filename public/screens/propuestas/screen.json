@@ -1,0 +1,9 @@
+{
+  "id": "propuestas",
+  "title": "Propuestas del asistente",
+  "visibility": "live",
+  "nav": { "group": "Ajustes", "icon": "clipboard-check", "label": "Propuestas del asistente", "order": 71 },
+  "roles": ["admin", "agent"],
+  "entry": "index.js",
+  "styles": ["screen.css"]
+}

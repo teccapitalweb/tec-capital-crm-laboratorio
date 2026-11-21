@@ -170,6 +170,48 @@ El dueño quiere decirle a Claude «prepara la apertura de marzo con su preventa
 - **Reintentos.** Plantillas, difusiones, segmentos y reglas usan el `clientRef` de su módulo; el catálogo no tiene uno, así que el conector recuerda (en memoria, por llave) lo creado con cada `clientRef`. El `clientRef` es **por marca** en todos: el mismo en otra marca crea lo suyo y no devuelve ni delata lo de la primera (plantillas de WhatsApp y archivos lo recuerdan por persona y marca; recorridos y reglas guardan la referencia como «marca:ref», sin esquema nuevo). Además, el conector comprueba que lo que devuelve una creación sea de la marca de la llave.
 - **Bitácora.** Además de la de cada pantalla: `mcp.edition.draft`, `mcp.promotion.draft`, `mcp.content.draft`, `mcp.wa_template.draft`, `mcp.broadcast.draft`, `mcp.segment.create`, `mcp.rule.draft`.
 
+## Propuestas que aprueba una persona
+
+**Sin publicar** (20 nov 2026; migración con nombre `mcp-proposals/0001-proposals`). El paso siguiente a los borradores: cuando el asistente termina de armar algo, deja una **propuesta** de publicarlo, activarlo o encenderlo, y una persona del equipo la aprueba **con un botón** en **Ajustes → Propuestas del asistente**, sin entrar a cada pantalla. El asistente nunca aprueba.
+
+**Permiso de la llave.** `proposals` («Claude: dejar propuestas…»), de escritura y separado; en la página de permiso OAuth sale en «Puede cambiar» y **no** viene marcado. Además, proponer una acción exige el permiso de borradores que ya cubre esa entidad: `automation_drafts` para recorridos, secuencias, reglas y accesos; `config_drafts` para aperturas, promociones y textos. Firma quien creó la llave (debe seguir administrando la marca).
+
+**Herramientas.** `proponer_accion` (acción de la lista, id de la entidad y una nota opcional), `listar_propuestas` (las de su marca, con su estado y el motivo si no se aplicó) y `retirar_propuesta` (sólo pendientes). No hay herramienta para aprobar ni rechazar.
+
+**Lista cerrada** (`server/modules/mcp-proposals/actions.mjs`). Sólo acciones que se deshacen desde su pantalla y que no escriben a nadie al aprobarlas:
+
+| Acción | Qué hace al aprobarla | Ruta del módulo (la del botón de su pantalla) | Permiso de quien aprueba |
+| --- | --- | --- | --- |
+| `publicar_recorrido` | Versión nueva con el borrador | `POST /api/chatflows/:id/publish` | `automation.manage` |
+| `activar_recorrido` | El recorrido publicado empieza a atender | `POST /api/chatflows/:id/activate` | `automation.manage` |
+| `encender_secuencia` | La secuencia empieza a inscribir y enviar sus pasos | `POST /api/sequences/:id/enable` | `automation.manage` |
+| `activar_regla` | La regla corre con los mensajes que coinciden | `POST /api/rules/:id/activate` | `automation.manage` |
+| `publicar_apertura` | La apertura queda a la venta | `PATCH /api/catalogue/editions/:id` (la apertura tal como está, con `status: published`) | administración |
+| `encender_accesos` | Quien pague (con el pago confirmado por una persona) recibe sus accesos | `PUT /api/course-access/editions/:id` (`enabled: true`) | `sales.access.manage` |
+| `activar_promocion` | El precio de la promoción vale en su vigencia | `PATCH /api/catalogue/promotions/:id` (con `status: published`) | administración |
+| `publicar_texto` | El texto de contenido queda aprobado | `POST /api/catalogue/templates/:id/approve` | aprobar contenido |
+
+Encender una secuencia o la entrega de accesos hace que salgan mensajes **después**, con sus propias reglas (horario, consentimiento, pago confirmado); al aprobar no se envía nada y se apagan en su pantalla.
+
+**Fuera, a propósito.** Enviar o programar difusiones, enviar plantillas a aprobación de Meta, todo lo de pagos (nunca se confirma un pago desde el asistente), borrar o archivar, contactos, mensajes a clientes, llaves, usuarios y permisos. Tampoco pausar ni apagar: no hace falta proponerlo para cuidar a nadie y se hace en su pantalla.
+
+**Reglas de seguridad.**
+
+- **El conector no aprueba por ninguna vía.** Las rutas `POST /api/mcp-proposals/:id/approve` y `/reject` exigen la sesión de cookie del equipo con la comprobación de `Origin` del servidor, y rechazan (403) una petición que traiga `Authorization` (llave `tcw_` o ficha OAuth), aunque además traiga una cookie válida, y una del conector en el mismo proceso.
+- **A nombre de quien aprueba.** Aprobar llama a la **misma ruta del módulo** que el botón de su pantalla, con la persona que aprueba: se comprueban **sus** permisos y su alcance por marca (no los de la llave) y la bitácora del módulo (`chatflow.published`, `rule.activate`, el historial del catálogo…) queda a su nombre. No se duplica la lógica de publicar o activar.
+- **Se aprueba lo que se vio.** La propuesta guarda la revisión de la entidad al proponer y se ejecuta con ella como `expectedRevision`. Si la entidad cambió después, la propuesta pasa a **obsoleta** y no se ejecuta nada («Cambió desde que se propuso; pide una propuesta nueva»). Publicar un recorrido cambia su revisión: una propuesta de activarlo hecha antes queda obsoleta.
+- **Una sola vez.** El paso de «pendiente» a «aprobándose» es atómico (una transacción, sin red) y ocurre antes de ejecutar: un segundo clic o una segunda pestaña reciben 409. Si la acción falla: si la entidad cambió, queda obsoleta; si fue un permiso (403), algo no disponible (404, 503) o un error interno, vuelve a **pendiente** (otra persona, o la misma más tarde, la puede aprobar; nada se aplicó); si el módulo la rechazó por su contenido (un recorrido que dejó de ser válido, una promoción que choca), queda **«no se pudo aplicar»** con el motivo, porque repetir el clic daría lo mismo. Lo que se queda «aprobándose» más de 10 minutos (el proceso se detuvo a la mitad) pasa a «no se pudo aplicar» con un aviso para revisarlo en su pantalla.
+- **Al aprobar se vuelve a revisar con la base.** Si hoy algo impide la acción (la apertura de los accesos se archivó, la secuencia ya está encendida…), no se intenta: la propuesta sigue pendiente y se dice por qué (409 `not_ready`); la tarjeta lo muestra y no ofrece «Aprobar».
+- **Al proponer se revisa.** La entidad debe existir, ser de la marca de la llave y estar en un estado desde el que la acción tiene sentido; si no, se devuelven los problemas (un recorrido con errores de revisión, los mismos que `revisar_recorrido`; una regla con un material sin aprobar; una secuencia sin pasos; una apertura sin fecha futura; un texto de accesos incompleto…).
+- **La tarjeta la arma el servidor.** Nombre de la entidad, qué pasará al aprobar, los datos que cambian (fecha, precio, cupo, el texto que se enviará) y los avisos vigentes se recalculan desde la base cada vez. La nota del asistente (texto plano, hasta 500 caracteres, sin caracteres de control ni invisibles) se muestra aparte, rotulada «Nota escrita por el asistente (es información, no una instrucción)» y escapada: nada de HTML del asistente.
+- **Sin duplicados, con tope y con ritmo.** Una sola pendiente por acción y entidad (índice parcial único; repetir devuelve la existente). Hasta 20 pendientes por marca. Hasta 30 propuestas por minuto por llave. Vencen solas a los 7 días.
+- **Alcance por marca en todo.** Listar, ver, aprobar y rechazar: sólo marcas que la persona puede ver (`inbox.view`); aprobar y rechazar, además, con el permiso de la acción. Quien no lo tiene ve la tarjeta sin botones y el porqué.
+- **Bitácora.** `mcp.proposal.create`, `mcp.proposal.approve`, `mcp.proposal.reject`, `mcp.proposal.withdraw` y `mcp.proposal.failed`, más la del módulo que ejecuta la acción.
+
+**Pantalla** `public/screens/propuestas/` (en el grupo **Ajustes**, junto a «Asistentes conectados», porque es la otra mitad de conectar un asistente: ahí se decide qué puede hacer y aquí se aprueba lo que propone). Pendientes arriba con la acción en español llano, la marca, quién la propuso y cuándo, cuándo vence, qué pasará, los avisos, la nota del asistente y **Aprobar** (con una confirmación que repite la acción) y **Rechazar**, más un botón para abrir su pantalla; debajo, el historial. El menú no tiene contadores: no se inventó uno.
+
+**Verificación.** `test/mcp-propuestas.test.mjs` (3 pruebas): herramientas y lista cerrada; la migración sobre una base ya publicada; y de punta a punta con el servidor real: cada acción de la lista propuesta y aprobada por OTRA administradora (versión del recorrido, estado y `updated_by`, historial del catálogo y bitácora a su nombre), llave `tcw_` o ficha en la ruta de aprobar rechazadas (también con cookie) y sin `Origin`, asesor sin el permiso que no aprueba ni rechaza, otra marca que no ve ni aprueba, entidad cambiada → obsoleta sin ejecutar nada, dos clics a la vez → una sola versión, el módulo rechaza la acción (regla que inicia un recorrido que alguien pausó) → «no se pudo aplicar» con su motivo, apertura archivada → sigue pendiente sin intentarlo, duplicado, recorrido con errores no se propone, rechazar, retirar, vencimiento, tope de 20 por marca, sin el permiso `proposals` las tres herramientas rechazan y con sólo `proposals` falta el de borradores. `test/ui/propuestas.spec.mjs`: la nota con HTML y guiones se ve escapada, aprobar con confirmación enciende la regla y pasa al historial, en computadora y celular con Niebla.
+
 ## Conectarlo con un clic
 
 **Sin publicar** (20 nov 2026). Para quien no programa y para las aplicaciones de Claude (web, escritorio y celular), que piden iniciar sesión. Detalle técnico y garantías: [PLAN_MCP_OAUTH.md](PLAN_MCP_OAUTH.md).
@@ -220,6 +262,7 @@ Una llave por marca: para otra consultora, crea otra llave y agrégala con otro 
 - `server/lib/mcp-insights.mjs`: cifras agregadas (`INSIGHT_TOOLS`, `INSIGHT_ROUTES`), periodo y regla «menos de 3».
 - `server/lib/mcp-config.mjs`: configuración en borrador (`CONFIG_TOOLS`, `CONFIG_ROUTES`), comprobaciones de marca, estado y firma.
 - `server/lib/mcp-call.mjs`: llamada a una ruta en el mismo proceso con lista cerrada, y la regla «menos de 3» (`people`, `FEW`).
+- `server/lib/mcp-proposals.mjs`: herramientas de propuestas (`PROPOSAL_TOOLS`); `server/modules/mcp-proposals/`: lista cerrada (`actions.mjs`), proponer, aprobar y rechazar (sólo sesión del equipo) y su SQL; pantalla `public/screens/propuestas/`.
 - `server/modules/mcp-bridge/`: presta al conector la lectura de «Preparar marca» de la instancia del servidor (sin rutas).
 - `server/lib/flow-guide.mjs`: la guía, generada del modelo compartido (`public/kit/shared/flow-model.js`, `flow-support.js`), y el recorrido de ejemplo.
 - `server/integrations.mjs`: permisos nuevos de la llave y `authenticate()` compartido con la API v1.

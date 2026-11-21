@@ -45,7 +45,9 @@ test('las herramientas del conector están bien descritas: nombre, permiso, esqu
     'crear_segmento',
     'crear_texto_borrador',
     'escribir_acceso',
+    'proponer_accion',
     'proponer_conocimiento',
+    'retirar_propuesta',
   ]);
   assert.ok(
     TOOLS.filter(t => ['actualizar_apertura', 'actualizar_curso'].includes(t.name)).every(

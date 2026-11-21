@@ -38,6 +38,8 @@ export const SCOPES = {
     'Claude: ver cifras y resultados de la marca (ventas, atención, recorridos, difusiones, WhatsApp; sólo totales, sin nombres, teléfonos, correos ni mensajes)',
   config_drafts:
     'Claude: preparar en BORRADOR aperturas, promociones, textos, plantillas de WhatsApp, difusiones y segmentos (nunca publica, aprueba, envía a Meta, programa ni envía)',
+  proposals:
+    'Claude: dejar propuestas (publicar, activar o encender algo ya armado) para que una persona las apruebe en el CRM; nunca las aprueba él',
   // API v1 ampliada (docs/PLAN_API_ESCRITURA.md).
   templates: 'Plantillas de WhatsApp aprobadas y sus datos',
   contacts_write:
@@ -59,6 +61,7 @@ export const SCOPE_KINDS = Object.freeze({
   automation_drafts: 'write',
   insights: 'read',
   config_drafts: 'write',
+  proposals: 'write',
   templates: 'read',
   contacts_write: 'write',
   consent_write: 'write',
