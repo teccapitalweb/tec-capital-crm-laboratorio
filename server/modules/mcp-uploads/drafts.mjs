@@ -21,10 +21,11 @@ export function createCourseDrafts({ db, repo, fail, transaction, now = Date.now
     db.prepare('SELECT timezone FROM operation_settings WHERE brand_id=?').get(brandId)?.timezone ||
     'America/Mexico_City';
 
-  // Títulos parecidos (uno contiene al otro) y si ya está tomado tal cual.
-  function titleCheck(d) {
+  // Títulos parecidos (uno contiene al otro) y si ya está tomado tal cual: contra los cursos del catálogo de la marca
+  // y, con `source`, contra los borradores vivos de ESE origen (nunca los de otra llave o conexión).
+  function titleCheck(d, source = null) {
     const key = titleKey(d.title);
-    const others = repo.titlesOf(d.brand_id, d.id, d.course_id);
+    const others = repo.titlesOf(d.brand_id, d.id, d.course_id, source);
     const taken = key.length > 0 && others.some(t => titleKey(t) === key);
     const similar =
       key.length >= 3
@@ -97,8 +98,8 @@ export function createCourseDrafts({ db, repo, fail, transaction, now = Date.now
     const t = now();
     const id = randomUUID();
     const draft = { id, brand_id: brandId, ...row, course_id: null };
-    if (titleCheck(draft).taken)
-      throw fail(409, 'Ya hay un curso (o un curso en borrador) con ese título en la marca: usa otro.', {
+    if (titleCheck(draft, source).taken)
+      throw fail(409, 'Ya hay un curso de la marca (o un borrador tuyo) con ese título: usa otro.', {
         code: 'title_taken',
       });
     return transaction(db, () => {
@@ -143,8 +144,8 @@ export function createCourseDrafts({ db, repo, fail, transaction, now = Date.now
     if (['titulo', 'temario', 'bienvenida', 'apertura'].every(k => a[k] === undefined))
       throw fail(400, 'Manda al menos un cambio.');
     const row = draftRow(a, d, { zoneDefault: zoneOf(d.brand_id), fail });
-    if (titleCheck({ ...d, ...row }).taken)
-      throw fail(409, 'Ya hay un curso (o un curso en borrador) con ese título en la marca: usa otro.', {
+    if (titleCheck({ ...d, ...row }, source).taken)
+      throw fail(409, 'Ya hay un curso de la marca (o un borrador tuyo) con ese título: usa otro.', {
         code: 'title_taken',
       });
     const saved = transaction(db, () => repo.saveDraft(d.brand_id, d.id, d.revision, row, now()));
@@ -155,6 +156,13 @@ export function createCourseDrafts({ db, repo, fail, transaction, now = Date.now
   function discard(key, source, a) {
     const d = own(key, source, a.cursoBorradorId);
     if (d.status !== 'draft') throw fail(409, 'Ese curso ya no está en borrador.', { code: 'not_draft' });
+    // A medio dar de alta: descartarlo dejaría en el catálogo lo ya creado sin seguimiento.
+    if (d.course_id)
+      throw fail(
+        409,
+        `No se descarta: en un intento anterior ya quedó hecho en el catálogo: ${done(d).join(' y ')}. Termina el alta con otra propuesta o retíralo en el Catálogo.`,
+        { code: 'partly_created' },
+      );
     if (a.revision !== d.revision)
       throw fail(409, 'El curso en borrador cambió: vuelve a leerlo.', { code: 'stale_record' });
     const saved = transaction(db, () => repo.saveDraft(d.brand_id, d.id, d.revision, { status: 'discarded' }, now()));

@@ -217,8 +217,8 @@ export const ACTIONS = Object.freeze({
         ],
         sends: sendsOf([
           { label: 'Curso', value: e.title },
-          { label: 'Temario', value: e.syllabus },
-          { label: 'Bienvenida', value: e.welcome },
+          { label: 'Temario', value: e.syllabus, max: 5000 },
+          { label: 'Bienvenida', value: e.welcome, max: 2000 },
           { label: 'Apertura', value: e.edition_name },
           { label: 'Inicio', value: ctx.when(e.starts_at, e.timezone) },
           { label: 'Fin', value: e.ends_at === null ? '' : ctx.when(e.ends_at, e.timezone) },
@@ -369,8 +369,8 @@ export const ACTIONS = Object.freeze({
         warnings: [],
         details: [
           ['Curso', plain(e.course_title, 180)],
-          // lo que el asistente le dice a quien pregunta por el temario (recortado aquí; completo en el Catálogo)
-          ['Temario', plain(e.course_syllabus, 300) || 'Sin temario'],
+          // lo que el asistente le dice a quien pregunta por el temario: completo (la pantalla lo despliega)
+          ['Temario', plain(e.course_syllabus, 5000) || 'Sin temario'],
           ['Apertura', plain(e.name, 120)],
           ['Inicio', when(e.starts_at, e.timezone)],
           ['Fin', when(e.ends_at, e.timezone)],
@@ -598,6 +598,10 @@ export const ACTIONS = Object.freeze({
     permission: 'catalogue',
     screen: { view: 'courses', label: 'Catálogo' },
     batchOrder: 3,
+    // Un retiro: «Seleccionar todas» no lo incluye (se marca a mano) y sus avisos se comparan al aprobar con los que vio
+    // la persona (warningsSeen): si apareció uno nuevo, no se ejecuta y se pide revisarlo.
+    selectAll: false,
+    confirmWarnings: true,
     effect:
       'El curso sale del catálogo: el asistente deja de ofrecerlo y sus aperturas dejan de venderse (no se borran). No borra nada ni le escribe a nadie. Se puede reactivar en el Catálogo (editar el curso y marcarlo activo).',
     name: e => e.name,

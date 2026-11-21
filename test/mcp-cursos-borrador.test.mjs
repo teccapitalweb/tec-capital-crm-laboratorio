@@ -175,14 +175,16 @@ test('alta de cursos por el conector: borrador, imagen, propuesta, alta, alta a 
     (await tool(gv.token, 'crear_curso_borrador', { titulo: existing.toUpperCase(), clientRef: ref() })).error,
     /Ya hay un curso/,
   );
+  // del mismo origen, sin importar acentos, mayúsculas ni espacios, se rechaza; desde otro origen no se revela (el
+  // choque se resuelve al aprobar: test/mcp-catalogo-revision.test.mjs, punto 4)
   assert.match(
-    (await tool(gv2.token, 'crear_curso_borrador', { titulo: 'curso  del conector Á', clientRef: ref() })).error,
-    /Ya hay un curso/,
-    'sin importar acentos, mayúsculas ni espacios, y desde otro origen',
+    (await tool(gv.token, 'crear_curso_borrador', { titulo: 'curso  del conector Á', clientRef: ref() })).error,
+    /Ya hay un curso de la marca \(o un borrador tuyo\)/,
   );
-  assert.match(
-    (await tool(gv2.token, 'crear_curso_borrador', { titulo: 'Curso del conector a', clientRef: ref() })).error,
-    /Ya hay un curso/,
+  assert.equal(
+    (await ok(gv2.token, 'crear_curso_borrador', { titulo: 'Curso del conector a (otra conexión)', clientRef: ref() }))
+      .estado,
+    'draft',
   );
   // completar el borrador
   const A = await ok(gv.token, 'actualizar_curso_borrador', {

@@ -70,16 +70,22 @@ export function createRepo(db) {
       ),
     liveDraftsByBrand: brandId =>
       count("SELECT count(*) n FROM mcp_course_drafts WHERE brand_id=? AND status='draft'", brandId),
-    // Títulos con los que se compara uno nuevo: los cursos de la marca (activos o archivados, salvo el que ya creó este
-    // borrador en un intento anterior) y los borradores vivos de la marca (de cualquier origen, salvo éste).
-    titlesOf: (brandId, exceptDraft, exceptCourse) =>
+    // Títulos con los que se compara uno: los cursos de la marca (activos o archivados, salvo el que ya creó este
+    // borrador en un intento anterior) y, si se da `source`, los borradores vivos de ESE origen (salvo éste). Nunca los
+    // de otro origen: decirle a una llave que otra conexión ya tiene un borrador con ese título sería revelarlo (el
+    // choque se resuelve al aprobar: el segundo encuentra el curso ya en el catálogo).
+    titlesOf: (brandId, exceptDraft, exceptCourse, source = null) =>
       [
         ...all('SELECT title FROM courses WHERE brand_id=? AND id IS NOT ?', brandId, exceptCourse ?? null),
-        ...all(
-          "SELECT title FROM mcp_course_drafts WHERE brand_id=? AND status='draft' AND id IS NOT ?",
-          brandId,
-          exceptDraft ?? null,
-        ),
+        ...(source
+          ? all(
+              "SELECT title FROM mcp_course_drafts WHERE brand_id=? AND source_kind=? AND source_id=? AND status='draft' AND id IS NOT ?",
+              brandId,
+              source.sourceKind,
+              source.sourceId,
+              exceptDraft ?? null,
+            )
+          : []),
       ].map(r => r.title),
     file: (brandId, id) =>
       id ? one('SELECT id,mime,filename FROM library_files WHERE id=? AND brand_id=?', id, brandId) : null,
@@ -142,6 +148,14 @@ export function createRepo(db) {
       ),
     usedSince: (brandId, since) =>
       count('SELECT count(*) n FROM mcp_upload_tokens WHERE brand_id=? AND used_at>=?', brandId, since),
+    // Bytes que el conector ya guardó en la biblioteca de la marca desde `since` (por lo que dejó cada subida).
+    bytesSince: (brandId, since) =>
+      one(
+        `SELECT COALESCE(sum(l.size),0) n FROM mcp_upload_tokens t JOIN library_files l ON l.id=t.file_id
+         WHERE t.brand_id=? AND t.used_at>=?`,
+        brandId,
+        since,
+      ).n,
     // Imágenes en borrador de una apertura y de la marca (de quien sea), sin contar las del conector que se van a
     // sustituir.
     draftsOfEdition: (brandId, editionId, except) =>
@@ -159,15 +173,19 @@ export function createRepo(db) {
         JSON.stringify(except),
       ),
     // Las imágenes en borrador que dejó el conector en esta apertura (las que un borrador nuevo sustituye).
-    connectorDrafts: (brandId, editionId) =>
+    // Sólo las que dejó ESTE origen (misma llave o conexión): la de otra llave no se toca.
+    connectorDrafts: (brandId, editionId, kind, sourceId) =>
       all(
         `SELECT f.id,f.revision FROM flyers f
          WHERE f.brand_id=? AND f.edition_id=? AND f.status='draft'
-           AND f.id IN (SELECT flyer_id FROM mcp_upload_tokens WHERE brand_id=? AND edition_id=? AND status='done')`,
+           AND f.id IN (SELECT flyer_id FROM mcp_upload_tokens WHERE brand_id=? AND edition_id=? AND status='done'
+                          AND source_kind=? AND source_id=?)`,
         brandId,
         editionId,
         brandId,
         editionId,
+        kind,
+        sourceId,
       ),
     flyer: (brandId, id) => one('SELECT * FROM flyers WHERE id=? AND brand_id=?', id, brandId),
 

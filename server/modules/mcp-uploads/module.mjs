@@ -40,6 +40,7 @@ export const UPLOAD_LIMITS = Object.freeze({
   openPerSource: 40,
   openPerBrand: 80,
   uploadsPerBrandPerDay: 100,
+  bytesPerBrandPerDay: 100 * MB,
   draftsPerEdition: 3,
   draftsPerBrand: 60,
   uploadsPerMinutePerIp: 30,
@@ -219,10 +220,7 @@ export default {
         throw fail(404, 'El curso en borrador ya no existe.', { code: 'not_found' });
       if (d.status !== 'draft' || d.course_id)
         throw fail(409, 'Ese curso ya no está en borrador.', { code: 'not_draft' });
-      if (repo.usedSince(row.brand_id, now() - DAY) > UPLOAD_LIMITS.uploadsPerBrandPerDay)
-        throw fail(429, `La marca ya subió ${UPLOAD_LIMITS.uploadsPerBrandPerDay} imágenes hoy: sigue mañana.`, {
-          code: 'daily_limit',
-        });
+      dailyQuota(row.brand_id, bytes.length);
       const file = await routes.call(actor, 'catalogue', 'POST', '/api/catalogue/files', {
         brandId: row.brand_id,
         file: { name: fileName(d.title, real.ext), type: real.mime, base64: bytes.toString('base64') },
@@ -233,6 +231,24 @@ export default {
         });
       audit(actor, 'mcp.course_draft.image', d.id);
       return { fileId: file.id, draft: repo.draft(row.brand_id, d.id), replaced: d.file_id ? 1 : 0 };
+    }
+
+    // Topes por marca y día: subidas (ésta ya cuenta: la ficha se gastó) y BYTES guardados por el conector en la
+    // biblioteca (una imagen sustituida deja su archivo: no hay una forma segura de borrarlo, ver la documentación).
+    function dailyQuota(brandId, incoming) {
+      const since = now() - DAY;
+      if (repo.usedSince(brandId, since) > UPLOAD_LIMITS.uploadsPerBrandPerDay)
+        throw fail(429, `La marca ya subió ${UPLOAD_LIMITS.uploadsPerBrandPerDay} imágenes hoy: sigue mañana.`, {
+          code: 'daily_limit',
+        });
+      if (repo.bytesSince(brandId, since) + incoming > UPLOAD_LIMITS.bytesPerBrandPerDay)
+        throw fail(
+          429,
+          `La marca ya subió ${UPLOAD_LIMITS.bytesPerBrandPerDay / MB} MB de imágenes hoy: sigue mañana.`,
+          {
+            code: 'daily_bytes',
+          },
+        );
     }
 
     // ---- guardar la imagen por las rutas del catálogo, ya gastada la ficha
@@ -252,7 +268,8 @@ export default {
       if (!e) throw fail(404, 'La apertura ya no existe en esta marca.', { code: 'not_found' });
       if (e.status === 'archived' || !e.course_active)
         throw fail(409, 'La apertura o su curso se archivaron.', { code: 'archived' });
-      const replace = repo.connectorDrafts(row.brand_id, e.id);
+      // Sólo se sustituye el borrador que dejó este mismo origen; el tope por apertura cuenta todos los demás.
+      const replace = repo.connectorDrafts(row.brand_id, e.id, row.source_kind, row.source_id);
       const except = replace.map(f => f.id);
       if (repo.draftsOfEdition(row.brand_id, e.id, except) >= UPLOAD_LIMITS.draftsPerEdition)
         throw fail(
@@ -266,11 +283,7 @@ export default {
           `La marca ya tiene ${UPLOAD_LIMITS.draftsPerBrand} imágenes en borrador: apruébalas o archívalas en el Catálogo.`,
           { code: 'draft_limit' },
         );
-      // ésta ya cuenta (la ficha se gastó)
-      if (repo.usedSince(row.brand_id, now() - DAY) > UPLOAD_LIMITS.uploadsPerBrandPerDay)
-        throw fail(429, `La marca ya subió ${UPLOAD_LIMITS.uploadsPerBrandPerDay} imágenes hoy: sigue mañana.`, {
-          code: 'daily_limit',
-        });
+      dailyQuota(row.brand_id, bytes.length);
       const file = await routes.call(actor, 'catalogue', 'POST', '/api/catalogue/files', {
         brandId: row.brand_id,
         file: { name: fileName(e.course_title, real.ext), type: real.mime, base64: bytes.toString('base64') },
@@ -309,13 +322,15 @@ export default {
         res.setHeader('Allow', 'POST, PUT');
         throw fail(405, 'Sube la imagen con POST (los bytes del archivo como cuerpo).');
       }
-      rate('mcp-upload:' + ip, UPLOAD_LIMITS.uploadsPerMinutePerIp);
       const token = m[1];
       const row = TOKEN.test(token) ? repo.byHash(sha(token)) : null;
+      // Inexistente, usada o vencida: la misma respuesta, y cuenta sólo en el límite de fichas malas. El de subidas
+      // cuenta sólo con una ficha abierta: quien no tiene ficha no puede agotar el cupo de quien sí.
       if (!row || row.status !== 'open' || row.expires_at <= now()) {
         rate('mcp-upload-bad:' + ip, UPLOAD_LIMITS.badPerMinutePerIp);
         throw fail(404, GONE, { code: 'not_found' });
       }
+      rate('mcp-upload:' + ip, UPLOAD_LIMITS.uploadsPerMinutePerIp);
       const tooLarge = () => {
         res.setHeader('Connection', 'close');
         return fail(413, `La imagen pasa de ${UPLOAD_LIMITS.maxBytes / MB} MB. Redúcela y vuelve a subirla.`, {

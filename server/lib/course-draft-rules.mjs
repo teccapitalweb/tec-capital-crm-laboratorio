@@ -31,6 +31,32 @@ export const titleKey = v =>
     .replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, ' ');
 
+// Caracteres que no se publican: de control (C0, DEL y C1) y de dirección del texto (bidi: LRM, RLM, ALM, LRE…RLO,
+// LRI…PDI). Se escriben por su código para que el archivo no lleve ninguno.
+const range = (a, b) => String.fromCharCode(a) + '-' + String.fromCharCode(b);
+const CONTROL = new RegExp('[' + range(0x00, 0x1f) + range(0x7f, 0x9f) + ']', 'g');
+const CONTROL_BUT_NEWLINE = new RegExp('[' + range(0x00, 0x09) + range(0x0b, 0x1f) + range(0x7f, 0x9f) + ']', 'g');
+const BIDI = new RegExp(
+  '[' + range(0x200e, 0x200f) + range(0x202a, 0x202e) + range(0x2066, 0x2069) + String.fromCharCode(0x061c) + ']',
+  'g',
+);
+// Texto de una línea (título, nombre de la apertura, docente, lugar): los saltos y tabuladores pasan a espacio.
+export const cleanLine = (v, n) =>
+  String(v ?? '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(CONTROL, '')
+    .replace(BIDI, '')
+    .trim()
+    .slice(0, n);
+// Texto de varias líneas (temario, bienvenida): conserva el salto de línea.
+export const cleanBlock = (v, n) =>
+  String(v ?? '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\t/g, ' ')
+    .replace(CONTROL_BUT_NEWLINE, '')
+    .replace(BIDI, '')
+    .trim()
+    .slice(0, n);
 const txt = (v, n) =>
   String(v ?? '')
     .trim()
@@ -96,16 +122,16 @@ export function draftRow(a, current, { zoneDefault, fail }) {
     if (!ok) throw fail(400, 'El enlace debe comenzar con https:// o http://.');
   }
   return {
-    title: txt(pick(a.titulo, current?.title, ''), DRAFT_MAX.title),
-    syllabus: txt(pick(a.temario, current?.syllabus, ''), DRAFT_MAX.syllabus),
-    welcome: txt(pick(a.bienvenida, current?.welcome, ''), DRAFT_MAX.welcome),
-    edition_name: txt(pick(ap.nombre, current?.edition_name, ''), DRAFT_MAX.name),
+    title: cleanLine(pick(a.titulo, current?.title, ''), DRAFT_MAX.title),
+    syllabus: cleanBlock(pick(a.temario, current?.syllabus, ''), DRAFT_MAX.syllabus),
+    welcome: cleanBlock(pick(a.bienvenida, current?.welcome, ''), DRAFT_MAX.welcome),
+    edition_name: cleanLine(pick(ap.nombre, current?.edition_name, ''), DRAFT_MAX.name),
     starts_at: startsAt,
     ends_at: endsAt,
     timezone: zone,
-    instructor: txt(pick(ap.docente, current?.instructor, ''), DRAFT_MAX.instructor),
+    instructor: cleanLine(pick(ap.docente, current?.instructor, ''), DRAFT_MAX.instructor),
     modality,
-    location: txt(pick(ap.lugar, current?.location, ''), DRAFT_MAX.location),
+    location: cleanLine(pick(ap.lugar, current?.location, ''), DRAFT_MAX.location),
     info_url: link,
     capacity,
     price_cents: priceCents,
@@ -119,7 +145,7 @@ export function draftReview(d, { now, takenTitle = false, similar = [] }) {
   const missing = [];
   const warnings = [];
   if (d.title.length < 3) missing.push('El título necesita al menos 3 caracteres.');
-  if (takenTitle) missing.push('Ya hay un curso (o un curso en borrador) con ese título en la marca: usa otro.');
+  if (takenTitle) missing.push('Ya hay un curso de la marca con ese título: usa otro.');
   if (!d.syllabus) missing.push('Falta el temario.');
   if (!d.edition_name) missing.push('Falta el nombre de la apertura (por ejemplo «Enero 2027»).');
   if (d.starts_at === null) missing.push('Falta el inicio de la apertura.');

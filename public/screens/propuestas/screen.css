@@ -260,6 +260,45 @@
   object-fit: contain;
 }
 
+/* Un texto largo (temario, bienvenida): su inicio y «Ver completo», que se abre con teclado. */
+.pp-largo {
+  margin-top: var(--space-2);
+}
+
+.pp-largo__ver {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-5);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
+.pp-largo[open] .pp-largo__ver {
+  margin-bottom: var(--space-2);
+}
+
+.pp-largo__todo {
+  display: block;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* Confirmación del lote: las que tienen avisos van aparte. */
+.pp-confirma-grupo {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.pp-confirma-grupo--avisos {
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+
 @media (max-width: 600px) {
   .pp-detalle {
     grid-template-columns: minmax(0, 1fr);

@@ -451,12 +451,16 @@ test('catálogo por el conector: subir imágenes, proponer, aprobar en orden de 
   assert.equal(thumb.status, 200);
   assert.deepEqual(Buffer.from(await thumb.arrayBuffer()), uploads[0].bytes);
   assert.notEqual((await fetch(origin + imgCard.image.url)).status, 200);
-  // publicar la apertura muestra el curso, su temario recortado, fechas, precio y docente
+  // publicar la apertura muestra el curso, su temario COMPLETO, fechas, precio y docente
   const pubCard = view.pending.find(p => p.id === pubs[0].propuestaId);
   const pubDetail = Object.fromEntries(pubCard.details.map(d => [d.label, d.value]));
   assert.equal(pubDetail.Curso, courses[0].title);
   assert.match(pubDetail.Temario, /^Tema 1\.1 de prueba\nTema 1\.2 de prueba/);
-  assert.ok(pubDetail.Temario.length <= 300 && pubDetail.Temario.endsWith('…'), 'recortado');
+  assert.equal(
+    pubDetail.Temario,
+    db.prepare('SELECT syllabus FROM courses WHERE id=?').get(courses[0].id).syllabus,
+    'completo',
+  );
   assert.match(pubDetail.Inicio, /2027/);
   assert.match(pubDetail.Precio, /1,001/);
   assert.equal(pubDetail.Docente, 'Docente de prueba');

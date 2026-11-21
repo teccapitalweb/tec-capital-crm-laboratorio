@@ -254,3 +254,81 @@ test('propuestas: dar de alta tres cursos en borrador con su imagen en un lote',
   }
   watcher.done();
 });
+
+// Revisión de seguridad: un temario largo se lee COMPLETO antes de aprobar («Ver completo», con teclado); «Seleccionar
+// todas» no incluye un archivar_curso; y la confirmación del lote separa las propuestas con avisos y avisa del texto
+// largo.
+test('propuestas: temario completo, archivar fuera de «Seleccionar todas» y avisos aparte', async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  const watcher = watch(page);
+  const tag = `${testInfo.project.name} ${randomUUID().slice(0, 6)}`;
+  const tool = await assistant(page.request, baseURL);
+  const syllabus =
+    Array.from({ length: 40 }, (_, i) => `Tema largo ${i + 1} de prueba`).join('\n') + '\nFIN-DEL-TEMARIO';
+  // sin docente: la propuesta lleva un aviso
+  const d = await tool('crear_curso_borrador', {
+    titulo: `Curso largo · ${tag}`,
+    temario: syllabus,
+    apertura: { nombre: 'Mayo 2027', inicio: '2027-05-12 18:00', precio: 950 },
+    clientRef: 'ui-largo-' + randomUUID(),
+  });
+  const pAlta = await tool('proponer_accion', { accion: 'dar_de_alta_curso', id: d.cursoBorradorId });
+  const course = await page.request.post('/api/catalogue/courses', {
+    headers: { Origin: baseURL },
+    data: { brandId: 'globalvet', title: `Curso para archivar · ${tag}`, syllabus: 'Tema de prueba' },
+  });
+  expect(course.status(), await course.text()).toBe(201);
+  const pArch = await tool('proponer_accion', { accion: 'archivar_curso', id: (await course.json()).item.id });
+
+  await page.goto('/crm');
+  await page.locator('.nav [data-view="propuestas"]').click();
+  await expect(page.locator('#breadcrumb-title')).toHaveText('Propuestas del asistente');
+  await settled(page);
+
+  const alta = page.locator('#page .pp-tarjeta', { has: page.locator('.pp-nombre dd', { hasText: d.titulo }) });
+  const archivo = page.locator('#page .pp-tarjeta', {
+    has: page.locator('.pp-nombre dd', { hasText: `Curso para archivar · ${tag}` }),
+  });
+  // el final del temario no se ve hasta abrir «Ver completo», que se abre con el teclado
+  const ver = alta.locator('.pp-largo__ver').first();
+  await expect(ver).toContainText('Ver completo');
+  await expect(alta.locator('.pp-largo__todo', { hasText: 'FIN-DEL-TEMARIO' })).toBeHidden();
+  await ver.scrollIntoViewIfNeeded();
+  const box = await ver.boundingBox();
+  expect(box.height).toBeGreaterThanOrEqual(40);
+  await ver.focus();
+  await page.keyboard.press('Enter');
+  await expect(alta.locator('.pp-largo__todo', { hasText: 'FIN-DEL-TEMARIO' })).toBeVisible();
+  await expectNiebla(page, 'propuestas', testInfo);
+
+  // «Seleccionar todas» no marca el archivar
+  const toggle = page.getByRole('button', { name: /^(Seleccionar todas las que puedo aprobar|Quitar la selección)$/ });
+  if ((await toggle.textContent()).includes('Quitar')) await toggle.click();
+  await page.getByRole('button', { name: 'Seleccionar todas las que puedo aprobar' }).click();
+  await expect(alta.getByRole('checkbox', { name: 'Elegir para el lote' })).toBeChecked();
+  await expect(archivo.getByRole('checkbox', { name: 'Elegir para el lote' })).not.toBeChecked();
+  // se puede marcar a mano; la confirmación lo pone con los que tienen avisos, y avisa del temario largo
+  await page.getByRole('button', { name: 'Quitar la selección' }).click();
+  await alta.getByRole('checkbox', { name: 'Elegir para el lote' }).check();
+  await archivo.getByRole('checkbox', { name: 'Elegir para el lote' }).check();
+  await page.getByRole('button', { name: /Aprobar las seleccionadas \(2\)/ }).click();
+  const dialog = page.locator('.k-dialog');
+  const conAvisos = dialog.locator('.pp-confirma-grupo--avisos');
+  await expect(conAvisos).toContainText('Con avisos');
+  await expect(conAvisos).toContainText(d.titulo);
+  await expect(conAvisos).toContainText('No tiene docente');
+  await expect(dialog).toContainText(/Temario de \d+ caracteres: léelo completo/);
+  await dialog.getByRole('button', { name: 'Cancelar' }).click();
+
+  // limpieza: se rechazan las dos (no se aplica nada)
+  for (const p of [pAlta, pArch]) {
+    const r = await page.request.post(`/api/mcp-proposals/${p.propuestaId}/reject`, {
+      headers: { Origin: baseURL },
+      data: {},
+    });
+    expect(r.status(), await r.text()).toBe(200);
+  }
+  watcher.done();
+});

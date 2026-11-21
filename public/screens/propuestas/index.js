@@ -42,6 +42,25 @@ let enVivo = null;
 // La persona puede aprobarla ahora con un clic (lo mismo que decide si se ofrece el botón «Aprobar»).
 const aprobable = p => p.canDecide && p.status === 'pending' && p.problems.length === 0;
 const RESULTADO = { aprobada: 'k-chip--ok', obsoleta: 'k-chip--lilac', fallo: 'k-chip--bad' };
+// Un texto largo (el temario o la bienvenida de un curso) llega COMPLETO del servidor: se muestra su inicio y se
+// despliega entero con «Ver completo» (un <details>, que se abre con teclado). Nada queda sin poder leerse antes de aprobar.
+const CORTO = 300;
+const largos = p => [...(p.details ?? []), ...(p.sends?.items ?? [])].filter(d => String(d.value ?? '').length > CORTO);
+function valor(d) {
+  const texto = String(d.value ?? '');
+  if (texto.length <= CORTO) return html`${texto}`;
+  return html`<span class="pp-largo__inicio">${texto.slice(0, CORTO).trimEnd()}…</span>
+    <details class="pp-largo">
+      <summary class="pp-largo__ver">Ver completo (${texto.length} caracteres)</summary>
+      <span class="pp-largo__todo">${texto}</span>
+    </details>`;
+}
+// En la confirmación: si hay textos largos, que se lean completos en la tarjeta.
+const avisoLargos = p =>
+  largos(p).map(
+    d =>
+      html`<p class="k-hint pp-confirma__largo">${d.label} de ${String(d.value).length} caracteres: léelo completo en la tarjeta («Ver completo»).</p>`,
+  );
 
 function origen(p) {
   const s = p.source;
@@ -57,7 +76,7 @@ function envios(s) {
       ${s.items.map(
         d => html`<div class="pp-detalle">
           <dt>${d.label}</dt>
-          <dd>${d.value}</dd>
+          <dd>${valor(d)}</dd>
         </div>`,
       )}
     </dl>
@@ -122,7 +141,7 @@ function pendiente(p, elegidas, ocupado) {
             ${p.details.map(
               d => html`<div class="pp-detalle">
                 <dt>${d.label}</dt>
-                <dd>${d.value}</dd>
+                <dd>${valor(d)}</dd>
               </div>`,
             )}
           </dl>`,
@@ -233,7 +252,9 @@ export default {
       const posibles = pending.filter(aprobable);
       if (!posibles.length && !resultado) return html``;
       const n = posibles.filter(p => elegidas.has(p.id)).length;
-      const todas = posibles.length > 0 && n === posibles.length;
+      // «Seleccionar todas» no incluye los retiros (archivar un curso): ésos se marcan a mano.
+      const deTodas = posibles.filter(p => p.selectAll !== false);
+      const todas = deTodas.length > 0 && deTodas.every(p => elegidas.has(p.id));
       return html`<div class="k-card pp-lote" role="group" aria-label="Aprobar por lote">
         <p class="pp-grupo">Aprobar por lote</p>
         <p class="k-hint pp-lote__ayuda">
@@ -242,7 +263,7 @@ export default {
         </p>
         <div class="k-actions pp-acciones">
           ${when(
-            posibles.length,
+            deTodas.length,
             () =>
               html`<button type="button" class="k-btn" data-do="${todas ? 'ninguna' : 'todas'}" ${attrs({ disabled: ocupado })}>
                 ${todas ? 'Quitar la selección' : 'Seleccionar todas las que puedo aprobar'}
@@ -326,19 +347,39 @@ export default {
         .filter(p => aprobable(p) && elegidas.has(p.id))
         .sort((a, b) => (a.batchOrder ?? 1) - (b.batchOrder ?? 1));
       if (!lista.length) return;
+      const sinAvisos = lista.filter(p => !p.warnings.length);
+      const conAvisos = lista.filter(p => p.warnings.length);
+      const fila = (p, avisos = false) =>
+        html`<li class="pp-confirma-lote__fila" data-avisos="${avisos ? 'si' : 'no'}">
+          <span class="pp-confirma__accion">${p.title}</span>
+          <span><span class="pp-rotulo">Nombre:</span> <span class="pp-confirma__nombre">${p.name || '—'}</span></span>
+          ${when(avisos, () => html`<ul class="pp-lista pp-confirma-lote__avisos">${p.warnings.map(w => html`<li>${w}</li>`)}</ul>`)}
+          ${avisoLargos(p)}
+        </li>`;
       const eleccion = await dialog({
         title: `Aprobar ${lista.length} ${lista.length === 1 ? 'propuesta' : 'propuestas'}`,
-        content: html`<p>Se harán ahora, a tu nombre, una por una y en este orden:</p>
-          <ol class="pp-confirma-lote">
-            ${lista.map(
-              p =>
-                html`<li class="pp-confirma-lote__fila">
-                  <span class="pp-confirma__accion">${p.title}</span>
-                  <span><span class="pp-rotulo">Nombre:</span> <span class="pp-confirma__nombre">${p.name || '—'}</span></span>
-                </li>`,
-            )}
-          </ol>
-          <p class="k-hint">Si alguna cambió desde que se propuso, no se aplica y queda como obsoleta.</p>`,
+        content: html`<p>Se harán ahora, a tu nombre, una por una y en el orden de la lista.</p>
+          ${when(
+            sinAvisos.length,
+            () =>
+              html`<section class="pp-confirma-grupo" aria-label="Sin avisos">
+                <p class="pp-grupo">Sin avisos (${sinAvisos.length})</p>
+                <ol class="pp-confirma-lote">
+                  ${sinAvisos.map(p => fila(p))}
+                </ol>
+              </section>`,
+          )}
+          ${when(
+            conAvisos.length,
+            () =>
+              html`<section class="pp-confirma-grupo pp-confirma-grupo--avisos" aria-label="Con avisos">
+                <p class="pp-grupo">Con avisos (${conAvisos.length}): léelos antes de aprobar</p>
+                <ol class="pp-confirma-lote">
+                  ${conAvisos.map(p => fila(p, true))}
+                </ol>
+              </section>`,
+          )}
+          <p class="k-hint">Si alguna cambió desde que se propuso, o le apareció un aviso nuevo, no se aplica y se dice.</p>`,
         actions: [
           { id: 'no', label: 'Cancelar' },
           { id: 'si', label: `Aprobar ${lista.length}`, primary: true, autofocus: true },
@@ -352,7 +393,8 @@ export default {
         if (montado) pintar();
         const fila = { id: p.id, title: p.title, name: p.name };
         try {
-          await api.post(`/api/mcp-proposals/${p.id}/approve`, {});
+          // Con los avisos que vio la persona: si hoy hay uno nuevo (por ejemplo, al archivar un curso), no se aplica.
+          await api.post(`/api/mcp-proposals/${p.id}/approve`, { warningsSeen: p.warnings });
           resultado.push({ ...fila, estado: 'aprobada', etiqueta: 'Aprobada' });
         } catch (error) {
           if (isAbort(error)) break;
@@ -389,7 +431,8 @@ export default {
           </dl>
           <p>
             ${aprobar ? 'Se hará ahora, a tu nombre.' : 'No se hará nada y la propuesta pasa al historial.'}
-          </p>`,
+          </p>
+          ${aprobar ? avisoLargos(p) : ''}`,
         actions: [
           { id: 'no', label: 'Cancelar', autofocus: !aprobar },
           { id: 'si', label: aprobar ? 'Aprobar' : 'Rechazar', primary: aprobar, danger: !aprobar, autofocus: aprobar },
@@ -397,7 +440,10 @@ export default {
       });
       if (eleccion !== 'si' || !montado) return;
       try {
-        await api.post(`/api/mcp-proposals/${boton.dataset.id}/${aprobar ? 'approve' : 'reject'}`, {});
+        await api.post(
+          `/api/mcp-proposals/${boton.dataset.id}/${aprobar ? 'approve' : 'reject'}`,
+          aprobar ? { warningsSeen: p.warnings } : {},
+        );
         ctx.toast(aprobar ? 'Propuesta aprobada: ya se aplicó.' : 'Propuesta rechazada.');
       } finally {
         await cargar();
@@ -414,7 +460,10 @@ export default {
             rechazar: (_evento, boton) => decidir(boton, false),
             todas: () => {
               if (ocupado || !datos) return;
-              elegidas = new Set(datos.pending.filter(aprobable).map(p => p.id));
+              elegidas = new Set([
+                ...elegidas,
+                ...datos.pending.filter(p => aprobable(p) && p.selectAll !== false).map(p => p.id),
+              ]);
               pintar();
             },
             ninguna: () => {

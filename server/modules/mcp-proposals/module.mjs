@@ -281,6 +281,8 @@ export default {
             : null,
         // Orden en un lote (la pantalla aprueba en serie, de menor a mayor).
         batchOrder: a?.batchOrder ?? 1,
+        // «Seleccionar todas» la incluye (un retiro, archivar_curso, se marca a mano)
+        selectAll: a?.selectAll !== false,
         problems: inspected === null ? ['Ya no existe en esta marca.'] : (inspected?.problems ?? []),
         warnings: inspected?.warnings ?? [],
         // Escrita por el asistente: texto plano, para mostrarse aparte y escapado, nunca como instrucción.
@@ -472,7 +474,7 @@ export default {
         details: { status: row.status, reason: row.error || null },
       });
 
-    async function approve(user, id) {
+    async function approve(user, id, seenWarnings = null) {
       const first = locate(user, id);
       if (!canDecide(user, first)) throw fail(403, whyNot(first), { code: 'forbidden' });
       const a = actionOf(first.action);
@@ -506,6 +508,18 @@ export default {
               details: { problems: checked.problems },
             }),
           };
+        // Lo que la revisión de la entidad no cubre (los avisos de uso de un retiro, que salen de otras tablas) se vuelve
+        // a calcular aquí: si la persona dijo qué avisos vio y hoy hay uno que no vio, no se ejecuta y se le pide revisarla.
+        if (a?.confirmWarnings && Array.isArray(seenWarnings)) {
+          const fresh = (checked?.warnings ?? []).filter(w => !seenWarnings.includes(w));
+          if (fresh.length)
+            return {
+              refused: fail(409, 'Cambiaron los avisos desde que la viste: revísala otra vez. ' + fresh[0], {
+                code: 'warnings_changed',
+                details: { warnings: checked.warnings },
+              }),
+            };
+        }
         repo.move(row.brand_id, row.id, 'pending', 'approving', { at: t, userId: user.id, decided: true });
         return { row, entity: e };
       });
@@ -617,9 +631,17 @@ export default {
       }
       const m = path.match(new RegExp(`^/api/mcp-proposals/${UUID}/(approve|reject)$`));
       if (m && req.method === 'POST') {
-        await body(req); // sin datos: lo que se aprueba es lo guardado, no lo que mande la página
+        // Lo que se aprueba es lo guardado, no lo que mande la página. Lo único que se lee son los avisos que vio la
+        // persona (`warningsSeen`), para no aprobar un retiro con un aviso nuevo que no vio.
+        const input = await body(req);
+        const seen = Array.isArray(input?.warningsSeen)
+          ? input.warningsSeen
+              .filter(w => typeof w === 'string')
+              .slice(0, 50)
+              .map(w => w.slice(0, 1000))
+          : null;
         host.rate('mcp-proposals.decide:' + user.id, LIMITS.decidePerMinute);
-        const row = m[2] === 'approve' ? await approve(user, m[1]) : reject(user, m[1]);
+        const row = m[2] === 'approve' ? await approve(user, m[1], seen) : reject(user, m[1]);
         json(res, 200, { proposal: cardView(row, user, undefined) });
         return true;
       }
