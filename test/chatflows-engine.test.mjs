@@ -407,6 +407,31 @@ test('«¿Qué curso te interesa?»: el mensaje inicial manda sobre «pasar de l
   // 4) sin curso y sin curso en el mensaje: pregunta (aunque «pasar de largo» esté activado)
   r = courseRun({}, { start: 'Hola' });
   assert.equal(r.s.waiting.kind, 'course');
+  // revisión del 21 nov 2026: con curso ya puesto, «información» o «me interesa» solos no son señal de curso
+  for (const start of [
+    'Hola, quiero información. Tengo una granja con 200 aves',
+    'Me interesa, tengo aves en casa',
+    'Info por favor, crío aves',
+  ]) {
+    r = courseRun({}, { known: true, start });
+    assert.deepEqual(r.state.moves, [], start);
+    assert.deepEqual(r.exits(), [['next', 'known']], start);
+  }
+  //    … y sí lo son «curso de…», «el de…», «cambiar a…» o dos palabras propias del curso
+  for (const start of [
+    'Sí, me interesa el curso de: Plan sanitario para aves',
+    'mejor el de aves',
+    'quiero cambiar a aves',
+    'plan sanitario aves',
+  ]) {
+    r = courseRun({}, { known: true, start });
+    assert.deepEqual(r.state.moves, ['aves'], start);
+  }
+  // con un pedido vigente del curso que ya tiene y «pasar de largo»: sigue con su curso, sin decir nada
+  r = courseRun({}, { known: true, order: true, start: 'quiero el curso de aves' });
+  assert.deepEqual(r.state.moves, []);
+  assert.deepEqual(r.exits(), [['next', 'known']]);
+  assert.deepEqual(r.texts(), ['Curso elegido']);
   // con «tomar el curso del mensaje» apagado, el mensaje no cuenta: pasa de largo como antes
   r = courseRun({ useMessage: false }, { known: true, start: 'quiero el curso de aves' });
   assert.deepEqual(r.exits(), [['next', 'known']]);

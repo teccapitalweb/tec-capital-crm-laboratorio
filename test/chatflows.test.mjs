@@ -1251,6 +1251,10 @@ test('«¿Qué curso te interesa?»: con curso ya puesto, el mensaje que nombra 
   await beto.say('Hola, buenas tardes');
   assert.equal(L.conversation(beto.conv).course_id, 'aves');
   assert.equal(L.outgoing(beto.conv).at(-1).text, `Listo con ${title('aves')}.`);
+  // «información» y una palabra suelta de otro curso no lo cambian (revisión del 21 nov 2026)
+  const caro = await L.customer('Caro Díaz', 'nutricion');
+  await caro.say('Hola, quiero información. Tengo una granja con 200 aves');
+  assert.equal(L.conversation(caro.conv).course_id, 'nutricion');
 });
 
 // {{fecha}} en un recorrido (segunda prueba real del 21 nov 2026): la fecha de la apertura dicha como en la ficha del

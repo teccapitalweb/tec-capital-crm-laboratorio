@@ -515,9 +515,19 @@ const EXEC = {
     if (d.useMessage && list.length > 1) {
       // A media conversación (ya con curso) hace falta además una señal, como al cambiar de curso con el asistente.
       start = env.io.startText();
-      hit = env.io.courseFrom(start, { strict: known });
-      const taken = hit ? takeCourse(env, s, hit, 'message') : null;
-      if (taken) return taken;
+      // Con la conversación ya con curso, la señal es la específica de curso (course-match: strict 'course'): dos
+      // palabras propias, o «curso de…», «el de…», «cambiar a…» más una; «info» o «me interesa» solos no bastan.
+      hit = env.io.courseFrom(start, { strict: known ? 'course' : false });
+      if (hit) {
+        const r = env.io.chooseCourse(hit);
+        if (r.ok) return { next: 'next', detail: 'message' };
+        // Con un pedido vigente del curso que ya tiene y «pasar de largo», sigue con su curso sin decir nada.
+        if (r.blocked && d.skipIfKnown && known) return { next: 'next', detail: 'known' };
+        if (r.blocked) {
+          say(env, s, { text: env.io.copy.switchBlocked({ course: { title: r.blocked.current } }, r.blocked.other) });
+          return { next: 'none', detail: 'blocked' };
+        }
+      }
     }
     if (d.skipIfKnown && known) return { next: 'next', detail: 'known' };
     if (!list.length) return { next: 'none', detail: 'no_courses' };

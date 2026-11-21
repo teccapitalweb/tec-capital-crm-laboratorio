@@ -136,6 +136,7 @@ const TEXTS = {
     copy.recommend(ctx, [{ title: 'Otro curso', start: null, price: '$500.00 MXN' }], { multi: true }),
   askTopic: () => copy.askTopic(ctx),
   jobs: () => copy.jobs(ctx),
+  BUTTONS_PROMPT: () => copy.BUTTONS_PROMPT,
 };
 const NOT_TEXT = ['firstName', 'noHour', 'startText', 'whenText', 'zoneWords', 'priceText', 'facts', 'LAB_SWAPS'];
 

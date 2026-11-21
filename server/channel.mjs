@@ -1,5 +1,5 @@
 import { transaction } from './database.mjs';
-import { mediaGapMs } from './lib/media-gap.mjs';
+import { MEDIA_GAP_MAX_MS, mediaGapMs } from './lib/media-gap.mjs';
 
 // Canal simulado realista (Fase 1 · bloque 3). Imita lo que un proveedor oficial haría con los mensajes salientes, sin
 // conectar nada: estados enviado → entregado → leído (o fallido, con reintento), ventana de servicio de 24 h (72 h si el
@@ -241,7 +241,8 @@ export function createChannel({
         if (live.send_lease_until !== null) {
           const again = UNCERTAIN_POLICY === 'retry' && !live.wa_template && live.send_attempts < UNCERTAIN_MAX;
           m.uncertain = again ? 'retry' : 'fail';
-          if (again) event(m, 'lease_expired', null, null, t); // un posible duplicado deja rastro
+          // El rastro de un posible duplicado («lease_expired») lo deja one() justo antes de volver a enviarlo: si
+          // este lote lo suelta sin enviarlo (espera el margen tras un archivo), no queda un rastro de más.
         }
         return true;
       });
@@ -279,9 +280,10 @@ export function createChannel({
     const rows = claim(
       db
         .prepare(
-          "SELECT m.id,m.conversation_id,c.brand_id,c.channel,m.category,COALESCE(s.failure_rate,0) failure_rate,c.wa_number,c.wa_peer FROM messages m JOIN conversations c ON c.id=m.conversation_id LEFT JOIN channel_settings s ON s.brand_id=c.brand_id WHERE m.delivery_state='sent' AND m.sender_kind IN ('agent','automation') AND ((c.wa_number IS NOT NULL AND m.provider_ref IS NULL AND (m.send_lease_until IS NULL OR m.send_lease_until<=?) AND (m.wa_hold IS NULL OR EXISTS(SELECT 1 FROM messages x WHERE x.conversation_id=m.conversation_id AND x.sender_kind='customer' AND x.created_at>m.wa_hold)) AND NOT EXISTS(SELECT 1 FROM messages g WHERE g.conversation_id=m.conversation_id AND g.wa_gap_until IS NOT NULL AND g.wa_gap_until>? AND g.delivery_state='sent' AND g.seq<m.seq)) OR (c.wa_number IS NULL AND s.enabled=1 AND m.created_at<=?-s.delivery_delay_ms)) ORDER BY m.seq LIMIT 100",
+          "SELECT m.id,m.conversation_id,c.brand_id,c.channel,m.category,COALESCE(s.failure_rate,0) failure_rate,c.wa_number,c.wa_peer FROM messages m JOIN conversations c ON c.id=m.conversation_id LEFT JOIN channel_settings s ON s.brand_id=c.brand_id WHERE m.delivery_state='sent' AND m.sender_kind IN ('agent','automation') AND ((c.wa_number IS NOT NULL AND m.provider_ref IS NULL AND (m.send_lease_until IS NULL OR m.send_lease_until<=?) AND (m.wa_hold IS NULL OR EXISTS(SELECT 1 FROM messages x WHERE x.conversation_id=m.conversation_id AND x.sender_kind='customer' AND x.created_at>m.wa_hold)) AND NOT EXISTS(SELECT 1 FROM messages g WHERE g.conversation_id=m.conversation_id AND g.wa_gap_until IS NOT NULL AND g.wa_gap_until>? AND g.wa_gap_until<=? AND g.delivery_state='sent' AND g.seq<m.seq)) OR (c.wa_number IS NULL AND s.enabled=1 AND m.created_at<=?-s.delivery_delay_ms)) ORDER BY m.seq LIMIT 100",
         )
-        .all(t, t, t)
+        // un margen más lejano que ahora + el máximo posible (el reloj se atrasó) se da por vencido
+        .all(t, t, t + MEDIA_GAP_MAX_MS, t)
         .filter(m => !flying.has(m.id) && !(m.wa_number && busy.has(m.conversation_id))),
       t,
     );
@@ -306,6 +308,7 @@ export function createChannel({
         }
         // Envío en duda que no se debe repetir: no se le pide nada a Meta y queda como no entregado, con su motivo.
         if (m.uncertain === 'fail') return { m, r: { providerRef: null, state: 'failed', reason: UNCERTAIN_REASON } };
+        if (m.uncertain === 'retry') event(m, 'lease_expired', null, null, now()); // un posible duplicado deja rastro
         if (!connectorOf || !outboundOf) throw fail(503, 'WhatsApp real no está disponible en este servidor.');
         // Ventana cerrada: whatsapp.mjs decide. Una plantilla sale; un aviso del negocio queda EN ESPERA (se manda la plantilla de aviso de la marca
         // y el mensaje sale cuando la persona responda); sin plantilla de aviso, falla con el motivo. Nunca se le pide a Meta lo que va a rechazar.
@@ -353,14 +356,27 @@ export function createChannel({
               const res = await one(list[i]);
               done.push(res);
               if (res.gap && i + 1 < list.length) {
-                // Salió un archivo: lo que sigue de esta conversación se suelta sin enviarse y vuelve a tomarse
-                // cuando pase el margen. No es un envío en duda: se le quita la marca de «en vuelo» y el intento.
+                // Salió un archivo: lo que sigue de esta conversación no se envía en este lote y vuelve a tomarse
+                // cuando pase el margen. Un envío en duda conserva su marca (claim lo puso así):
+                //  · «fail» (no se repite, p. ej. una plantilla): se resuelve ya con one(), que no llama a Meta;
+                //  · «retry»: su marca queda vencida y su intento contado, para que el siguiente claim lo vuelva a
+                //    ver como en duda (con su tope de intentos);
+                //  · lo demás no es un envío en duda: se le quita la marca de «en vuelo» y el intento de este lote.
                 const rest = list.slice(i + 1);
+                for (const later of rest) if (later.uncertain === 'fail') done.push(await one(later));
+                const expired = now() - 1;
                 transaction(db, () => {
-                  for (const later of rest)
-                    db.prepare(
-                      "UPDATE messages SET send_lease_until=NULL,send_attempts=MAX(send_attempts-1,0) WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL",
-                    ).run(later.id);
+                  for (const later of rest) {
+                    if (later.uncertain === 'fail') continue;
+                    if (later.uncertain === 'retry')
+                      db.prepare(
+                        "UPDATE messages SET send_lease_until=? WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL",
+                      ).run(expired, later.id);
+                    else
+                      db.prepare(
+                        "UPDATE messages SET send_lease_until=NULL,send_attempts=MAX(send_attempts-1,0) WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL",
+                      ).run(later.id);
+                  }
                 });
                 break;
               }

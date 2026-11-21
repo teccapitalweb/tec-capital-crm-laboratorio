@@ -47,17 +47,34 @@ export const noHour = (t, zone) =>
   }).format(t) === '00:00';
 // El nombre de la zona para una persona: «hora del centro de México»; una zona que no está en la lista se dice por su
 // ciudad («America/Guatemala» → «hora de Guatemala»), nunca con el identificador técnico.
-export const zoneWords = zone =>
-  ZONES[zone] ||
-  'hora de ' +
-    String(zone || 'America/Mexico_City')
-      .split('/')
-      .pop()
-      .replace(/_/g, ' ');
+// Cuerpo del mensaje corto con los botones cuando el texto no cabe en el cuerpo de unos botones de WhatsApp (1024).
+export const BUTTONS_PROMPT = '¿Qué te gustaría hacer?';
+// «UTC», «GMT» y las zonas Etc/* se dicen por su desfase real: en «Etc/GMT+6» el signo va al revés (POSIX) y es UTC−6.
+export const zoneWords = zone => {
+  const z = String(zone || 'America/Mexico_City');
+  if (ZONES[z]) return ZONES[z];
+  if (/^(Etc\/)?(UTC|UCT|GMT|GMT0|GMT[+-]0|Zulu|Universal|Greenwich)$/i.test(z)) return 'UTC';
+  const etc = /^Etc\/GMT([+-])(\d{1,2})$/.exec(z);
+  if (etc) return 'UTC' + (etc[1] === '+' ? '−' : '+') + Number(etc[2]);
+  return 'hora de ' + z.split('/').pop().replace(/_/g, ' ');
+};
+const validZone = zone => {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+};
 // Un instante dicho para el cliente, en la zona dada: «lunes, 23 de noviembre de 2026, 7:00 p.m. (hora del centro de
 // México)»; a medianoche exacta sólo se sabe el día y se dice sin hora. Lo usan la ficha del asistente y {{fecha}}.
+// Nunca lanza: una fecha no válida da null (quien llama dice «por confirmar») y una zona que no existe se dice en UTC.
 export function whenText(t, zone = 'America/Mexico_City') {
+  if (t === null || t === undefined || t === '' || !Number.isFinite(Number(t))) return null;
+  t = Number(t);
+  if (!Number.isFinite(new Date(t).getTime())) return null;
   zone = zone || 'America/Mexico_City';
+  if (!validZone(zone)) zone = 'UTC';
   // Medianoche exacta en la zona de la edición significa «sólo se sabe el día»: no se dice «12:00 a.m.».
   if (noHour(t, zone))
     return new Intl.DateTimeFormat('es-MX', {

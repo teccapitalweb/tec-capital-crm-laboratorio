@@ -9,7 +9,8 @@ import { randomUUID } from 'node:crypto';
 import { NUMBER, PNG, metaStatus, metaText, startFakeMeta } from './helpers/fake-meta.mjs';
 import { call, crash, sleep, until, whatsappLab } from './helpers/crm.mjs';
 import { mediaGapMs } from '../server/lib/media-gap.mjs';
-import { metaChannel } from '../server/connectors.mjs';
+import { buttonTitle, headerRefusal, metaChannel } from '../server/connectors.mjs';
+import { BUTTONS_PROMPT } from '../server/reply-copy.mjs';
 
 const ref = () => randomUUID();
 const node = (id, type, data = {}) => ({ id, type, x: 0, y: 0, data });
@@ -150,6 +151,10 @@ test('texto, imagen y botones llegan a Meta en ese orden; los botones esperan el
     0,
     'soltar lo que sigue no deja envíos en duda',
   );
+  // el margen es una marca interna: no sale por la API de mensajes (como send_lease_until)
+  const served = (await api('/api/conversations/' + image.conversation_id + '/messages')).messages;
+  assert.ok(served.some(m => m.id === image.id));
+  for (const m of served) assert.equal('wa_gap_until' in m, false);
 });
 
 test('tras un reinicio el margen sigue en la base: los botones no se adelantan y salen en cuanto la imagen se entrega', async t => {
@@ -212,18 +217,29 @@ test('adaptador de Meta: archivo con botones en un solo interactivo con encabeza
     ['Precio', 'Temario', 'Fechas'],
   );
   assert.equal(r.media, true, 'cuenta como archivo para el margen del siguiente mensaje');
-  // un PDF con botones: encabezado de documento con su nombre
-  await adapter.send({
-    to,
-    from: NUMBER,
-    text: 'El temario',
-    buttons: ['Sí'],
-    media: { buffer: Buffer.from('%PDF-1.4'), mime: 'application/pdf', filename: 'temario.pdf' },
-  });
-  const doc = sentTo()[1].interactive.header;
-  assert.equal(doc.type, 'document');
-  assert.equal(doc.document.filename, 'temario.pdf');
-  // cuerpo de más de 1024: imagen primero y el texto aparte, después del margen
+  // PDF, WebP o GIF con botones: nunca como encabezado; el camino de dos partes de siempre (archivo y luego los botones)
+  for (const [mime, name] of [
+    ['application/pdf', 'temario.pdf'],
+    ['image/webp', 'ficha.webp'],
+    ['image/gif', 'ficha.gif'],
+  ]) {
+    const from0 = meta.sent.length;
+    await adapter.send({
+      to,
+      from: NUMBER,
+      text: 'El temario',
+      buttons: ['Sí'],
+      media: { buffer: Buffer.from('x'), mime, filename: name },
+    });
+    const got = meta.sent.slice(from0);
+    assert.deepEqual(
+      got.map(m => m.type),
+      ['document', 'interactive'],
+      mime,
+    );
+    assert.equal(got[1].interactive.header, undefined, mime);
+  }
+  // cuerpo de más de 1024 con botones: imagen, después del margen el texto y al final los botones con un cuerpo breve
   const before = meta.sent.length;
   const times = [];
   const timer = setInterval(() => {
@@ -233,7 +249,7 @@ test('adaptador de Meta: archivo con botones en un solo interactivo con encabeza
     to,
     from: NUMBER,
     text: 'x'.repeat(1500),
-    buttons: ['Precio'],
+    buttons: ['Precio', 'Temario'],
     media: { buffer: PNG, mime: 'image/png', filename: 'ficha.png' },
   });
   await sleep(20);
@@ -241,14 +257,86 @@ test('adaptador de Meta: archivo con botones en un solo interactivo con encabeza
   const split = meta.sent.slice(before);
   assert.deepEqual(
     split.map(m => m.type),
-    ['image', 'text'],
+    ['image', 'text', 'interactive'],
   );
   assert.equal(split[0].image.caption, undefined);
+  assert.equal(split[1].text.body.length, 1500);
+  assert.equal(split[2].interactive.body.text, BUTTONS_PROMPT);
+  assert.deepEqual(
+    split[2].interactive.action.buttons.map(b => b.reply.title),
+    ['Precio', 'Temario'],
+  );
   assert.ok(times[1] - times[0] >= GAP - 30, 'el texto esperó el margen: ' + (times[1] - times[0]) + ' ms');
-  assert.equal(r.media, undefined, 'lo último fue el texto');
+  assert.equal(r.media, undefined, 'lo último fueron los botones');
+  // sin archivo y con texto largo, tampoco se pierden los botones
+  const from1 = meta.sent.length;
+  await adapter.send({ to, from: NUMBER, text: 'y'.repeat(1200), buttons: ['Sí'] });
+  assert.deepEqual(
+    meta.sent.slice(from1).map(m => m.type),
+    ['text', 'interactive'],
+  );
   // sin archivo, los botones de siempre (sin encabezado)
   await adapter.send({ to, from: NUMBER, text: '¿Te cuento más?', buttons: ['Sí', 'No'] });
   assert.equal(sentTo().at(-1).interactive.header, undefined);
+  // títulos de botón: hasta 20, sin partir un emoji
+  assert.equal(buttonTitle('Inscribirme ya mismo 🎓'), 'Inscribirme ya mismo');
+  assert.equal(buttonTitle('Quiero inscribirme🎓🎓'), 'Quiero inscribirme🎓');
+  assert.equal(buttonTitle('🎓'.repeat(11)), '🎓'.repeat(10));
+  assert.ok(!/[\uD800-\uDBFF]$/.test(buttonTitle('Diecinueve letras 🎓x')));
+});
+
+// Plan B: si Meta rechaza el interactivo con la imagen de encabezado (y no por autenticación, ritmo ni ventana de 24
+// horas), se manda una vez como antes: imagen y luego el texto con sus botones. Sin duplicar.
+test('adaptador de Meta: plan B del interactivo con imagen de encabezado', async () => {
+  const run = async refusal => {
+    const calls = [];
+    const adapter = metaChannel({
+      env: {
+        META_ACCESS_TOKEN: 'EAAprueba0000000000000000000000token',
+        META_APP_SECRET: 's',
+        META_VERIFY_TOKEN: 'v',
+        META_PHONE_NUMBER_ID: NUMBER,
+        NODE_ENV: 'test',
+        WA_MEDIA_GAP_MS: '0',
+      },
+      fetchImpl: async (url, init) => {
+        const body = init?.body && typeof init.body === 'string' ? JSON.parse(init.body) : null;
+        calls.push(body);
+        if (String(url).endsWith('/media')) return { ok: true, status: 200, json: async () => ({ id: 'm1' }) };
+        if (body?.interactive?.header)
+          return {
+            ok: false,
+            status: refusal.status,
+            json: async () => ({ error: { code: refusal.code, message: 'x' } }),
+          };
+        return { ok: true, status: 200, json: async () => ({ messages: [{ id: 'wamid.' + calls.length }] }) };
+      },
+    });
+    const out = await adapter
+      .send({
+        to: '15550001111', // sin el reintento de México (521…), que repetiría la petición
+        text: 'Ficha del curso',
+        buttons: ['Precio'],
+        media: { buffer: PNG, mime: 'image/png', filename: 'ficha.png' },
+      })
+      .catch(e => ({ error: e }));
+    return { out, types: calls.filter(Boolean).map(c => (c.interactive?.header ? 'header' : c.type)) };
+  };
+  // Meta no admite el encabezado (parámetro inválido): plan B, una sola vez
+  let r = await run({ status: 400, code: 100 });
+  assert.deepEqual(r.types, ['header', 'image', 'interactive']);
+  assert.match(r.out.providerRef, /^wamid\./);
+  // token vencido, ritmo o ventana de 24 horas: no hay plan B (fallaría igual) y el error sube
+  for (const refusal of [
+    { status: 401, code: 190 },
+    { status: 429, code: 130429 },
+    { status: 400, code: 131047 },
+  ]) {
+    r = await run(refusal);
+    assert.deepEqual(r.types, ['header'], JSON.stringify(refusal));
+    assert.ok(r.out.error, JSON.stringify(refusal));
+  }
+  assert.equal(headerRefusal({ network: true, status: 502 }), false, 'sin respuesta de Meta no se sabe si salió');
 });
 
 test('la ficha del asistente por WhatsApp real sale como un solo mensaje: imagen de encabezado, texto y botones', async t => {

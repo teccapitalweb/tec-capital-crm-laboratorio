@@ -63,3 +63,23 @@ test('{{fecha}} y {{vigencia}} con la redacción de la ficha del asistente, nunc
   );
   assert.doesNotMatch(shortTimeText(seven, 'America/Mexico_City'), /America\//);
 });
+
+test('zonas UTC y Etc/* con su desfase real; una zona o una fecha no válidas no tumban la respuesta', () => {
+  // en «Etc/GMT+6» el signo va al revés (POSIX): es UTC−6
+  assert.equal(zoneWords('Etc/GMT+6'), 'UTC−6');
+  assert.equal(zoneWords('Etc/GMT-3'), 'UTC+3');
+  assert.equal(zoneWords('UTC'), 'UTC');
+  assert.equal(zoneWords('Etc/UTC'), 'UTC');
+  assert.equal(zoneWords('GMT'), 'UTC');
+  assert.match(whenText(seven, 'Etc/GMT+6'), /, 7:00 p\.\s?m\. \(UTC−6\)$/);
+  // zona que no existe: se dice en UTC, sin lanzar
+  assert.match(whenText(seven, 'Marte/Olimpo'), /\(UTC\)$/);
+  assert.match(templateValues(ctx({ edition: { timezone: 'Marte/Olimpo' } }), 'Ana').fecha, /\(UTC\)$/);
+  assert.equal(shortTimeText(seven, 'Marte/Olimpo'), 'Por confirmar');
+  // fecha no válida: «Por confirmar» (o sin fecha en la ficha), sin lanzar
+  assert.equal(whenText(Number.NaN, 'America/Mexico_City'), null);
+  assert.equal(whenText(8.64e15 + 1, 'America/Mexico_City'), null);
+  assert.equal(templateValues(ctx({ edition: { starts_at: 'no-es-fecha' } }), 'Ana').fecha, 'Por confirmar');
+  assert.equal(startText({ starts_at: Number.NaN, timezone: 'America/Mexico_City' }), null);
+  assert.equal(shortTimeText('x', 'America/Mexico_City'), 'Por confirmar');
+});

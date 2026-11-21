@@ -8,7 +8,7 @@
 //    se guarda su huella. Se gasta de forma atómica (una sola sentencia) ANTES de escribir nada: dos subidas con la
 //    misma ficha no pasan las dos.
 //  · Ruta pública (sin sesión ni Origin): se defiende sola con su ficha y con límites por IP (intentos y fichas malas).
-//  · Sólo una imagen JPEG, PNG o WebP, comprobada por su contenido (bytes mágicos), nunca por el Content-Type ni el
+//  · Sólo una imagen JPEG o PNG (las que WhatsApp envía como imagen; WebP no), comprobada por su contenido (bytes mágicos), nunca por el Content-Type ni el
 //    nombre. Nunca SVG ni HTML. Hasta 4 MB (el mismo tope de la biblioteca del catálogo); la lectura se corta en cuanto
 //    pasa del tope. El nombre del archivo lo pone el servidor.
 //  · Al recibirla se vuelve a comprobar que el origen sigue vigente (la regla del conector, como en las propuestas, y
@@ -50,7 +50,7 @@ export const UPLOAD_LIMITS = Object.freeze({
   purgeChunk: 500,
 });
 export const UPLOAD_PREFIX = '/subida-imagen';
-export const IMAGE_TYPES = Object.freeze(['image/jpeg', 'image/png', 'image/webp']);
+export const IMAGE_TYPES = Object.freeze(['image/jpeg', 'image/png']);
 const TOKEN = /^tci_[A-Za-z0-9_-]{43}$/;
 const sha = v => createHash('sha256').update(String(v)).digest('hex');
 const GONE = 'Esa dirección de subida no existe, ya se usó o venció. Pide otra con preparar_subida_imagen.';
@@ -345,9 +345,16 @@ export default {
       // Por su contenido: el Content-Type y el nombre no cuentan.
       const real = sniff(bytes);
       if (!real || !IMAGE_TYPES.includes(real.mime))
-        throw fail(415, 'Sólo se admite una imagen JPEG, PNG o WebP (se comprueba por su contenido).', {
-          code: 'upload_type',
-        });
+        throw fail(
+          415,
+          (real?.mime === 'image/webp'
+            ? 'Sólo se admite una imagen JPEG o PNG: esta es WebP y WhatsApp no la envía como imagen; convierte la imagen a JPG o PNG y vuelve a subirla. '
+            : 'Sólo se admite una imagen JPEG o PNG: convierte la imagen a JPG o PNG. ') +
+            '(Se comprueba por su contenido.)',
+          {
+            code: 'upload_type',
+          },
+        );
       // Gastar la ficha de forma atómica antes de escribir nada.
       if (!repo.spend(row.id, now())) throw fail(404, GONE, { code: 'not_found' });
       let out;
