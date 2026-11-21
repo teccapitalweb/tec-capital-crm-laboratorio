@@ -834,9 +834,7 @@ test('probar un recorrido desde el conector nunca consulta a la IA; «Probar» d
   });
   const questions = [
     'Vivo en Colombia, ¿puedo tomar el curso desde allá?',
-    // una pregunta que se parece al conocimiento (desde docs/PLAN_RESPUESTAS_DE_VENTA.md, la que no se parece a nada ni
-    // siquiera querría la IA, aunque la marca tenga 6 respuestas o menos)
-    '¿Puedo conectarme desde la computadora del trabajo si viajo mucho?',
+    '¿Sirve si trabajo en otro estado de la república y viajo mucho?',
     '¿Y si me mudo a Perú a medio curso puedo seguir tomando el curso?',
   ];
   const aiAudit = () => db.prepare("SELECT count(*) n FROM audit WHERE action='ai.call'").get().n;

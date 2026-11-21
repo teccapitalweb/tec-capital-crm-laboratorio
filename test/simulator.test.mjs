@@ -152,7 +152,9 @@ test('simulador por API: permisos, catálogo demo, demo rápida con ocho perfile
     (r.stats.stages.inscripcion || 0) >= 1,
     'el cliente listo avanzó a inscripción: ' + JSON.stringify(r.stats.stages),
   );
-  assert.equal(r.stats.waitingHuman, 4);
+  // «precio» termina su guion, pero su pregunta de meses sin intereses (sin respuesta aprobada) dejó la conversación con
+  // una persona (docs/PLAN_RESPUESTAS_DE_VENTA.md): cinco conversaciones esperan a alguien del equipo
+  assert.equal(r.stats.waitingHuman, 5);
   assert.equal(r.stats.finished, 5);
   assert.equal(r.stats.withoutHuman, 5);
   const d = db();

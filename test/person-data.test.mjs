@@ -190,6 +190,12 @@ const SEEDS = {
         "INSERT INTO legacy_records(id,batch_id,brand_id,kind,external_id,person_id,contact_id,created_at) VALUES(?,'b',?,'alumno',?,?,?,1)",
       )
       .run(randomUUID(), c.brand, 'ext-' + s, c.person, c.id),
+  certificate_name_requests: (db, c, s) =>
+    db
+      .prepare(
+        "INSERT INTO certificate_name_requests(id,brand_id,contact_id,order_id,requested_name,email,status,created_at,updated_at) VALUES(?,?,?,?,?,?,'pending',1,1)",
+      )
+      .run(randomUUID(), c.brand, c.id, 'order-' + s, 'Nombre Ejemplo ' + s, s + '@correo.test'),
   survey_invites: (db, c, s) =>
     db
       .prepare(
@@ -452,4 +458,22 @@ test('fusión manual por la API: usa la fusión interna y la vista previa cuenta
   } finally {
     check.close();
   }
+});
+
+test('nombre pedido para la constancia: registrado como dato de persona, con exportación y borrado', async t => {
+  const db = await workspace(t);
+  const defs = [];
+  registerExistingTables({ register: d => defs.push(d) }, db);
+  const def = defs.find(d => d.tables.includes('certificate_name_requests'));
+  assert.ok(def, 'certificate_name_requests tiene dueño en el registro');
+  assert.equal(typeof def.export, 'function');
+  assert.equal(typeof def.erase, 'function');
+  db.exec('PRAGMA foreign_keys=OFF');
+  db.prepare(
+    "INSERT INTO certificate_name_requests(id,brand_id,contact_id,order_id,requested_name,email,status,created_at,updated_at) VALUES('r1','globalvet','c-uno','o-uno','Ana Ejemplo','ana@correo.test','pending',1,1)",
+  ).run();
+  assert.equal(def.export({ contactIds: ['c-uno'] }).certificate_name_requests[0].requested_name, 'Ana Ejemplo');
+  assert.deepEqual(def.export({ contactIds: ['otro'] }).certificate_name_requests, []);
+  assert.equal(def.erase({ contactIds: ['c-uno'] }).certificate_name_requests, 1);
+  assert.equal(db.prepare('SELECT count(*) n FROM certificate_name_requests').get().n, 0);
 });

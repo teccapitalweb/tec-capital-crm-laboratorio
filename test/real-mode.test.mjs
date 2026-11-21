@@ -136,6 +136,12 @@ const TEXTS = {
     copy.recommend(ctx, [{ title: 'Otro curso', start: null, price: '$500.00 MXN' }], { multi: true }),
   askTopic: () => copy.askTopic(ctx),
   jobs: () => copy.jobs(ctx),
+  promoUntil: () => copy.promoUntil(ctx) + copy.promoUntil({ ...ctx, promotion: null }),
+  payUntil: () => copy.payUntil({ reference: 'TC-ABC123', until: '30 nov 2026' }) + copy.payUntil(),
+  alreadyEnrolled: () => copy.alreadyEnrolled(ctx) + copy.alreadyEnrolled(ctx, { advisor: true }),
+  orderFailed: () => copy.orderFailed,
+  noTopicMatch: () => copy.noTopicMatch(ctx, ['Otro curso']) + copy.noTopicMatch(ctx, []),
+  certDataNoOrder: () => copy.certDataNoOrder,
   BUTTONS_PROMPT: () => copy.BUTTONS_PROMPT,
 };
 const NOT_TEXT = ['firstName', 'noHour', 'startText', 'whenText', 'zoneWords', 'priceText', 'facts', 'LAB_SWAPS'];

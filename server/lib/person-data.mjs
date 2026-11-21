@@ -176,6 +176,33 @@ export function registerExistingTables(personData, db) {
   ])
     personData.register({ name, tables: [table], merge: move(table), mergePerson: move(table, 'person_id') });
   personData.register({ name: 'surveys', tables: ['survey_invites'], merge: move('survey_invites') });
+  // Nombre, correo y teléfono que la persona dio por el chat para su constancia (docs/PLAN_RESPUESTAS_DE_VENTA.md): son
+  // datos personales; pasan al contacto que queda y el expediente y la supresión los alcanzan por contact_id.
+  const nameRequests = ids =>
+    (ids || []).length
+      ? db
+          .prepare(
+            `SELECT * FROM certificate_name_requests WHERE contact_id IN (${ids.map(() => '?').join(',')}) ORDER BY created_at`,
+          )
+          .all(...ids)
+      : [];
+  personData.register({
+    name: 'certificate-names',
+    tables: ['certificate_name_requests'],
+    merge: move('certificate_name_requests'),
+    export: ({ contactIds = [] } = {}) => ({ certificate_name_requests: nameRequests(contactIds) }),
+    erase: ({ contactIds = [] } = {}) => ({
+      certificate_name_requests: contactIds.length
+        ? Number(
+            db
+              .prepare(
+                `DELETE FROM certificate_name_requests WHERE contact_id IN (${contactIds.map(() => '?').join(',')})`,
+              )
+              .run(...contactIds).changes,
+          )
+        : 0,
+    }),
+  });
   // Destinatarios de campaña: una fila por campaña y contacto. Si los dos recibieron la misma campaña se conserva la
   // fila del que queda (la campaña le llegó una vez a esa persona) y la del absorbido se retira; el paso de envío y
   // su mensaje siguen en automation_steps y en la conversación.

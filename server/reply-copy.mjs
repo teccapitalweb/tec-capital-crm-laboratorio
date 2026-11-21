@@ -413,6 +413,12 @@ export function payStatus(state, { reference = null, course = '', edition = '' }
       (edition ? ' · ' + edition : '') +
       ' está activa. Si te falta algo, dime y te ayudo.'
     );
+  if (state === 'cancelled')
+    return (
+      'Tu pedido' +
+      refOf(reference) +
+      ' aparece pagado, pero tu inscripción no está activa. Ya le avisé al equipo para que lo revise contigo por aquí.'
+    );
   if (state === 'review')
     return (
       'Tu comprobante del pedido' +
@@ -462,17 +468,47 @@ export const noPromotion = ctx =>
   priceBody(ctx) +
   ' Por ahora no hay una promoción vigente para esta apertura.\n\n' +
   ENROLL_CTA +
-  ' Si buscas un precio especial (por ser estudiante o por grupo), escribe «asesor» y una persona del equipo te dice si aplica.\n' +
+  ' Si quieres que una persona del equipo revise tu caso, escribe «asesor».\n' +
   PRICE_NOTE;
+// «¿Hasta cuándo es la promoción?»: la vigencia de la promoción del catálogo, o que no hay.
+export const promoUntil = ctx =>
+  ctx.promotion
+    ? priceBody(ctx) + '\n\n' + ENROLL_CTA + '\n' + PRICE_NOTE
+    : 'Por ahora no hay una promoción vigente para ' +
+      title(ctx) +
+      '. ' +
+      priceBody(ctx) +
+      '\n\n' +
+      ENROLL_CTA +
+      '\n' +
+      PRICE_NOTE;
+// «¿Cuál es el último día para pagar?»: la vigencia de su pedido, si lo hay.
+export const payUntil = ({ reference = null, until = null } = {}) =>
+  reference
+    ? 'Tu pedido' +
+      refOf(reference) +
+      (until ? ' vence el ' + until + '.' : ' sigue vigente.') +
+      ' Cuando pagues, mándame tu comprobante por aquí y una persona del equipo lo valida.'
+    : 'Cuando escribas «Quiero inscribirme» te mando tu enlace de pago con su fecha de vencimiento.';
+// Ya está inscrita (o la oportunidad está ganada) y pide inscribirse: no se crea otro pedido.
+export const alreadyEnrolled = (ctx, { advisor = false } = {}) =>
+  'Tu inscripción a ' +
+  title(ctx) +
+  ' ya está activa: no hace falta otro pedido.' +
+  (advisor ? ' Si necesitas tus accesos o algo más, escribe «asesor» y una persona del equipo te ayuda.' : '');
+// El pedido no se pudo crear (p. ej. la oportunidad ya estaba cerrada): una persona lo ve.
+export const orderFailed =
+  'No pude generar tu pedido en este momento, así que ya le avisé al equipo: una persona te escribe por aquí para completar tu inscripción.';
 // Validez del certificado: lo que consta (digital, emisor, folio y QR) y nada más. Nunca se afirma validez oficial.
 export const validity = (ctx, issuer) =>
   'El certificado que emitimos es digital: lo emite ' +
   issuer +
   ', lleva folio y un código QR para verificarlo en línea. Sobre su validez ante la SEP, para tu cédula, puntos o valor curricular no te puedo confirmar nada por aquí. Si lo necesitas para un trámite, escribe «asesor» y una persona del equipo te dice exactamente qué ampara.';
-// Datos para la constancia: se acusa lo que se anotó, sin crear pedidos ni repetir el texto del certificado.
-export function certDataThanks(name, data, { enrolled = false, order = false } = {}) {
+// Datos para la constancia: se acusa lo que se anotó, sin crear pedidos ni repetir el texto del certificado. El nombre es una
+// propuesta: el equipo lo revisa antes de emitir. `changedFrom`: el nombre anterior, para que la persona vea el cambio.
+export function certDataThanks(name, data, { enrolled = false, order = false, changedFrom = null } = {}) {
   const got = [
-    data.name ? 'tu nombre «' + data.name + '» para tu certificado' : '',
+    data.name && !changedFrom ? 'tu nombre «' + data.name + '» para tu certificado' : '',
     data.email ? 'tu correo' : '',
     data.phone ? 'tu teléfono' : '',
   ].filter(Boolean);
@@ -480,9 +516,10 @@ export function certDataThanks(name, data, { enrolled = false, order = false } =
   return (
     '¡Gracias' +
     hi(name) +
-    '! Anoté ' +
-    list +
-    '.' +
+    '!' +
+    (changedFrom ? ' Cambié el nombre de tu certificado de «' + changedFrom + '» a «' + data.name + '».' : '') +
+    (list ? ' Anoté ' + list + '.' : '') +
+    (data.name ? ' El equipo lo revisa antes de emitir tu certificado.' : '') +
     (enrolled
       ? ' Queda junto con tu inscripción; si algo cambia, escríbemelo por aquí.'
       : order
@@ -490,6 +527,9 @@ export function certDataThanks(name, data, { enrolled = false, order = false } =
         : ' Cuando quieras apartar tu lugar, escribe «Quiero inscribirme».')
   );
 }
+// Datos para la constancia sin pedido: no se guardan todavía.
+export const certDataNoOrder =
+  '¡Gracias! Tus datos para el certificado te los pido cuando apartes tu lugar. Si quieres empezar, escribe «Quiero inscribirme».';
 export const certDataAsk =
   'Claro. Escríbeme en un solo mensaje tu nombre completo tal como quieres que aparezca en tu certificado (con acentos y mayúsculas donde van), tu correo y tu teléfono.';
 // Accesos después de pagar.
@@ -519,9 +559,7 @@ export const thanksEnrolled = name => '¡Con gusto' + hi(name) + '! Aquí estoy 
 export const deadline = ctx =>
   scheduleBody(ctx) +
   '\n\n' +
-  (startText(ctx.edition) !== null
-    ? 'Las inscripciones siguen abiertas mientras haya lugar y hasta que empiece el curso. ¿Quieres apartar tu lugar? Escribe «Quiero inscribirme».'
-    : 'Las inscripciones siguen abiertas. ¿Quieres apartar tu lugar? Escribe «Quiero inscribirme».');
+  'Por ahora las inscripciones están abiertas. ¿Quieres apartar tu lugar? Escribe «Quiero inscribirme».';
 export const nextEdition = ctx =>
   scheduleBody(ctx) +
   '\n\nPor ahora ésta es la fecha que tengo abierta de ' +
@@ -576,8 +614,20 @@ export function recommend(ctx, items, { multi = false } = {}) {
     PRICE_NOTE
   );
 }
+// Buscó un tema que ningún curso de la marca tiene.
+export const noTopicMatch = (ctx, titles) =>
+  'No encontré un curso con ese tema en su nombre ni en su temario en ' +
+  ctx.brand.name +
+  '. ' +
+  (titles.length
+    ? 'Estos son los que sí tenemos, además de ' +
+      ctx.course.title +
+      ':\n' +
+      titles.map(t => '• ' + t).join('\n') +
+      '\n\nSi te interesa alguno, escribe «asesor» y una persona te da los detalles.'
+    : 'Por ahora ' + ctx.course.title + ' es el curso que tenemos abierto. ¿Te cuento el precio o las fechas?');
 export const askTopic = ctx =>
-  'Con gusto te recomiendo. ¿Con qué especie o tema trabajas, o cuál te gustaría aprender? Así te digo cuál de los cursos de ' +
+  'Con gusto te recomiendo. ¿Qué tema te interesa? Así te digo cuál de los cursos de ' +
   ctx.brand.name +
   ' te conviene.';
 export const jobs = ctx =>

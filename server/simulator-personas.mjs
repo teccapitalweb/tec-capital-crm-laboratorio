@@ -33,9 +33,9 @@ export const PERSONAS = {
   },
   precio: {
     label: 'Sensible al precio',
-    // (Sin «¿aceptan meses sin intereses?»: desde docs/PLAN_RESPUESTAS_DE_VENTA.md, sin una respuesta aprobada sobre meses
-    // esa pregunta la atiende una persona, y este perfil es el que termina indeciso sin pasar a nadie.)
-    description: 'Pregunta costo y promociones y le parece caro; queda indeciso.',
+    // Sin una respuesta aprobada sobre meses o pagos en partes, esa pregunta la atiende una persona (docs/PLAN_RESPUESTAS_DE_VENTA.md).
+    description:
+      'Pregunta costo, promociones y pago en partes; sin respuesta aprobada sobre meses, pasa a una persona.',
     outcome: 'indeciso_precio',
     steps: [
       {
@@ -51,7 +51,11 @@ export const PERSONAS = {
         wait: 'reply',
       },
       {
-        say: ['Está un poco caro para mí.', 'Mmm, me parece caro.', 'No sé, está fuera de mi presupuesto.'],
+        say: [
+          '¿Aceptan meses sin intereses o pago en partes?',
+          '¿Se puede pagar en dos partes con tarjeta?',
+          '¿Aceptan pago con tarjeta a meses sin intereses?',
+        ],
         wait: 'reply',
       },
       { say: ['Gracias, lo pienso y les escribo.', 'Ok, gracias. Déjame revisar mi presupuesto.'] },

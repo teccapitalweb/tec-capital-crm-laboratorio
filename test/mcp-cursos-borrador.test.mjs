@@ -126,6 +126,14 @@ test('alta de cursos por el conector: borrador, imagen, propuesta, alta, alta a 
       assert.equal(r.status, expected, `approve ${id}: ${JSON.stringify(out)}`);
       return out;
     });
+  // Aprobar una propuesta que quedó obsoleta: según quién llega primero, el reloj de mantenimiento ya la marcó
+  // («already_decided» con estado «stale») o la aprobación lo descubre («stale_proposal»). Las dos son correctas: no se
+  // ejecuta nada; lo que importa es que quede obsoleta.
+  const expectStale = out =>
+    assert.ok(
+      out.code === 'stale_proposal' || (out.code === 'already_decided' && out.details?.status === 'stale'),
+      JSON.stringify(out),
+    );
   const customerFlyer = async (courseId, editionId) => {
     const r = await fetch(origin + `/api/courses/${courseId}/flyer?editionId=${editionId}`, {
       headers: { Cookie: customer },
@@ -325,7 +333,7 @@ test('alta de cursos por el conector: borrador, imagen, propuesta, alta, alta a 
     revision: a.revision,
     apertura: { cupo: 30 },
   });
-  assert.equal((await decide(approver, prop1.propuestaId, 409)).code, 'stale_proposal');
+  expectStale(await decide(approver, prop1.propuestaId, 409));
   assert.equal(coursesTitled(A.titulo).length, 0, 'obsoleta: no se creó nada');
   const prop2 = await ok(gv.token, 'proponer_accion', { accion: 'dar_de_alta_curso', id: A.cursoBorradorId });
   // ---- sin el permiso de la acción no se aprueba
@@ -427,7 +435,7 @@ test('alta de cursos por el conector: borrador, imagen, propuesta, alta, alta a 
   const pc = await ok(gv.token, 'proponer_accion', { accion: 'dar_de_alta_curso', id: C.cursoBorradorId });
   const cNow = (await ok(gv.token, 'listar_cursos_borrador')).cursos.find(c => c.cursoBorradorId === C.cursoBorradorId);
   await ok(gv.token, 'descartar_curso_borrador', { cursoBorradorId: C.cursoBorradorId, revision: cNow.revision });
-  assert.equal((await decide(approver, pc.propuestaId, 409)).code, 'stale_proposal');
+  expectStale(await decide(approver, pc.propuestaId, 409));
   assert.match(
     (await tool(gv.token, 'proponer_accion', { accion: 'dar_de_alta_curso', id: C.cursoBorradorId })).error,
     /se descartó/,

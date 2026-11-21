@@ -12,6 +12,11 @@ window.createSaleUI = function ({ api, esc, icon, toast, setView }) {
   const button = (action, label, primary = false) =>
     `<button type="button" class="btn${primary ? ' primary' : ''}" data-action="${action}" ${busy ? 'disabled' : ''}>${esc(label)}</button>`;
 
+  // Nombre que la persona pidió por el chat para su constancia (docs/PLAN_RESPUESTAS_DE_VENTA.md): se confirma en Certificados.
+  const certName = d =>
+    d.certificateName?.name
+      ? `<small>Nombre que pidió para su constancia: ${esc(d.certificateName.name)} · ${d.certificateName.status === 'confirmed' ? 'confirmado' : 'por confirmar en Certificados'}</small>`
+      : '';
   function review(d) {
     const o = d.order,
       r = d.receipt;
@@ -20,7 +25,7 @@ window.createSaleUI = function ({ api, esc, icon, toast, setView }) {
         ? 'Al validar, recibe su confirmación y sus accesos.'
         : 'Al validar, recibe su confirmación. Este curso todavía no envía accesos solo.';
     return `<div class="sale-strip sale-review" role="group" aria-label="Comprobante por revisar">
-      <div class="sale-what">${icon('receipt')}<span><b>Comprobante por revisar</b><small>${esc(o.reference)} · ${esc(o.amountLabel)} · ${esc(o.courseTitle)}</small><small>${esc(access)}</small></span></div>
+      <div class="sale-what">${icon('receipt')}<span><b>Comprobante por revisar</b><small>${esc(o.reference)} · ${esc(o.amountLabel)} · ${esc(o.courseTitle)}</small><small>${esc(access)}</small>${certName(d)}</span></div>
       <div class="sale-actions"><a class="btn" href="${esc(r.url)}" target="_blank" rel="noopener">Ver comprobante</a>${button('sale-accept', 'Validar pago', true)}${button('sale-reject', 'No es válido')}</div>
       ${
         rejecting === d.id
@@ -50,7 +55,7 @@ window.createSaleUI = function ({ api, esc, icon, toast, setView }) {
       tone = 'sale-missing';
     }
     return `<div class="sale-strip ${tone}" role="group" aria-label="Accesos del curso">
-      <div class="sale-what">${icon(a.sent ? 'key-round' : 'triangle-alert')}<span><b>${esc(title)}</b><small>${esc(o.reference)} · ${esc(o.courseTitle)}${detail ? ' · ' + esc(detail) : ''}</small></span></div>
+      <div class="sale-what">${icon(a.sent ? 'key-round' : 'triangle-alert')}<span><b>${esc(title)}</b><small>${esc(o.reference)} · ${esc(o.courseTitle)}${detail ? ' · ' + esc(detail) : ''}</small>${certName(d)}</span></div>
       <div class="sale-actions">${action}</div>
     </div>`;
   }
