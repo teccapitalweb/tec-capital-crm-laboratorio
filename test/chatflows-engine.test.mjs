@@ -380,6 +380,39 @@ test('«¿Qué curso te interesa?» con un mensaje que acota: primero sólo esos
   );
 });
 
+// Orden de decisiones (segunda prueba real del 21 nov 2026, entrada por anuncio): el mensaje inicial va ANTES que
+// «pasar de largo». Los cuatro casos, más el de una palabra suelta sin señal a media conversación.
+test('«¿Qué curso te interesa?»: el mensaje inicial manda sobre «pasar de largo»; sin curso en el mensaje, pasa de largo o pregunta', () => {
+  // 1) ya tiene curso y el mensaje nombra OTRO con señal: se toma ése (la conversación cambia de curso)
+  let r = courseRun({}, { known: true, start: 'Hola, quiero información del curso de aves' });
+  assert.deepEqual(r.state.moves, ['aves']);
+  assert.deepEqual(r.exits(), [['next', 'message']]);
+  assert.deepEqual(r.texts(), ['Curso elegido']);
+  // 2) ya tiene curso y el mensaje no nombra ninguno: pasa de largo con el suyo
+  r = courseRun({}, { known: true, start: 'Hola, buenas tardes' });
+  assert.deepEqual(r.state.moves, []);
+  assert.deepEqual(r.exits(), [['next', 'known']]);
+  //    … y una palabra suelta sin señal tampoco lo cambia («tengo 200 aves»)
+  r = courseRun({}, { known: true, start: 'tengo 200 aves ponedoras' });
+  assert.deepEqual(r.state.moves, []);
+  assert.deepEqual(r.exits(), [['next', 'known']]);
+  // 3) sin «pasar de largo», ya con curso y sin curso en el mensaje: pregunta la lista
+  r = courseRun({ skipIfKnown: false }, { known: true, start: 'Hola' });
+  assert.equal(r.s.waiting.kind, 'course');
+  assert.deepEqual(r.state.moves, []);
+  //    … pero si el mensaje nombra otro con señal, lo toma sin preguntar
+  r = courseRun({ skipIfKnown: false }, { known: true, start: 'me interesa el de aves' });
+  assert.deepEqual(r.state.moves, ['aves']);
+  assert.deepEqual(r.exits(), [['next', 'message']]);
+  // 4) sin curso y sin curso en el mensaje: pregunta (aunque «pasar de largo» esté activado)
+  r = courseRun({}, { start: 'Hola' });
+  assert.equal(r.s.waiting.kind, 'course');
+  // con «tomar el curso del mensaje» apagado, el mensaje no cuenta: pasa de largo como antes
+  r = courseRun({ useMessage: false }, { known: true, start: 'quiero el curso de aves' });
+  assert.deepEqual(r.exits(), [['next', 'known']]);
+  assert.deepEqual(r.state.moves, []);
+});
+
 // Una lista de seis cursos: tres secciones de dos filas.
 const sixRows = (extra = {}) => ({
   header: 'Cursos',

@@ -1216,6 +1216,43 @@ test('«¿Qué curso te interesa?» tras un saludo: sin doble saludo, y la lista
   assert.equal(L.conversation(caro.conv).course_id, 'rep-manejo');
 });
 
+// Entrada por anuncio (segunda prueba real del 21 nov 2026): la conversación ya tiene curso y el mensaje inicial nombra
+// OTRO con señal; con «pasar de largo» y «tomar el curso del mensaje», el paso toma el del mensaje y mueve la conversación.
+test('«¿Qué curso te interesa?»: con curso ya puesto, el mensaje que nombra otro curso lo cambia antes de pasar de largo', async t => {
+  const L = await lab(t);
+  const { db } = L;
+  await L.enableAutomation();
+  await L.publishFlow({
+    name: 'Curso por anuncio',
+    graph: {
+      v: 1,
+      start: 'n1',
+      variables: [],
+      nodes: [
+        node('n1', 'start'),
+        node('c', 'choose_course', { skipIfKnown: true, useMessage: true, attempts: 2 }),
+        node('ok', 'end', { text: 'Listo con {{curso}}.' }),
+        node('no', 'end', { text: 'Sin curso.' }),
+      ],
+      edges: [
+        ['n1', 'next', 'c'],
+        ['c', 'next', 'ok'],
+        ['c', 'none', 'no'],
+      ].map(([from, port, to]) => ({ from, port, to })),
+    },
+  });
+  const title = id => db.prepare('SELECT title FROM courses WHERE id=?').get(id).title;
+  const ana = await L.customer('Ana Pérez'); // conversación del curso de aves
+  await ana.say('Hola, quiero información del curso de nutrición');
+  assert.equal(L.conversation(ana.conv).course_id, 'nutricion');
+  assert.equal(L.outgoing(ana.conv).at(-1).text, `Listo con ${title('nutricion')}.`);
+  // sin curso en el mensaje: pasa de largo con el que tenía
+  const beto = await L.customer('Beto Ruiz');
+  await beto.say('Hola, buenas tardes');
+  assert.equal(L.conversation(beto.conv).course_id, 'aves');
+  assert.equal(L.outgoing(beto.conv).at(-1).text, `Listo con ${title('aves')}.`);
+});
+
 // {{fecha}} en un recorrido (segunda prueba real del 21 nov 2026): la fecha de la apertura dicha como en la ficha del
 // asistente, con la zona en palabras («hora del centro de México»), nunca «· America/Mexico_City».
 test('{{fecha}} en un recorrido sale con la fecha amable de la ficha, sin la zona técnica', async t => {

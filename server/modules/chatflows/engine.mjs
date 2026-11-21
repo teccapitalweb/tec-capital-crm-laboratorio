@@ -500,26 +500,31 @@ const EXEC = {
     const detail = r.refused ? 'refused:' + r.refused : r.duplicate ? 'duplicate' : 'enrolled';
     return { next: 'next', detail };
   },
-  // 1) Con «pasar de largo» y un curso real (no el de relleno), no pregunta. 2) Sin cursos que ofrecer sale por
-  // «Ninguno»; con uno solo lo toma sin preguntar. 3) Con «tomar el curso del mensaje», si el mensaje que inició el
-  // recorrido nombra un curso de la marca, lo toma. 4) Si no, pregunta como el asistente y espera la respuesta.
+  // 1) Con «tomar el curso del mensaje» (y más de un curso), si el mensaje que inició el recorrido nombra un curso de
+  // la marca, lo toma (con la conversación ya con curso hace falta la señal estricta del asistente) y la conversación
+  // cambia a ese curso. 2) Si no, con «pasar de largo» y un curso real (no el de relleno), no pregunta. 3) Sin cursos
+  // que ofrecer sale por «Ninguno»; con uno solo lo toma sin preguntar. 4) Si no, pregunta como el asistente (o sólo
+  // los cursos que acota el mensaje) y espera la respuesta.
   // Detalle de la salida: known, single, message, answer, blocked, no_courses, taken.
+  // El mensaje va antes que «pasar de largo» desde el 21 nov 2026: la entrada por anuncio pide cambiar de curso.
   choose_course(node, d, env, s) {
     const { list, known } = env.io.courses();
+    let narrow = [];
+    let start = '';
+    let hit = null;
+    if (d.useMessage && list.length > 1) {
+      // A media conversación (ya con curso) hace falta además una señal, como al cambiar de curso con el asistente.
+      start = env.io.startText();
+      hit = env.io.courseFrom(start, { strict: known });
+      const taken = hit ? takeCourse(env, s, hit, 'message') : null;
+      if (taken) return taken;
+    }
     if (d.skipIfKnown && known) return { next: 'next', detail: 'known' };
     if (!list.length) return { next: 'none', detail: 'no_courses' };
     if (list.length === 1) return takeCourse(env, s, list[0], 'single') || { next: 'none', detail: 'taken' };
-    let narrow = [];
-    if (d.useMessage) {
-      // A media conversación (ya con curso) hace falta además una señal, como al cambiar de curso con el asistente.
-      const start = env.io.startText();
-      const hit = env.io.courseFrom(start, { strict: known });
-      const taken = hit ? takeCourse(env, s, hit, 'message') : null;
-      if (taken) return taken;
-      // Nombró algo que comparten varios cursos («algo de reptiles»): como el asistente, se le ofrecen sólo ésos
-      // (course-match: candidates), con «ver todos» para la lista completa.
-      if (!hit) narrow = env.io.courseCandidates?.(start, { strict: known }) || [];
-    }
+    // Nombró algo que comparten varios cursos («algo de reptiles»): como el asistente, se le ofrecen sólo ésos
+    // (course-match: candidates), con «ver todos» para la lista completa.
+    if (d.useMessage && !hit) narrow = env.io.courseCandidates?.(start, { strict: known }) || [];
     if (narrow.length) {
       const titles = narrow.map(k => k.title);
       say(env, s, { text: env.io.copy.whichCourse(titles, { seeAll: true }) });
