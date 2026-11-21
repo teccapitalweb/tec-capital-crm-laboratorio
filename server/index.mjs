@@ -628,6 +628,7 @@ function messageList(id, before = Number.MAX_SAFE_INTEGER) {
       flyer_snapshot: undefined,
       send_lease_until: undefined, // marcas internas del envío (docs/PLAN_RECEPCION_DURADERA.md): no salen por la API
       send_attempts: undefined,
+      wa_gap_until: undefined, // margen tras un archivo (docs/PLAN_WHATSAPP_REAL.md): marca interna, no sale por la API
       buttons: m.buttons ? JSON.parse(m.buttons) : null,
       commercial_snapshot: m.commercial_snapshot ? JSON.parse(m.commercial_snapshot) : null,
       attachmentUrl: m.attachment_id

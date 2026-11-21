@@ -150,6 +150,10 @@ test('texto, imagen y botones llegan a Meta en ese orden; los botones esperan el
     0,
     'soltar lo que sigue no deja envíos en duda',
   );
+  // el margen es una marca interna: no sale por la API de mensajes (como send_lease_until)
+  const served = (await api('/api/conversations/' + image.conversation_id + '/messages')).messages;
+  assert.ok(served.some(m => m.id === image.id));
+  for (const m of served) assert.equal('wa_gap_until' in m, false);
 });
 
 test('tras un reinicio el margen sigue en la base: los botones no se adelantan y salen en cuanto la imagen se entrega', async t => {
