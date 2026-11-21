@@ -325,7 +325,12 @@ test('respuestas de venta de punta a punta', async t => {
   const open = await sim('¿cuál me recomiendas?');
   assert.match(open.reply, /¿Qué tema te interesa\?/);
   assert.doesNotMatch(open.reply, /especie|Bovinos|Reptiles/);
-  assert.match((await sim('¿tienen algo de cirugía?')).reply, /no tengo un curso de ese tema/);
+  assert.match((await sim('¿tienen algo de cirugía?')).reply, /No encontré un curso con ese tema/);
+  assert.doesNotMatch(
+    (await sim('no soy veterinario, soy tecnico, puedo tomarlo?')).reply,
+    / — inicia /,
+    'pregunta por ESTE curso: no se le suelta una lista',
+  );
   assert.match((await sim('¿qué otros cursos tienen?')).reply, /también tenemos/, 'vecino: la lista de siempre');
   // punto 6: temas que el curso no cubre no reciben requisitos ni el curso por una palabra del temario
   const bovine = await sim('Soy Ana y trabajo con ganado, ¿este curso aplica para bovinos también?');

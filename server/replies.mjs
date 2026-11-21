@@ -828,8 +828,9 @@ export function createReplies({
         ...k,
         syllabus: db.prepare('SELECT syllabus FROM courses WHERE id=?').get(k.id)?.syllabus || '',
       }));
-      const items = sales
-        .recommend(trigger.text, list)
+      // «soy técnico, ¿puedo tomarlo?» pregunta por ESTE curso: no se le recomienda una lista
+      const forThis = sales.FITS.test(said) && !sales.ASKS_TOPIC.test(said) && !/recomiend/.test(said);
+      const items = (forThis ? [] : sales.recommend(trigger.text, list))
         .map(k => {
           try {
             const x = catalogue.info(k.id, k.editionId);

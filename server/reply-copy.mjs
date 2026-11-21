@@ -616,7 +616,7 @@ export function recommend(ctx, items, { multi = false } = {}) {
 }
 // Buscó un tema que ningún curso de la marca tiene.
 export const noTopicMatch = (ctx, titles) =>
-  'Por ahora no tengo un curso de ese tema en ' +
+  'No encontré un curso con ese tema en su nombre ni en su temario en ' +
   ctx.brand.name +
   '. ' +
   (titles.length
