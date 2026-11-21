@@ -220,6 +220,9 @@ export default {
         // para «Lo que se enviará a los clientes»: nombres dentro de la marca y la versión publicada de un recorrido
         names: repo.names(brandId),
         versionGraph: (flowId, version) => repo.versionGraph(brandId, flowId, version),
+        // pausar o activar un recorrido: conversaciones en curso y los demás recorridos activos de la marca
+        flowLiveSessions: flowId => repo.flowLiveSessions(brandId, flowId),
+        activeFlows: () => repo.activeFlows(brandId),
       });
       return { a, e, name: a.name(e), revision: e.revision, ...checked };
     }

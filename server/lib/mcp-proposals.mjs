@@ -38,7 +38,7 @@ export const PROPOSAL_TOOLS = [
     description:
       'Deja una PROPUESTA para que una persona del equipo la apruebe con un botón en el CRM (Ajustes → Propuestas del asistente). No ejecuta nada: aprobar lo hace una persona, con sus propios permisos. Acciones admitidas: ' +
       ACCIONES +
-      '. Usa el id real de la entidad (de listar_recorridos, listar_secuencias, listar_reglas, listar_accesos, listar_cursos, listar_borradores_catalogo…). Para un curso NUEVO propón «dar_de_alta_curso» con el cursoBorradorId (crear_curso_borrador y su imagen con preparar_subida_imagen): al aprobarla se crea el curso con su apertura publicada y su imagen aprobada. Para una apertura que ya existe, «publicar_apertura» (aperturaId) y «aprobar_imagen» (imagenId). Una persona puede aprobar varias juntas en un lote (primero las altas y las aperturas, después las imágenes). «archivar_curso» retira un curso del catálogo (reversible) y la persona ve antes lo que deja de ofrecerse. Si todavía no se puede (un recorrido con errores, una secuencia sin pasos…) devuelve los problemas. Si la entidad cambia después de proponer, la propuesta queda obsoleta. Una sola pendiente por acción y entidad (si otra conexión ya la propuso, se rechaza); hasta ' +
+      '. Usa el id real de la entidad (de listar_recorridos, listar_secuencias, listar_reglas, listar_accesos, listar_cursos, listar_borradores_catalogo…). Para un curso NUEVO propón «dar_de_alta_curso» con el cursoBorradorId (crear_curso_borrador y su imagen con preparar_subida_imagen): al aprobarla se crea el curso con su apertura publicada y su imagen aprobada. Para una apertura que ya existe, «publicar_apertura» (aperturaId) y «aprobar_imagen» (imagenId). Una persona puede aprobar varias juntas en un lote (primero las altas y las aperturas, después las imágenes). «archivar_curso» retira un curso del catálogo (reversible) y la persona ve antes lo que deja de ofrecerse. «pausar_recorrido» (recorridoId) hace que un recorrido activo deje de empezar conversaciones; las que ya están dentro lo terminan; en un lote se pausa antes de activar otro. Si todavía no se puede (un recorrido con errores, una secuencia sin pasos…) devuelve los problemas. Si la entidad cambia después de proponer, la propuesta queda obsoleta. Una sola pendiente por acción y entidad (si otra conexión ya la propuso, se rechaza); hasta ' +
       LIMITS.pendingPerSource +
       ' pendientes por llave o conexión; vence a los ' +
       LIMITS.expiresMs / 86_400_000 +
@@ -50,7 +50,7 @@ export const PROPOSAL_TOOLS = [
           type: 'string',
           maxLength: 80,
           description:
-            'El id de la entidad: recorridoId, secuenciaId, reglaId, aperturaId (para publicar la apertura o encender sus accesos), promocionId, textoId, imagenId (para aprobar_imagen: el que devuelve la subida o listar_borradores_catalogo), cursoId (para archivar_curso) o cursoBorradorId (para dar_de_alta_curso: sólo uno tuyo, de listar_cursos_borrador).',
+            'El id de la entidad: recorridoId (publicar, activar o pausar un recorrido), secuenciaId, reglaId, aperturaId (para publicar la apertura o encender sus accesos), promocionId, textoId, imagenId (para aprobar_imagen: el que devuelve la subida o listar_borradores_catalogo), cursoId (para archivar_curso) o cursoBorradorId (para dar_de_alta_curso: sólo uno tuyo, de listar_cursos_borrador).',
         },
         nota: {
           type: 'string',

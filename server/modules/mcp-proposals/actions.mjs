@@ -1,6 +1,7 @@
 // La lista CERRADA de acciones que el asistente puede proponer (docs/PLAN_MCP_CLAUDE.md, «Propuestas que aprueba una
 // persona»). Sólo acciones reversibles desde su propia pantalla, que no escriben a nadie en el momento de aprobarlas:
-// publicar, activar o aprobar algo que ya está armado, y una sola de retiro, archivar un curso (pone el curso inactivo,
+// publicar, activar o aprobar algo que ya está armado; pausar un recorrido (deja de empezar y las conversaciones en
+// curso lo terminan; se reactiva en Automatización); y una sola de retiro, archivar un curso (pone el curso inactivo,
 // no borra nada y se reactiva en el Catálogo), que avisa con datos de la base de lo que deja de ofrecerse.
 // Lo que no está aquí no se puede proponer.
 //
@@ -9,7 +10,7 @@
 // usuarios y permisos.
 //
 // `batchOrder` (0 primero; 1 si no lo dice) es el orden en que la pantalla aprueba un lote: primero se publican las
-// aperturas, luego lo demás, después las imágenes (se ligan a la apertura ya publicada) y al final los retiros.
+// aperturas y se pausan recorridos (antes de activar otro que quizá los sustituye), luego lo demás, después las imágenes (se ligan a la apertura ya publicada) y al final los retiros.
 //
 // Cada acción dice: qué entidad toca y qué permiso de borradores del conector la cubre; qué permiso de la PERSONA que
 // aprueba hace falta (el mismo que pide su pantalla; la ruta lo vuelve a comprobar); qué pasará al aprobarla; cómo se
@@ -18,6 +19,7 @@
 //
 // Lo que la entidad le dirá a los clientes (los mensajes de un recorrido, los pasos de una secuencia, lo que hace una
 // regla) sale en `sends` (./preview.mjs), recalculado desde la base: esos textos pudo escribirlos el asistente.
+import { keywordMatch } from '../../lib/conditions.mjs';
 import { flowSends, plain, ruleSends, sendsOf, sequenceSends } from './preview.mjs';
 
 const DRAFTS = 'automation_drafts';
@@ -71,6 +73,61 @@ const steps = raw => {
     return [];
   }
 };
+
+// ---- inicio de un recorrido (el de su versión publicada) y qué otro recorrido activo arrancaría antes
+const parseStart = raw => {
+  try {
+    const s = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return s && typeof s === 'object' ? s : null;
+  } catch {
+    return null;
+  }
+};
+const words = list => (Array.isArray(list) ? list : []).filter(w => typeof w === 'string' && w.trim());
+const quoted = list => list.map(w => '«' + plain(w, 60) + '»').join(', ');
+export function startWords(raw) {
+  const s = parseStart(raw);
+  if (!s) return 'Sin inicio publicado';
+  if (s.type === 'keyword') {
+    const w = words(s.keywords);
+    return w.length ? 'Palabras clave: ' + quoted(w.slice(0, 12)) + (w.length > 12 ? '…' : '') : 'Palabra clave';
+  }
+  return (
+    {
+      first_message: 'Primer mensaje de la conversación',
+      any_message: 'Cualquier mensaje (si no hay otro recorrido en curso)',
+      manual: 'Sólo a mano, desde el chat',
+    }[s.type] || 'Inicio desconocido'
+  );
+}
+// La regla del motor (server/modules/chatflows/runtime.mjs, pick()): primero los de palabra clave, luego «primer mensaje»,
+// luego «cualquier mensaje»; dentro de cada tipo, el más antiguo. Al activar `e`, ¿qué recorrido activo de la marca le
+// ganaría con alguna de SUS palabras de inicio (o, si no usa palabras, con su mismo tipo de inicio)? Devuelve avisos.
+export function startClashes(e, others) {
+  const mine = parseStart(e.published_start);
+  if (!mine) return [];
+  const older = o => o.id !== e.id && (o.createdAt < e.created_at || (o.createdAt === e.created_at && o.id < e.id));
+  const out = [];
+  if (mine.type === 'keyword') {
+    for (const o of others) {
+      if (!older(o) || o.start?.type !== 'keyword') continue;
+      const hit = words(mine.keywords).find(
+        w => keywordMatch(w, words(o.start.keywords), { mode: o.start.mode || 'contains' }) !== null,
+      );
+      if (hit)
+        out.push(
+          `El recorrido activo «${plain(o.name, 80)}» arrancaría antes con la palabra «${plain(hit, 60)}»: entre recorridos de palabra clave gana el más antiguo, y ése lo es. Páusalo o cambia sus palabras si quieres que atienda éste.`,
+        );
+    }
+  } else if (mine.type === 'first_message' || mine.type === 'any_message') {
+    const o = others.find(x => older(x) && x.start?.type === mine.type);
+    if (o)
+      out.push(
+        `El recorrido activo «${plain(o.name, 80)}» tiene el mismo inicio (${startWords(o.start).toLowerCase()}) y es más antiguo: arrancaría siempre antes que éste. Páusalo si quieres que atienda éste.`,
+      );
+  }
+  return out;
+}
 
 // ---- dar de alta un curso en borrador del conector (server/modules/mcp-uploads/drafts.mjs)
 const LAUNCH_STEPS = ['crear el curso', 'publicar la apertura', 'crear la imagen', 'aprobar la imagen'];
@@ -280,15 +337,67 @@ export const ACTIONS = Object.freeze({
       if (e.published_version === null) problems.push('Publica el recorrido antes de activarlo.');
       if (!ctx.automationOn)
         warnings.push('La automatización de la marca está apagada: el recorrido no atenderá hasta encenderla.');
+      // Otro recorrido activo que arrancaría antes con sus mismas palabras de inicio (la regla de prioridad del motor):
+      // así se metió un recorrido viejo con la palabra «reptiles» en la prueba real del 21 nov 2026.
+      if (e.status !== 'active' && e.published_version !== null) warnings.push(...startClashes(e, ctx.activeFlows()));
       // lo que atenderá es la versión publicada (no el borrador)
       return {
         problems,
         warnings,
-        details: e.published_version === null ? [] : [['Versión que atenderá', 'Versión ' + e.published_version]],
+        details:
+          e.published_version === null
+            ? []
+            : [
+                ['Versión que atenderá', 'Versión ' + e.published_version],
+                ['Inicio', startWords(e.published_start)],
+              ],
         sends: e.published_version === null ? null : flowSends(ctx.versionGraph(e.id, e.published_version), ctx.names),
       };
     },
     request: (e, revision) => ['chatflows', 'POST', `/api/chatflows/${e.id}/activate`, { expectedRevision: revision }],
+  },
+  // Pausar un recorrido activo (reversible y sin salida al exterior). Por la misma ruta que el botón «Pausar» de
+  // Automatización, SIN `stopSessions`: las conversaciones que ya están dentro lo terminan; sólo deja de empezar.
+  pausar_recorrido: {
+    entity: 'chatflow',
+    scope: DRAFTS,
+    noun: 'recorrido',
+    label: 'Pausar el recorrido',
+    permission: 'automation',
+    screen: { view: 'automatizacion', label: 'Automatización' },
+    // En un lote va antes de activar otro recorrido (que quizá lo sustituye): así nunca hay dos con el mismo inicio.
+    batchOrder: 0,
+    effect:
+      'El recorrido deja de empezar conversaciones nuevas: ya no arranca con su inicio (sus palabras clave, el primer mensaje o cualquier mensaje) y su versión publicada se conserva. Las conversaciones que ya están dentro lo terminan con normalidad: no se cortan a la mitad. No le escribe a nadie ni borra nada. Se vuelve a activar en Automatización (o con una propuesta de activarlo).',
+    name: e => e.name,
+    check(e, ctx) {
+      const problems = [];
+      const warnings = [];
+      if (e.status === 'archived') problems.push('El recorrido está archivado.');
+      else if (e.status === 'paused') problems.push('El recorrido ya está en pausa.');
+      else if (e.status !== 'active') problems.push('El recorrido no está activo: no hay nada que pausar.');
+      const live = ctx.flowLiveSessions(e.id);
+      if (live)
+        warnings.push(
+          (live === 1
+            ? 'Hay una conversación dentro de este recorrido ahora mismo'
+            : `Hay ${live} conversaciones dentro de este recorrido ahora mismo`) +
+            ': lo terminan con normalidad; no empieza ninguna nueva.',
+        );
+      if (e.status === 'active' && !ctx.activeFlows().some(f => f.id !== e.id))
+        warnings.push(
+          'Es el único recorrido activo de la marca: al pausarlo, los mensajes nuevos los contesta el asistente (o el equipo), sin recorrido.',
+        );
+      return {
+        problems,
+        warnings,
+        details: [
+          ['Inicio que deja de valer', startWords(e.published_start)],
+          ['Conversaciones en curso', String(live) + (live ? ' (lo terminan)' : '')],
+        ],
+      };
+    },
+    request: (e, revision) => ['chatflows', 'POST', `/api/chatflows/${e.id}/pause`, { expectedRevision: revision }],
   },
   encender_secuencia: {
     entity: 'sequence',
@@ -679,7 +788,8 @@ export const actionOf = key => (typeof key === 'string' && Object.hasOwn(ACTIONS
 // Las únicas rutas de los módulos que aprobar una propuesta puede tocar (y revisar una, sólo de lectura).
 const ID = '[A-Za-z0-9_-]{1,80}';
 export const EXEC_ROUTES = Object.freeze([
-  ['chatflows', 'POST', new RegExp(`^/api/chatflows/${ID}/(publish|activate|validate)$`)],
+  // pausar un recorrido: la ruta del botón «Pausar», sin detener las conversaciones en curso
+  ['chatflows', 'POST', new RegExp(`^/api/chatflows/${ID}/(publish|activate|pause|validate)$`)],
   ['sequences', 'POST', new RegExp(`^/api/sequences/${ID}/enable$`)],
   ['rules', 'GET', new RegExp(`^/api/rules/${ID}$`)],
   ['rules', 'POST', new RegExp(`^/api/rules/${ID}/activate$`)],

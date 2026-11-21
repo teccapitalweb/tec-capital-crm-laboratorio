@@ -52,6 +52,7 @@ test('propuestas: herramientas, permiso propio, lista cerrada y ninguna herramie
     'dar_de_alta_curso',
     'publicar_recorrido',
     'activar_recorrido',
+    'pausar_recorrido',
     'encender_secuencia',
     'activar_regla',
     'publicar_apertura',
@@ -67,10 +68,15 @@ test('propuestas: herramientas, permiso propio, lista cerrada y ninguna herramie
     // el único retiro de la lista es archivar un curso (reversible: el curso queda inactivo)
     if (/archivar/.test(k)) assert.equal(k, 'archivar_curso');
   }
-  // las rutas que puede tocar aprobar: ninguna de envío, pago o borrado; el único archivo, el de un curso
-  for (const [, method, re] of EXEC_ROUTES) {
+  // las rutas que puede tocar aprobar: ninguna de envío, pago o borrado; el único archivo, el de un curso; la única
+  // pausa, la de un recorrido
+  for (const [mod, method, re] of EXEC_ROUTES) {
     assert.ok(['GET', 'POST', 'PATCH', 'PUT'].includes(method));
-    assert.doesNotMatch(re.source, /send|schedule|delete|pay|submit|duplicate|pause|disable/);
+    assert.doesNotMatch(re.source, /send|schedule|delete|pay|submit|duplicate|disable/);
+    if (/pause/.test(re.source)) {
+      assert.equal(mod, 'chatflows', re.source);
+      assert.ok(re.test('/api/chatflows/f-1/pause') && !re.test('/api/sequences/s-1/pause'), re.source);
+    }
     if (/archive/.test(re.source)) assert.ok(re.test('/api/catalogue/courses/aves/archive'), re.source);
     if (/archive/.test(re.source)) assert.ok(!re.test('/api/catalogue/editions/x/archive'), re.source);
   }

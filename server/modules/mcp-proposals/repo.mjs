@@ -7,8 +7,16 @@ export function createRepo(db) {
 
   // Lo que hace falta de cada entidad para describirla, comprobar su revisión y decidir si la acción tiene sentido.
   const ENTITY = {
+    // Con el inicio de su versión publicada (el que vale al activarlo o pausarlo) y su antigüedad (decide el orden
+    // entre recorridos del mismo tipo de inicio, server/modules/chatflows/runtime.mjs: pick()).
     chatflow: (b, id) =>
-      one('SELECT id,name,status,revision,published_version,draft FROM chatflows WHERE id=? AND brand_id=?', id, b),
+      one(
+        `SELECT f.id,f.name,f.status,f.revision,f.published_version,f.draft,f.created_at,v.start published_start
+         FROM chatflows f LEFT JOIN chatflow_versions v ON v.flow_id=f.id AND v.version=f.published_version
+         WHERE f.id=? AND f.brand_id=?`,
+        id,
+        b,
+      ),
     sequence: (b, id) =>
       one('SELECT id,title name,enabled,archived_at,revision,steps FROM sequences WHERE id=? AND brand_id=?', id, b),
     rule: (b, id) =>
@@ -179,6 +187,27 @@ export function createRepo(db) {
     versionGraph: (brandId, flowId, version) =>
       one('SELECT graph FROM chatflow_versions WHERE flow_id=? AND version=? AND brand_id=?', flowId, version, brandId)
         ?.graph ?? null,
+    // Conversaciones que están dentro de un recorrido ahora mismo (sesión sin terminar).
+    flowLiveSessions: (brandId, flowId) =>
+      one("SELECT count(*) n FROM chatflow_sessions WHERE brand_id=? AND flow_id=? AND state!='ended'", brandId, flowId)
+        ?.n ?? 0,
+    // Los recorridos activos de la marca con el inicio de su versión publicada, del más antiguo al más nuevo (el mismo
+    // orden con que el motor elige cuál arranca).
+    activeFlows: brandId =>
+      all(
+        `SELECT f.id,f.name,f.created_at,v.start FROM chatflows f
+           JOIN chatflow_versions v ON v.flow_id=f.id AND v.version=f.published_version
+         WHERE f.brand_id=? AND f.status='active' ORDER BY f.created_at,f.id`,
+        brandId,
+      ).map(f => {
+        let start = null;
+        try {
+          start = JSON.parse(f.start || 'null');
+        } catch {
+          start = null;
+        }
+        return { id: f.id, name: f.name, createdAt: f.created_at, start };
+      }),
     // ¿Otra promoción publicada de la misma apertura coincide en fechas? (la misma regla que el catálogo)
     promotionOverlap: p =>
       Boolean(
