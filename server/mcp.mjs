@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { Readable } from 'node:stream';
 import { zonedToUtc } from './catalogue-import.mjs';
 import { DRAFT_SCOPE, DRAFT_TOOLS, createDraftTools } from './lib/mcp-drafts.mjs';
@@ -272,11 +273,17 @@ export function createMcp({
   integrations,
   body,
   json,
-  audit,
+  audit: auditLog,
   rate,
   version = '0',
   now = Date.now,
 }) {
+  // Actividad del asistente (server/modules/mcp-activity): lo que cada herramienta audita queda anotado para su fila.
+  const audited = new AsyncLocalStorage();
+  const audit = (user, action, id) => {
+    audited.getStore()?.push([action, id]);
+    return auditLog(user, action, id);
+  };
   // Los módulos nuevos (server/modules/) se crean después del conector: server/index.mjs los entrega con useModules()
   // en cuanto existen, y cada herramienta los pide por nombre al usarlos.
   let moduleOf = () => null;
@@ -684,8 +691,17 @@ export function createMcp({
   Object.assign(run, createConfigTools({ db, crm, audit, module: name => moduleOf(name), actorOf, catalogue }).run);
 
   const rpcError = (id, code, message) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
+  // Una fila de actividad por llamada (sin argumentos ni respuesta). Si no se puede escribir, la herramienta responde igual.
+  const note = entry => {
+    try {
+      moduleOf('mcp-activity')?.record(entry);
+    } catch (e) {
+      console.error('mcp-activity', e?.message);
+    }
+  };
   async function call(key, params) {
     const tool = TOOLS.find(t => t.name === params?.name);
+    if (!tool) note({ key });
     if (!tool)
       return {
         error: { code: -32602, message: 'Herramienta desconocida: ' + String(params?.name || '').slice(0, 60) },
@@ -694,6 +710,7 @@ export function createMcp({
       params.arguments && typeof params.arguments === 'object' && !Array.isArray(params.arguments)
         ? params.arguments
         : {};
+    const seen = [];
     try {
       if (tool.scope && !has(key, tool.scope))
         throw fail(
@@ -705,9 +722,11 @@ export function createMcp({
       creatorOf(key);
       const bad = invalid(tool.inputSchema, args);
       if (bad) throw fail(400, bad);
-      const data = await run[tool.name](key, args);
+      const data = await audited.run(seen, () => run[tool.name](key, args));
+      note({ key, tool, audited: seen });
       return { result: { content: [{ type: 'text', text: JSON.stringify(data, null, 1) }], isError: false } };
     } catch (e) {
+      note({ key, tool, error: e, scopeDenied: Boolean(tool.scope) && !has(key, tool.scope), audited: seen });
       if (!e.status) console.error('mcp', tool.name, e); // fallo inesperado: se registra en el servidor y a Claude sólo le llega un texto neutro
       return {
         result: {

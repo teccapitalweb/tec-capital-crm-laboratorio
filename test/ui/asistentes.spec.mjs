@@ -14,8 +14,10 @@ async function registerClient(request, name) {
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).client_id;
 }
+let lastVerifier = '';
 function authorizeUrl(clientId, baseURL) {
   const verifier = randomBytes(32).toString('base64url');
+  lastVerifier = verifier;
   const challenge = createHash('sha256').update(verifier).digest('base64url');
   return (
     '/oauth/authorize?' +
@@ -81,6 +83,51 @@ test.describe('con sesión de administración', () => {
     await expect(card).toBeVisible();
     await expect(card).toContainText('Aperturas, precios y cupos');
     await expectNiebla(page, 'asistentes', testInfo);
+
+    // ---- Actividad: el asistente usa el conector (una consulta y una sin permiso) y una llave de la API también
+    const tokens = await (
+      await page.request.post('/oauth/token', {
+        form: {
+          grant_type: 'authorization_code',
+          code: landed.searchParams.get('code'),
+          redirect_uri: CALLBACK,
+          client_id: clientId,
+          code_verifier: lastVerifier,
+        },
+      })
+    ).json();
+    expect(tokens.access_token).toMatch(/^tca_/);
+    const mcp = (token, name) =>
+      page.request.post('/mcp', {
+        headers: { Authorization: 'Bearer ' + token },
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} } },
+      });
+    expect((await mcp(tokens.access_token, 'listar_cursos')).status()).toBe(200);
+    expect((await mcp(tokens.access_token, 'listar_pedidos')).status()).toBe(200);
+    const keyName = `Llave de la prueba ${testInfo.project.name}`;
+    const key = await page.request.post('/api/integrations/keys', {
+      headers: { Origin: baseURL },
+      data: { brandId: 'globalvet', name: keyName, scopes: ['editions'] },
+    });
+    expect(key.status(), await key.text()).toBe(201);
+    expect((await mcp((await key.json()).token, 'resumen')).status()).toBe(200);
+
+    await card.getByRole('button', { name: 'Ver actividad' }).click();
+    await expect(page.getByRole('tab', { name: 'Actividad' })).toHaveAttribute('aria-selected', 'true');
+    const rows = page.locator('#page .ac-item');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0)).toContainText(/Rechazada: no tenía el permiso «.+»/);
+    await expect(rows.nth(0)).toContainText('Rechazada');
+    await expect(rows.nth(1)).toContainText('Consultó los cursos y aperturas');
+    await expect(rows.nth(1)).toContainText(name);
+    await expectNiebla(page, 'asistentes-actividad', testInfo); // sin filtro de conexión aparece también la llave, por su nombre; «Sólo rechazadas» deja sólo el rechazo
+    await page.locator('#page select[name="source"]').selectOption('');
+    await expect(page.locator('#page .ac-item', { hasText: keyName })).toContainText('Consultó el resumen de la marca');
+    await page.getByRole('button', { name: 'Sólo rechazadas' }).click();
+    await expect(page.getByRole('button', { name: 'Sólo rechazadas' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#page .ac-item[data-outcome="ok"]')).toHaveCount(0);
+    await expect(page.locator('#page .ac-item', { hasText: name }).first()).toContainText('Rechazada');
+    await page.getByRole('tab', { name: 'Conexiones' }).click();
 
     await card.getByRole('button', { name: 'Desconectar' }).click();
     await page.locator('.k-dialog').getByRole('button', { name: 'Desconectar' }).click();
