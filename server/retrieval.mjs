@@ -118,21 +118,12 @@ function docTerms(e) {
 
 // Rankea las entradas para una consulta (el mensaje actual y, si hace falta, los últimos del cliente).
 // Devuelve las más relevantes con su puntuación; entradas.length ≤ k y dentro de maxChars.
+// Con pocas entradas (k o menos) antes se mandaban TODAS sin medir nada: cualquier pregunta sin intención reconocida («buen
+// día», algo sin relación) llamaba a la IA con todo el conocimiento. Ahora se exige el mismo parecido mínimo que con muchas
+// (docs/PLAN_RESPUESTAS_DE_VENTA.md); el modo se llama 'pocas' y, si nada se parece, no se manda nada.
 export function rankKnowledge(query, entries, { k = 6, maxChars = 6000, hintTopic = null, extraQuery = '' } = {}) {
   const all = entries || [];
-  if (all.length <= k) {
-    const sel = trim(
-      all.map((e, i) => ({ entry: e, score: all.length - i })),
-      maxChars,
-    );
-    return {
-      selected: sel.items,
-      considered: all.length,
-      sent: sel.items.length,
-      truncated: sel.truncated,
-      mode: 'todo',
-    };
-  }
+  if (!all.length) return { selected: [], considered: 0, sent: 0, truncated: false, mode: 'pocas' };
   const docs = all.map(docTerms),
     N = docs.length,
     avg = docs.reduce((a, d) => a + d.len, 0) / N || 1;
@@ -182,7 +173,13 @@ export function rankKnowledge(query, entries, { k = 6, maxChars = 6000, hintTopi
     if (h && ranked.length < k + 1) ranked.push({ entry: h, score: 0 });
   }
   const sel = trim(ranked, maxChars);
-  return { selected: sel.items, considered: N, sent: sel.items.length, truncated: sel.truncated, mode: 'relevantes' };
+  return {
+    selected: sel.items,
+    considered: N,
+    sent: sel.items.length,
+    truncated: sel.truncated,
+    mode: N <= k ? 'pocas' : 'relevantes',
+  };
 }
 
 function trim(items, maxChars) {

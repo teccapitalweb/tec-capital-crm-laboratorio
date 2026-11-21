@@ -413,6 +413,50 @@ export default {
     // La confirmación del pago dice «enseguida te mando tus accesos» sólo si de verdad van a salir solos.
     payments.useAccessHint?.(o => o.kind !== 'session' && autoSkip(repo.access(o.edition_id), o) === '');
 
+    // El asistente (server/replies.mjs) reenvía los accesos a quien los pide por el chat («¿dónde entro?», «no me llegó el
+    // enlace») sólo si ya está inscrito y los accesos de su apertura se pueden enviar tal cual: los mismos que ya recibió o
+    // los que saldrían solos al confirmar. Si no, responde null o el motivo y la conversación pasa a una persona. Sólo lee;
+    // `record` deja la entrega anotada como un reenvío (sin persona) en la transacción del asistente.
+    host.services.replies?.useAccess?.({
+      forConversation(c) {
+        const o = repo.latestOrder(c.id);
+        if (!o || o.status !== 'paid' || o.brand_id !== c.brand_id) return null;
+        const n0 = repo.enrollmentOfOrder(o.id);
+        if (!n0 || n0.status !== 'enrolled') return null;
+        const n = repo.enrollment(n0.id),
+          e = repo.edition(n.brand_id, n.edition_id),
+          a = repo.access(n.edition_id);
+        const reason = !e ? 'empty' : problemsOf(a.body, e).length ? 'empty' : repo.wasSent(n.id) ? '' : autoSkip(a, n);
+        if (reason) return { enrolled: true, ready: false, reason };
+        return {
+          enrolled: true,
+          ready: true,
+          enrollmentId: n.id,
+          text: render(a.body, e, { name: n.contact_name, reference: n.reference }),
+        };
+      },
+      record(enrollmentId, messageId) {
+        const n = repo.enrollment(enrollmentId);
+        if (!n || !messageId) return;
+        repo.insertDelivery({
+          id: randomUUID(),
+          brandId: n.brand_id,
+          editionId: n.edition_id,
+          enrollmentId: n.id,
+          conversationId: n.conversation_id,
+          kind: 'manual',
+          status: 'sent',
+          reason: '',
+          messageId,
+          accessRevision: repo.access(n.edition_id).revision,
+          sentBy: null,
+          clientRef: 'assistant:' + messageId,
+          at: now(),
+        });
+        emit(n.brand_id);
+      },
+    });
+
     // El pago confirmado inscribe (server/payments.mjs) y publica `inscripcion.activada`; aquí sale el mensaje de accesos.
     events.subscribe('inscripcion.activada', 'course-access.deliver', ev => {
       deliver(ev.entity_id, { kind: 'auto' });

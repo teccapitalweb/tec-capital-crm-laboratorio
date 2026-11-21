@@ -96,6 +96,46 @@ const TEXTS = {
     copy.paymentConfirmed({ name: 'Ana', ...ORDER }) +
     copy.paymentConfirmed({ name: 'Ana', ...ORDER, perSession: true }),
   REAL_PAYMENT_METHODS: () => copy.REAL_PAYMENT_METHODS,
+  // respuestas de venta y posventa (docs/PLAN_RESPUESTAS_DE_VENTA.md)
+  paidAck: () => ['review', 'pending', null].map(status => copy.paidAck({ reference: 'TC-ABC123', status })).join('\n'),
+  payStatus: () =>
+    ['paid', 'review', 'pending', 'none']
+      .map(s => copy.payStatus(s, { reference: 'TC-ABC123', course: 'Nutrición de aves', edition: 'Diciembre' }))
+      .join('\n'),
+  payLater: () =>
+    copy.payLater('Ana', { reference: 'TC-ABC123', until: '30 nov 2026', hold: true }) +
+    copy.payLater('Ana') +
+    copy.payLater('Ana', { canOrder: false }),
+  paymentAdvisor: () =>
+    ['invoice', 'installments', 'group', 'account', 'discount'].map(k => copy.paymentAdvisor(k)).join('\n'),
+  noPromotion: () => copy.noPromotion({ ...ctx, promotion: null }),
+  validity: () => copy.validity(ctx, 'Emisor Uno'),
+  certDataThanks: () =>
+    copy.certDataThanks('Ana', { name: 'ANA RUIZ', email: 'a@b.test', phone: '5512345678' }) +
+    copy.certDataThanks('Ana', { name: 'ANA RUIZ' }, { order: true }) +
+    copy.certDataThanks('Ana', { email: 'a@b.test' }, { enrolled: true }),
+  certDataAsk: () => copy.certDataAsk,
+  accessResend: () => copy.accessResend('Ana', 'Enlace: https://clases.example.test/x'),
+  accessPending: () => copy.accessPending,
+  accessProblem: () => copy.accessProblem('Ana'),
+  accessAfterPayment: () =>
+    copy.accessAfterPayment('TC-ABC123', 'review') + copy.accessAfterPayment('TC-ABC123', 'pending'),
+  accessUnknown: () => copy.accessUnknown,
+  waitingAck: () => copy.waitingAck('Ana') + copy.waitingAck('Ana', { reference: 'TC-ABC123', review: true }),
+  thanksEnrolled: () => copy.thanksEnrolled('Ana'),
+  deadline: () => copy.deadline(ctx),
+  nextEdition: () => copy.nextEdition(ctx),
+  notifyNext: () => copy.notifyNext(ctx, 'Ana'),
+  timeObjection: () => copy.timeObjection(ctx, 'Cada sesión se graba.') + copy.timeObjection(ctx),
+  durationExtra: () => copy.durationExtra({ ...ctx, edition: { ...ctx.edition, ends_at: Date.UTC(2026, 11, 5) } }, 4),
+  durationBody: () => copy.durationBody(ctx, 3),
+  duration: () => copy.duration(ctx),
+  seatsCapacity: () => copy.seatsCapacity({ ...ctx, edition: { ...ctx.edition, capacity: 30 } }),
+  recommend: () =>
+    copy.recommend(ctx, [{ title: 'Otro curso', start: 'lunes', price: '$500.00 MXN' }]) +
+    copy.recommend(ctx, [{ title: 'Otro curso', start: null, price: '$500.00 MXN' }], { multi: true }),
+  askTopic: () => copy.askTopic(ctx),
+  jobs: () => copy.jobs(ctx),
 };
 const NOT_TEXT = ['firstName', 'noHour', 'startText', 'whenText', 'zoneWords', 'priceText', 'facts', 'LAB_SWAPS'];
 

@@ -459,7 +459,9 @@ test('modo autónomo: las preguntas que la IA sí contesta no cuentan para pasar
   assert.deepEqual(ana.state(), { bot_enabled: 1, status: 'open' });
   // ahora la IA devuelve algo inválido (un precio): eso sí es «sin respuesta», y arranca desde el primer escalón
   answer = 'El curso cuesta $500 pesos y lo puedes tomar desde cualquier lugar.';
-  const m1 = await ana.say('¿Sirve si trabajo en otro estado de la república y viajo mucho?');
+  // (una pregunta con algo parecido en el conocimiento: desde docs/PLAN_RESPUESTAS_DE_VENTA.md, una que no se parece a nada ni
+  // siquiera llega a la IA, aunque la marca tenga 6 respuestas o menos)
+  const m1 = await ana.say('¿Puedo conectarme desde la computadora del trabajo si viajo mucho?');
   assert.match(m1.log.reason, /Proveedor descartado/);
   assert.match(m1.text, /todavía no la tengo a la mano/);
   assert.deepEqual(m1.buttons, WITH_HUMAN);
@@ -476,7 +478,7 @@ test('modo autónomo: las preguntas que la IA sí contesta no cuentan para pasar
   assert.equal(back.buttons, null);
   assert.ok(!back.log.sources.includes('offer_human'));
   answer = 'El curso cuesta $500 pesos.';
-  const again = await ana.say('¿Sirve si trabajo en otro estado de la república y viajo mucho?');
+  const again = await ana.say('¿Puedo conectarme desde la computadora del trabajo si viajo mucho?');
   assert.match(again.text, /todavía no la tengo a la mano/, 'tras una respuesta buena la cuenta vuelve a empezar');
   assert.deepEqual(ana.state(), { bot_enabled: 1, status: 'open' });
 });

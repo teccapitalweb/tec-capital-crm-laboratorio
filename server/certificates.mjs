@@ -160,7 +160,13 @@ export function createCertificates({
     const person = contact?.persona_id
         ? db.prepare('SELECT id,name FROM persons WHERE id=?').get(contact.persona_id)
         : null,
-      holder = (person?.name || contact?.name || 'Alumno').trim();
+      // El nombre que la persona dio en el chat para su constancia (docs/PLAN_RESPUESTAS_DE_VENTA.md) gana sobre el del contacto.
+      stated = db
+        .prepare(
+          "SELECT d.full_name FROM certificate_details d JOIN orders o ON o.conversation_id=d.conversation_id WHERE o.id=? AND d.brand_id=? AND d.full_name!=''",
+        )
+        .get(en.order_id, en.brand_id)?.full_name,
+      holder = (stated || person?.name || contact?.name || 'Alumno').trim();
     const hours = db
       .prepare("SELECT COALESCE(sum(duration_min),0) m FROM edition_sessions WHERE edition_id=? AND status='done'")
       .get(e.id).m;

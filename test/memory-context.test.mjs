@@ -107,8 +107,16 @@ test('selección de conocimiento: lo relevante entra, con sinónimos del negocio
   assert.equal(top('y eso incluye', { extraQuery: '¿Entregan constancia al terminar?' })[0], 'cert');
   // el tema que ya detectó el motor de reglas siempre entra
   assert.ok(top('hmm cuéntame más', { hintTopic: 'recording' }).includes('rec'));
-  // un conocimiento chico se manda completo; uno grande respeta el presupuesto de caracteres
-  assert.equal(rankKnowledge('lo que sea', CORE.slice(0, 4), { k: 6 }).mode, 'todo');
+  // un conocimiento chico (k entradas o menos) ya no se manda completo ante cualquier cosa (docs/PLAN_RESPUESTAS_DE_VENTA.md):
+  // exige el mismo parecido mínimo que uno grande. Lo relacionado sí entra; lo ajeno, nada (y no se llama a la IA).
+  const few = CORE.slice(0, 4);
+  assert.equal(rankKnowledge('lo que sea', few, { k: 6 }).mode, 'pocas');
+  assert.deepEqual(rankKnowledge('lo que sea', few, { k: 6 }).selected, []);
+  assert.deepEqual(rankKnowledge('buen día', few, { k: 6 }).selected, []);
+  const related = rankKnowledge('Me dan algún papel que acredite que lo tomé?', few, { k: 6 });
+  assert.ok(related.sent >= 1 && related.sent < few.length, 'sólo lo parecido');
+  assert.equal(related.selected[0].entry.id, 'cert');
+  // uno grande respeta el presupuesto de caracteres
   const big = Array.from({ length: 40 }, (_, i) =>
     mk('b' + i, 'general', '¿Pregunta de certificado número ' + i + '?', 'Respuesta larga '.repeat(60), ['constancia']),
   );

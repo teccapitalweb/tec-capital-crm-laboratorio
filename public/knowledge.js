@@ -195,6 +195,8 @@ window.createReplyAssistUI = function ({ state, api, esc, icon, toast }) {
     help: 'Pide ayuda',
     menu: 'Pide opciones',
     choose_course: 'Elige curso',
+    access: 'Pide sus accesos',
+    cert_data: 'Datos para la constancia',
   };
   const ACTION = {
     replied: 'Respondió',

@@ -30,6 +30,8 @@ window.createEvaluationUI = function ({ state, api, esc, icon, showModal, toast,
     help: 'pide ayuda',
     menu: 'pide opciones',
     choose_course: 'elige curso',
+    access: 'pide sus accesos',
+    cert_data: 'datos para la constancia',
   };
   const ACTION = {
       replied: 'responde',

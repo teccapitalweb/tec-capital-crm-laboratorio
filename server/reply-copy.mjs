@@ -370,3 +370,200 @@ export const LAB_SWAPS = Object.freeze([
   ['\n\nPaga aquí: ', '\n\nCómo pagar: '],
   ['Paga aquí (simulado): ', 'Cómo pagar: '],
 ]);
+
+// ---- Respuestas de venta y posventa (docs/PLAN_RESPUESTAS_DE_VENTA.md). Mismas reglas que todo el archivo: los datos
+// salen del catálogo o del pedido real, nada confirma un pago, nada aparta un lugar y lo que no consta lo dice una
+// persona. Ninguno de estos textos lleva aviso de prueba propio (el que acompaña a un precio es PRICE_NOTE).
+const refOf = reference => (reference ? ' ' + reference : '');
+// «Ya pagué», «ya hice la transferencia»: acuse, estado real del pedido y pase a una persona, que es quien valida.
+export function paidAck({ reference = null, status = null } = {}) {
+  return (
+    'Gracias por avisar. Una persona del equipo revisará tu pago y te confirmará por aquí; no confirmamos pagos de forma automática.' +
+    (status === 'review'
+      ? ' Tu pedido' + refOf(reference) + ' ya está en revisión.'
+      : (status === 'pending' ? ' Tu pedido' + refOf(reference) + ' todavía aparece sin pago confirmado.' : '') +
+        ' Si tienes tu comprobante, puedes enviarlo en este chat.')
+  );
+}
+// «¿Ya verificaron mi pago?»: el estado que dice el pedido, sin confirmar nada por cuenta propia.
+export function payStatus(state, { reference = null, course = '', edition = '' } = {}) {
+  if (state === 'paid')
+    return (
+      'Tu pedido' +
+      refOf(reference) +
+      ' ya aparece con el pago confirmado y tu inscripción a ' +
+      course +
+      (edition ? ' · ' + edition : '') +
+      ' está activa. Si te falta algo, dime y te ayudo.'
+    );
+  if (state === 'review')
+    return (
+      'Tu comprobante del pedido' +
+      refOf(reference) +
+      ' está en revisión. Ya le avisé al equipo para que lo revise y te confirme por aquí; no confirmamos pagos de forma automática.'
+    );
+  if (state === 'pending')
+    return (
+      'Todavía no veo un comprobante en tu pedido' +
+      refOf(reference) +
+      '. Si ya pagaste, mándame por aquí la foto o captura del comprobante y una persona del equipo lo revisa.'
+    );
+  return 'No encuentro un pedido en este chat, así que le pasé tu mensaje a una persona del equipo para que revise tu pago. Te escribe por aquí.';
+}
+// «Mañana pago», «en la quincena»: sin presionar y con el siguiente paso. No aparta el lugar: se asegura al confirmar el pago.
+export function payLater(name, { reference = null, until = null, hold = false, canOrder = true } = {}) {
+  const asked = hold ? ' El lugar queda asegurado cuando se confirma el pago.' : '';
+  return reference
+    ? '¡Perfecto' +
+        hi(name) +
+        ', sin problema! Tu pedido' +
+        refOf(reference) +
+        (until ? ' sigue vigente hasta el ' + until + '.' : ' sigue vigente.') +
+        asked +
+        ' Cuando pagues, mándame tu comprobante por aquí y una persona del equipo lo valida.'
+    : '¡Claro' +
+        hi(name) +
+        ', sin prisa!' +
+        asked +
+        (canOrder
+          ? ' Cuando estés listo, escribe «Quiero inscribirme» y te mando tu enlace de pago.'
+          : ' Cuando estés listo, escríbeme por aquí y seguimos.');
+}
+// Factura, meses o pagos en partes, varias personas, datos de la cuenta: si no hay una respuesta aprobada, lo dice una persona.
+const ADVISOR = {
+  invoice: 'Lo de la factura te lo confirma una persona del equipo para no darte un dato equivocado.',
+  installments:
+    'Las opciones para pagar en partes o a meses te las confirma una persona del equipo para no darte un dato equivocado.',
+  group:
+    'Con gusto. Para inscribir o pagar por varias personas te ayuda una persona del equipo, así cada quien queda con su lugar.',
+  account: 'Los datos para depositar o transferir te los comparte una persona del equipo.',
+  discount: 'Si hay alguna opción para grupos o un precio especial, te lo confirma una persona del equipo.',
+};
+export const paymentAdvisor = kind => (ADVISOR[kind] || ADVISOR.invoice) + ' Ya le avisé y te escribe por aquí.';
+// «¿Hay descuento?» sin promoción vigente: se dice claro, con el precio del catálogo.
+export const noPromotion = ctx =>
+  priceBody(ctx) +
+  ' Por ahora no hay una promoción vigente para esta apertura.\n\n' +
+  ENROLL_CTA +
+  ' Si buscas un precio especial (por ser estudiante o por grupo), escribe «asesor» y una persona del equipo te dice si aplica.\n' +
+  PRICE_NOTE;
+// Validez del certificado: lo que consta (digital, emisor, folio y QR) y nada más. Nunca se afirma validez oficial.
+export const validity = (ctx, issuer) =>
+  'El certificado que emitimos es digital: lo emite ' +
+  issuer +
+  ', lleva folio y un código QR para verificarlo en línea. Sobre su validez ante la SEP, para tu cédula, puntos o valor curricular no te puedo confirmar nada por aquí. Si lo necesitas para un trámite, escribe «asesor» y una persona del equipo te dice exactamente qué ampara.';
+// Datos para la constancia: se acusa lo que se anotó, sin crear pedidos ni repetir el texto del certificado.
+export function certDataThanks(name, data, { enrolled = false, order = false } = {}) {
+  const got = [
+    data.name ? 'tu nombre «' + data.name + '» para tu certificado' : '',
+    data.email ? 'tu correo' : '',
+    data.phone ? 'tu teléfono' : '',
+  ].filter(Boolean);
+  const list = got.length > 1 ? got.slice(0, -1).join(', ') + ' y ' + got[got.length - 1] : got[0];
+  return (
+    '¡Gracias' +
+    hi(name) +
+    '! Anoté ' +
+    list +
+    '.' +
+    (enrolled
+      ? ' Queda junto con tu inscripción; si algo cambia, escríbemelo por aquí.'
+      : order
+        ? ' Lo dejo junto con tu pedido; si algo cambia, escríbemelo por aquí.'
+        : ' Cuando quieras apartar tu lugar, escribe «Quiero inscribirme».')
+  );
+}
+export const certDataAsk =
+  'Claro. Escríbeme en un solo mensaje tu nombre completo tal como quieres que aparezca en tu certificado (con acentos y mayúsculas donde van), tu correo y tu teléfono.';
+// Accesos después de pagar.
+export const accessResend = (name, text) => 'Claro' + hi(name) + ', aquí tienes de nuevo tus accesos:\n\n' + text;
+export const accessPending =
+  'Tu inscripción está activa, pero tus accesos todavía no están listos en este chat. Ya le avisé al equipo para que te los envíe por aquí.';
+export const accessProblem = name =>
+  'Lamento la falla' + hi(name) + '. Ya le avisé al equipo para que lo revise contigo y te escriba por aquí.';
+export const accessAfterPayment = (reference, status) =>
+  'Tus accesos llegan por este chat cuando tu pago queda confirmado.' +
+  (status === 'review'
+    ? ' Tu comprobante del pedido' + refOf(reference) + ' está en revisión; ya le avisé al equipo.'
+    : ' Tu pedido' +
+      refOf(reference) +
+      ' todavía aparece sin pago confirmado: cuando pagues, mándame tu comprobante por aquí.');
+export const accessUnknown =
+  'No encuentro una inscripción activa en este chat, así que le pasé tu mensaje a una persona del equipo para que lo revise. Te escribe por aquí.';
+// Mientras la conversación espera a una persona: un acuse por espera, sin retomar la conversación.
+export const waitingAck = (name, { reference = null, review = false } = {}) =>
+  'Gracias por tu mensaje' +
+  hi(name) +
+  '. Ya le avisé al equipo; en cuanto una persona esté disponible te contesta por aquí.' +
+  (review ? ' Tu comprobante del pedido' + refOf(reference) + ' sigue en revisión.' : '');
+// «Gracias» de alguien ya inscrito: no se le ofrece «ver el precio o inscribirte».
+export const thanksEnrolled = name => '¡Con gusto' + hi(name) + '! Aquí estoy si necesitas algo más.';
+// Fechas que no son «¿cuándo empieza?».
+export const deadline = ctx =>
+  scheduleBody(ctx) +
+  '\n\n' +
+  (startText(ctx.edition) !== null
+    ? 'Las inscripciones siguen abiertas mientras haya lugar y hasta que empiece el curso. ¿Quieres apartar tu lugar? Escribe «Quiero inscribirme».'
+    : 'Las inscripciones siguen abiertas. ¿Quieres apartar tu lugar? Escribe «Quiero inscribirme».');
+export const nextEdition = ctx =>
+  scheduleBody(ctx) +
+  '\n\nPor ahora ésta es la fecha que tengo abierta de ' +
+  ctx.course.title +
+  '. Si buscas otra, escribe «asesor» y una persona del equipo te dice cuándo es la siguiente.';
+export const notifyNext = (ctx, name) =>
+  'Con gusto' +
+  hi(name) +
+  '. Le pedí al equipo que te avise de la siguiente fecha de ' +
+  ctx.course.title +
+  '; una persona te escribe por aquí.';
+// «No tengo tiempo», «estoy de guardia»: la respuesta aprobada de la grabación si existe y la puerta a otra fecha.
+export const timeObjection = (ctx, recording = '') =>
+  'Te entiendo.' +
+  (recording ? '\n\n' + recording : '') +
+  '\n\nSi estas fechas no te acomodan, escribe «asesor» y una persona del equipo te dice cuándo es la siguiente apertura de ' +
+  ctx.course.title +
+  '.';
+// Duración con el calendario de la apertura que ya se conoce (sin pedir «dime qué edición»).
+// Los renglones de fin y sesiones (también se añaden a la ficha de fechas cuando preguntan las dos cosas).
+export function durationExtra(ctx, sessions = 0) {
+  const e = ctx.edition,
+    end = e.ends_at ? startText({ ...e, starts_at: e.ends_at }) : null;
+  return (end ? '\n• Termina: ' + end : '') + (sessions ? '\n• Sesiones: ' + sessions : '');
+}
+export const durationBody = (ctx, sessions = 0) =>
+  title(ctx) + '\n• Inicio: ' + (startText(ctx.edition) || 'fecha por confirmar') + durationExtra(ctx, sessions);
+export const duration = (ctx, sessions = 0) =>
+  durationBody(ctx, sessions) + '\n\n¿Quieres apartar tu lugar? Escribe «Quiero inscribirme».';
+// Cupo cuando el catálogo sabe el tamaño del grupo pero no los lugares que quedan.
+export const seatsCapacity = ctx =>
+  'Las inscripciones de ' +
+  title(ctx) +
+  ' están abiertas y el grupo es de ' +
+  ctx.edition.capacity +
+  ' lugares, así que el cupo es limitado. ' +
+  ENROLL_CTA;
+// Recomendar cursos de la marca con lo que la persona dice (especie o tema), con inicio y precio vigentes.
+export function recommend(ctx, items, { multi = false } = {}) {
+  return (
+    'Por lo que me cuentas, te pueden servir estos cursos de ' +
+    ctx.brand.name +
+    ':\n\n' +
+    items.map(i => '• ' + i.title + ' — inicia ' + (i.start || 'en fecha por confirmar') + ' · ' + i.price).join('\n') +
+    '\n\n' +
+    (multi
+      ? 'Responde con el nombre del que te interesa y te paso su información.'
+      : 'Este chat es sobre ' +
+        ctx.course.title +
+        '. Si te interesa otro, escribe «asesor» y una persona te da los detalles.') +
+    '\n' +
+    PRICE_NOTE
+  );
+}
+export const askTopic = ctx =>
+  'Con gusto te recomiendo. ¿Con qué especie o tema trabajas, o cuál te gustaría aprender? Así te digo cuál de los cursos de ' +
+  ctx.brand.name +
+  ' te conviene.';
+export const jobs = ctx =>
+  'Gracias por escribirnos. Por este chat sólo atiendo información e inscripciones a los cursos de ' +
+  ctx.brand.name +
+  ', así que no manejo vacantes ni colaboraciones. Si tienes una duda de algún curso, aquí estoy.';

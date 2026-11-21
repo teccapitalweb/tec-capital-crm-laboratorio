@@ -75,7 +75,12 @@ export function createSummaries({
   now = Date.now,
 }) {
   const messagesOf = id =>
-    db.prepare('SELECT seq,sender_kind,text,created_at FROM messages WHERE conversation_id=? ORDER BY seq').all(id);
+    db
+      .prepare('SELECT seq,sender_kind,text,created_at,client_ref FROM messages WHERE conversation_id=? ORDER BY seq')
+      .all(id);
+  // El acuse que deja el asistente mientras la conversación espera a una persona (docs/PLAN_RESPUESTAS_DE_VENTA.md) no es
+  // una respuesta: el último mensaje que cuenta sigue siendo el de la persona.
+  const isAck = m => /^wait-(ack|data):/.test(m?.client_ref || '');
   const names = id => (id ? db.prepare('SELECT name FROM users WHERE id=?').get(id)?.name || null : null);
   const span = ms => {
     const h = Math.floor(ms / HOUR);
@@ -124,7 +129,7 @@ export function createSummaries({
       .filter(m => m.text && looksLikeQuestion(m.text))
       .slice(-3)
       .map(m => quote(m.text));
-    const last = msgs.at(-1),
+    const last = msgs.filter(m => !isAck(m)).at(-1),
       lastCustomer = customer.at(-1),
       first = msgs[0];
     const waitingHours = last && last.sender_kind === 'customer' ? Math.floor((now() - last.created_at) / HOUR) : null;

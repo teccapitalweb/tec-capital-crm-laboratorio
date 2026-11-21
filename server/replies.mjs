@@ -8,6 +8,7 @@ import { customerMemory } from './memory.mjs';
 import * as copy from './reply-copy.mjs';
 import { forBrand, isRealBrand } from './lib/real-mode.mjs';
 import { brandCourses, matchCourse, byNumber, candidates } from './course-match.mjs';
+import * as sales from './lib/sales-replies.mjs';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const text = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -39,6 +40,8 @@ export const INTENTS = [
   'help',
   'menu',
   'choose_course',
+  'access',
+  'cert_data',
   'unknown',
 ];
 // Mensajes de trato (saludo, gracias, «sí», «no», «espera», «¿sigues ahí?»…): se contestan con un texto fijo y NO cuentan como pregunta sin respuesta.
@@ -91,7 +94,7 @@ const PATTERNS = [
   // «persona» y «alguien» sueltos no piden un asesor («¿aplica para alguien que apenas empieza?»): sólo cuando se pide que alguien atienda.
   [
     'human',
-    /\b(asesor|asesora|humano|atencion|hablar con|persona real|(con|a) (una|alguna) persona|una persona del equipo|(atienda|atiende|responda|conteste|ayude|escriba|llame) (una|alguna) persona|con alguien|alguien (que )?(me )?(atienda|ayude|llame|explique|responda|conteste)|alguien me (puede|podria)|llamenme|llamame|llamada|(pueden|podrian|puedes|podria) (llamar|marcar)(me)?)\b/,
+    /\b(asesor|asesora|humano|atencion|hablar con|persona real|(con|a) (una|alguna) persona|una persona del equipo|(atienda|atiende|responda|conteste|ayude|escriba|llame) (una|alguna) persona|con alguien|alguien (que )?(me )?(atienda|ayude|llame|explique|responda|conteste)|alguien me (puede|podria)|llamenme|llamame|llamada|(pueden|podrian|puedes|podria|puede) (llamar|marcar)(me)?)\b/,
     0.9,
   ],
   [
@@ -106,6 +109,15 @@ const PATTERNS = [
     0.8,
     (t, raw) => words(t) <= 7 && !/[?¿]/.test(raw),
   ],
+  // ---- Venta y posventa (docs/PLAN_RESPUESTAS_DE_VENTA.md). Busca trabajo, no un curso: no es una pregunta de cupo («vacante»).
+  ['help', sales.JOBS, 0.8],
+  // Datos para la constancia («mi nombre completo para la constancia es…», «les paso mis datos»): no son una pregunta del
+  // certificado ni una inscripción nueva. Un correo o un nombre sueltos se reconocen en plan(), sólo si ya hay un pedido.
+  ['cert_data', /\S/, 0.8, (t, raw) => sales.certDataSignal(t, raw)],
+  // Accesos después de pagar («¿dónde entro?», «no me llegó el enlace», «no me han agregado al grupo»).
+  ['access', /\S/, 0.8, t => sales.isAccess(t)],
+  // «¿Hasta qué día me puedo registrar?» pregunta un plazo: no pide crear un pedido todavía.
+  ['schedule', sales.DEADLINE, 0.8],
   [
     'enroll',
     /\b(inscrib|registr|apuntar|apuntarme|apunto|anotarme|quiero el curso|quiero entrar|quiero tomarlo|me anoto|como me inscribo)/,
@@ -115,6 +127,13 @@ const PATTERNS = [
         t,
       ),
   ],
+  // Inscripción dicha como sustantivo o decisión: «el proceso de inscripción», «apartar mi lugar», «lo tomo», «me apunto».
+  [
+    'enroll',
+    /\b(inscripcion|apartar (mi |el |un )?lugar|aparto (mi )?lugar|lo tomo|la tomo|lo quiero tomar|quiero tomar(lo)?|me apunto|estoy interesad[oa] en (tomarlo|tomar|inscribirme|el curso))\b/,
+    0.8,
+    t => !/\b(cuanto|costo|precio|cuesta|requisitos?|cierran|hasta)\b|\bno (quiero|voy a|pienso)\b/.test(t),
+  ],
   // «Está caro», «no me alcanza»: no es una pregunta de pago ni de precio; se contesta con el precio vigente y la opción de hablar con una persona.
   [
     'objection',
@@ -122,27 +141,49 @@ const PATTERNS = [
     0.75,
     t => !/comprobante|pague|transferi|deposite|\btiempo\b/.test(t),
   ],
+  // «No tengo tiempo», «estoy de guardia»: tampoco es una pregunta de fechas (antes recibía otra vez la ficha de fechas).
+  [
+    'objection',
+    sales.TIME_OBJECTION,
+    0.75,
+    (t, raw) =>
+      !/\b(grabaci\w*|grabad[oa]s?|repeticion|ver despues|verlo despues|verla despues)\b/.test(t) &&
+      !(/[?¿]/.test(raw) && /\b(a que hora|que hora|cuando|que dias?|horario)\b/.test(t)), // «¿a qué hora es? salgo tarde» pregunta la hora
+  ],
   // «¿Cuánto hay que pagar?» pregunta el precio, no una forma de pago: va antes que «payment».
   ['price', /\bcuanto (se |hay que |tengo que |debo |es lo que hay que )?(pag(a|ar|o)|cobran)\b/, 0.85],
   [
     'payment',
-    /\b(comprobante|pague|pago|pagos|pagar|transferencia|deposito|tarjeta|oxxo|spei|factura|meses sin intereses)\b/,
+    /\b(comprobante|pague|pago|pagos|pagar|transferencia|transferi|transfiero|deposito|deposite|depositar|tarjeta|oxxo|spei|factura|facturan?|facturar|cfdi|iva|meses sin intereses|msi|parcialidades|mensualidades|en (dos|2|tres|3) (partes|pagos)|numero de cuenta|cuenta bancaria|clabe|voucher|baucher|bauche)\b/,
     0.85,
   ],
   // Duración va antes que precio: «¿cuánto dura?» no es una pregunta de precio. «¿Cuánto tiempo tengo para…?» tampoco es de duración.
   [
     'duration',
-    /\b(duracion|cuanto dura|cuantas (horas|sesiones|clases|semanas)|cuanto tiempo (dura|es|son|tarda|lleva|toma))\b/,
+    /\b(duracion|cuanto dura|cuantas (horas|sesiones|clases|semanas)|cuanto tiempo (dura|es|son|tarda|lleva|toma)|cuantos dias (es|son|dura)|cuantos dias$)\b/,
     0.8,
   ],
   [
     'price',
-    /\b(precio|precios|cuesta|costo|costos|inversion|promo|promos|promocion|promociones|descuento|descuentos|oferta|cuanto (cuesta|vale|sale|es|seria|cobran|me queda|queda)|en cuanto|que vale)\b|^cuanto$/,
+    /\b(precio|precios|cuesta|costo|costos|inversion|promo|promos|promocion|promociones|descuento|descuentos|oferta|cupon|cupones|cuanto (cuesta|vale|sale|es|seria|cobran|me queda|queda)|en cuanto|que vale|queda en \d+)\b|^cuanto$/,
     0.85,
+  ],
+  // Otra fecha («¿va a haber otra fecha?», «avísame de la siguiente»): ni la ficha de siempre ni una pregunta sin respuesta.
+  [
+    'schedule',
+    /\S/,
+    0.8,
+    t => sales.NEXT.test(t) || (sales.NOTIFY.test(t) && /\b(siguiente|proxima|otra|vuelv\w*|abrir|abran)\b/.test(t)),
+  ],
+  // «¿Hay repetición?» o «¿lo veo después?» preguntan por la grabación aunque mencionen el horario.
+  [
+    'recording',
+    /\b(repeticion|se graban?|quedan? grabad[oa]s?|lo veo despues|verlo despues|verla despues|ver despues|grabacion|grabaciones|grabad[oa]s?)\b/,
+    0.8,
   ],
   [
     'schedule',
-    /\b(fecha|fechas|horario|horarios|calendario|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|a que hora|que hora|(que|cual|primer|ultimo|proximo) dias?|cuando (es|son|seria|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|abren|hay|toca)|para cuando|quien (lo |la |los |las |nos )?(da|dara|imparte|impartira|ensena|va a dar|va a impartir)|docente|docentes|profesor|profesora|maestro|maestra|instructor|ponente)\b|^cuando$/,
+    /\b(fecha|fechas|horario|horarios|calendario|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|a que hora|que hora|(que|cual|primer|ultimo|proximo) dias?|cuando (es|son|seria|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|abren|hay|toca)|para cuando|quien (lo |la |los |las |nos )?(da|dara|imparte|impartira|ensena|va a dar|va a impartir)|docente|docentes|profesor|profesora|maestro|maestra|instructor|ponente|(es|son|sera|seria) (en la|por la|de) (noche|tarde|manana)|hoy (es|hay) (la )?clase|es hoy)\b|^cuando$/,
     0.8,
   ],
   [
@@ -150,8 +191,15 @@ const PATTERNS = [
     /\b(temario|incluye|temas?|contenido|que voy a aprender|programa|de que (se )?trata|que (se )?(ve|vera|veremos|ensenan)|que es (esto|eso|el curso))\b/,
     0.8,
   ],
-  ['certificate', /\b(certificad|constancia|diploma|aval|validez|reconocimiento)/, 0.85],
-  ['requirements', /\b(requisito|conocimientos previos|necesito saber|que necesito)\b/, 0.8],
+  // Validez oficial, SEP, cédula, valor curricular: se contesta sólo lo que consta (ver plan()), nunca «Sí».
+  ['certificate', /\S/, 0.85, t => sales.isValidity(t)],
+  // «diplomados» no es «diploma»: «¿manejan diplomados?» pregunta por otros cursos.
+  ['certificate', /\b(certificad|constancia|diplomas?\b|aval|validez|reconocimiento)/, 0.85],
+  [
+    'requirements',
+    /\b(requisito|conocimientos previos|necesito saber|que necesito|(desde|con|en) (el|mi|un) (celular|cel|telefono|tablet))\b/,
+    0.8,
+  ],
   [
     'modality',
     /\b(modalidad|en linea|online|presencial|virtual|zoom|meet|plataforma|donde es|donde se imparte|donde me conecto|como me conecto|por donde (es|son|se da)|en vivo|ubicad[oa]s?|ubicacion|sucursal|sucursales|direccion|donde (estan|se encuentran|quedan))\b/,
@@ -161,13 +209,16 @@ const PATTERNS = [
   // Cupo y otros cursos: datos del catálogo.
   [
     'seats',
-    /\b(cupos?|lugar|lugares|vacantes?|lleno)\b/,
+    /\b(cupos?|lugar|lugares|vacantes?|lleno|espacio|espacios)\b/,
     0.8,
     t => /\b(hay|queda|quedan|cuantos|todavia|aun|tienen|lleno|disponibles?|cupos?)\b/.test(t),
   ],
+  // Pide una recomendación o nombra una especie o un tema («¿cuál me recomiendas?», «tengo un rancho», «¿tienen algo de
+  // cirugía?»): se contesta con los cursos de la marca que coinciden (plan()), sin IA.
+  ['courses', sales.RECOMMEND, 0.8],
   [
     'courses',
-    /\b(otros?|mas|cuales|que) (cursos|diplomados|talleres)\b|\b(cursos|diplomados|talleres) (tienen|hay|manejan|ofrecen|dan|imparten)\b|\botro (curso|diplomado|taller)\b/,
+    /\b(otros?|mas|cuales|que) (cursos|diplomados|talleres)\b|\b(cursos|diplomados|talleres) (tienen|hay|manejan|ofrecen|dan|imparten)\b|\botro (curso|diplomado|taller)\b|\b(manejan|tienen|hay|ofrecen|dan|imparten) (otros? )?(cursos|diplomados|talleres)\b/,
     0.8,
   ],
   // ---- Mensajes de trato. Casi todos exigen que el mensaje sea SÓLO eso, para no robarle una pregunta de verdad al conocimiento o a la IA.
@@ -183,7 +234,7 @@ const PATTERNS = [
   ],
   [
     'later',
-    /\b(espera|esperame|espereme|un momento|un momentito|un segundo|dame chance|dame un momento|permiteme|dejame (pensarlo|verlo|checarlo|revisarlo|consultarlo|platicarlo)|deja lo (pienso|checo|reviso|consulto|platico)|lo (voy a|tengo que|quiero) (pensar|consultar|checar|platicar|revisar)|lo (pienso|consulto|checo|platico)|voy a pensarlo|tengo que pensarlo|(luego|despues|manana|al rato|mas tarde|ahorita|en la tarde|en la noche|la proxima semana|en la quincena) (te|les|le) (aviso|digo|confirmo|escribo|marco)|te aviso|les aviso|cuando (cobre|me paguen))\b/,
+    /\b(espera|esperame|espereme|un momento|un momentito|un segundo|dame chance|dame un momento|permiteme|dejame (pensarlo|verlo|checarlo|revisarlo|consultarlo|platicarlo)|deja lo (pienso|checo|reviso|consulto|platico)|lo (voy a|tengo que|quiero) (pensar|consultar|checar|platicar|revisar)|lo (pienso|consulto|checo|platico)|voy a pensarlo|tengo que pensarlo|(luego|despues|manana|al rato|mas tarde|ahorita|en la tarde|en la noche|la proxima semana|en la quincena) (te|les|le) (aviso|digo|confirmo|escribo|marco)|te aviso|les aviso|cuando (cobre|me paguen)|mas adelante|en otra ocasion|para la proxima)\b/,
     0.6,
     (t, raw) => words(t) <= 12 && !/[?¿]/.test(raw) && !SITUATION.test(t),
   ],
@@ -200,7 +251,7 @@ const PATTERNS = [
   ],
   [
     'greeting',
-    /\b(hola|buen[oa]s?|informacion|info|informes|detalles|flyer|imagen|me interesa|saludos|saber mas|cuentame|platicame|explicame)\b/,
+    /\b(hola|buen[oa]s?|buen dia|informacion|info|informes|detalles|flyer|imagen|me interesa|saludos|saber mas|cuentame|platicame|explicame)\b/,
     0.6,
   ],
   // Un agradecimiento no es una pregunta: «¿el curso vale la pena?» debe resolverse con conocimiento o IA, no con «¡con gusto!».
@@ -393,6 +444,33 @@ export function createReplies({
       })
       .slice(0, 6)
       .map(k => k.title);
+  // ---- Venta y posventa (docs/PLAN_RESPUESTAS_DE_VENTA.md). Sólo leen.
+  // El pedido más reciente del curso en esta conversación (cualquier estado) y si la persona ya está inscrita por aquí.
+  const lastOrder = conversationId =>
+    db
+      .prepare(
+        "SELECT * FROM orders WHERE conversation_id=? AND COALESCE(kind,'course')='course' ORDER BY created_at DESC,rowid DESC LIMIT 1",
+      )
+      .get(conversationId);
+  const enrolledHere = conversationId =>
+    Boolean(
+      db
+        .prepare(
+          "SELECT 1 FROM enrollments n JOIN orders o ON o.id=n.order_id WHERE o.conversation_id=? AND n.status='enrolled' LIMIT 1",
+        )
+        .get(conversationId),
+    );
+  const sessionsOf = editionId =>
+    db.prepare("SELECT count(*) n FROM edition_sessions WHERE edition_id=? AND status!='cancelled'").get(editionId).n;
+  // Quien emite el certificado de la marca (Certificados → ajustes); el mismo valor por omisión que server/certificates.mjs.
+  const issuerOf = brandId =>
+    db.prepare('SELECT issuer_name FROM certificate_settings WHERE brand_id=?').get(brandId)?.issuer_name ||
+    'IPCI · TEC Capital';
+  // Accesos del curso (server/modules/course-access): el módulo se registra al crearse. Sin él, nadie reenvía accesos.
+  let accessApi = null;
+  const useAccess = api => {
+    accessApi = api;
+  };
 
   // Plan síncrono: decide intención, texto, fuentes y si hace falta el proveedor. No escribe nada.
   // `opts.noFlow`: hay un recorrido en curso (docs/PLAN_RECORRIDOS.md); el flujo de bienvenida no decora esta respuesta.
@@ -415,7 +493,11 @@ export function createReplies({
     const ctx = catalogue.info(c.course_id, c.edition_id),
       course = ctx.course,
       cls = forced ? { intent: forced, confidence: 1 } : classify(trigger.text),
-      situational = !forced && CATALOGUE_INTENTS.includes(cls.intent) && SITUATION.test(normalize(trigger.text));
+      situational =
+        !forced &&
+        CATALOGUE_INTENTS.includes(cls.intent) &&
+        SITUATION.test(normalize(trigger.text)) &&
+        !/\b(siguiente|proxima|otra fecha|vuelv\w* a abrir|hasta (que|cuando)|alcanzo a)\b/.test(clean(trigger.text)); // «no alcanzo esta vez, avísame de la siguiente» sí es de fechas
     let intent = situational ? 'unknown' : cls.intent,
       confidence = situational ? 0.3 : cls.confidence;
     // «Hola, quiero el curso de aves» como primer mensaje a un número que atiende toda la marca ELIGE el curso; no es todavía una inscripción:
@@ -482,6 +564,40 @@ export function createReplies({
         }
       }
     }
+    const said = clean(trigger.text);
+    // «Sí, me interesa» a media conversación (el botón de una plantilla de seguimiento, o después de contestar una duda) pide
+    // seguir con la inscripción del curso de esta conversación; reenviar la ficha no ayuda. Justo después de la ficha (la
+    // bienvenida o un paso del flujo, que ya ofrecen opciones) se sigue contestando como siempre.
+    if (
+      !forced &&
+      !pressed &&
+      !fresh &&
+      !followed &&
+      intent === 'greeting' &&
+      sales.INTERESTED.test(said) &&
+      !(prev && ['greeting', 'flow'].includes(prev.intent))
+    ) {
+      intent = 'enroll';
+      confidence = 0.8;
+      followed = '«Sí, me interesa» fuera de la pregunta de la ficha: sigue el camino de la inscripción.';
+    }
+    // Un correo, un teléfono o un nombre sueltos cuando ya hay un pedido en esta conversación son los datos para la constancia.
+    if (
+      !forced &&
+      !pressed &&
+      ['unknown', 'greeting', 'thanks', 'help'].includes(intent) &&
+      sales.weakCertData(said, trigger.text) &&
+      c.id !== 'simulacion' &&
+      db
+        .prepare(
+          "SELECT 1 FROM orders WHERE conversation_id=? AND status IN ('pending','review','paid') AND COALESCE(kind,'course')='course' LIMIT 1",
+        )
+        .get(c.id)
+    ) {
+      intent = 'cert_data';
+      confidence = 0.75;
+    }
+    const payKind = intent === 'payment' ? sales.paymentKind(said) : null;
     // ¿El cliente pregunta algo concreto? (un tema del conocimiento, o una pregunta sin intención reconocida)
     const asks = TOPIC_INTENTS.includes(intent) || (intent === 'unknown' && looksLikeQuestion(trigger.text));
     const out = {
@@ -532,6 +648,8 @@ export function createReplies({
       currency: ctx.currency,
     };
     const kb = approved(c.brand_id, c.course_id);
+    const sessions = sessionsOf(ctx.edition.id),
+      durationKnown = ctx.edition.starts_at !== null && (Boolean(ctx.edition.ends_at) || sessions > 0);
     // Bienvenida con la ficha vigente del curso (o la de anuncio): saludo, primer mensaje sin pregunta y respaldo del primer mensaje.
     const welcome = () => {
       out.prepared = catalogue.prepare(c, { kind: 'flyer' });
@@ -596,7 +714,7 @@ export function createReplies({
       'duration',
       'payment',
     ];
-    const paidClaim = /comprobante|pague|ya pague|transferi|deposite/.test(normalize(trigger.text));
+    const paidClaim = sales.claimsPaid(said);
     const several = (only = null) => {
       if (!only) {
         if (situational || paidClaim || !INFO.includes(intent)) return false;
@@ -614,6 +732,8 @@ export function createReplies({
           .filter(i => INFO.includes(i))
           .slice(0, 3);
       if (asked.length < 2) return false;
+      // «¿cuántos días dura y en qué horario?»: el fin y las sesiones van dentro de la ficha de fechas, sin repetir el inicio
+      const endsToo = durationKnown && asked.includes('schedule') && asked.includes('duration');
       const parts = [],
         sources = [];
       let kind = null;
@@ -622,11 +742,19 @@ export function createReplies({
           parts.push(copy.priceBody(ctx));
           kind = 'price';
         } else if (it === 'schedule') {
-          parts.push(copy.scheduleBody(ctx));
+          parts.push(copy.scheduleBody(ctx) + (endsToo ? copy.durationExtra(ctx, sessions) : ''));
           kind = kind === 'price' ? kind : 'schedule';
         } else if (it === 'syllabus') {
           parts.push(copy.syllabusBody(ctx));
           kind = kind || 'syllabus';
+        } else if (it === 'certificate' && sales.isValidity(said)) {
+          parts.push(copy.validity(ctx, issuerOf(c.brand_id))); // nunca «Sí» a una validez oficial que no consta
+        } else if (it === 'duration' && durationKnown) {
+          if (endsToo) continue; // va dentro de la ficha de fechas, sin repetir el inicio
+          parts.push(copy.durationBody(ctx, sessions));
+          kind = kind || 'schedule';
+        } else if (it === 'payment' && sales.paymentKind(said) !== 'methods') {
+          continue; // factura, meses, varias personas…: la respuesta general de pago no los contesta
         } else {
           const entry = kb.find(k => k.topic === it);
           if (entry) {
@@ -635,7 +763,7 @@ export function createReplies({
           }
         }
       }
-      if (parts.length < 2) return false; // sólo una tenía respuesta: se contesta como siempre
+      if (parts.length + (endsToo ? 1 : 0) < 2) return false; // sólo una tenía respuesta: se contesta como siempre
       if (kind) {
         out.prepared = catalogue.prepare(c, { kind });
         out.sources.push(catalogueSource);
@@ -649,7 +777,54 @@ export function createReplies({
         '): se contestan juntas con el catálogo vigente y el conocimiento aprobado.';
       return true;
     };
-    const OWN_PATH = ['opt_out', 'human', 'refund'].includes(intent) || (intent === 'payment' && paidClaim); // la baja, pedir una persona, una queja y avisar de un pago siguen su camino aunque falte el curso
+    // Recomendar sin IA («¿cuál me recomiendas?», «tengo un rancho», «¿tienen algo de reptiles?»): con los títulos y temarios
+    // de los cursos de la marca que tienen una apertura disponible, hasta 5, con su inicio y precio vigentes. Si no dice
+    // especie ni tema, se le pregunta (o contesta una respuesta aprobada) en lugar de soltar la lista completa.
+    const recommendation = () => {
+      const list = brandCourses(db, catalogue, c.brand_id).map(k => ({
+        ...k,
+        syllabus: db.prepare('SELECT syllabus FROM courses WHERE id=?').get(k.id)?.syllabus || '',
+      }));
+      const items = sales
+        .recommend(trigger.text, list)
+        .map(k => {
+          try {
+            const x = catalogue.info(k.id, k.editionId);
+            return { title: k.title, start: copy.startText(x.edition), price: copy.priceText(x) };
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+      if (items.length) {
+        out.reply = copy.recommend(ctx, items, { multi: Boolean(routed?.multi && routed.list.length > 1) });
+        out.sources.push(catalogueSource);
+        out.reason =
+          'Recomendación con el catálogo de la marca: ' +
+          items.length +
+          ' curso(s) que coinciden con lo que dijo (título y temario), con su inicio y precio vigentes.';
+        return true;
+      }
+      if (!sales.RECOMMEND.test(said)) return false;
+      if (fromKnowledge(0.5)) return true;
+      // «Soy estudiante, ¿me sirve?», «soy técnico, ¿puedo tomarlo?»: pregunta por ESTE curso; contesta la respuesta aprobada de requisitos.
+      const req = kb.find(k => k.topic === 'requirements');
+      if (
+        req &&
+        /\b(me sirve|sirve|puedo tomar\w*|lo puedo tomar|es para mi|aplica para|me conviene este)\b/.test(said)
+      ) {
+        out.reply = req.answer;
+        out.sources.push({ type: 'knowledge', id: req.id, revision: req.revision, question: req.question });
+        out.reason = 'Pregunta si el curso le sirve: respuesta aprobada de requisitos «' + req.question + '».';
+        return true;
+      }
+      out.reply = copy.askTopic(ctx);
+      out.reason =
+        'Pide una recomendación sin decir especie ni tema: se le pregunta con qué trabaja en lugar de soltar la lista completa.';
+      return true;
+    };
+    const POSTSALE = ['access', 'cert_data'].includes(intent) || ['paid', 'status'].includes(payKind); // ya compró: no depende del curso que elija ahora
+    const OWN_PATH = ['opt_out', 'human', 'refund'].includes(intent) || (intent === 'payment' && paidClaim) || POSTSALE; // la baja, pedir una persona, una queja y avisar de un pago siguen su camino aunque falte el curso
     if (routed?.ask && !OWN_PATH) {
       const asked = askedStreak(c.id);
       out.intent = 'choose_course';
@@ -705,6 +880,74 @@ export function createReplies({
         intent === 'refund'
           ? 'Queja o reembolso: siempre lo atiende una persona.'
           : 'El cliente pidió hablar con una persona.';
+    } else if (intent === 'access') {
+      // Posventa: con una inscripción activa y los accesos de la apertura listos, se reenvían; si no, una persona.
+      const st = c.id === 'simulacion' ? null : accessApi?.forConversation(c) || null,
+        problem = sales.ACCESS_PROBLEM.test(said);
+      if (st?.ready && !problem) {
+        out.reply = copy.accessResend(user?.name, st.text);
+        out.accessResend = { enrollmentId: st.enrollmentId };
+        out.reason = 'Pidió sus accesos con una inscripción activa: se le reenvían los accesos de su apertura.';
+      } else if (problem || st?.enrolled || enrolledHere(c.id)) {
+        out.reply = problem ? copy.accessProblem(user?.name) : copy.accessPending;
+        out.handoff = true;
+        out.reason = problem
+          ? 'Inscrito con una falla en el acceso: la revisa una persona.'
+          : 'Inscrito sin accesos listos para reenviar: se los manda una persona.';
+      } else {
+        const o = payments?.openOrder(c.id);
+        if (o) {
+          out.reply = copy.accessAfterPayment(o.reference, o.status);
+          out.handoff = o.status === 'review';
+          out.reason =
+            'Pregunta por sus accesos con el pedido ' +
+            o.reference +
+            ' sin pago confirmado: los accesos llegan al confirmarse el pago.';
+        } else {
+          out.reply = copy.accessUnknown;
+          out.handoff = true;
+          out.reason = 'Pregunta por sus accesos y no hay una inscripción en este chat: lo revisa una persona.';
+        }
+      }
+    } else if (intent === 'cert_data') {
+      // Datos para la constancia: se guardan con la conversación (commit) y se acusan. Ni pedido nuevo ni texto del certificado.
+      const data = sales.certData(trigger.text),
+        order = c.id === 'simulacion' ? null : lastOrder(c.id);
+      if (sales.hasCertData(data)) {
+        out.certData = data;
+        out.reply = copy.certDataThanks(user?.name, data, {
+          enrolled: order?.status === 'paid',
+          order: Boolean(order && ['pending', 'review', 'paid'].includes(order.status)),
+        });
+        out.reason =
+          'Datos para la constancia: se guardan con la conversación y se acusa recibo, sin crear otro pedido.';
+      } else {
+        out.reply = copy.certDataAsk;
+        out.reason = 'Ofrece sus datos o pregunta cómo escribir su nombre: se le piden en un solo mensaje.';
+      }
+    } else if (payKind === 'paid') {
+      // Quien avisa que YA pagó no pregunta cómo pagar: se le agradece, se le dice el estado de su pedido y pasa a una persona, que es quien valida.
+      // Nunca se confirma un pago desde aquí.
+      const open = payments?.openOrder(c.id);
+      out.reply = copy.paidAck({ reference: open?.reference || null, status: open?.status || null });
+      out.handoff = true;
+      out.reason = 'Menciona un pago realizado: lo valida una persona.';
+    } else if (payKind === 'status') {
+      // «¿Ya verificaron mi pago?»: el estado real del pedido. En revisión (o sin pedido) se avisa al equipo.
+      const o = c.id === 'simulacion' ? null : lastOrder(c.id),
+        state = !o ? 'none' : ['paid', 'review', 'pending'].includes(o.status) ? o.status : 'none',
+        v = o && state !== 'none' ? payments?.view(o) : null;
+      out.reply = copy.payStatus(state, {
+        reference: o?.reference || null,
+        course: v?.courseTitle || course.title,
+        edition: v?.editionName || '',
+      });
+      out.handoff = state === 'none' || state === 'review' || (state === 'pending' && paidClaim);
+      out.reason =
+        'Pregunta por el estado de su pago: ' +
+        (state === 'none' ? 'no hay pedido en este chat' : 'el pedido ' + o.reference + ' está «' + o.status + '»') +
+        (out.handoff ? '; lo revisa una persona.' : '.') +
+        ' Nunca se confirma un pago desde el asistente.';
     } else if (ctx.reason) {
       out.reply = copy.unavailable(ctx.reason);
       out.handoff = true;
@@ -712,6 +955,13 @@ export function createReplies({
       out.sources.push(catalogueSource);
     } else if ((offered && several(offered)) || several()) {
       /* varias preguntas: respondidas juntas */
+    } else if (intent === 'enroll' && sales.GROUP.test(said)) {
+      // Inscribir a varias personas: cada quien necesita su lugar; lo arma una persona del equipo.
+      out.reply = copy.paymentAdvisor('group');
+      out.stage = 'inscripcion';
+      out.handoff = true;
+      out.reason = 'Quiere inscribir a varias personas: lo atiende una persona del equipo.';
+      out.sources.push(catalogueSource);
     } else if (intent === 'enroll') {
       const open = payments?.openOrder(c.id);
       if (open) {
@@ -734,20 +984,48 @@ export function createReplies({
         out.sources.push(catalogueSource);
       }
     } else if (intent === 'payment') {
-      // Quien avisa que YA pagó no pregunta cómo pagar: se le agradece, se le dice el estado de su pedido y pasa a una persona, que es quien valida.
-      // Nunca se confirma un pago desde aquí.
-      if (/comprobante|pague|ya pague|transferi|deposite/.test(normalize(trigger.text))) {
-        const open = payments?.openOrder(c.id);
-        out.reply =
-          'Gracias por avisar. Una persona del equipo revisará tu pago y te confirmará por aquí; no confirmamos pagos de forma automática.' +
-          (open
-            ? ' Tu pedido ' +
-              open.reference +
-              (open.status === 'review' ? ' ya está en revisión.' : ' todavía aparece sin pago confirmado.')
-            : '') +
-          ' Si tienes tu comprobante, puedes enviarlo en este chat.';
-        out.handoff = true;
-        out.reason = 'Menciona un pago realizado: lo valida una persona.';
+      // «Ya pagué» y «¿ya verificaron?» se contestaron arriba. Aquí: pagar después, factura, meses, varias personas, cuenta, o cómo pagar.
+      if (payKind === 'later') {
+        const o = payments?.openOrder(c.id);
+        out.reply = copy.payLater(user?.name, {
+          reference: o?.reference || null,
+          until: o ? copy.startText({ starts_at: o.expires_at, timezone: ctx.edition.timezone }) : null,
+          hold: /\b(apart\w*|reserv\w*|guard\w*)\b/.test(said),
+          canOrder: Boolean(payments?.settings(c.brand_id).enabled),
+        });
+        out.reason =
+          'Avisa que pagará después: acuse sin presionar y el siguiente paso' +
+          (o ? ' (pedido ' + o.reference + ' vigente).' : '.') +
+          ' No se aparta el lugar: se asegura al confirmarse el pago.';
+      } else if (['invoice', 'installments', 'group', 'account'].includes(payKind)) {
+        // Sólo una respuesta aprobada que de verdad hable de eso; si no, una persona (nada de inventar factura o meses).
+        const re = sales.ANSWERS[payKind],
+          hit = bestMatch(
+            trigger.text,
+            kb.filter(k => re.test(normalize(k.answer))),
+            0.5,
+          );
+        if (hit) {
+          out.reply = hit.entry.answer;
+          out.sources.push({
+            type: 'knowledge',
+            id: hit.entry.id,
+            revision: hit.entry.revision,
+            question: hit.entry.question,
+          });
+          out.reason = 'Conocimiento aprobado «' + hit.entry.question + '».';
+        } else {
+          out.reply = copy.paymentAdvisor(payKind);
+          out.handoff = true;
+          out.reason =
+            ({
+              invoice: 'Pide factura',
+              installments: 'Pregunta por meses o pagos en partes',
+              group: 'Quiere pagar por varias personas',
+              account: 'Pide los datos de la cuenta',
+            }[payKind] || 'Consulta de pago') +
+            ' y no hay una respuesta aprobada que lo conteste: lo atiende una persona (no se inventa).';
+        }
       } else {
         if (!fromKnowledge(0.6)) {
           if (payments?.settings(c.brand_id).enabled) out.reply = copy.paymentMethods;
@@ -762,6 +1040,24 @@ export function createReplies({
             ? 'Consulta de pago sin respuesta aprobada ni venta activa: la atiende una persona.'
             : 'Información general de pago.');
       }
+    } else if (
+      intent === 'price' &&
+      !ctx.promotion &&
+      /\b(descuentos?|promos?|promocion|promociones|ofertas?|cupon|cupones|precio especial)\b/.test(said)
+    ) {
+      // «¿Hay descuento?» sin promoción vigente en el catálogo: se dice claro. Para grupos, lo confirma una persona.
+      out.sources.push(catalogueSource);
+      out.stage = 'interesado';
+      if (sales.GROUP.test(said) || /\bsomos\b/.test(said)) {
+        out.reply = copy.paymentAdvisor('discount');
+        out.handoff = true;
+        out.reason = 'Pide descuento para un grupo y el catálogo no tiene promoción vigente: lo atiende una persona.';
+      } else {
+        out.prepared = catalogue.prepare(c, { kind: 'price' });
+        out.reply = copy.noPromotion(ctx);
+        out.reason =
+          'Pregunta por descuentos: el catálogo no tiene promoción vigente para esta apertura y se dice claro.';
+      }
     } else if (intent === 'price') {
       out.prepared = catalogue.prepare(c, { kind: 'price' });
       out.reply = copy.price(ctx);
@@ -773,15 +1069,68 @@ export function createReplies({
       out.reply = copy.syllabus(ctx);
       out.sources.push(catalogueSource);
       out.reason = 'Temario del curso en el catálogo.';
+    } else if (
+      intent === 'schedule' &&
+      sales.NOTIFY.test(said) &&
+      /\b(siguiente|proxima|otra|vuelv\w*|abrir|abran)\b/.test(said)
+    ) {
+      // «Avísame de la siguiente»: el asistente no puede prometer avisar solo; se lo pide al equipo.
+      out.reply = copy.notifyNext(ctx, user?.name);
+      out.handoff = true;
+      out.sources.push(catalogueSource);
+      out.reason = 'Pide que le avisen de la siguiente fecha: se le pasa al equipo.';
+    } else if (intent === 'schedule' && (sales.NEXT.test(said) || sales.DEADLINE.test(said))) {
+      out.prepared = catalogue.prepare(c, { kind: 'schedule' });
+      out.reply = sales.NEXT.test(said) ? copy.nextEdition(ctx) : copy.deadline(ctx);
+      out.sources.push(catalogueSource);
+      out.reason = sales.NEXT.test(said)
+        ? 'Pregunta por otra fecha: la apertura vigente del catálogo y la opción de preguntar a una persona.'
+        : 'Pregunta hasta cuándo puede inscribirse: fecha de inicio del catálogo; no se crea un pedido sin que lo pida.';
     } else if (intent === 'schedule') {
       out.prepared = catalogue.prepare(c, { kind: 'schedule' });
       out.reply = copy.schedule(ctx);
       out.sources.push(catalogueSource);
       out.reason = 'Fecha, horario y docente de la edición en el catálogo.';
+    } else if (intent === 'certificate' && sales.isValidity(said)) {
+      // Validez oficial, SEP, cédula, valor curricular: sólo lo que consta. Una respuesta aprobada que hable de eso a propósito gana.
+      const own = kb.filter(k => sales.VALIDITY_ENTRY.test(normalize([k.question, ...(k.variants || [])].join(' '))));
+      const hit = bestMatch(trigger.text, own, 0.3);
+      if (hit) {
+        out.reply = hit.entry.answer;
+        out.sources.push({
+          type: 'knowledge',
+          id: hit.entry.id,
+          revision: hit.entry.revision,
+          question: hit.entry.question,
+        });
+        out.reason = 'Conocimiento aprobado sobre la validez «' + hit.entry.question + '».';
+      } else {
+        out.reply = copy.validity(ctx, issuerOf(c.brand_id));
+        out.reason =
+          'Pregunta por la validez oficial del certificado: se dice lo que consta (digital, emisor, folio y QR) y nunca se afirma una validez oficial.';
+      }
+    } else if (intent === 'duration' && durationKnown) {
+      out.prepared = catalogue.prepare(c, { kind: 'schedule' });
+      out.reply = copy.duration(ctx, sessions);
+      out.sources.push(catalogueSource);
+      out.reason =
+        'Duración con el calendario de la apertura de esta conversación (inicio, fin y sesiones del catálogo).';
+    } else if (intent === 'objection' && sales.TIME_OBJECTION.test(said)) {
+      const rec = kb.find(k => k.topic === 'recording');
+      out.reply = copy.timeObjection(ctx, rec?.answer || '');
+      out.sources.push(catalogueSource);
+      if (rec) out.sources.push({ type: 'knowledge', id: rec.id, revision: rec.revision, question: rec.question });
+      out.reason =
+        'No le acomoda el horario: se le dice lo que el conocimiento aprobado dice de la grabación y cómo preguntar por otra fecha.';
     } else if (intent === 'greeting' || (fresh && !asks && !DIRECT_INTENTS.includes(intent))) welcome();
     else if (intent === 'thanks') {
-      out.reply = prev?.intent === 'thanks' ? copy.thanksAgain : copy.thanks(user?.name);
-      out.reason = 'Agradecimiento o cierre.';
+      const done = c.id !== 'simulacion' && (enrolledHere(c.id) || lastOrder(c.id)?.status === 'review');
+      out.reply = done
+        ? copy.thanksEnrolled(user?.name)
+        : prev?.intent === 'thanks'
+          ? copy.thanksAgain
+          : copy.thanks(user?.name);
+      out.reason = 'Agradecimiento o cierre.' + (done ? ' Ya pagó: no se le ofrece inscribirse otra vez.' : '');
     } else if (intent === 'affirm') {
       options(copy.affirm(ctx));
       out.reason = 'Dijo que sí sin una pregunta pendiente: se le ofrecen las opciones.';
@@ -794,6 +1143,10 @@ export function createReplies({
     } else if (intent === 'bye') {
       out.reply = copy.bye(user?.name);
       out.reason = 'Despedida.';
+    } else if (intent === 'help' && sales.JOBS.test(said)) {
+      out.reply = copy.jobs(ctx);
+      out.reason =
+        'Busca trabajo o colaborar, no un curso: se le dice con amabilidad que este chat es de inscripciones.';
     } else if (intent === 'help') {
       options(copy.help(ctx), WITH_HUMAN);
       out.reason =
@@ -805,9 +1158,16 @@ export function createReplies({
       options(copy.identity(ctx), WITH_HUMAN);
       out.reason = 'Preguntó con quién habla: se le dice que es el asistente automático y cómo pedir una persona.';
     } else if (intent === 'seats') {
-      out.reply = copy.seats(ctx);
+      // Sin lugares disponibles anotados pero con el tamaño del grupo: «el grupo es de 40 lugares, cupo limitado».
+      const e = ctx.edition;
+      out.reply =
+        (e.available_seats === null || e.available_seats === undefined) && e.capacity > 0
+          ? copy.seatsCapacity(ctx)
+          : copy.seats(ctx);
       out.sources.push(catalogueSource);
       out.reason = 'Cupo de la edición consultado en el catálogo al responder.';
+    } else if (intent === 'courses' && recommendation()) {
+      /* recomendación con el catálogo: respondida */
     } else if (intent === 'courses') {
       out.reply =
         routed?.multi && routed.list.length > 1
@@ -1057,6 +1417,89 @@ export function createReplies({
     } // aprender nunca debe impedir que la respuesta salga
   }
 
+  // Datos para la constancia (docs/PLAN_RESPUESTAS_DE_VENTA.md): uno por conversación; lo nuevo reemplaza sólo lo que trae.
+  // server/certificates.mjs usa el nombre al emitir el certificado de la inscripción de esta conversación.
+  function saveCertData(c, trigger, d) {
+    const t = now(),
+      cur = db.prepare('SELECT * FROM certificate_details WHERE conversation_id=?').get(c.id);
+    if (cur)
+      db.prepare(
+        'UPDATE certificate_details SET full_name=?,email=?,phone=?,message_id=?,updated_at=? WHERE conversation_id=?',
+      ).run(d.name || cur.full_name, d.email || cur.email, d.phone || cur.phone, trigger.id, t, c.id);
+    else
+      db.prepare(
+        'INSERT INTO certificate_details(conversation_id,brand_id,full_name,email,phone,message_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
+      ).run(c.id, c.brand_id, d.name || '', d.email || '', d.phone || '', trigger.id, t, t);
+  }
+
+  // Mientras la conversación espera a una persona porque el asistente la pasó (docs/PLAN_RESPUESTAS_DE_VENTA.md): antes, lo que
+  // la persona escribía después («¿ya verificaron mi pago?», «nadie me contesta») no recibía nada. Ahora recibe UN acuse breve por
+  // espera, sin que el asistente retome la conversación. No aplica si alguien del equipo la tomó o ya escribió, si el nivel de la
+  // marca es «Apagado» o «Sugerir», ni a un archivo (un comprobante sigue su propio camino). Lo llama server/operations.mjs al
+  // guardar el mensaje de la persona, dentro de la misma transacción.
+  function ackWhileWaiting(c0) {
+    const c = db.prepare('SELECT * FROM conversations WHERE id=?').get(c0.id);
+    if (!c || c.bot_enabled || c.assigned_to || c.status !== 'waiting') return null;
+    if (!['templates', 'autonomous'].includes(settings(c.brand_id).mode)) return null;
+    const m = db
+      .prepare(
+        "SELECT id,text,attachment_id FROM messages WHERE conversation_id=? AND sender_kind='customer' ORDER BY seq DESC LIMIT 1",
+      )
+      .get(c.id);
+    if (!m || m.attachment_id || contacts.isOptOutText(m.text)) return null;
+    const last = db
+      .prepare(
+        'SELECT action,created_at FROM reply_log WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1',
+      )
+      .get(c.id);
+    if (last?.action !== 'escalated') return null; // sólo tras un pase del asistente (no el nivel de la marca ni otra vía)
+    const person = db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id)?.name;
+    // Los datos para la constancia suelen llegar justo después de «ya pagué» (cuando la conversación ya espera a una persona):
+    // se guardan y se acusan, cada vez que llegan, sin contestar nada más.
+    const t = clean(m.text),
+      data = sales.certData(m.text),
+      order = lastOrder(c.id);
+    if (
+      sales.hasCertData(data) &&
+      (sales.certDataSignal(t, m.text) ||
+        (order && ['pending', 'review', 'paid'].includes(order.status) && sales.weakCertData(t, m.text)))
+    ) {
+      saveCertData(c, { id: m.id }, data);
+      return insertMessage(
+        c,
+        null,
+        copy.certDataThanks(person, data, { enrolled: order?.status === 'paid', order: Boolean(order) }),
+        'automation',
+        'wait-data:' + m.id,
+        null,
+        null,
+        null,
+        { category: 'service' },
+      );
+    }
+    if (
+      db
+        .prepare(
+          "SELECT 1 FROM messages WHERE conversation_id=? AND created_at>=? AND (sender_kind='agent' OR client_ref LIKE 'wait-ack:%') LIMIT 1",
+        )
+        .get(c.id, last.created_at)
+    )
+      return null; // una vez por espera; si una persona ya escribió, la conversación es suya
+    const o = payments?.openOrder(c.id);
+    return insertMessage(
+      c,
+      null,
+      copy.waitingAck(person, { reference: o?.reference || null, review: o?.status === 'review' }),
+      'automation',
+      'wait-ack:' + m.id,
+      null,
+      null,
+      null,
+      { category: 'service' },
+    );
+  }
+  operations.useCustomerWaiting?.(ackWhileWaiting);
+
   // Aplica el plan dentro de una transacción del llamador. Revalida que nadie respondió ya a este mensaje.
   function commit(c, trigger, p, draft = null) {
     const ref = 'automation:' + trigger.id;
@@ -1164,6 +1607,8 @@ export function createReplies({
       { buttons, keepButtons, category: 'service' },
     ); // responde a un mensaje entrante: siempre dentro de la ventana de servicio
     log(handoff ? 'escalated' : 'replied', messageId);
+    if (p.certData) saveCertData(c, trigger, p.certData);
+    if (p.accessResend) accessApi?.record?.(p.accessResend.enrollmentId, messageId);
     if (move) flows?.apply(c.id, move);
     if (p.stage) crm.setStage(c, p.stage);
     if (handoff) escalate(c, trigger);
@@ -1212,7 +1657,7 @@ export function createReplies({
       if (m.attachment_id) return false;
       const intent = classify(m.text).intent;
       if (intent === 'human' || intent === 'refund') return false;
-      if (intent === 'payment' && /comprobante|pague|ya pague|transferi|deposite/.test(normalize(m.text))) return false;
+      if (intent === 'payment' && sales.claimsPaid(clean(m.text))) return false;
     }
     consumeSuggestions(c.id);
     db.prepare("UPDATE conversations SET bot_enabled=1,status='open',updated_at=? WHERE id=?").run(now(), c.id);
@@ -1671,6 +2116,8 @@ export function createReplies({
     courseList: brandId => brandCourses(db, catalogue, brandId),
     pickCourse,
     courseSwitch,
+    // El módulo de accesos del curso se registra aquí para que el asistente reenvíe los accesos de quien ya pagó.
+    useAccess,
     settings,
     resumeIfPausedByMode,
     suggestion,

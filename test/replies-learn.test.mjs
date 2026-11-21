@@ -182,11 +182,13 @@ test('aprender de la IA: una respuesta de Claude aceptada queda como borrador, s
 
   // 3) lo que no debe volverse conocimiento no se guarda: precios (los rechaza el validador) y datos de contacto
   answer = 'El curso cuesta $500 pesos y lo puedes tomar desde cualquier lugar.';
-  const priced = await ask('¿Sirve si trabajo en otro estado de la república y viajo mucho?');
+  // (cada pregunta comparte alguna palabra con el conocimiento: desde docs/PLAN_RESPUESTAS_DE_VENTA.md, una que no se parece a
+  // nada no llega a la IA aunque la marca tenga 6 respuestas o menos)
+  const priced = await ask('¿Basta con mi conexión a internet si trabajo en otro estado y viajo mucho?');
   assert.match(priced.log.reason, /Proveedor descartado/);
   assert.equal(drafts().length, 1);
   answer = 'Claro, para eso escríbenos al 5512345678 y te explicamos todo con detalle.';
-  await ask('¿Atienden dudas los fines de semana por otro medio distinto?');
+  await ask('¿Atienden dudas sobre la conexión a internet los fines de semana?');
   assert.equal(drafts().length, 1, 'una respuesta con un teléfono no queda como borrador');
   // 3b) datos de la persona en la RESPUESTA (el proveedor recibe su memoria): aunque el motor la acepte y el cliente la reciba, no se aprende de ella
   answer = 'Claro, Ana: el curso es en línea y lo puedes tomar desde tu casa sin problema.';
@@ -203,12 +205,12 @@ test('aprender de la IA: una respuesta de Claude aceptada queda como borrador, s
   assert.equal(drafts().length, 1, 'una respuesta que habla de la historia del cliente tampoco');
   // 3c) el nombre del cliente dentro de su PREGUNTA se quita antes de guardarla
   answer = 'Este curso está enfocado en aves de corral; para otras especies conviene revisar otro programa.';
-  await ask('Soy Ana Pérez y trabajo con ganado, ¿este curso aplica para bovinos también?');
+  await ask('Soy Ana Pérez y vivo lejos de la ciudad, ¿puedo conectarme al curso desde allá?');
   d = drafts();
   assert.equal(d.length, 2);
   const second = d.find(x => x.id !== draft.id);
   assert.doesNotMatch(second.question, /\bana\b|p[eé]rez/i, 'sin el nombre de quien preguntó');
-  assert.match(second.question, /trabajo con ganado, ¿este curso aplica para bovinos también\?$/);
+  assert.match(second.question, /vivo lejos de la ciudad, ¿puedo conectarme al curso desde allá\?$/);
   // 3d) descartar un borrador de la IA que nunca se aprobó lo BORRA con su historial (no se conserva texto salido de una conversación)
   const gone = await call('/api/replies/knowledge/' + second.id + '/archive', admin.cookie, {
     expectedRevision: second.revision,
