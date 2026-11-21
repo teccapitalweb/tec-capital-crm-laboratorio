@@ -3,6 +3,7 @@ import { transaction } from './database.mjs';
 import { createWebhookInbox } from './app/webhook-inbox.mjs';
 import { createPeerHash, loadPeerKey } from './lib/peer-key.mjs';
 import { isBsuid } from './lib/identity.mjs';
+import { mediaGapMs } from './lib/media-gap.mjs';
 
 // Contrato de conectores (Fase 1 · bloque 6). Define la interfaz que tendrán los proveedores reales de canal (Meta:
 // WhatsApp Cloud API, Instagram, Messenger) y de pago (Stripe, Conekta), y la cumple hoy con adaptadores simulados.
@@ -658,6 +659,9 @@ export function metaChannel({
   const missing = missingOf(env, ['META_ACCESS_TOKEN', 'META_APP_SECRET', 'META_VERIFY_TOKEN', 'META_PHONE_NUMBER_ID']);
   const STATE = { sent: 'sent', delivered: 'delivered', read: 'read', failed: 'failed' };
   const production = env.NODE_ENV === 'production';
+  // Un archivo con su texto o sus botones aparte son dos mensajes de Meta: el segundo espera el mismo margen que el
+  // canal deja después de un archivo (server/lib/media-gap.mjs), para que no llegue antes que el archivo.
+  const MEDIA_GAP = mediaGapMs(env);
   // En producción el token sólo viaja a graph.facebook.com; META_GRAPH_URL existe para las pruebas con un Meta de mentira.
   const base = () =>
     String((!production && env.META_GRAPH_URL) || 'https://graph.facebook.com').replace(/\/+$/, '') +
@@ -957,7 +961,7 @@ export function metaChannel({
           reason: null,
           ...(waId ? { waId } : {}),
           ...(userId ? { userId } : {}),
-          ...(mediaId ? { mediaId } : {}),
+          ...(mediaId ? { mediaId, media: true } : {}),
         };
       }
       const text = String(m.text || '')
@@ -1008,8 +1012,10 @@ export function metaChannel({
         });
       else parts.push({ type: 'text', text: { body: text, preview_url: false } });
       let ref = null;
-      for (const part of parts) {
+      const isMedia = part => part.type === 'image' || part.type === 'document';
+      for (const [i, part] of parts.entries()) {
         try {
+          if (i > 0 && MEDIA_GAP > 0 && isMedia(parts[i - 1])) await new Promise(done => setTimeout(done, MEDIA_GAP));
           ref = (await post(from, to, part)).messages?.[0]?.id || ref;
         } catch (e) {
           if (!ref) throw e;
@@ -1022,7 +1028,8 @@ export function metaChannel({
         } // la persona ya recibió el archivo: reintentar lo duplicaría
       }
       if (!ref) throw fail(502, 'Meta aceptó la petición pero no devolvió la referencia del mensaje.');
-      return { providerRef: ref, state: 'sent', reason: null };
+      // `media`: lo último que salió fue un archivo (el canal deja el margen antes del siguiente mensaje)
+      return { providerRef: ref, state: 'sent', reason: null, ...(isMedia(parts.at(-1)) ? { media: true } : {}) };
     },
     // Descarga un archivo que envió la persona: primero su URL temporal y después los bytes, siempre con el token y sólo desde servidores de Meta.
     async fetchMedia(id, { maxBytes = 4 * 1024 * 1024 } = {}) {

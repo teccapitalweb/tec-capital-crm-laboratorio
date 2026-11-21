@@ -1,4 +1,5 @@
 import { transaction } from './database.mjs';
+import { mediaGapMs } from './lib/media-gap.mjs';
 
 // Canal simulado realista (Fase 1 · bloque 3). Imita lo que un proveedor oficial haría con los mensajes salientes, sin
 // conectar nada: estados enviado → entregado → leído (o fallido, con reintento), ventana de servicio de 24 h (72 h si el
@@ -41,6 +42,7 @@ export function createChannel({
   now = Date.now,
   uncertainSend = process.env.WA_UNCERTAIN_SEND,
   sendLeaseMs = 120_000,
+  mediaGap = mediaGapMs(process.env),
 }) {
   const defaults = b => ({
     brand_id: b,
@@ -277,9 +279,9 @@ export function createChannel({
     const rows = claim(
       db
         .prepare(
-          "SELECT m.id,m.conversation_id,c.brand_id,c.channel,m.category,COALESCE(s.failure_rate,0) failure_rate,c.wa_number,c.wa_peer FROM messages m JOIN conversations c ON c.id=m.conversation_id LEFT JOIN channel_settings s ON s.brand_id=c.brand_id WHERE m.delivery_state='sent' AND m.sender_kind IN ('agent','automation') AND ((c.wa_number IS NOT NULL AND m.provider_ref IS NULL AND (m.send_lease_until IS NULL OR m.send_lease_until<=?) AND (m.wa_hold IS NULL OR EXISTS(SELECT 1 FROM messages x WHERE x.conversation_id=m.conversation_id AND x.sender_kind='customer' AND x.created_at>m.wa_hold))) OR (c.wa_number IS NULL AND s.enabled=1 AND m.created_at<=?-s.delivery_delay_ms)) ORDER BY m.seq LIMIT 100",
+          "SELECT m.id,m.conversation_id,c.brand_id,c.channel,m.category,COALESCE(s.failure_rate,0) failure_rate,c.wa_number,c.wa_peer FROM messages m JOIN conversations c ON c.id=m.conversation_id LEFT JOIN channel_settings s ON s.brand_id=c.brand_id WHERE m.delivery_state='sent' AND m.sender_kind IN ('agent','automation') AND ((c.wa_number IS NOT NULL AND m.provider_ref IS NULL AND (m.send_lease_until IS NULL OR m.send_lease_until<=?) AND (m.wa_hold IS NULL OR EXISTS(SELECT 1 FROM messages x WHERE x.conversation_id=m.conversation_id AND x.sender_kind='customer' AND x.created_at>m.wa_hold)) AND NOT EXISTS(SELECT 1 FROM messages g WHERE g.conversation_id=m.conversation_id AND g.wa_gap_until IS NOT NULL AND g.wa_gap_until>? AND g.delivery_state='sent' AND g.seq<m.seq)) OR (c.wa_number IS NULL AND s.enabled=1 AND m.created_at<=?-s.delivery_delay_ms)) ORDER BY m.seq LIMIT 100",
         )
-        .all(t, t)
+        .all(t, t, t)
         .filter(m => !flying.has(m.id) && !(m.wa_number && busy.has(m.conversation_id))),
       t,
     );
@@ -318,12 +320,15 @@ export function createChannel({
           return { m, r: { state: 'held', reason: null } };
         }
         const r = await connectorOf(out).send(out);
+        // Si lo último que aceptó Meta fue un archivo, el siguiente mensaje de esta conversación espera el margen (o
+        // el «entregado» del archivo): WhatsApp entrega después un archivo que un texto enviado justo detrás.
+        const gap = r.state !== 'failed' && r.providerRef && r.media && mediaGap > 0 ? now() + mediaGap : null;
         // la referencia de Meta se guarda en cuanto llega: su aviso de «entregado» puede venir antes de que termine el resto del lote
         if (r.state !== 'failed' && r.providerRef)
           db.prepare(
-            "UPDATE messages SET provider_ref=?,wa_hold=NULL,send_lease_until=NULL,send_attempts=0 WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL",
-          ).run(r.providerRef, m.id);
-        return { m, r };
+            "UPDATE messages SET provider_ref=?,wa_gap_until=?,wa_hold=NULL,send_lease_until=NULL,send_attempts=0 WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL",
+          ).run(r.providerRef, gap, m.id);
+        return { m, r, gap };
       } catch (e) {
         return { m, r: { providerRef: null, state: 'failed', reason: String(e?.message || e).slice(0, 200) } };
       }
@@ -344,7 +349,22 @@ export function createChannel({
           ...lab.map(one),
           ...[...real.values()].map(async list => {
             const done = [];
-            for (const m of list) done.push(await one(m));
+            for (let i = 0; i < list.length; i++) {
+              const res = await one(list[i]);
+              done.push(res);
+              if (res.gap && i + 1 < list.length) {
+                // Salió un archivo: lo que sigue de esta conversación se suelta sin enviarse y vuelve a tomarse
+                // cuando pase el margen. No es un envío en duda: se le quita la marca de «en vuelo» y el intento.
+                const rest = list.slice(i + 1);
+                transaction(db, () => {
+                  for (const later of rest)
+                    db.prepare(
+                      "UPDATE messages SET send_lease_until=NULL,send_attempts=MAX(send_attempts-1,0) WHERE id=? AND delivery_state='sent' AND provider_ref IS NULL",
+                    ).run(later.id);
+                });
+                break;
+              }
+            }
             return done;
           }),
         ])

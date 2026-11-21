@@ -34,6 +34,8 @@ Aunque Meta esté activo, **ningún mensaje del laboratorio viaja a Meta**. Y un
 
 **Salientes**: cada mensaje del asistente o del equipo en una conversación real sale por `POST /{número}/messages`: texto, hasta tres botones de respuesta, imagen o documento (se sube primero a Meta). Los mensajes de una misma conversación salen **en orden** y nunca dos veces.
 
+**Orden de los mensajes después de un archivo** (21 nov 2026). En una prueba real con un teléfono, un recorrido dijo saludo → ficha del curso (imagen con pie) → botones, y llegaron el saludo, los botones y **después** la imagen: Meta aceptó los tres en orden (salen en serie, esperando su respuesta, y la imagen se sube antes de enviarse), pero WhatsApp entrega más tarde un mensaje con archivo que uno de texto enviado justo detrás. Regla: el orden en que el recorrido o el asistente dicen las cosas es el orden en que deben llegar. Por eso, cuando Meta acepta un mensaje cuyo último envío fue un archivo (imagen o documento, también el encabezado con archivo de una plantilla), el canal anota en ese mensaje `messages.wa_gap_until` (migración con nombre `messages/0002-media-gap`) y el siguiente mensaje de **esa** conversación no sale hasta que pase el margen o hasta que llegue el estado «entregado» (o leído, o no entregado) del archivo, lo que ocurra antes. Lo que ya estaba tomado en el mismo lote se suelta sin enviarse (sin contarlo como intento ni como envío en duda) y lo vuelve a tomar el reloj del canal (cada 0,5 s). No se duerme en ninguna transacción ni se detiene a las demás conversaciones; y como el margen vive en la base, se respeta tras un reinicio. Un mismo mensaje del CRM que Meta recibe en dos partes (archivo y, aparte, su texto largo o sus botones) espera el mismo margen entre las dos partes dentro del envío. Variable `WA_MEDIA_GAP_MS` (milisegundos, de 0 a 30000; por omisión **2500**; con `NODE_ENV=test`, 0). El canal simulado del laboratorio no cambia. Pruebas: `test/whatsapp-media-order.test.mjs`.
+
 **Estados**: Meta avisa entregado, leído o no entregado y el mensaje avanza. Los rechazos se explican en español (`explainMeta`): token vencido, número fuera de la lista de prueba, ventana de 24 h, cuenta sin método de pago, etcétera.
 
 **Pago sin sesión**: el enlace `/?pay=<pedido>` de un pedido de una conversación real abre la pasarela de prueba sin pedir perfil (`/api/pay/<pedido>/customer` y `/pay`). Sólo ese pedido; los del laboratorio siguen pidiendo sesión. La confirmación del pago sale por WhatsApp.
@@ -60,6 +62,7 @@ Las tres quedan vacías hasta que alguien escribe a un número real: migrar no c
 | `META_PHONE_NUMBER_ID` | Sí | Identificador del primer número |
 | `META_WABA_ID` | No | Hará falta para las plantillas aprobadas |
 | `META_GRAPH_VERSION` | No | Versión de la API; por omisión `v25.0` |
+| `WA_MEDIA_GAP_MS` | No | Margen tras un archivo antes del siguiente mensaje de la conversación; por omisión `2500`, `0` lo apaga |
 
 `META_GRAPH_URL` sólo existe para las pruebas (un Meta de mentira) y **se ignora en producción**: el token únicamente viaja a `graph.facebook.com`, y los archivos sólo se descargan de servidores de Meta. «Producción» es `NODE_ENV=production`, que ya fija el `Dockerfile`; no hay que cambiarlo en Railway.
 
