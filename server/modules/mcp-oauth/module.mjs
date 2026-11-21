@@ -690,8 +690,17 @@ export default {
       const grant = repo.grantById.get(grantId);
       if (!grant || grant.revoked_at) return null;
       const scopes = effective(grant);
+      // Con sus permisos vigentes, como el objeto de authenticate: quien pregunta «¿conserva tal permiso?» (la subida de
+      // imágenes del conector) los lee de aquí. Sin ellos, una conexión OAuth parecía no tener ninguno.
       return scopes.length
-        ? { id: 'oauth:' + grant.id, brand_id: grant.brand_id, created_by: grant.user_id, name: grant.client_name }
+        ? {
+            id: 'oauth:' + grant.id,
+            brand_id: grant.brand_id,
+            created_by: grant.user_id,
+            name: grant.client_name,
+            scopes: JSON.stringify(scopes),
+            status: 'active',
+          }
         : null;
     }
     // Cabecera del 401 de /mcp: dónde están los metadatos para empezar el flujo.
