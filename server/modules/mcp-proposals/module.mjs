@@ -31,15 +31,19 @@ import { createRepo } from './repo.mjs';
 
 const DAY = 24 * 3600 * 1000;
 export const LIMITS = Object.freeze({
-  pendingPerBrand: 20,
+  // Caben las propuestas de un catálogo completo (publicar la apertura y aprobar la imagen de unos 20 cursos).
+  pendingPerBrand: 60,
   // por origen: una misma llave o conexión no llena sola el tope de la marca
-  pendingPerSource: 10,
+  pendingPerSource: 40,
   expiresMs: 7 * DAY,
   noteLength: 500,
   nameLength: 120,
-  proposePerMinute: 30,
+  // Proponer un catálogo de ~40 en un minuto cabe; el conector además limita a 60 llamadas por minuto por llave.
+  proposePerMinute: 60,
   withdrawPerMinute: 30,
-  decidePerMinute: 30,
+  // Aprobar por lote llama a la ruta de aprobar una vez por propuesta, en serie: un lote del tope de la marca (60) más
+  // algunos reintentos cabe en un minuto; pasado eso, el resto sigue pendiente y se dice.
+  decidePerMinute: 90,
   history: 50,
   stuckMs: 10 * 60 * 1000,
   sweepRows: 500,
@@ -168,13 +172,17 @@ export default {
     // ---- revisar una acción sobre una entidad: existe, es de la marca, y desde su estado la acción tiene sentido.
     // Lo síncrono sale de la base; lo que revisa el módulo (errores de un recorrido, lo que le falta a una regla) se
     // pide a su ruta de lectura a nombre de `user`.
-    function snapshot(brandId, action, entityId) {
+    // `mode`: 'propose' (al dejarla), 'view' (en la pantalla) o 'approve' (al aprobar, lo más estricto).
+    function snapshot(brandId, action, entityId, mode = 'view') {
       const a = actionOf(action);
       if (!a || typeof entityId !== 'string' || !ID.test(entityId)) return null;
       const e = repo.entity(brandId, a.entity, entityId);
       if (!e) return null;
       const checked = a.check(e, {
+        mode,
         now: now(),
+        pendingPublish: editionId => repo.pendingPublish(brandId, editionId),
+        courseUsage: courseId => repo.courseUsage(brandId, courseId),
         automationOn: (() => {
           try {
             return Boolean(automation?.enabledFor?.(brandId));
@@ -191,8 +199,8 @@ export default {
       return { a, e, name: a.name(e), revision: e.revision, ...checked };
     }
     const issueText = x => (typeof x === 'string' ? x : x?.message || x?.text || String(x?.code || ''));
-    async function inspect(user, brandId, action, entityId, { strict = false } = {}) {
-      const s = snapshot(brandId, action, entityId);
+    async function inspect(user, brandId, action, entityId, { strict = false, mode = 'view' } = {}) {
+      const s = snapshot(brandId, action, entityId, mode);
       if (!s) return null;
       const problems = [...s.problems];
       const warnings = [...s.warnings];
@@ -240,6 +248,14 @@ export default {
         details: (inspected?.details ?? []).map(([label, value]) => ({ label, value: String(value ?? '') })),
         // Lo que la entidad le dirá a los clientes, recalculado desde la base (null si la acción no envía nada).
         sends: inspected?.sends ?? null,
+        // La imagen que se aprobaría: una dirección del mismo origen que sirve el catálogo con sesión y alcance por
+        // marca (nunca una dirección externa ni algo que haya escrito el asistente).
+        image:
+          inspected?.image && /^\/api\/library\/files\/[a-f0-9-]{36}$/.test(inspected.image.url)
+            ? inspected.image
+            : null,
+        // Orden en un lote (la pantalla aprueba en serie, de menor a mayor).
+        batchOrder: a?.batchOrder ?? 1,
         problems: inspected === null ? ['Ya no existe en esta marca.'] : (inspected?.problems ?? []),
         warnings: inspected?.warnings ?? [],
         // Escrita por el asistente: texto plano, para mostrarse aparte y escapado, nunca como instrucción.
@@ -325,7 +341,7 @@ export default {
       const a = actionOf(action);
       if (!a) throw fail(400, 'Esa acción no se puede proponer.', { code: 'invalid_action' });
       host.rate('mcp-proposals.propose:' + key.id, LIMITS.proposePerMinute);
-      const seen = await inspect(actor, brandId, action, entityId, { strict: true });
+      const seen = await inspect(actor, brandId, action, entityId, { strict: true, mode: 'propose' });
       if (!seen) throw fail(404, `Ese ${a.noun} no existe en esta marca.`, { code: 'not_found' });
       if (seen.problems.length)
         throw fail(409, 'Todavía no se puede proponer: ' + seen.problems[0], {
@@ -350,7 +366,7 @@ export default {
           );
         }
         // Lo revisado debe seguir igual al guardar (la revisión es lo que se aprobará).
-        const again = snapshot(brandId, action, seen.e.id);
+        const again = snapshot(brandId, action, seen.e.id, 'propose');
         if (!again || again.revision !== seen.revision)
           throw fail(409, 'Cambió mientras se revisaba: vuelve a intentarlo.', { code: 'stale_record' });
         if (repo.pendingBySource(brandId, source.sourceKind, source.sourceId) >= LIMITS.pendingPerSource)
@@ -424,6 +440,8 @@ export default {
     const decided = row =>
       fail(409, 'Esta propuesta ya está «' + (STATUS[row.status] ?? row.status) + '».', {
         code: 'already_decided',
+        // el estado en que quedó (la pantalla de lote dice «obsoleta» si el mantenimiento ya la marcó así)
+        details: { status: row.status, reason: row.error || null },
       });
 
     async function approve(user, id) {
@@ -452,7 +470,7 @@ export default {
           return { refused: fail(409, why, { code: 'stale_proposal' }) };
         }
         // Lo que hoy impide la acción (con los datos de la base) no se intenta: sigue pendiente y se dice por qué.
-        const checked = snapshot(row.brand_id, row.action, row.entity_id);
+        const checked = snapshot(row.brand_id, row.action, row.entity_id, 'approve');
         if (checked?.problems.length)
           return {
             refused: fail(409, 'Todavía no se puede aprobar: ' + checked.problems[0], {
@@ -469,8 +487,10 @@ export default {
       }
       const { row, entity } = outcome;
       try {
-        const [name, method, path, input] = a.request(entity, row.entity_revision);
-        await moduleCall(user, name, method, path, input);
+        // Una acción de varios pasos (aprobar una imagen cuya apertura cambió: guardarla y aprobarla) los hace en serie.
+        // Si un paso posterior falla, lo anterior ya quedó (sigue en borrador) y la entidad cambió: queda obsoleta.
+        const steps = a.steps ? a.steps(entity, row.entity_revision) : [a.request(entity, row.entity_revision)];
+        for (const [name, method, path, input] of steps) await moduleCall(user, name, method, path, input);
       } catch (error) {
         // Nada se aplicó (las rutas de los módulos hacen su cambio en una sola transacción). Si la entidad cambió entre
         // tanto, la propuesta queda obsoleta; si fue un permiso, la disponibilidad o un fallo interno, vuelve a quedar

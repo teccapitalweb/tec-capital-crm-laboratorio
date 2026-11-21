@@ -15,7 +15,7 @@ export function createRepo(db) {
       one('SELECT id,title name,status,revision,definition FROM automation_rules WHERE id=? AND brand_id=?', id, b),
     edition: (b, id) =>
       one(
-        'SELECT e.*,k.title course_title,k.active course_active FROM editions e JOIN courses k ON k.id=e.course_id WHERE e.id=? AND e.brand_id=?',
+        'SELECT e.*,k.title course_title,k.active course_active,k.syllabus course_syllabus FROM editions e JOIN courses k ON k.id=e.course_id WHERE e.id=? AND e.brand_id=?',
         id,
         b,
       ),
@@ -39,7 +39,88 @@ export function createRepo(db) {
       ),
     content_template: (b, id) =>
       one('SELECT id,title name,status,revision,body,scenario FROM content_templates WHERE id=? AND brand_id=?', id, b),
+    // Una imagen (flyer) con su archivo, su apertura y su curso: para ver qué se aprueba y si su `binding` sigue al día.
+    flyer: (b, id) =>
+      one(
+        `SELECT f.id,f.title,f.status,f.revision,f.binding,f.file_id,f.edition_id,f.course_id,f.promotion_id,f.channel,
+           f.expires_at,e.name edition_name,e.status edition_status,e.revision edition_revision,k.title course_title,
+           k.active course_active,k.version course_version,l.mime,l.builtin_id
+         FROM flyers f JOIN editions e ON e.id=f.edition_id JOIN courses k ON k.id=f.course_id
+           JOIN library_files l ON l.id=f.file_id
+         WHERE f.id=? AND f.brand_id=?`,
+        id,
+        b,
+      ),
+    // Un curso: su «revisión» es su versión (la que pide la ruta de archivar como expectedRevision).
+    course: (b, id) =>
+      one('SELECT id,brand_id,title name,active,version revision FROM courses WHERE id=? AND brand_id=?', id, b),
   };
+
+  // Dónde se usa un curso (para avisar antes de archivarlo). Todo dentro de la marca. Recorridos, secuencias, reglas y
+  // difusiones guardan el curso dentro de su configuración (JSON): se busca su id entre comillas, así que un aviso
+  // puede salir de más (otro dato con el mismo texto), nunca de menos.
+  const n = (sql, ...args) => one(sql, ...args)?.n ?? 0;
+  function courseUsage(b, courseId) {
+    const like = '%"' + String(courseId).replace(/[%_\\]/g, '\\$&') + '"%';
+    return {
+      publishedEditions: n(
+        "SELECT count(*) n FROM editions WHERE brand_id=? AND course_id=? AND status='published'",
+        b,
+        courseId,
+      ),
+      draftEditions: n(
+        "SELECT count(*) n FROM editions WHERE brand_id=? AND course_id=? AND status='draft'",
+        b,
+        courseId,
+      ),
+      liveOrders: n(
+        "SELECT count(*) n FROM orders WHERE brand_id=? AND course_id=? AND status IN ('pending','review')",
+        b,
+        courseId,
+      ),
+      openConversations: n(
+        "SELECT count(*) n FROM conversations WHERE brand_id=? AND course_id=? AND status!='resolved'",
+        b,
+        courseId,
+      ),
+      waNumbers: all(
+        "SELECT COALESCE(NULLIF(label,''),'Número sin nombre') label FROM wa_numbers WHERE brand_id=? AND course_id=? ORDER BY label",
+        b,
+        courseId,
+      ).map(r => r.label),
+      ads: n('SELECT count(*) n FROM wa_ads WHERE brand_id=? AND course_id=?', b, courseId),
+      sequences: n(
+        `SELECT count(*) n FROM sequences WHERE brand_id=? AND enabled=1 AND archived_at IS NULL
+           AND (course_id=? OR steps LIKE ? ESCAPE '\\' OR settings LIKE ? ESCAPE '\\')`,
+        b,
+        courseId,
+        like,
+        like,
+      ),
+      flows: n(
+        `SELECT count(*) n FROM chatflows f WHERE f.brand_id=? AND f.status='active' AND (f.start LIKE ? ESCAPE '\\'
+           OR EXISTS(SELECT 1 FROM chatflow_versions v WHERE v.flow_id=f.id AND v.version=f.published_version
+             AND (v.graph LIKE ? ESCAPE '\\' OR v.start LIKE ? ESCAPE '\\' OR v.settings LIKE ? ESCAPE '\\')))`,
+        b,
+        like,
+        like,
+        like,
+        like,
+      ),
+      rules: n(
+        "SELECT count(*) n FROM automation_rules WHERE brand_id=? AND status='active' AND definition LIKE ? ESCAPE '\\'",
+        b,
+        like,
+      ),
+      broadcasts: n(
+        `SELECT count(*) n FROM campaigns WHERE brand_id=? AND status IN ('scheduled','sending')
+           AND (content LIKE ? ESCAPE '\\' OR segment LIKE ? ESCAPE '\\')`,
+        b,
+        like,
+        like,
+      ),
+    };
+  }
 
   // Nombres de lo que nombra un recorrido, una secuencia o una regla, siempre dentro de la marca (fuera de ella no hay
   // nombre). Para la vista previa de «Lo que se enviará a los clientes».
@@ -60,6 +141,16 @@ export function createRepo(db) {
 
   return {
     entity: (brandId, type, id) => (Object.hasOwn(ENTITY, type) ? ENTITY[type](brandId, id) : null),
+    courseUsage,
+    // ¿Hay una propuesta pendiente de publicar esta apertura? (la imagen se puede aprobar en el mismo lote, después)
+    pendingPublish: (brandId, editionId) =>
+      Boolean(
+        one(
+          "SELECT 1 FROM mcp_proposals WHERE brand_id=? AND action='publicar_apertura' AND entity_id=? AND status IN ('pending','approving')",
+          brandId,
+          editionId,
+        ),
+      ),
     names: brandId => Object.fromEntries(Object.entries(NAMES).map(([k, f]) => [k, id => f(brandId, id)])),
     versionGraph: (brandId, flowId, version) =>
       one('SELECT graph FROM chatflow_versions WHERE flow_id=? AND version=? AND brand_id=?', flowId, version, brandId)

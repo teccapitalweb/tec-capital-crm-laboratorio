@@ -45,6 +45,7 @@ test('las herramientas del conector están bien descritas: nombre, permiso, esqu
     'crear_segmento',
     'crear_texto_borrador',
     'escribir_acceso',
+    'preparar_subida_imagen',
     'proponer_accion',
     'proponer_conocimiento',
     'retirar_propuesta',

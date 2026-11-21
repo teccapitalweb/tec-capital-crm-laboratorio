@@ -1,9 +1,15 @@
 // La lista CERRADA de acciones que el asistente puede proponer (docs/PLAN_MCP_CLAUDE.md, «Propuestas que aprueba una
 // persona»). Sólo acciones reversibles desde su propia pantalla, que no escriben a nadie en el momento de aprobarlas:
-// publicar o activar algo que ya está armado. Lo que no está aquí no se puede proponer.
+// publicar, activar o aprobar algo que ya está armado, y una sola de retiro, archivar un curso (pone el curso inactivo,
+// no borra nada y se reactiva en el Catálogo), que avisa con datos de la base de lo que deja de ofrecerse.
+// Lo que no está aquí no se puede proponer.
 //
 // Fuera, a propósito: enviar o programar difusiones, enviar plantillas a aprobación de Meta, todo lo de pagos (nunca se
-// confirma un pago desde el asistente), borrar o archivar, contactos, mensajes a clientes, llaves, usuarios y permisos.
+// confirma un pago desde el asistente), borrar, archivar cualquier otra cosa, contactos, mensajes a clientes, llaves,
+// usuarios y permisos.
+//
+// `batchOrder` (0 primero; 1 si no lo dice) es el orden en que la pantalla aprueba un lote: primero se publican las
+// aperturas, luego lo demás, después las imágenes (se ligan a la apertura ya publicada) y al final los retiros.
 //
 // Cada acción dice: qué entidad toca y qué permiso de borradores del conector la cubre; qué permiso de la PERSONA que
 // aprueba hace falta (el mismo que pide su pantalla; la ruta lo vuelve a comprobar); qué pasará al aprobarla; cómo se
@@ -54,6 +60,9 @@ const when = (t, zone) => {
   }
 };
 const MODALITY = { online: 'En línea', in_person: 'Presencial', hybrid: 'Híbrida' };
+const EDITION_STATUS = { draft: 'En borrador', published: 'Publicada', archived: 'Archivada' };
+// El `binding` con que el catálogo liga una imagen a los datos de su curso y su apertura (catalogue.mjs, binding()).
+const bindingOf = e => JSON.stringify({ course: e.course_version, edition: e.edition_revision, promotion: null });
 const steps = raw => {
   try {
     const list = JSON.parse(raw || '[]');
@@ -175,6 +184,7 @@ export const ACTIONS = Object.freeze({
     label: 'Publicar la apertura',
     permission: 'catalogue',
     screen: { view: 'courses', label: 'Catálogo' },
+    batchOrder: 0,
     effect:
       'La apertura queda a la venta: el asistente la ofrece a los clientes con estos datos. Aprobar sólo cambia su estado: no cambia su precio ni su cupo, así que publicarla no genera por sí mismo avisos de precio o cupo ni eventos de webhooks. Desde ese momento, cada cambio de precio o de cupo de esta apertura sí avisa al equipo y sale como evento a los destinos de webhooks configurados de la marca. Se puede devolver a borrador en el Catálogo.',
     name: e => e.course_title + ' · ' + e.name,
@@ -194,6 +204,9 @@ export const ACTIONS = Object.freeze({
         problems,
         warnings: [],
         details: [
+          ['Curso', plain(e.course_title, 180)],
+          // lo que el asistente le dice a quien pregunta por el temario (recortado aquí; completo en el Catálogo)
+          ['Temario', plain(e.course_syllabus, 300) || 'Sin temario'],
           ['Apertura', plain(e.name, 120)],
           ['Inicio', when(e.starts_at, e.timezone)],
           ['Fin', when(e.ends_at, e.timezone)],
@@ -339,6 +352,138 @@ export const ACTIONS = Object.freeze({
       { expectedRevision: revision },
     ],
   },
+  aprobar_imagen: {
+    entity: 'flyer',
+    scope: CONFIG,
+    noun: 'imagen',
+    label: 'Aprobar la imagen del curso',
+    permission: 'content',
+    screen: { view: 'courses', label: 'Catálogo' },
+    // En un lote va después de publicar las aperturas: la imagen se liga a los datos de su apertura ya publicada.
+    batchOrder: 2,
+    effect:
+      'La imagen queda aprobada para esta apertura: el asistente y el equipo la envían como imagen del curso mientras la apertura esté a la venta y sus datos no cambien. Si la apertura cambió desde que se subió la imagen, al aprobar se vuelve a ligar a los datos que ves aquí. Se puede archivar en el Catálogo.',
+    name: e => e.course_title + ' · ' + e.edition_name,
+    check(e, ctx) {
+      const problems = [];
+      const warnings = [];
+      if (e.status === 'approved') problems.push('La imagen ya está aprobada.');
+      else if (e.status === 'archived') problems.push('La imagen está archivada.');
+      if (!e.course_active) problems.push('El curso está archivado.');
+      if (e.edition_status === 'archived') problems.push('La apertura está archivada.');
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(e.mime))
+        problems.push('Desde aquí sólo se aprueba una imagen JPEG, PNG o WebP.');
+      if (e.builtin_id) problems.push('Es un arte de demostración: se aprueba en el Catálogo.');
+      if (e.promotion_id) problems.push('La imagen va ligada a una promoción: apruébala en el Catálogo.');
+      if (e.expires_at !== null && e.expires_at <= ctx.now) problems.push('La imagen ya venció.');
+      // Una imagen aprobada en una apertura sin publicar dejaría de valer al publicarla (cambia su revisión). Al
+      // proponer, o si hay una propuesta pendiente de publicarla (se aprueba antes en el mismo lote), es un aviso; al
+      // aprobar, un impedimento.
+      if (e.edition_status === 'draft') {
+        const later = ctx.mode === 'propose' || (ctx.mode === 'view' && ctx.pendingPublish(e.edition_id));
+        (later ? warnings : problems).push(
+          later
+            ? 'La apertura todavía no está publicada: la imagen se aprueba después de publicarla (en un lote se publica primero).'
+            : 'Publica primero la apertura (si hay una propuesta para publicarla, apruébala antes).',
+        );
+      }
+      if (e.binding !== bindingOf(e) && e.edition_status === 'published')
+        warnings.push(
+          'La apertura cambió desde que se subió la imagen: al aprobar se vuelve a ligar a los datos actuales de la apertura.',
+        );
+      return {
+        problems,
+        warnings,
+        details: [
+          ['Curso', plain(e.course_title, 180)],
+          ['Apertura', plain(e.edition_name, 120)],
+          ['Estado de la apertura', EDITION_STATUS[e.edition_status] || e.edition_status],
+          ['Formato', e.mime],
+        ],
+        // La miniatura: la sirve la ruta del catálogo con sesión y alcance por marca (mismo origen).
+        image: { url: '/api/library/files/' + e.file_id, alt: 'Imagen propuesta para ' + plain(e.course_title, 120) },
+      };
+    },
+    // Si la apertura cambió desde que se subió (por ejemplo, al publicarla), primero se vuelve a guardar el borrador
+    // (lo liga a los datos actuales, como pide el Catálogo) y luego se aprueba; si no, sólo se aprueba.
+    steps: (e, revision) =>
+      e.binding === bindingOf(e)
+        ? [['catalogue', 'POST', `/api/catalogue/flyers/${e.id}/approve`, { expectedRevision: revision }]]
+        : [
+            [
+              'catalogue',
+              'PATCH',
+              `/api/catalogue/flyers/${e.id}`,
+              {
+                editionId: e.edition_id,
+                fileId: e.file_id,
+                title: e.title,
+                channel: e.channel,
+                expiresAt: e.expires_at,
+                expectedRevision: revision,
+              },
+            ],
+            ['catalogue', 'POST', `/api/catalogue/flyers/${e.id}/approve`, { expectedRevision: revision + 1 }],
+          ],
+  },
+  archivar_curso: {
+    entity: 'course',
+    scope: CONFIG,
+    noun: 'curso',
+    label: 'Archivar el curso',
+    permission: 'catalogue',
+    screen: { view: 'courses', label: 'Catálogo' },
+    batchOrder: 3,
+    effect:
+      'El curso sale del catálogo: el asistente deja de ofrecerlo y sus aperturas dejan de venderse (no se borran). No borra nada ni le escribe a nadie. Se puede reactivar en el Catálogo (editar el curso y marcarlo activo).',
+    name: e => e.name,
+    check(e, ctx) {
+      const problems = [];
+      const warnings = [];
+      if (!e.active) problems.push('El curso ya está archivado.');
+      const u = ctx.courseUsage(e.id);
+      if (u.waNumbers.length)
+        problems.push(
+          `Es el curso por omisión de ${u.waNumbers.length === 1 ? 'un número' : u.waNumbers.length + ' números'} de WhatsApp (${u.waNumbers.map(x => plain(x, 60)).join(', ')}): cámbialo en Conectores antes de archivarlo.`,
+        );
+      const count = (n, one, many) => (n === 1 ? one : n + ' ' + many);
+      if (u.publishedEditions)
+        warnings.push(
+          `Tiene ${count(u.publishedEditions, 'una apertura publicada', 'aperturas publicadas')}: dejan de venderse.`,
+        );
+      if (u.liveOrders)
+        warnings.push(
+          `Tiene ${count(u.liveOrders, 'un pedido sin cerrar', 'pedidos sin cerrar')} (pendiente o en revisión).`,
+        );
+      if (u.openConversations)
+        warnings.push(
+          `Tiene ${count(u.openConversations, 'una conversación abierta', 'conversaciones abiertas')}: el asistente dejará de dar sus datos y pasará la conversación a una persona.`,
+        );
+      if (u.ads) warnings.push(`${count(u.ads, 'Un anuncio lleva', 'anuncios llevan')} a este curso.`);
+      if (u.sequences)
+        warnings.push(`Lo usa ${count(u.sequences, 'una secuencia encendida', 'secuencias encendidas')}.`);
+      if (u.flows) warnings.push(`Lo usa ${count(u.flows, 'un recorrido activo', 'recorridos activos')}.`);
+      if (u.rules) warnings.push(`Lo usa ${count(u.rules, 'una regla encendida', 'reglas encendidas')}.`);
+      if (u.broadcasts)
+        warnings.push(
+          `Lo usa ${count(u.broadcasts, 'una difusión programada o enviándose', 'difusiones programadas o enviándose')}.`,
+        );
+      return {
+        problems,
+        warnings,
+        details: [
+          ['Curso', plain(e.name, 180)],
+          ['Aperturas', `${u.publishedEditions} publicadas · ${u.draftEditions} en borrador`],
+        ],
+      };
+    },
+    request: (e, revision) => [
+      'catalogue',
+      'POST',
+      `/api/catalogue/courses/${e.id}/archive`,
+      { expectedRevision: revision },
+    ],
+  },
 });
 export const ACTION_KEYS = Object.freeze(Object.keys(ACTIONS));
 export const actionOf = key => (typeof key === 'string' && Object.hasOwn(ACTIONS, key) ? ACTIONS[key] : null);
@@ -350,8 +495,10 @@ export const EXEC_ROUTES = Object.freeze([
   ['sequences', 'POST', new RegExp(`^/api/sequences/${ID}/enable$`)],
   ['rules', 'GET', new RegExp(`^/api/rules/${ID}$`)],
   ['rules', 'POST', new RegExp(`^/api/rules/${ID}/activate$`)],
-  ['catalogue', 'PATCH', new RegExp(`^/api/catalogue/(editions|promotions)/${ID}$`)],
-  ['catalogue', 'POST', new RegExp(`^/api/catalogue/templates/${ID}/approve$`)],
+  ['catalogue', 'PATCH', new RegExp(`^/api/catalogue/(editions|promotions|flyers)/${ID}$`)],
+  ['catalogue', 'POST', new RegExp(`^/api/catalogue/(templates|flyers)/${ID}/approve$`)],
+  // el único retiro: archivar un curso (active=0, reversible desde el Catálogo)
+  ['catalogue', 'POST', new RegExp(`^/api/catalogue/courses/${ID}/archive$`)],
   ['course-access', 'PUT', new RegExp(`^/api/course-access/editions/${ID}$`)],
 ]);
 

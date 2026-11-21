@@ -173,6 +173,93 @@
   margin: 0;
 }
 
+/* Aprobar por lote: la casilla de cada tarjeta mide lo que un dedo necesita. */
+.pp-elegir {
+  min-height: var(--touch);
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+}
+
+.pp-lote {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.pp-lote__ayuda {
+  margin: 0;
+}
+
+.pp-resultado {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.pp-resultado__lista,
+.pp-confirma-lote {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.pp-resultado__lista {
+  list-style: none;
+  padding: 0;
+}
+
+.pp-confirma-lote {
+  padding-left: var(--space-8);
+}
+
+.pp-resultado__fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+
+.pp-resultado__que,
+.pp-resultado__motivo,
+.pp-confirma-lote__fila {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pp-resultado__motivo {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.pp-confirma-lote__fila {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.pp-confirma-lote__fila .pp-confirma__accion {
+  margin: 0;
+}
+
+/* La imagen que se aprobaría (servida por el catálogo, del mismo origen). */
+.pp-imagen {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.pp-imagen__img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  height: auto;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  object-fit: contain;
+}
+
 @media (max-width: 600px) {
   .pp-detalle {
     grid-template-columns: minmax(0, 1fr);

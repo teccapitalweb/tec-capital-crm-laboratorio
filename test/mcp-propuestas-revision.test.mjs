@@ -399,7 +399,7 @@ test('propuestas de punta a punta: lo que se enviará, nombre aparte, origen pro
   const another = await newRule(A.token, 'Regla para el tope por origen');
   assert.match(
     (await tool(A.token, 'proponer_accion', { accion: 'activar_regla', id: another })).error,
-    /Esta llave o conexión ya tiene 10 propuestas pendientes/,
+    new RegExp(`Esta llave o conexión ya tiene ${LIMITS.pendingPerSource} propuestas pendientes`),
   );
   // otra llave de la misma marca sí puede (el tope es por origen; el de la marca es otro)
   const pOther = await ok(B.token, 'proponer_accion', { accion: 'activar_regla', id: another });

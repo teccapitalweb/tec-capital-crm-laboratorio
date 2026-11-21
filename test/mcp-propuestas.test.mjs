@@ -57,15 +57,21 @@ test('propuestas: herramientas, permiso propio, lista cerrada y ninguna herramie
     'encender_accesos',
     'activar_promocion',
     'publicar_texto',
+    'aprobar_imagen',
+    'archivar_curso',
   ]);
   for (const [k, a] of Object.entries(ACTIONS)) {
     assert.ok(['automation_drafts', 'config_drafts'].includes(a.scope), k);
-    assert.doesNotMatch(k, /enviar|difusion|pago|cobrar|borrar|archivar|plantilla|contacto|llave|usuario|permiso/);
+    assert.doesNotMatch(k, /enviar|difusion|pago|cobrar|borrar|plantilla|contacto|llave|usuario|permiso/);
+    // el único retiro de la lista es archivar un curso (reversible: el curso queda inactivo)
+    if (/archivar/.test(k)) assert.equal(k, 'archivar_curso');
   }
-  // las rutas que puede tocar aprobar: ninguna de envío, pago, borrado o archivo
+  // las rutas que puede tocar aprobar: ninguna de envío, pago o borrado; el único archivo, el de un curso
   for (const [, method, re] of EXEC_ROUTES) {
     assert.ok(['GET', 'POST', 'PATCH', 'PUT'].includes(method));
-    assert.doesNotMatch(re.source, /send|schedule|archive|delete|pay|submit|duplicate|pause|disable/);
+    assert.doesNotMatch(re.source, /send|schedule|delete|pay|submit|duplicate|pause|disable/);
+    if (/archive/.test(re.source)) assert.ok(re.test('/api/catalogue/courses/aves/archive'), re.source);
+    if (/archive/.test(re.source)) assert.ok(!re.test('/api/catalogue/editions/x/archive'), re.source);
   }
   // el esquema se hace cumplir: una acción fuera de la lista o datos de más se rechazan antes de tocar nada
   const schema = PROPOSAL_TOOLS[0].inputSchema;
@@ -505,7 +511,7 @@ test('propuestas de punta a punta: proponer, aprobar a nombre de quien aprueba, 
   // ---- la otra marca no ve las propuestas de ésta por el conector
   assert.deepEqual((await ok(od, 'listar_propuestas')).propuestas, []);
 
-  // ---- tope de pendientes por marca (20)
+  // ---- tope de pendientes por marca (LIMITS.pendingPerBrand)
 
   const ruleIds = [];
   for (let i = 0; i <= LIMITS.pendingPerBrand; i++)
@@ -521,6 +527,9 @@ test('propuestas de punta a punta: proponer, aprobar a nombre de quien aprueba, 
     `INSERT INTO mcp_proposals(id,brand_id,action,entity_type,entity_id,entity_revision,entity_name,source_kind,source_id,
        proposed_by,status,created_at,updated_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,'pending',?,?,?)`,
   );
+  const fillerSource = db
+    .prepare("SELECT id FROM api_keys WHERE brand_id='globalvet' AND name=? AND status='active'")
+    .get('Claude automation_drafts config_drafts').id;
   const pendingNow = db.prepare("SELECT count(*) n FROM mcp_proposals WHERE brand_id='globalvet' AND status='pending'");
   for (const id of ruleIds.slice(0, -1).slice(0, LIMITS.pendingPerBrand - pendingNow.get().n)) {
     const r = db.prepare('SELECT revision FROM automation_rules WHERE id=?').get(id).revision;
@@ -533,7 +542,9 @@ test('propuestas de punta a punta: proponer, aprobar a nombre de quien aprueba, 
       r,
       'x',
       'key',
-      'k',
+      // el de una llave activa de la marca (otra que la que propone): el mantenimiento retira al instante las de un
+      // origen que no existe, y llenar el tope ahora tarda más que una vuelta del reloj de pruebas
+      fillerSource,
       adminId,
       1,
       1,
@@ -542,7 +553,7 @@ test('propuestas de punta a punta: proponer, aprobar a nombre de quien aprueba, 
   }
   assert.equal(pendingNow.get().n, LIMITS.pendingPerBrand);
   const capped = await tool(gv2, 'proponer_accion', { accion: 'activar_regla', id: ruleIds.at(-1) });
-  assert.match(capped.error, /ya tiene 20 propuestas pendientes/);
+  assert.match(capped.error, new RegExp(`ya tiene ${LIMITS.pendingPerBrand} propuestas pendientes`));
   // otra marca no se ve afectada por el tope de ésta
   const odRule = await ok(od, 'crear_regla', { titulo: 'Regla OdonTeck', definicion: ruleDef, clientRef: ref() });
   await ok(od, 'proponer_accion', { accion: 'activar_regla', id: odRule.reglaId });

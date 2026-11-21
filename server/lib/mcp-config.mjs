@@ -184,7 +184,7 @@ export const CONFIG_TOOLS = [
     scope: CONFIG_SCOPE,
     annotations: read('Borradores del catálogo'),
     description:
-      'Aperturas y promociones EN BORRADOR de la marca y los textos de contenido (con su estado), con la revisión que hace falta para guardarlos. Los borradores no se venden ni se envían.',
+      'Aperturas y promociones EN BORRADOR de la marca, los textos de contenido (con su estado) y las imágenes de curso en borrador (imagenId para proponer «aprobar_imagen»), con la revisión que hace falta para guardarlos. Los borradores no se venden ni se envían.',
     inputSchema: obj({}),
   },
   {
@@ -840,6 +840,19 @@ export function createConfigTools({ db, crm, audit, module, actorOf, catalogue }
         textos: all("SELECT * FROM content_templates WHERE brand_id=? AND status!='archived' ORDER BY title", b).map(
           textView,
         ),
+        // Imágenes (flyers) en borrador: el imagenId es el que se propone con «aprobar_imagen».
+        imagenesEnBorrador: all(
+          `SELECT f.id,f.edition_id,f.course_id,f.title,f.revision,l.mime FROM flyers f JOIN library_files l ON l.id=f.file_id
+           WHERE f.brand_id=? AND f.status='draft' ORDER BY f.updated_at DESC LIMIT 100`,
+          b,
+        ).map(f => ({
+          imagenId: f.id,
+          aperturaId: f.edition_id,
+          cursoId: f.course_id,
+          titulo: f.title,
+          formato: f.mime,
+          revision: f.revision,
+        })),
         escenarios: scenarios,
       };
     },

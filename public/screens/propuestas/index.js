@@ -12,8 +12,15 @@
  * recorrido, los pasos de una secuencia, lo que hace una regla, el texto o el mensaje de accesos) también se muestra
  * como texto escapado: esos textos pudo escribirlos el asistente. Si la persona no tiene permiso para la acción, no se ofrecen los botones y se dice por qué.
  * Aprobar ejecuta la acción a nombre de quien aprueba (GET/POST /api/mcp-proposals; el servidor lo decide todo).
+ *
+ * Aprobar por lote: cada tarjeta que la persona puede aprobar tiene una casilla; «Aprobar las seleccionadas» pide UNA
+ * confirmación con cada acción y su nombre, y luego llama a la ruta de aprobar de cada una, EN SERIE, en el orden que
+ * da el servidor (`batchOrder`: primero se publican las aperturas, después las imágenes). No hay ruta que apruebe
+ * varias a la vez: cada aprobación conserva sus garantías y su resultado (aprobada, obsoleta o no se pudo, con el
+ * motivo) se muestra al terminar. La imagen de «Aprobar la imagen del curso» es una <img> del mismo origen que sirve el
+ * catálogo con sesión y alcance por marca (el servidor sólo manda /api/library/files/<id>).
  */
-import { html, render, when } from '../../kit/html.js';
+import { attrs, html, render, when } from '../../kit/html.js';
 import { listen } from '../../kit/events.js';
 import { isAbort } from '../../kit/api.js';
 import { dialog } from '../../kit/components/dialog.js';
@@ -32,6 +39,9 @@ const CHIP = {
   failed: 'k-chip--bad',
 };
 let enVivo = null;
+// La persona puede aprobarla ahora con un clic (lo mismo que decide si se ofrece el botón «Aprobar»).
+const aprobable = p => p.canDecide && p.status === 'pending' && p.problems.length === 0;
+const RESULTADO = { aprobada: 'k-chip--ok', obsoleta: 'k-chip--lilac', fallo: 'k-chip--bad' };
 
 function origen(p) {
   const s = p.source;
@@ -55,7 +65,7 @@ function envios(s) {
   </section>`;
 }
 
-function pendiente(p) {
+function pendiente(p, elegidas, ocupado) {
   const bloqueada = p.problems.length > 0;
   return html`<li class="k-item pp-tarjeta" data-key="${p.id}">
     <div class="k-item__head">
@@ -63,7 +73,23 @@ function pendiente(p) {
         <h3 class="k-item__title">${p.title}</h3>
         <span class="k-chip ${CHIP[p.status] || ''}">${p.statusLabel}</span>
       </div>
+      ${when(
+        aprobable(p),
+        () =>
+          html`<label class="k-check pp-elegir">
+            <input type="checkbox" data-do="elegir" data-id="${p.id}" ${attrs({ checked: elegidas.has(p.id), disabled: ocupado })} />
+            Elegir para el lote
+          </label>`,
+      )}
     </div>
+    ${when(
+      p.image,
+      () =>
+        html`<figure class="pp-imagen">
+          <img class="pp-imagen__img" src="${p.image?.url}" alt="${p.image?.alt}" loading="lazy" />
+          <figcaption class="k-hint">Imagen que se aprobaría, tal como la recibirán los clientes.</figcaption>
+        </figure>`,
+    )}
     <dl class="pp-datos">
       <div class="k-piece pp-nombre">
         <dt class="k-piece__label">Nombre</dt>
@@ -178,6 +204,11 @@ export default {
     const api = ctx.api;
     let montado = true;
     let datos = null;
+    // Lote: lo elegido, si se está aprobando (y por cuál va) y el resultado del último lote.
+    let elegidas = new Set();
+    let ocupado = false;
+    let avance = '';
+    let resultado = null;
     const marca = ctx.brand && ctx.brand !== 'all' ? ctx.brand : '';
     render(
       root,
@@ -198,6 +229,50 @@ export default {
     const cuerpo = root.querySelector('[data-slot="cuerpo"]');
     render(cuerpo, loading('Cargando propuestas…'));
 
+    function barraLote(pending) {
+      const posibles = pending.filter(aprobable);
+      if (!posibles.length && !resultado) return html``;
+      const n = posibles.filter(p => elegidas.has(p.id)).length;
+      const todas = posibles.length > 0 && n === posibles.length;
+      return html`<div class="k-card pp-lote" role="group" aria-label="Aprobar por lote">
+        <p class="pp-grupo">Aprobar por lote</p>
+        <p class="k-hint pp-lote__ayuda">
+          Elige varias y apruébalas con una sola confirmación. Se aprueban una por una, a tu nombre, y primero se publican
+          las aperturas. Si alguna cambió o ya no se puede, se dice cuál y por qué.
+        </p>
+        <div class="k-actions pp-acciones">
+          ${when(
+            posibles.length,
+            () =>
+              html`<button type="button" class="k-btn" data-do="${todas ? 'ninguna' : 'todas'}" ${attrs({ disabled: ocupado })}>
+                ${todas ? 'Quitar la selección' : 'Seleccionar todas las que puedo aprobar'}
+              </button>`,
+          )}
+          <button type="button" class="k-btn k-btn--primary" data-do="lote" ${attrs({ disabled: ocupado || n === 0 })}>
+            Aprobar las seleccionadas (${n})
+          </button>
+        </div>
+        ${when(avance, () => html`<p class="k-hint" role="status">${avance}</p>`)}
+        ${when(
+          resultado,
+          () =>
+            html`<section class="pp-resultado" aria-label="Resultado del lote">
+              <p class="pp-grupo">Resultado del lote</p>
+              <ul class="pp-resultado__lista">
+                ${(resultado || []).map(
+                  r =>
+                    html`<li class="pp-resultado__fila" data-estado="${r.estado}">
+                      <span class="k-chip ${RESULTADO[r.estado]}">${r.etiqueta}</span>
+                      <span class="pp-resultado__que"><strong>${r.title}</strong> · <span class="pp-rotulo">Nombre:</span> ${r.name || '—'}</span>
+                      ${when(r.motivo, () => html`<span class="k-hint pp-resultado__motivo">${r.motivo}</span>`)}
+                    </li>`,
+                )}
+              </ul>
+            </section>`,
+        )}
+      </div>`;
+    }
+
     function pintar() {
       const { pending, history } = datos;
       render(
@@ -205,9 +280,10 @@ export default {
         html`<div class="k-stack">
           <section aria-labelledby="${ctx.uid('pendientes')}" class="k-stack">
             <h2 class="pp-subtitulo" id="${ctx.uid('pendientes')}">Pendientes (${pending.length})</h2>
+            ${barraLote(pending)}
             ${when(
               pending.length,
-              () => html`<ul class="k-cards">${pending.map(pendiente)}</ul>`,
+              () => html`<ul class="k-cards">${pending.map(p => pendiente(p, elegidas, ocupado))}</ul>`,
               () =>
                 html`<div class="k-card">
                   ${empty({
@@ -237,7 +313,67 @@ export default {
           render(cuerpo, failure({ title: 'No se pudieron cargar las propuestas', error, retry: 'reintentar' }));
         return;
       }
-      if (montado) pintar();
+      if (!montado) return;
+      // Lo elegido sólo vale mientras siga pendiente y se pueda aprobar.
+      elegidas = new Set(datos.pending.filter(p => aprobable(p) && elegidas.has(p.id)).map(p => p.id));
+      pintar();
+    }
+
+    // Aprobar por lote: una confirmación con cada acción y su nombre; después, la ruta de aprobar de cada una, en serie.
+    async function aprobarLote() {
+      if (ocupado || !datos) return;
+      const lista = datos.pending
+        .filter(p => aprobable(p) && elegidas.has(p.id))
+        .sort((a, b) => (a.batchOrder ?? 1) - (b.batchOrder ?? 1));
+      if (!lista.length) return;
+      const eleccion = await dialog({
+        title: `Aprobar ${lista.length} ${lista.length === 1 ? 'propuesta' : 'propuestas'}`,
+        content: html`<p>Se harán ahora, a tu nombre, una por una y en este orden:</p>
+          <ol class="pp-confirma-lote">
+            ${lista.map(
+              p =>
+                html`<li class="pp-confirma-lote__fila">
+                  <span class="pp-confirma__accion">${p.title}</span>
+                  <span><span class="pp-rotulo">Nombre:</span> <span class="pp-confirma__nombre">${p.name || '—'}</span></span>
+                </li>`,
+            )}
+          </ol>
+          <p class="k-hint">Si alguna cambió desde que se propuso, no se aplica y queda como obsoleta.</p>`,
+        actions: [
+          { id: 'no', label: 'Cancelar' },
+          { id: 'si', label: `Aprobar ${lista.length}`, primary: true, autofocus: true },
+        ],
+      });
+      if (eleccion !== 'si' || !montado) return;
+      ocupado = true;
+      resultado = [];
+      for (const [i, p] of lista.entries()) {
+        avance = `Aprobando ${i + 1} de ${lista.length}…`;
+        if (montado) pintar();
+        const fila = { id: p.id, title: p.title, name: p.name };
+        try {
+          await api.post(`/api/mcp-proposals/${p.id}/approve`, {});
+          resultado.push({ ...fila, estado: 'aprobada', etiqueta: 'Aprobada' });
+        } catch (error) {
+          if (isAbort(error)) break;
+          // Obsoleta al aprobarla, o ya marcada así por el mantenimiento (otra pestaña o el repaso de cada minuto).
+          const yaObsoleta = error?.code === 'already_decided' && error?.data?.details?.status === 'stale';
+          const obsoleta = error?.code === 'stale_proposal' || yaObsoleta;
+          resultado.push({
+            ...fila,
+            estado: obsoleta ? 'obsoleta' : 'fallo',
+            etiqueta: obsoleta ? 'Obsoleta' : 'No se pudo',
+            motivo: (yaObsoleta && error.data.details.reason) || error?.message || '',
+          });
+        }
+      }
+      ocupado = false;
+      avance = '';
+      elegidas = new Set();
+      if (!montado) return;
+      const bien = resultado.filter(r => r.estado === 'aprobada').length;
+      ctx.toast(`Lote terminado: ${bien} de ${lista.length} aprobadas.`);
+      await cargar();
     }
 
     async function decidir(boton, aprobar) {
@@ -276,7 +412,26 @@ export default {
             reintentar: cargar,
             aprobar: (_evento, boton) => decidir(boton, true),
             rechazar: (_evento, boton) => decidir(boton, false),
+            todas: () => {
+              if (ocupado || !datos) return;
+              elegidas = new Set(datos.pending.filter(aprobable).map(p => p.id));
+              pintar();
+            },
+            ninguna: () => {
+              if (ocupado) return;
+              elegidas = new Set();
+              pintar();
+            },
+            lote: () => aprobarLote(),
             abrir: (_evento, boton) => ctx.go(boton.dataset.target),
+          },
+          change: {
+            elegir: (_evento, casilla) => {
+              if (ocupado) return;
+              if (casilla.checked) elegidas.add(casilla.dataset.id);
+              else elegidas.delete(casilla.dataset.id);
+              pintar();
+            },
           },
         },
         { onError: error => ctx.toast(error.message) },
