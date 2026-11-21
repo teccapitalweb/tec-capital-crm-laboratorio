@@ -387,20 +387,25 @@ test('propuestas de punta a punta: lo que se enviará, nombre aparte, origen pro
     `INSERT INTO mcp_proposals(id,brand_id,action,entity_type,entity_id,entity_revision,source_kind,source_id,
        proposed_by,status,created_at,updated_at,expires_at) VALUES(?,'globalvet','activar_regla','rule',?,1,'key',?,NULL,'pending',?,?,?)`,
   );
-  const mine = db
-    .prepare("SELECT count(*) n FROM mcp_proposals WHERE source_id=? AND status IN ('pending','approving')")
-    .get(A.id).n;
-  const filler = [];
-  for (let i = mine; i < LIMITS.pendingPerSource; i++) {
-    const id = randomUUID();
-    filler.push(id);
-    fill.run(id, 'relleno-' + i, A.id, Date.now(), Date.now(), Date.now() + DAY);
-  }
-  const another = await newRule(A.token, 'Regla para el tope por origen');
-  assert.match(
-    (await tool(A.token, 'proponer_accion', { accion: 'activar_regla', id: another })).error,
-    new RegExp(`Esta llave o conexión ya tiene ${LIMITS.pendingPerSource} propuestas pendientes`),
+  const countMine = db.prepare(
+    "SELECT count(*) n FROM mcp_proposals WHERE source_id=? AND status IN ('pending','approving')",
   );
+  const filler = [];
+  const another = await newRule(A.token, 'Regla para el tope por origen');
+  // Las filas de relleno apuntan a reglas que no existen, y el mantenimiento (cada segundo en las pruebas) las marca
+  // obsoletas. Si esa vuelta cae justo entre rellenar y proponer, la propuesta entra: se deshace y se repite el tramo.
+  let capped;
+  for (let attempt = 0; attempt < 6 && !capped; attempt++) {
+    for (let i = countMine.get(A.id).n; i < LIMITS.pendingPerSource; i++) {
+      const id = randomUUID();
+      filler.push(id);
+      fill.run(id, `relleno-${attempt}-${i}`, A.id, Date.now(), Date.now(), Date.now() + DAY);
+    }
+    const tried = await tool(A.token, 'proponer_accion', { accion: 'activar_regla', id: another });
+    if (tried.error) capped = tried.error;
+    else db.prepare('DELETE FROM mcp_proposals WHERE id=?').run(tried.propuestaId);
+  }
+  assert.match(capped, new RegExp(`Esta llave o conexión ya tiene ${LIMITS.pendingPerSource} propuestas pendientes`));
   // otra llave de la misma marca sí puede (el tope es por origen; el de la marca es otro)
   const pOther = await ok(B.token, 'proponer_accion', { accion: 'activar_regla', id: another });
   for (const id of filler) db.prepare('DELETE FROM mcp_proposals WHERE id=?').run(id);
