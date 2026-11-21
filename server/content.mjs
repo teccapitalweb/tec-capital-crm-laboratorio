@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { transaction } from './database.mjs';
-import { variables, templateValues, fillTemplate, validateTemplateBody } from './catalogue.mjs';
+import { variables, templateValues, fillTemplate, validateTemplateBody, shortTimeText } from './catalogue.mjs';
 import { linkKeys } from './ai-provider.mjs';
 import { encodeQR, qrSvgPath } from './qr.mjs';
 import { forBrand, isRealBrand } from './lib/real-mode.mjs';
@@ -472,7 +472,7 @@ export function createContent({
 <text x="96" y="186" font-size="20" fill="#8a919c">CURSO EN VIVO · ${esc(modality.toUpperCase())}</text>
 ${title.map((l, i) => `<text x="96" y="${300 + i * 78}" font-size="66" font-weight="600" fill="#1f242c">${esc(l)}</text>`).join('')}
 <text x="96" y="${300 + title.length * 78 + 30}" font-size="30" fill="#4b5565">${esc(e.name)}</text>
-<text x="96" y="${300 + title.length * 78 + 86}" font-size="30" fill="#1f242c">${esc(ctx.dateLabel)}</text>
+<text x="96" y="${300 + title.length * 78 + 86}" font-size="30" fill="#1f242c">${esc(e.starts_at === null ? ctx.dateLabel : shortTimeText(e.starts_at, e.timezone))}</text>
 ${e.instructor ? `<text x="96" y="${300 + title.length * 78 + 134}" font-size="26" fill="#67717d">Imparte ${esc(e.instructor)}</text>` : ''}
 <rect x="96" y="${H - 330}" width="${W - 192}" height="150" rx="22" fill="#f6f7fa" stroke="#e6e8ee"/>
 <text x="128" y="${H - 268}" font-size="24" fill="#67717d">${p ? 'Promoción «' + esc(p.name) + '»' : 'Inversión'}</text>

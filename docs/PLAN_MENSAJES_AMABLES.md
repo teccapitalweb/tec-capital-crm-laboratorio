@@ -39,6 +39,10 @@ Cambio de comportamiento (uno): una consulta general de pago **sin** respuesta a
 
 Cada respuesta se separó en **cuerpo** (el dato) y **cierre** (el siguiente paso): `priceBody`, `syllabusBody`, `scheduleBody`. Cuando el cliente pregunta dos o tres cosas a la vez («¿qué temas incluye, y tiene certificado?»), `several()` une los cuerpos y pone un solo cierre. Los temas del conocimiento (certificado, grabación, requisitos…) entran con su respuesta aprobada; si un tema no tiene respuesta aprobada, se omite y se contesta lo demás.
 
+## Fechas para el cliente (21 nov 2026)
+
+Tras una prueba real, `{{fecha}}` en un recorrido salía como «23 nov 2026, 7:00 p.m. · America/Mexico_City». Ahora toda fecha del catálogo que se interpola para el cliente usa la redacción de la ficha del asistente (`whenText` en `server/reply-copy.mjs`, que también usa `startText`): «lunes, 23 de noviembre de 2026, 7:00 p.m. (hora del centro de México)», sin hora si sólo se sabe el día (medianoche exacta), y una zona fuera de la lista se dice por su ciudad («hora de Guatemala»), nunca con su identificador. Vale para `{{fecha}}` y `{{vigencia}}` (`templateValues` de `server/catalogue.mjs`: recorridos, reglas, accesos, textos de Contenido y mensajes programados), los materiales de Precio, Fechas e Información (`catalogue.prepare`) y la etiqueta de fecha del catálogo (`dateLabel`), que también ve el equipo. El flyer generado (SVG) usa una versión corta en un renglón: «23 nov 2026, 7:00 p.m. (hora del centro de México)». Pruebas: `test/fecha-amable.test.mjs` y, de punta a punta, en `test/chatflows.test.mjs`.
+
 > **13 nov 2026:** los textos de «sin respuesta» y los mensajes de trato («ok», «sí», «no», «espera», «¿eres un bot?») se ampliaron en [PLAN_ASISTENTE_SIN_CALLEJONES.md](PLAN_ASISTENTE_SIN_CALLEJONES.md).
 
 ## Lo que no cambió

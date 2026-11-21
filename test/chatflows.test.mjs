@@ -1216,6 +1216,31 @@ test('«¿Qué curso te interesa?» tras un saludo: sin doble saludo, y la lista
   assert.equal(L.conversation(caro.conv).course_id, 'rep-manejo');
 });
 
+// {{fecha}} en un recorrido (segunda prueba real del 21 nov 2026): la fecha de la apertura dicha como en la ficha del
+// asistente, con la zona en palabras («hora del centro de México»), nunca «· America/Mexico_City».
+test('{{fecha}} en un recorrido sale con la fecha amable de la ficha, sin la zona técnica', async t => {
+  const L = await lab(t);
+  const { db } = L;
+  await L.enableAutomation();
+  const at = Date.UTC(2027, 2, 2, 1, 0); // lunes 1 de marzo de 2027, 7:00 p.m. en Ciudad de México
+  db.prepare("UPDATE editions SET starts_at=?,timezone='America/Mexico_City' WHERE course_id='aves'").run(at);
+  await L.publishFlow({
+    name: 'Fecha amable',
+    graph: {
+      v: 1,
+      start: 'n1',
+      variables: [],
+      nodes: [node('n1', 'start'), node('e', 'end', { text: 'Empieza el {{fecha}}.' })],
+      edges: [{ from: 'n1', port: 'next', to: 'e' }],
+    },
+  });
+  const ana = await L.customer('Ana Pérez');
+  await ana.say('Hola');
+  const said = L.outgoing(ana.conv).at(-1).text;
+  assert.equal(said, 'Empieza el lunes, 1 de marzo de 2027, 7:00 p.m. (hora del centro de México).');
+  assert.doesNotMatch(said, /America\//);
+});
+
 // WhatsApp real, con un número que atiende toda la marca: la pregunta sale a Meta como texto, igual que la del
 // asistente (la persona contesta con el número o el nombre); un webhook repetido no la manda dos veces y la respuesta
 // mueve la conversación al curso elegido.

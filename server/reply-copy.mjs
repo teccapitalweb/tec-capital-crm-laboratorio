@@ -45,18 +45,28 @@ export const noHour = (t, zone) =>
     minute: '2-digit',
     timeZone: zone || 'America/Mexico_City',
   }).format(t) === '00:00';
-export function startText(edition) {
-  if (edition?.starts_at === null || edition?.starts_at === undefined) return null;
-  const zone = edition.timezone || 'America/Mexico_City';
+// El nombre de la zona para una persona: «hora del centro de México»; una zona que no está en la lista se dice por su
+// ciudad («America/Guatemala» → «hora de Guatemala»), nunca con el identificador técnico.
+export const zoneWords = zone =>
+  ZONES[zone] ||
+  'hora de ' +
+    String(zone || 'America/Mexico_City')
+      .split('/')
+      .pop()
+      .replace(/_/g, ' ');
+// Un instante dicho para el cliente, en la zona dada: «lunes, 23 de noviembre de 2026, 7:00 p.m. (hora del centro de
+// México)»; a medianoche exacta sólo se sabe el día y se dice sin hora. Lo usan la ficha del asistente y {{fecha}}.
+export function whenText(t, zone = 'America/Mexico_City') {
+  zone = zone || 'America/Mexico_City';
   // Medianoche exacta en la zona de la edición significa «sólo se sabe el día»: no se dice «12:00 a.m.».
-  if (noHour(edition.starts_at, zone))
+  if (noHour(t, zone))
     return new Intl.DateTimeFormat('es-MX', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
       year: 'numeric',
       timeZone: zone,
-    }).format(edition.starts_at);
+    }).format(t);
   return (
     new Intl.DateTimeFormat('es-MX', {
       weekday: 'long',
@@ -66,11 +76,15 @@ export function startText(edition) {
       hour: 'numeric',
       minute: '2-digit',
       timeZone: zone,
-    }).format(edition.starts_at) +
+    }).format(t) +
     ' (' +
-    (ZONES[zone] || zone) +
+    zoneWords(zone) +
     ')'
   );
+}
+export function startText(edition) {
+  if (edition?.starts_at === null || edition?.starts_at === undefined) return null;
+  return whenText(edition.starts_at, edition.timezone || 'America/Mexico_City');
 }
 const shortDay = (t, zone) =>
   new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', timeZone: zone || 'America/Mexico_City' }).format(

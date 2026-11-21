@@ -97,7 +97,7 @@ const TEXTS = {
     copy.paymentConfirmed({ name: 'Ana', ...ORDER, perSession: true }),
   REAL_PAYMENT_METHODS: () => copy.REAL_PAYMENT_METHODS,
 };
-const NOT_TEXT = ['firstName', 'noHour', 'startText', 'priceText', 'facts', 'LAB_SWAPS'];
+const NOT_TEXT = ['firstName', 'noHour', 'startText', 'whenText', 'zoneWords', 'priceText', 'facts', 'LAB_SWAPS'];
 
 test('textos fijos del asistente: en modo real ninguno dice prueba, ejemplo ni simulado; el precio y la fecha siguen', () => {
   assert.deepEqual(

@@ -285,7 +285,9 @@ test('catálogo v0.4: ediciones, vigencia, biblioteca aprobada y mensajes inmuta
     });
     assert.match(preview.text, /Lucía/);
     assert.match(preview.text, /449\.75/);
-    assert.match(preview.text, /America\/Mexico_City/);
+    // la fecha en palabras, con la zona dicha para el cliente (docs/PLAN_MENSAJES_AMABLES.md, «Fechas para el cliente»)
+    assert.match(preview.text, /\(hora del centro de México\)/);
+    assert.doesNotMatch(preview.text, /America\//);
     assert.ok(!preview.text.includes('{{'));
     await call(
       '/api/conversations/' + conversation.id + '/materials/preview',

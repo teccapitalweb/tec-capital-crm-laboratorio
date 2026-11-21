@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { noHour } from './reply-copy.mjs';
+import { noHour, whenText, zoneWords } from './reply-copy.mjs';
 import { forBrand, isRealBrand } from './lib/real-mode.mjs';
 import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -94,15 +94,20 @@ const revision = (row, input) => {
   if (Number(input.expectedRevision) !== row.revision)
     throw fail(409, 'El registro cambió. Recarga los datos antes de guardar.');
 };
-// Medianoche exacta en la zona de la edición = sólo se conoce el día: se muestra la fecha, sin «12:00 a.m.».
-const timeText = (value, zone) =>
-  value === null
+// Una fecha del catálogo tal como la lee el cliente ({{fecha}}, {{vigencia}}, la ficha, los materiales): la misma
+// redacción que la ficha del asistente (reply-copy: whenText), con la zona dicha en palabras y nunca su identificador
+// técnico («America/Mexico_City»). Medianoche exacta = sólo se conoce el día: sin hora.
+const timeText = (value, zone) => (value === null || value === undefined ? 'Por confirmar' : whenText(value, zone));
+// La versión corta para el flyer generado (cabe en un renglón): «23 nov 2026, 7:00 p.m. (hora del centro de México)».
+export const shortTimeText = (value, zone) =>
+  value === null || value === undefined
     ? 'Por confirmar'
     : noHour(value, zone)
       ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeZone: zone }).format(value)
       : new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short', timeZone: zone }).format(value) +
-        ' · ' +
-        zone;
+        ' (' +
+        zoneWords(zone) +
+        ')';
 
 // Valores de las variables de una plantilla para un curso/edición (los usa también Contenido para las plantillas por evento).
 export function templateValues(ctx, name) {
@@ -112,7 +117,8 @@ export function templateValues(ctx, name) {
     marca: brand.name,
     curso: c.title,
     edicion: e.name,
-    fecha: ctx.dateLabel,
+    // de la edición, en palabras (sin fecha: lo que diga el catálogo, «Por confirmar» o la fecha escrita anterior)
+    fecha: e.starts_at === null || e.starts_at === undefined ? ctx.dateLabel : timeText(e.starts_at, e.timezone),
     docente: e.instructor || 'Por confirmar',
     modalidad: { online: 'En línea', in_person: 'Presencial', hybrid: 'Híbrida' }[e.modality],
     precio: money(ctx.priceCents, e.currency),
