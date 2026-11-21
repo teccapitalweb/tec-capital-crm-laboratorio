@@ -32,14 +32,23 @@ import { createRepo } from './repo.mjs';
 const DAY = 24 * 3600 * 1000;
 export const LIMITS = Object.freeze({
   pendingPerBrand: 20,
+  // por origen: una misma llave o conexión no llena sola el tope de la marca
+  pendingPerSource: 10,
   expiresMs: 7 * DAY,
   noteLength: 500,
+  nameLength: 120,
   proposePerMinute: 30,
+  withdrawPerMinute: 30,
   decidePerMinute: 30,
   history: 50,
   stuckMs: 10 * 60 * 1000,
   sweepRows: 500,
+  // las decididas (aprobadas, rechazadas, retiradas, vencidas, obsoletas, fallidas) se borran a los 90 días, por trozos
+  keepDecidedMs: 90 * DAY,
+  purgeChunk: 500,
+  purgeMaxChunks: 40,
 });
+export const SOURCE_GONE = 'La llave o conexión que la propuso ya no está activa.';
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
 const UUID = '([a-f0-9-]{36})';
 
@@ -64,6 +73,24 @@ const INVISIBLE = new RegExp(
 // Texto plano: sin caracteres de control (salvo el salto de línea), recortado.
 export const cleanNote = v =>
   typeof v === 'string' ? v.replace(/\r\n?/g, '\n').replace(INVISIBLE, '').trim().slice(0, LIMITS.noteLength) : '';
+
+// El nombre de la entidad (lo escribió el equipo o el asistente) va aparte del título, rotulado «Nombre»: en una sola
+// línea, sin caracteres de control ni de dirección del texto, sin comillas («» “” "" ‘’ '' ‹› `) y recortado. Así no
+// puede cerrar unas comillas del servidor ni parecer una frase que el CRM afirma.
+const QUOTES = /[«»“”„‟"‘’‚‛'‹›`]/g;
+// Saltos de línea (también los de Unicode) y otros invisibles que INVISIBLE no cubre, por su código.
+const NAME_BREAKS = new RegExp('[\\r\\n\\t' + String.fromCharCode(0x2028, 0x2029) + ']+', 'g');
+const NAME_HIDDEN = new RegExp('[' + String.fromCharCode(0x80) + '-' + String.fromCharCode(0x9f, 0xfeff) + ']', 'g');
+export function cleanName(v) {
+  const text = (typeof v === 'string' ? v : '')
+    .replace(NAME_BREAKS, ' ')
+    .replace(INVISIBLE, '')
+    .replace(NAME_HIDDEN, '')
+    .replace(QUOTES, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > LIMITS.nameLength ? text.slice(0, LIMITS.nameLength - 1).trimEnd() + '…' : text;
+}
 
 export default {
   name: 'mcp-proposals',
@@ -157,6 +184,9 @@ export default {
         })(),
         accessProblems: problemsOf,
         overlap: p => repo.promotionOverlap(p),
+        // para «Lo que se enviará a los clientes»: nombres dentro de la marca y la versión publicada de un recorrido
+        names: repo.names(brandId),
+        versionGraph: (flowId, version) => repo.versionGraph(brandId, flowId, version),
       });
       return { a, e, name: a.name(e), revision: e.revision, ...checked };
     }
@@ -189,14 +219,16 @@ export default {
     });
     function cardView(row, user, inspected) {
       const a = actionOf(row.action);
-      const name = inspected?.name ?? row.entity_name;
+      const name = cleanName(inspected?.name ?? row.entity_name);
       const decide = canDecide(user, row);
       return {
         id: row.id,
         brandId: row.brand_id,
         brandName: repo.brandName(row.brand_id),
         action: row.action,
-        title: `${a?.label ?? row.action} «${name}»`,
+        // Sólo la acción, texto fijo del servidor. El nombre va aparte (`name`), rotulado y saneado.
+        title: a?.label ?? 'Acción',
+        name,
         entity: {
           type: row.entity_type,
           id: row.entity_id,
@@ -206,6 +238,8 @@ export default {
         },
         effect: a?.effect ?? '',
         details: (inspected?.details ?? []).map(([label, value]) => ({ label, value: String(value ?? '') })),
+        // Lo que la entidad le dirá a los clientes, recalculado desde la base (null si la acción no envía nada).
+        sends: inspected?.sends ?? null,
         problems: inspected === null ? ['Ya no existe en esta marca.'] : (inspected?.problems ?? []),
         warnings: inspected?.warnings ?? [],
         // Escrita por el asistente: texto plano, para mostrarse aparte y escapado, nunca como instrucción.
@@ -223,7 +257,15 @@ export default {
       };
     }
 
-    // ---- mantenimiento: vencer, marcar obsoletas y soltar las que se quedaron a medias
+    // ---- ¿sigue vigente el origen? La comprobación es la del conector (server/mcp.mjs, sourceActive), que la entrega
+    // al arrancar con useSourceCheck: la misma regla con que deja pasar una llamada. Sin ella no se sabe: no se aprueba
+    // nada (503) y el mantenimiento no retira nada.
+    let sourceCheck = null;
+    const sourceKnown = () => typeof sourceCheck === 'function';
+    const sourceActive = row => sourceCheck(row.source_kind, row.source_id, row.brand_id) === true;
+
+    // ---- mantenimiento: vencer, retirar las de un origen que ya no está activo, marcar obsoletas y soltar las que se
+    // quedaron a medias
     function refresh(rows) {
       const t = now();
       const touched = new Set();
@@ -232,6 +274,11 @@ export default {
           if (row.status !== 'pending') continue;
           if (row.expires_at <= t) {
             if (repo.move(row.brand_id, row.id, 'pending', 'expired', { at: t })) touched.add(row.brand_id);
+            continue;
+          }
+          if (sourceKnown() && !sourceActive(row)) {
+            if (repo.move(row.brand_id, row.id, 'pending', 'withdrawn', { at: t, error: SOURCE_GONE }))
+              touched.add(row.brand_id);
             continue;
           }
           const a = actionOf(row.action);
@@ -244,6 +291,16 @@ export default {
       });
       for (const b of touched) emit(b);
     }
+    // Las decididas de más de 90 días se borran por trozos (cada trozo, su propia sentencia), con un tope por vuelta.
+    function purge(t = now()) {
+      let total = 0;
+      for (let i = 0; i < LIMITS.purgeMaxChunks; i++) {
+        const n = repo.purgeDecided(t - LIMITS.keepDecidedMs, LIMITS.purgeChunk);
+        total += n;
+        if (n < LIMITS.purgeChunk) break;
+      }
+      return total;
+    }
     function sweep() {
       const t = now();
       transaction(db, () => {
@@ -251,6 +308,7 @@ export default {
         repo.expire(t);
       });
       refresh(repo.allPending(LIMITS.sweepRows));
+      return { purged: purge(t) };
     }
 
     // ---- para el conector (server/lib/mcp-proposals.mjs): la llave ya se comprobó (marca, permisos y firma)
@@ -275,14 +333,32 @@ export default {
           details: { problemas: seen.problems, avisos: seen.warnings },
         });
       const t = now();
+      const source = sourceOf(key);
       const made = transaction(db, () => {
         repo.expire(t);
         const existing = repo.open(brandId, action, seen.e.id);
-        if (existing) return { row: existing, duplicate: true };
+        if (existing) {
+          // La de este mismo origen se devuelve (idempotente). La de otro se rechaza sin decir su nota ni quién.
+          if (existing.source_kind === source.sourceKind && existing.source_id === source.sourceId)
+            return { row: existing, duplicate: true };
+          throw fail(
+            409,
+            `Ya hay una propuesta pendiente para eso mismo (${a.noun}): espera a que una persona la decida.`,
+            {
+              code: 'already_proposed',
+            },
+          );
+        }
         // Lo revisado debe seguir igual al guardar (la revisión es lo que se aprobará).
         const again = snapshot(brandId, action, seen.e.id);
         if (!again || again.revision !== seen.revision)
           throw fail(409, 'Cambió mientras se revisaba: vuelve a intentarlo.', { code: 'stale_record' });
+        if (repo.pendingBySource(brandId, source.sourceKind, source.sourceId) >= LIMITS.pendingPerSource)
+          throw fail(
+            409,
+            `Esta llave o conexión ya tiene ${LIMITS.pendingPerSource} propuestas pendientes: espera a que una persona las revise o retira alguna.`,
+            { code: 'source_limit' },
+          );
         if (repo.pendingCount(brandId) >= LIMITS.pendingPerBrand)
           throw fail(
             409,
@@ -299,25 +375,32 @@ export default {
           revision: seen.revision,
           entityName: String(seen.name).slice(0, 200),
           note: cleanNote(note),
-          ...sourceOf(key),
+          ...source,
           proposedBy: actor.id,
           at: t,
           expiresAt: t + LIMITS.expiresMs,
         });
         return { row: repo.get(brandId, id), duplicate: false };
       });
-      if (!made.duplicate) {
-        audit(actor, 'mcp.proposal.create', made.row.id);
-        emit(brandId);
-      }
+      // La auditoría la escribe la herramienta del conector (una sola fila, con la propuesta en la actividad).
+      if (!made.duplicate) emit(brandId);
       return { ...made, warnings: seen.warnings };
     }
-    function listFor(brandId) {
-      refresh(repo.forBrand(brandId, LIMITS.history));
-      return repo.forBrand(brandId, LIMITS.history);
+    // El conector sólo ve y retira las propuestas de su propio origen (misma llave o mismo permiso OAuth).
+    const ownRows = key => {
+      const s = sourceOf(key);
+      return repo.forSource(key.brand_id, s.sourceKind, s.sourceId, LIMITS.history);
+    };
+    function listFor(key) {
+      refresh(ownRows(key));
+      return ownRows(key);
     }
-    function withdraw(key, actor, id) {
-      const row = typeof id === 'string' ? repo.get(key.brand_id, id) : null;
+    function withdraw(key, id) {
+      host.rate('mcp-proposals.withdraw:' + key.id, LIMITS.withdrawPerMinute);
+      const s = sourceOf(key);
+      const found = typeof id === 'string' ? repo.get(key.brand_id, id) : null;
+      // La de otro origen no existe para esta llave (no se revela que exista).
+      const row = found && found.source_kind === s.sourceKind && found.source_id === s.sourceId ? found : null;
       if (!row) throw fail(404, 'Esa propuesta no existe en esta marca.', { code: 'not_found' });
       if (!repo.move(row.brand_id, row.id, 'pending', 'withdrawn', { at: now() }))
         throw fail(
@@ -327,7 +410,6 @@ export default {
             code: 'not_pending',
           },
         );
-      audit(actor, 'mcp.proposal.withdraw', row.id);
       emit(row.brand_id);
       return repo.get(row.brand_id, row.id);
     }
@@ -348,7 +430,9 @@ export default {
       const first = locate(user, id);
       if (!canDecide(user, first)) throw fail(403, whyNot(first), { code: 'forbidden' });
       const a = actionOf(first.action);
-      // Paso atómico: pendiente → aprobándose, sólo si no venció y la entidad sigue en la revisión propuesta.
+      if (!sourceKnown()) throw fail(503, 'Las propuestas no están disponibles ahora. Inténtalo más tarde.');
+      // Paso atómico: pendiente → aprobándose, sólo si no venció, su origen sigue vigente y la entidad sigue en la
+      // revisión propuesta.
       const t = now();
       const outcome = transaction(db, () => {
         const row = repo.get(first.brand_id, first.id);
@@ -356,6 +440,10 @@ export default {
         if (row.expires_at <= t) {
           repo.move(row.brand_id, row.id, 'pending', 'expired', { at: t });
           return { refused: fail(409, 'La propuesta venció: pide una nueva.', { code: 'expired' }) };
+        }
+        if (!sourceActive(row)) {
+          repo.move(row.brand_id, row.id, 'pending', 'withdrawn', { at: t, error: SOURCE_GONE });
+          return { refused: fail(409, SOURCE_GONE, { code: 'source_inactive' }) };
         }
         const e = a ? repo.entity(row.brand_id, a.entity, row.entity_id) : null;
         if (!e || e.revision !== row.entity_revision) {
@@ -476,7 +564,11 @@ export default {
       return false;
     }
 
-    return { handle, propose, listFor, withdraw, sweep, actions: ACTIONS };
+    // El conector entrega aquí su comprobación de origen (server/mcp.mjs, useModules).
+    const useSourceCheck = fn => {
+      if (typeof fn === 'function') sourceCheck = fn;
+    };
+    return { handle, propose, listFor, withdraw, sweep, purge, useSourceCheck, actions: ACTIONS };
   },
   timers: [{ name: 'vencer', everyMs: 60_000, testEveryMs: 1000, run: api => api.sweep() }],
 };

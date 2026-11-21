@@ -38,9 +38,11 @@ export const PROPOSAL_TOOLS = [
     description:
       'Deja una PROPUESTA para que una persona del equipo la apruebe con un botón en el CRM (Ajustes → Propuestas del asistente). No ejecuta nada: aprobar lo hace una persona, con sus propios permisos. Acciones admitidas: ' +
       ACCIONES +
-      '. Usa el id real de la entidad (de listar_recorridos, listar_secuencias, listar_reglas, listar_accesos, listar_cursos…). Si todavía no se puede (un recorrido con errores, una secuencia sin pasos…) devuelve los problemas. Si la entidad cambia después de proponer, la propuesta queda obsoleta. Una sola pendiente por acción y entidad; vence a los ' +
+      '. Usa el id real de la entidad (de listar_recorridos, listar_secuencias, listar_reglas, listar_accesos, listar_cursos…). Si todavía no se puede (un recorrido con errores, una secuencia sin pasos…) devuelve los problemas. Si la entidad cambia después de proponer, la propuesta queda obsoleta. Una sola pendiente por acción y entidad (si otra conexión ya la propuso, se rechaza); hasta ' +
+      LIMITS.pendingPerSource +
+      ' pendientes por llave o conexión; vence a los ' +
       LIMITS.expiresMs / 86_400_000 +
-      ' días.',
+      ' días. Si la llave o conexión deja de estar activa, sus propuestas pendientes se retiran.',
     inputSchema: obj(
       {
         accion: { type: 'string', enum: ACTION_KEYS },
@@ -71,7 +73,7 @@ export const PROPOSAL_TOOLS = [
       openWorldHint: false,
     },
     description:
-      'Las propuestas de la marca, de la más reciente a la más antigua, con su estado: pendiente, aprobada, rechazada, retirada, vencida, obsoleta (la entidad cambió después de proponer) o no se pudo aplicar (con el motivo).',
+      'Las propuestas que dejó ESTA llave o conexión (no las de otras), de la más reciente a la más antigua, con su estado: pendiente, aprobada, rechazada, retirada, vencida, obsoleta (la entidad cambió después de proponer) o no se pudo aplicar (con el motivo).',
     inputSchema: obj({}),
   },
   {
@@ -84,14 +86,17 @@ export const PROPOSAL_TOOLS = [
       idempotentHint: false,
       openWorldHint: false,
     },
-    description: 'Retira una propuesta PENDIENTE de la marca (una ya decidida no se toca).',
+    description:
+      'Retira una propuesta PENDIENTE que dejó esta misma llave o conexión (una ya decidida, o de otra conexión, no se toca).',
     inputSchema: obj({ propuestaId: { type: 'string', maxLength: 64 } }, ['propuestaId']),
   },
 ];
 
 // `module(name)` devuelve la API de un módulo nuevo al usarla; `has(key, scope)` y `actorOf(key)` son las
-// comprobaciones de server/mcp.mjs (permiso de la llave y administrador de la marca).
-export function createProposalTools({ module, has, actorOf, scopeName = s => s }) {
+// comprobaciones de server/mcp.mjs (permiso de la llave y administrador de la marca). `audit` es la envoltura del
+// conector: la única fila de auditoría de proponer y retirar se escribe aquí, y así la fila de «Actividad del asistente»
+// lleva la propuesta (entity_type «proposal» y su id).
+export function createProposalTools({ module, has, actorOf, audit, scopeName = s => s }) {
   const api = () => {
     const found = typeof module === 'function' ? module('mcp-proposals') : null;
     if (!found || typeof found.propose !== 'function')
@@ -125,6 +130,7 @@ export function createProposalTools({ module, has, actorOf, scopeName = s => s }
         );
       const actor = actorOf(key);
       const made = await api().propose(key, actor, { action: a.accion, entityId: a.id, note: a.nota });
+      if (!made.duplicate) audit(actor, 'mcp.proposal.create', made.row.id);
       return {
         guardada: true,
         duplicada: made.duplicate,
@@ -135,12 +141,15 @@ export function createProposalTools({ module, has, actorOf, scopeName = s => s }
           : 'Quedó PENDIENTE. Una persona del equipo la aprueba o la rechaza en el CRM (Ajustes → Propuestas del asistente); tú no puedes aprobarla.',
       };
     },
+    // Sólo las propuestas de esta misma llave o conexión: no las de otra.
     listar_propuestas(key) {
-      return { aviso: AVISO, propuestas: api().listFor(key.brand_id).map(view) };
+      return { aviso: AVISO, propuestas: api().listFor(key).map(view) };
     },
     retirar_propuesta(key, a) {
       const actor = actorOf(key);
-      return { retirada: true, ...view(api().withdraw(key, actor, a.propuestaId)) };
+      const row = api().withdraw(key, a.propuestaId);
+      audit(actor, 'mcp.proposal.withdraw', row.id);
+      return { retirada: true, ...view(row) };
     },
   };
   return { run };

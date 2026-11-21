@@ -7,13 +7,16 @@
  * aprobar y sus avisos (los recalcula el servidor desde la base); debajo, el historial.
  *
  * La nota del asistente se muestra aparte, rotulada como escrita por él y escapada por la plantilla: es un dato,
- * nunca una instrucción. Si la persona no tiene permiso para la acción, no se ofrecen los botones y se dice por qué.
+ * nunca una instrucción. El título es sólo la acción (texto del servidor); el nombre de la entidad va en su propio
+ * elemento rotulado «Nombre», también en la confirmación. «Lo que se enviará a los clientes» (los mensajes de un
+ * recorrido, los pasos de una secuencia, lo que hace una regla, el texto o el mensaje de accesos) también se muestra
+ * como texto escapado: esos textos pudo escribirlos el asistente. Si la persona no tiene permiso para la acción, no se ofrecen los botones y se dice por qué.
  * Aprobar ejecuta la acción a nombre de quien aprueba (GET/POST /api/mcp-proposals; el servidor lo decide todo).
  */
 import { html, render, when } from '../../kit/html.js';
 import { listen } from '../../kit/events.js';
 import { isAbort } from '../../kit/api.js';
-import { confirm } from '../../kit/components/dialog.js';
+import { dialog } from '../../kit/components/dialog.js';
 import { empty, failure, loading } from '../../kit/components/feedback.js';
 
 const FECHA = new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
@@ -35,6 +38,23 @@ function origen(p) {
   return `${s.name || s.kindLabel} · ${s.kindLabel}${s.ownerName ? ` de ${s.ownerName}` : ''}`;
 }
 
+// «Lo que se enviará a los clientes»: lo recalcula el servidor desde la base; todo es texto y la plantilla lo escapa.
+function envios(s) {
+  return html`<section class="pp-bloque pp-envios" aria-label="${s.title}">
+    <p class="pp-grupo">${s.title}</p>
+    <p class="k-hint pp-envios__aviso">${s.note}</p>
+    <dl class="pp-detalles">
+      ${s.items.map(
+        d => html`<div class="pp-detalle">
+          <dt>${d.label}</dt>
+          <dd>${d.value}</dd>
+        </div>`,
+      )}
+    </dl>
+    ${when(s.more > 0, () => html`<p class="k-hint">y ${s.more} más (ábrelo en su pantalla para verlo completo)</p>`)}
+  </section>`;
+}
+
 function pendiente(p) {
   const bloqueada = p.problems.length > 0;
   return html`<li class="k-item pp-tarjeta" data-key="${p.id}">
@@ -45,6 +65,10 @@ function pendiente(p) {
       </div>
     </div>
     <dl class="pp-datos">
+      <div class="k-piece pp-nombre">
+        <dt class="k-piece__label">Nombre</dt>
+        <dd class="k-piece__value">${p.name || '—'}</dd>
+      </div>
       <div class="k-piece" data-tone="lilac">
         <dt class="k-piece__label">Marca</dt>
         <dd class="k-piece__value">${p.brandName}</dd>
@@ -78,6 +102,7 @@ function pendiente(p) {
           </dl>`,
       )}
     </section>
+    ${when(p.sends?.items?.length, () => envios(p.sends))}
     ${when(
       bloqueada,
       () =>
@@ -113,11 +138,9 @@ function pendiente(p) {
           html`${when(
             !bloqueada,
             () =>
-              html`<button type="button" class="k-btn k-btn--primary" data-do="aprobar" data-id="${p.id}" data-title="${p.title}">
-                  Aprobar
-                </button>`,
+              html`<button type="button" class="k-btn k-btn--primary" data-do="aprobar" data-id="${p.id}">Aprobar</button>`,
           )}
-            <button type="button" class="k-btn" data-do="rechazar" data-id="${p.id}" data-title="${p.title}">Rechazar</button>`,
+            <button type="button" class="k-btn" data-do="rechazar" data-id="${p.id}">Rechazar</button>`,
       )}
       ${when(
         p.entity.screen,
@@ -138,6 +161,7 @@ function decidida(p) {
       <strong class="pp-historia__titulo">${p.title}</strong>
       <span class="k-chip ${CHIP[p.status] || ''}">${p.statusLabel}</span>
     </div>
+    <p class="k-hint pp-historia__nombre"><span class="pp-rotulo">Nombre:</span> ${p.name || '—'}</p>
     <p class="k-hint">
       ${p.brandName} · propuesta ${fecha(p.createdAt)}${
         p.decidedByName
@@ -217,15 +241,25 @@ export default {
     }
 
     async function decidir(boton, aprobar) {
-      const si = await confirm({
+      const p = datos?.pending.find(x => x.id === boton.dataset.id);
+      if (!p) return;
+      // La acción (texto del servidor) y el nombre (dato de la marca) van en elementos distintos, rotulados.
+      const eleccion = await dialog({
         title: aprobar ? 'Aprobar propuesta' : 'Rechazar propuesta',
-        message: aprobar
-          ? `${boton.dataset.title}. Se hará ahora, a tu nombre.`
-          : `${boton.dataset.title}. No se hará nada y la propuesta pasa al historial.`,
-        confirmLabel: aprobar ? 'Aprobar' : 'Rechazar',
-        danger: !aprobar,
+        content: html`<p class="pp-confirma__accion">${p.title}</p>
+          <dl class="pp-confirma">
+            <dt>Nombre</dt>
+            <dd class="pp-confirma__nombre">${p.name || '—'}</dd>
+          </dl>
+          <p>
+            ${aprobar ? 'Se hará ahora, a tu nombre.' : 'No se hará nada y la propuesta pasa al historial.'}
+          </p>`,
+        actions: [
+          { id: 'no', label: 'Cancelar', autofocus: !aprobar },
+          { id: 'si', label: aprobar ? 'Aprobar' : 'Rechazar', primary: aprobar, danger: !aprobar, autofocus: aprobar },
+        ],
       });
-      if (!si || !montado) return;
+      if (eleccion !== 'si' || !montado) return;
       try {
         await api.post(`/api/mcp-proposals/${boton.dataset.id}/${aprobar ? 'approve' : 'reject'}`, {});
         ctx.toast(aprobar ? 'Propuesta aprobada: ya se aplicó.' : 'Propuesta rechazada.');

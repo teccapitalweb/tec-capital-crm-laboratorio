@@ -8,10 +8,11 @@ export function createRepo(db) {
   // Lo que hace falta de cada entidad para describirla, comprobar su revisión y decidir si la acción tiene sentido.
   const ENTITY = {
     chatflow: (b, id) =>
-      one('SELECT id,name,status,revision,published_version FROM chatflows WHERE id=? AND brand_id=?', id, b),
+      one('SELECT id,name,status,revision,published_version,draft FROM chatflows WHERE id=? AND brand_id=?', id, b),
     sequence: (b, id) =>
       one('SELECT id,title name,enabled,archived_at,revision,steps FROM sequences WHERE id=? AND brand_id=?', id, b),
-    rule: (b, id) => one('SELECT id,title name,status,revision FROM automation_rules WHERE id=? AND brand_id=?', id, b),
+    rule: (b, id) =>
+      one('SELECT id,title name,status,revision,definition FROM automation_rules WHERE id=? AND brand_id=?', id, b),
     edition: (b, id) =>
       one(
         'SELECT e.*,k.title course_title,k.active course_active FROM editions e JOIN courses k ON k.id=e.course_id WHERE e.id=? AND e.brand_id=?',
@@ -40,8 +41,29 @@ export function createRepo(db) {
       one('SELECT id,title name,status,revision,body,scenario FROM content_templates WHERE id=? AND brand_id=?', id, b),
   };
 
+  // Nombres de lo que nombra un recorrido, una secuencia o una regla, siempre dentro de la marca (fuera de ella no hay
+  // nombre). Para la vista previa de «Lo que se enviará a los clientes».
+  const named = sql => (b, id) => (typeof id === 'string' && id ? (one(sql, id, b)?.name ?? null) : null);
+  const NAMES = {
+    file: named('SELECT filename name FROM library_files WHERE id=? AND brand_id=?'),
+    material: named('SELECT title name FROM content_templates WHERE id=? AND brand_id=?'),
+    template: named('SELECT name FROM wa_templates WHERE id=? AND brand_id=?'),
+    sequence: named('SELECT title name FROM sequences WHERE id=? AND brand_id=?'),
+    flow: named('SELECT name FROM chatflows WHERE id=? AND brand_id=?'),
+    tag: named('SELECT name FROM contact_tags WHERE id=? AND brand_id=?'),
+    course: named('SELECT title name FROM courses WHERE id=? AND brand_id=?'),
+    user: named(
+      "SELECT u.name FROM users u WHERE u.id=? AND u.role IN ('admin','agent') AND (u.role='admin' OR EXISTS(SELECT 1 FROM brand_members m WHERE m.user_id=u.id AND m.brand_id=?))",
+    ),
+  };
+  const DECIDED = "status NOT IN ('pending','approving')";
+
   return {
     entity: (brandId, type, id) => (Object.hasOwn(ENTITY, type) ? ENTITY[type](brandId, id) : null),
+    names: brandId => Object.fromEntries(Object.entries(NAMES).map(([k, f]) => [k, id => f(brandId, id)])),
+    versionGraph: (brandId, flowId, version) =>
+      one('SELECT graph FROM chatflow_versions WHERE flow_id=? AND version=? AND brand_id=?', flowId, version, brandId)
+        ?.graph ?? null,
     // ¿Otra promoción publicada de la misma apertura coincide en fechas? (la misma regla que el catálogo)
     promotionOverlap: p =>
       Boolean(
@@ -74,17 +96,39 @@ export function createRepo(db) {
             ...brandIds,
           )
         : [],
+    // Pendientes de un mismo origen (la llave o el permiso OAuth que las propuso).
+    pendingBySource: (brandId, kind, sourceId) =>
+      one(
+        "SELECT count(*) n FROM mcp_proposals WHERE brand_id=? AND source_kind=? AND source_id=? AND status IN ('pending','approving')",
+        brandId,
+        kind,
+        sourceId,
+      ).n,
     history: (brandIds, limit) =>
       brandIds.length
         ? all(
-            `SELECT * FROM mcp_proposals WHERE brand_id IN (${brandIds.map(() => '?').join(',')}) AND status NOT IN ('pending','approving') ORDER BY updated_at DESC LIMIT ?`,
+            `SELECT * FROM mcp_proposals WHERE brand_id IN (${brandIds.map(() => '?').join(',')}) AND ${DECIDED} ORDER BY updated_at DESC LIMIT ?`,
             ...brandIds,
             limit,
           )
         : [],
-    forBrand: (brandId, limit) =>
-      all('SELECT * FROM mcp_proposals WHERE brand_id=? ORDER BY created_at DESC LIMIT ?', brandId, limit),
-    allPending: limit => all("SELECT * FROM mcp_proposals WHERE status='pending' ORDER BY created_at LIMIT ?", limit),
+    // Lo que ve el conector: sólo las de su propio origen.
+    forSource: (brandId, kind, sourceId, limit) =>
+      all(
+        'SELECT * FROM mcp_proposals WHERE brand_id=? AND source_kind=? AND source_id=? ORDER BY created_at DESC LIMIT ?',
+        brandId,
+        kind,
+        sourceId,
+        limit,
+      ),
+    allPending: limit => all("SELECT * FROM mcp_proposals WHERE status='pending' ORDER BY expires_at LIMIT ?", limit),
+    // Las decididas (todo lo que no es pendiente ni aprobándose) de antes de `before`, por trozos; devuelve cuántas borró.
+    purgeDecided: (before, limit) =>
+      db
+        .prepare(
+          `DELETE FROM mcp_proposals WHERE id IN (SELECT id FROM mcp_proposals WHERE ${DECIDED} AND updated_at<? ORDER BY updated_at LIMIT ?)`,
+        )
+        .run(before, limit).changes,
 
     insert(p) {
       db.prepare(

@@ -4,13 +4,17 @@
 const DAY = 24 * 3600_000;
 export const KEEP_MS = 90 * DAY;
 export const PAGE_MAX = 100;
+// Purga: trozos de 500 filas, en bucle hasta que no quede nada vencido, con un tope por vuelta (trozos y tiempo) para
+// no bloquear el servidor; lo que quede sale en la vuelta siguiente del reloj (cada hora). 200 trozos = 100 000 filas
+// por vuelta, muy por encima de lo que deja entrar el límite de llamadas del conector.
+export const PURGE = Object.freeze({ chunk: 500, maxChunks: 200, budgetMs: 250 });
 
 export function createRepo(db) {
   const insert = db.prepare(
     'INSERT INTO mcp_activity(brand_id,source,key_id,grant_id,user_id,tool,kind,outcome,reason,entity_type,entity_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
   );
   const purge = db.prepare(
-    'DELETE FROM mcp_activity WHERE id IN (SELECT id FROM mcp_activity WHERE created_at<? ORDER BY id LIMIT ?)',
+    'DELETE FROM mcp_activity WHERE id IN (SELECT id FROM mcp_activity WHERE created_at<? ORDER BY created_at LIMIT ?)',
   );
   const marks = list => list.map(() => '?').join(',');
   return {
@@ -29,8 +33,8 @@ export function createRepo(db) {
         r.entityId,
         r.at,
       ),
-    // Borra lo de más de 90 días por trozos; devuelve cuántas filas borró.
-    purge: (at, limit = 500) => purge.run(at - KEEP_MS, limit).changes,
+    // Borra un trozo de lo de más de 90 días; devuelve cuántas filas borró.
+    purge: (at, limit = PURGE.chunk) => purge.run(at - KEEP_MS, limit).changes,
     // Una página de la actividad de esas marcas, de la más reciente a la más antigua (cursor: el id).
     list(
       brandIds,

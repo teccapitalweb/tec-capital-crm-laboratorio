@@ -6,7 +6,9 @@
 //                   del asistente (texto plano, sólo para mostrar), de dónde vino (llave de la API u OAuth, con su
 //                   nombre y la persona dueña) y su estado. Una sola pendiente por acción y entidad (índice parcial).
 //
-// No guarda llaves, fichas ni datos de clientes: sólo el id de la llave o del permiso y su nombre visible.
+// No guarda llaves, fichas ni datos de clientes: sólo el id de la llave o del permiso y su nombre visible. Índices para
+// las consultas de server/modules/mcp-proposals/repo.mjs: pendientes por marca, historial por marca y fecha, lo de cada
+// origen (lo que ve y retira el conector, y su tope), el vencimiento y la purga de las decididas a los 90 días.
 export default {
   name: 'mcp-proposals/0001-proposals',
   after: [],
@@ -37,6 +39,11 @@ export default {
       CREATE INDEX mcp_proposals_brand ON mcp_proposals(brand_id, status, created_at);
       CREATE UNIQUE INDEX mcp_proposals_one_open ON mcp_proposals(brand_id, action, entity_id)
         WHERE status IN ('pending','approving');
+      CREATE INDEX mcp_proposals_history ON mcp_proposals(brand_id, updated_at);
+      CREATE INDEX mcp_proposals_source ON mcp_proposals(brand_id, source_kind, source_id, created_at);
+      CREATE INDEX mcp_proposals_due ON mcp_proposals(status, expires_at);
+      CREATE INDEX mcp_proposals_decided ON mcp_proposals(updated_at)
+        WHERE status NOT IN ('pending','approving');
     `);
   },
 };

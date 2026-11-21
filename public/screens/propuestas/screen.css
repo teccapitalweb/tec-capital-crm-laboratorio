@@ -66,6 +66,38 @@
   white-space: pre-line;
 }
 
+.pp-envios__aviso {
+  margin: 0;
+}
+
+.pp-historia__nombre,
+.pp-confirma__nombre,
+.pp-nombre dd {
+  overflow-wrap: anywhere;
+}
+
+.pp-rotulo,
+.pp-confirma dt {
+  font-weight: var(--weight-bold);
+}
+
+.pp-confirma__accion {
+  margin: 0 0 var(--space-2);
+  font-weight: var(--weight-bold);
+}
+
+.pp-confirma {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-3);
+}
+
+.pp-confirma dd {
+  margin: 0;
+  min-width: 0;
+}
+
 .pp-lista {
   margin: 0;
   padding-left: var(--space-8);

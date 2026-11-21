@@ -7,7 +7,8 @@
 //                  la entidad que la propia herramienta audita (tipo e id) y la fecha.
 //
 // Nunca guarda los argumentos ni la respuesta de la herramienta, ni texto que venga del asistente o de clientes: sólo
-// claves cerradas e ids. Se purga a los 90 días.
+// claves cerradas e ids. Se purga a los 90 días. Índices para las consultas de server/modules/mcp-activity/repo.mjs:
+// por marca, por conexión (llave o permiso), «sólo escrituras», «sólo rechazadas» y la purga por fecha.
 export default {
   name: 'mcp-activity/0001-activity',
   after: [], // tabla propia; sólo referencia tablas de la escalera
@@ -31,6 +32,8 @@ export default {
       CREATE INDEX mcp_activity_brand ON mcp_activity(brand_id,id);
       CREATE INDEX mcp_activity_key ON mcp_activity(key_id,id) WHERE key_id IS NOT NULL;
       CREATE INDEX mcp_activity_grant ON mcp_activity(grant_id,id) WHERE grant_id IS NOT NULL;
-      CREATE INDEX mcp_activity_created ON mcp_activity(created_at);`);
+      CREATE INDEX mcp_activity_created ON mcp_activity(created_at);
+      CREATE INDEX mcp_activity_writes ON mcp_activity(brand_id,id) WHERE kind='write';
+      CREATE INDEX mcp_activity_problems ON mcp_activity(brand_id,id) WHERE outcome!='ok';`);
   },
 };

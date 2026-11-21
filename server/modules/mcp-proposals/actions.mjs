@@ -9,8 +9,28 @@
 // aprueba hace falta (el mismo que pide su pantalla; la ruta lo vuelve a comprobar); qué pasará al aprobarla; cómo se
 // revisa si tiene sentido (check, síncrono, con los datos de la base) y la ruta del módulo que la ejecuta (request), la
 // misma que pulsa el botón de su pantalla, con la revisión guardada al proponer como expectedRevision.
+//
+// Lo que la entidad le dirá a los clientes (los mensajes de un recorrido, los pasos de una secuencia, lo que hace una
+// regla) sale en `sends` (./preview.mjs), recalculado desde la base: esos textos pudo escribirlos el asistente.
+import { flowSends, plain, ruleSends, sendsOf, sequenceSends } from './preview.mjs';
+
 const DRAFTS = 'automation_drafts';
 const CONFIG = 'config_drafts';
+
+// El catálogo guarda la apertura completa y la normaliza al guardar (recorta y quita espacios, y deja de marcarla como
+// apertura del catálogo anterior). Publicar desde una propuesta no debe cambiar nada más que el estado: si algún dato
+// quedaría distinto, no se aprueba desde aquí (se dice cuál) y se corrige en el Catálogo.
+const same = (v, n) => typeof v === 'string' && v === v.trim().slice(0, n);
+export function editionRoundTrip(e) {
+  const out = [];
+  if (!same(e.name, 120)) out.push('nombre');
+  if (!same(e.instructor, 120)) out.push('docente');
+  if (!same(e.location, 250)) out.push('lugar');
+  if (!same(e.info_url, 1000)) out.push('enlace de información');
+  if (!same(e.timezone, 80)) out.push('zona horaria');
+  if (e.legacy) out.push('marca de apertura del catálogo anterior');
+  return out;
+}
 
 const money = (cents, currency) => {
   try {
@@ -54,10 +74,11 @@ export const ACTIONS = Object.freeze({
     effect:
       'Se guarda una versión nueva con el borrador actual. Si el recorrido ya está activo, atiende con esa versión desde ese momento; si no, sigue sin atender hasta que alguien lo active. Se puede volver a publicar o pausar en Automatización.',
     name: e => e.name,
-    check(e) {
+    check(e, ctx) {
       const problems = [];
       if (e.status === 'archived') problems.push('El recorrido está archivado.');
-      return { problems, warnings: [], details: [] };
+      // lo que se publicaría es el borrador actual
+      return { problems, warnings: [], details: [], sends: flowSends(e.draft, ctx.names) };
     },
     // Los errores de revisión impiden publicar (los mismos que la pantalla y revisar_recorrido); los avisos se muestran.
     review: { module: 'chatflows', method: 'POST', path: id => `/api/chatflows/${id}/validate`, issues: r => r.issues },
@@ -86,10 +107,12 @@ export const ACTIONS = Object.freeze({
       if (e.published_version === null) problems.push('Publica el recorrido antes de activarlo.');
       if (!ctx.automationOn)
         warnings.push('La automatización de la marca está apagada: el recorrido no atenderá hasta encenderla.');
+      // lo que atenderá es la versión publicada (no el borrador)
       return {
         problems,
         warnings,
         details: e.published_version === null ? [] : [['Versión que atenderá', 'Versión ' + e.published_version]],
+        sends: e.published_version === null ? null : flowSends(ctx.versionGraph(e.id, e.published_version), ctx.names),
       };
     },
     request: (e, revision) => ['chatflows', 'POST', `/api/chatflows/${e.id}/activate`, { expectedRevision: revision }],
@@ -113,7 +136,7 @@ export const ACTIONS = Object.freeze({
       if (!n) problems.push('Agrega al menos un paso antes de encenderla.');
       if (!ctx.automationOn)
         warnings.push('La automatización de la marca está apagada: la secuencia no enviará nada hasta encenderla.');
-      return { problems, warnings, details: [['Pasos', String(n)]] };
+      return { problems, warnings, details: [['Pasos', String(n)]], sends: sequenceSends(e.steps, ctx.names) };
     },
     request: (e, revision) => ['sequences', 'POST', `/api/sequences/${e.id}/enable`, { expectedRevision: revision }],
   },
@@ -134,7 +157,7 @@ export const ACTIONS = Object.freeze({
       else if (e.status === 'active') problems.push('La regla ya está encendida.');
       if (!ctx.automationOn)
         warnings.push('La automatización de la marca está apagada: la regla no correrá hasta encenderla.');
-      return { problems, warnings, details: [] };
+      return { problems, warnings, details: [], sends: ruleSends(e.definition, ctx.names) };
     },
     // Lo que le falta para poder encenderse (material sin aprobar, recorrido inactivo…), con la misma regla del módulo.
     review: {
@@ -153,7 +176,7 @@ export const ACTIONS = Object.freeze({
     permission: 'catalogue',
     screen: { view: 'courses', label: 'Catálogo' },
     effect:
-      'La apertura queda a la venta: el asistente la ofrece con esta fecha, precio y cupo. Se puede devolver a borrador en el Catálogo.',
+      'La apertura queda a la venta: el asistente la ofrece a los clientes con estos datos. Aprobar sólo cambia su estado: no cambia su precio ni su cupo, así que publicarla no genera por sí mismo avisos de precio o cupo ni eventos de webhooks. Desde ese momento, cada cambio de precio o de cupo de esta apertura sí avisa al equipo y sale como evento a los destinos de webhooks configurados de la marca. Se puede devolver a borrador en el Catálogo.',
     name: e => e.course_title + ' · ' + e.name,
     check(e, ctx) {
       const problems = [];
@@ -162,14 +185,27 @@ export const ACTIONS = Object.freeze({
       if (!e.course_active) problems.push('El curso está archivado.');
       if ((!e.legacy && e.starts_at === null) || (e.starts_at !== null && e.starts_at <= ctx.now))
         problems.push('Para publicar, la apertura necesita una fecha de inicio futura.');
+      const changes = editionRoundTrip(e);
+      if (changes.length)
+        problems.push(
+          `Publicarla desde aquí cambiaría además: ${changes.join(', ')}. Ábrela y guárdala en el Catálogo antes de aprobar.`,
+        );
       return {
         problems,
         warnings: [],
         details: [
+          ['Apertura', plain(e.name, 120)],
           ['Inicio', when(e.starts_at, e.timezone)],
+          ['Fin', when(e.ends_at, e.timezone)],
           ['Precio', money(e.price_cents, e.currency)],
+          ...(e.session_price_cents === null || e.session_price_cents === undefined
+            ? []
+            : [['Precio por sesión', money(e.session_price_cents, e.currency)]]),
           ['Cupo', e.capacity === null ? 'Sin límite' : `${e.available_seats ?? e.capacity} de ${e.capacity}`],
           ['Modalidad', MODALITY[e.modality] || e.modality],
+          ['Docente', plain(e.instructor, 120) || 'Por confirmar'],
+          ...(e.location ? [['Lugar', plain(e.location, 250)]] : []),
+          ...(e.info_url ? [['Enlace de información', plain(e.info_url, 300)]] : []),
         ],
       };
     },
@@ -202,7 +238,7 @@ export const ACTIONS = Object.freeze({
     entity: 'course_access',
     scope: DRAFTS,
     noun: 'entrega de accesos',
-    label: 'Encender la entrega automática de accesos de',
+    label: 'Encender la entrega automática de accesos',
     permission: 'access',
     screen: { view: 'accesos', label: 'Accesos' },
     effect:
@@ -216,7 +252,12 @@ export const ACTIONS = Object.freeze({
       if (e.enabled) problems.push('La entrega de accesos ya está encendida.');
       problems.push(...ctx.accessProblems(e.body, e));
       if (e.edition_status !== 'published') warnings.push('La apertura todavía no está a la venta.');
-      return { problems, warnings, details: [['Mensaje que recibirá quien pague', e.body]] };
+      return {
+        problems,
+        warnings,
+        details: [],
+        sends: sendsOf([{ label: 'Mensaje que recibirá quien pague', value: e.body, max: 4000 }]),
+      };
     },
     request: (e, revision) => [
       'course-access',
@@ -249,6 +290,8 @@ export const ACTIONS = Object.freeze({
         problems,
         warnings: [],
         details: [
+          ['Promoción', plain(e.name, 120)],
+          ['Apertura', plain(`${e.course_title} · ${e.edition_name}`, 250)],
           ['Precio', `${money(e.price_cents, e.currency)} (regular ${money(e.edition_price, e.currency)})`],
           ['Vigencia', `${when(e.starts_at, e.timezone)} → ${when(e.ends_at, e.timezone)}`],
         ],
@@ -282,7 +325,12 @@ export const ACTIONS = Object.freeze({
       const problems = [];
       if (e.status === 'approved') problems.push('El texto ya está publicado.');
       else if (e.status === 'archived') problems.push('El texto está archivado.');
-      return { problems, warnings: [], details: [['Texto', e.body]] };
+      return {
+        problems,
+        warnings: [],
+        details: [],
+        sends: sendsOf([{ label: 'Texto', value: e.body, max: 4000 }]),
+      };
     },
     request: (e, revision) => [
       'catalogue',
@@ -312,7 +360,8 @@ export const STATUS = Object.freeze({
   approving: 'Aprobándose',
   approved: 'Aprobada',
   rejected: 'Rechazada',
-  withdrawn: 'Retirada por el asistente',
+  // por el asistente, o sola si la llave o conexión que la propuso ya no está activa (el motivo lo dice)
+  withdrawn: 'Retirada',
   expired: 'Vencida',
   stale: 'Obsoleta',
   failed: 'No se pudo aplicar',

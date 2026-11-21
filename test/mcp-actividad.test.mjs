@@ -85,12 +85,23 @@ test('retención: se borra lo de más de 90 días, por trozos; un registro que f
   const insert = db.prepare(
     "INSERT INTO mcp_activity(brand_id,source,key_id,tool,kind,outcome,created_at) VALUES('globalvet','key','k1','resumen','read','ok',?)",
   );
-  for (let i = 0; i < 620; i++) insert.run(now - KEEP_MS - 1000 - i);
+  for (let i = 0; i < 1620; i++) insert.run(now - KEEP_MS - 1000 - i);
   insert.run(now - KEEP_MS + 60_000); // dentro de los 90 días
-  assert.equal(api.purge(), 500, 'por trozos de 500');
-  assert.equal(api.purge(), 120);
+  // con un tope por vuelta (trozos), se detiene en él; lo demás sale en la vuelta siguiente
+  assert.equal(api.purge({ chunk: 100, maxChunks: 3 }), 300, 'tope de trozos por vuelta');
+  // en una vuelta normal borra por trozos EN BUCLE hasta vaciar lo vencido (antes: 500 por vuelta, 12 000 al día)
+  assert.equal(api.purge(), 1320);
   assert.equal(api.purge(), 0);
   assert.equal(db.prepare('SELECT count(*) n FROM mcp_activity').get().n, 2);
+  // los filtros «sólo escrituras» y «sólo rechazadas» tienen su índice (y la purga, el de la fecha)
+  const plan = sql => JSON.stringify(db.prepare('EXPLAIN QUERY PLAN ' + sql).all());
+  const page = "SELECT a.id FROM mcp_activity a WHERE a.brand_id IN ('globalvet','odonteck') AND ";
+  assert.match(plan(page + "a.kind='write' ORDER BY a.id DESC LIMIT 51"), /mcp_activity_writes/);
+  assert.match(plan(page + "a.outcome!='ok' ORDER BY a.id DESC LIMIT 51"), /mcp_activity_problems/);
+  assert.match(
+    plan('SELECT id FROM mcp_activity WHERE created_at<1 ORDER BY created_at LIMIT 500'),
+    /mcp_activity_created/,
+  );
   // sin marca la fila no se puede escribir: lo dice en la consola y no lanza
   const errors = [];
   const original = console.error;

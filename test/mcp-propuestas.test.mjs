@@ -269,10 +269,14 @@ test('propuestas de punta a punta: proponer, aprobar a nombre de quien aprueba, 
   assert.equal(p1.estado, 'pending');
   assert.equal(p1.duplicada, false);
   assert.match(p1.que, /^Publicar el recorrido «Venta guiada \(propuesta\)»$/);
-  // duplicado: la misma acción sobre la misma entidad devuelve la pendiente, no crea otra
-  const dup = await ok(gv2, 'proponer_accion', { accion: 'publicar_recorrido', id: flow.recorridoId });
+  // duplicado: la misma acción sobre la misma entidad, desde la misma llave, devuelve la pendiente, no crea otra
+  const dup = await ok(gv, 'proponer_accion', { accion: 'publicar_recorrido', id: flow.recorridoId });
   assert.equal(dup.duplicada, true);
   assert.equal(dup.propuestaId, p1.propuestaId);
+  // desde OTRA llave se rechaza, sin revelar la nota ni quién la propuso
+  const other = await tool(gv2, 'proponer_accion', { accion: 'publicar_recorrido', id: flow.recorridoId });
+  assert.match(other.error, /Ya hay una propuesta pendiente para eso mismo \(recorrido\)/);
+  assert.doesNotMatch(other.error, /script|instrucciones|Claude|Administración|propuestaId|[a-f0-9]{8}-[a-f0-9]{4}/);
   assert.equal(db.prepare("SELECT count(*) n FROM mcp_proposals WHERE action='publicar_recorrido'").get().n, 1);
   const pRow = proposal(p1.propuestaId);
   assert.equal(pRow.note, NOTE, 'la nota se guarda como texto plano, sin interpretar');
@@ -299,7 +303,9 @@ test('propuestas de punta a punta: proponer, aprobar a nombre de quien aprueba, 
   // ---- la pantalla: lo recalcula el servidor; la nota va aparte, tal cual (la pantalla la escapa)
   const view = await call(origin, '/api/mcp-proposals', { cookie: approver });
   const c1 = view.pending.find(p => p.id === p1.propuestaId);
-  assert.equal(c1.title, 'Publicar el recorrido «Venta guiada (propuesta)»');
+  // el título es sólo la acción; el nombre va aparte
+  assert.equal(c1.title, 'Publicar el recorrido');
+  assert.equal(c1.name, 'Venta guiada (propuesta)');
   assert.equal(c1.note, NOTE);
   assert.equal(c1.canDecide, true);
   assert.deepEqual(c1.problems, []);

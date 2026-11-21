@@ -363,6 +363,25 @@ export function createMcp({
       );
     return u;
   };
+  // ¿Sigue vigente el origen de una propuesta (la llave o el permiso OAuth que la dejó)? La misma regla con que se deja
+  // pasar una llamada al conector: la llave activa y sin caducar (integrations.keyInUse, la de authenticate) o el
+  // permiso OAuth no revocado y con algún permiso vigente (mcp-oauth grantInUse, la de su authenticate), de esa marca, y
+  // quien la creó o la autorizó sigue activo y con acceso a la marca (creatorOf). La usa server/modules/mcp-proposals.
+  function sourceActive(kind, id, brandId) {
+    let key = null;
+    if (kind === 'key') key = integrations.keyInUse?.(id) ?? null;
+    else if (kind === 'oauth') {
+      const oauth = moduleOf('mcp-oauth');
+      key = oauth?.enabled ? (oauth.grantInUse?.(id) ?? null) : null;
+    }
+    if (!key || key.brand_id !== brandId) return false;
+    try {
+      creatorOf(key);
+      return true;
+    } catch {
+      return false;
+    }
+  }
   // Ejecuta una ruta del catálogo en el mismo proceso: mismas validaciones, historial, revisiones y eventos que la pantalla.
   async function dispatch(user, method, path, input) {
     const req = Object.assign(Readable.from([Buffer.from(JSON.stringify(input))]), { method, url: path, headers: {} });
@@ -695,7 +714,7 @@ export function createMcp({
   // Propuestas que aprueba una persona: el conector sólo propone, lista y retira las pendientes.
   Object.assign(
     run,
-    createProposalTools({ module: name => moduleOf(name), has, actorOf, scopeName: integrations.scopeName }).run,
+    createProposalTools({ module: name => moduleOf(name), has, actorOf, audit, scopeName: integrations.scopeName }).run,
   );
 
   const rpcError = (id, code, message) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
@@ -846,7 +865,10 @@ export function createMcp({
     handle,
     tools: TOOLS,
     useModules(get) {
-      if (typeof get === 'function') moduleOf = get;
+      if (typeof get !== 'function') return;
+      moduleOf = get;
+      // Propuestas: sólo se aprueban mientras su origen siga vigente, con la regla del conector.
+      get('mcp-proposals')?.useSourceCheck?.(sourceActive);
     },
   };
 }

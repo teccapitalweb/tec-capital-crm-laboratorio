@@ -808,6 +808,13 @@ export function createIntegrations({
     }
     return found;
   }
+  const expired = key => key.expires_at !== null && key.expires_at !== undefined && key.expires_at <= now();
+  // La misma regla que deja pasar una llave (activa y sin caducar), por su id y sin la llave en claro: la usa el conector
+  // para saber si el origen de una propuesta sigue vigente (server/mcp.mjs, sourceActive). Devuelve la fila o null.
+  function keyInUse(id) {
+    const key = typeof id === 'string' ? db.prepare('SELECT * FROM api_keys WHERE id=?').get(id) : null;
+    return key && key.status === 'active' && !expired(key) ? key : null;
+  }
   // Llave de la cabecera Authorization. Los intentos con llaves falsas se frenan por IP. Una llave caducada (también
   // la anterior de una rotación, pasada su convivencia) responde 401 `key_expired`.
   function identify(req, ip) {
@@ -821,7 +828,7 @@ export function createIntegrations({
       rate('apibad:' + ip, 30);
       throw fail(401, 'Llave no válida o revocada.', { code: 'unauthorized' });
     }
-    if (key.expires_at !== null && key.expires_at <= now())
+    if (expired(key))
       throw fail(401, 'Esta llave caducó. Crea o rota una llave en Operación → Sistema → API y webhooks.', {
         code: 'key_expired',
       });
@@ -1340,6 +1347,7 @@ export function createIntegrations({
     actorOf,
     test,
     authenticate,
+    keyInUse,
     scopesOf: key => parse(key.scopes, []),
     scopeName: s => SCOPES[s] || s,
   };

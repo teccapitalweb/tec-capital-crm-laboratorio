@@ -36,7 +36,7 @@ async function proposeRule(request, baseURL, title) {
     titulo: title,
     definicion: {
       trigger: { type: 'keyword', mode: 'contains', words: ['propuesta-ui-' + randomUUID().slice(0, 8)] },
-      actions: [{ type: 'send_text', text: 'Respuesta de la prueba de propuestas.' }],
+      actions: [{ type: 'send_text', text: 'Respuesta de la prueba de propuestas. <i>sin cursiva</i>' }],
     },
     clientRef: 'ui-prop-' + randomUUID(),
   });
@@ -61,8 +61,17 @@ test('propuestas: la nota del asistente sale escapada y aprobar enciende la regl
 
   const card = page.locator('#page .pp-tarjeta', { hasText: title });
   await expect(card).toBeVisible();
-  await expect(card.locator('.k-item__title')).toHaveText(`Encender la regla «${title}»`);
+  // el título es sólo la acción; el nombre va en su propia pieza rotulada
+  await expect(card.locator('.k-item__title')).toHaveText('Encender la regla');
+  await expect(card.locator('.pp-nombre')).toContainText('Nombre');
+  await expect(card.locator('.pp-nombre dd')).toHaveText(title);
   await expect(card).toContainText('Qué pasará al aprobar');
+  // lo que se enviará a los clientes, escapado
+  const sends = card.locator('.pp-envios');
+  await expect(sends).toContainText('Lo que se enviará a los clientes');
+  await expect(sends).toContainText('pudo escribirlos el asistente');
+  await expect(sends).toContainText('Respuesta de la prueba de propuestas. <i>sin cursiva</i>');
+  await expect(sends.locator('i')).toHaveCount(0);
   await expect(card).toContainText('GlobalVet');
   await expect(card.locator('.pp-nota__quien')).toContainText('Nota escrita por el asistente');
   // escapada: el texto se ve tal cual y no hay etiquetas pintadas dentro de la nota
@@ -72,7 +81,8 @@ test('propuestas: la nota del asistente sale escapada y aprobar enciende la regl
 
   await card.getByRole('button', { name: 'Aprobar' }).click();
   const dialog = page.locator('.k-dialog');
-  await expect(dialog).toContainText(`Encender la regla «${title}»`);
+  await expect(dialog.locator('.pp-confirma__accion')).toHaveText('Encender la regla');
+  await expect(dialog.locator('.pp-confirma__nombre')).toHaveText(title);
   await dialog.getByRole('button', { name: 'Aprobar' }).click();
   await expect(page.locator('#page .pp-tarjeta', { hasText: title })).toHaveCount(0);
   const done = page.locator('#page .pp-historia', { hasText: title });

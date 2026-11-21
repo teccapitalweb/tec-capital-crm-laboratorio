@@ -6,11 +6,11 @@
 //  · GET /api/mcp-activity: con la sesión del equipo, sólo de las marcas donde la persona administra las llaves y los
 //    asistentes (la misma regla que la lista de conexiones de mcp-oauth). El conector no tiene ninguna herramienta para
 //    leer ni borrar este registro.
-//  · Se purga a los 90 días, por trozos, con un reloj.
+//  · Se purga a los 90 días con un reloj: por trozos, en bucle hasta vaciar lo vencido, con un tope por vuelta.
 import { TOOLS } from '../../mcp.mjs';
 import { SCOPES } from '../../integrations.mjs';
 import { ENTITY_LABELS, REASONS, TOOL_LABELS, reasonOf } from '../../lib/mcp-activity-labels.mjs';
-import { KEEP_MS, PAGE_MAX, createRepo } from './repo.mjs';
+import { KEEP_MS, PAGE_MAX, PURGE, createRepo } from './repo.mjs';
 
 // Ver la actividad es de quien administra las llaves y los asistentes de esa marca.
 const ADMIN_PERMISSION = 'developer.keys.manage';
@@ -161,7 +161,19 @@ export default {
       return true;
     }
 
-    const purge = () => repo.purge(now());
+    // Borra por trozos en bucle hasta que no quede nada vencido o se llegue al tope de la vuelta (trozos o tiempo).
+    // Cada trozo es su propia sentencia: entre uno y otro el servidor sigue atendiendo. Devuelve cuántas filas borró.
+    function purge({ chunk = PURGE.chunk, maxChunks = PURGE.maxChunks, budgetMs = PURGE.budgetMs } = {}) {
+      const started = Date.now();
+      const at = now();
+      let total = 0;
+      for (let i = 0; i < maxChunks; i++) {
+        const n = repo.purge(at, chunk);
+        total += n;
+        if (n < chunk || Date.now() - started > budgetMs) break;
+      }
+      return total;
+    }
     return { handle, record, purge };
   },
 };

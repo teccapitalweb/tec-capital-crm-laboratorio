@@ -682,6 +682,18 @@ export default {
         status: 'active',
       };
     }
+    // ¿Sigue vigente este permiso, sin ficha de por medio? La misma regla de authenticate para el permiso (no revocado y
+    // con algún permiso que la persona aún puede conceder en su marca). Devuelve el objeto con forma de llave o null. La
+    // usa el conector para saber si el origen de una propuesta sigue vigente (server/mcp.mjs, sourceActive).
+    function grantInUse(grantId) {
+      if (disabled || typeof grantId !== 'string') return null;
+      const grant = repo.grantById.get(grantId);
+      if (!grant || grant.revoked_at) return null;
+      const scopes = effective(grant);
+      return scopes.length
+        ? { id: 'oauth:' + grant.id, brand_id: grant.brand_id, created_by: grant.user_id, name: grant.client_name }
+        : null;
+    }
     // Cabecera del 401 de /mcp: dónde están los metadatos para empezar el flujo.
     function challenge(req, error) {
       return (
@@ -754,6 +766,6 @@ export default {
       });
     }
 
-    return { handle, handlePublic, wellKnown, authenticate, challenge, sweep, enabled: !disabled };
+    return { handle, handlePublic, wellKnown, authenticate, grantInUse, challenge, sweep, enabled: !disabled };
   },
 };
