@@ -128,7 +128,9 @@ const PATTERNS = [
     t =>
       !/\b(no|ya no|todavia no|aun no) (me )?(quiero|voy a|pienso|deseo) (inscribir|registrar|apuntar|anotar|el curso|entrar|tomarlo)/.test(
         t,
-      ),
+      ) &&
+      // «me registré pero no me llegó nada», «ya me inscribí»: dice que ya lo hizo, no pide un pedido nuevo
+      !/\b(ya )?(me )?(registre|inscribi|apunte|anote)\b/.test(t),
   ],
   // Inscripción dicha como sustantivo o decisión: «el proceso de inscripción», «apartar mi lugar», «lo tomo», «me apunto».
   [
@@ -190,7 +192,7 @@ const PATTERNS = [
   ],
   [
     'schedule',
-    /\b(fecha|fechas|horario|horarios|calendario|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|a que hora|que hora|(que|cual|primer|ultimo|proximo) dias?|cuando (es|son|seria|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|abren|hay|toca)|para cuando|quien (lo |la |los |las |nos )?(da|dara|imparte|impartira|ensena|va a dar|va a impartir)|docente|docentes|profesor|profesora|maestro|maestra|instructor|ponente|(es|son|sera|seria) (en la|por la|de) (noche|tarde|manana)|hoy (es|hay) (la )?clase|es hoy)\b|^cuando$/,
+    /\b(fecha|fechas|horario|horarios|calendario|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|a que hora|que hora|(que|cual|primer|ultimo|proximo) dias?|cuando (es|son|seria|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|abren|hay|toca)|para cuando|quien (lo |la |los |las |nos )?(da|dara|imparte|impartira|ensena|va a dar|va a impartir)|docente|docentes|profesor|profesora|maestro|maestra|instructor|ponente|(es|son|sera|seria) (en la|por la|de) (noche|tarde|manana)|hoy (es|hay) (la )?clase|es hoy|ya empezo|ya inicio|ya comenzo|ya arranco)\b|^cuando$/,
     0.8,
   ],
   [
@@ -209,7 +211,7 @@ const PATTERNS = [
   ],
   [
     'modality',
-    /\b(modalidad|en linea|online|presencial|virtual|zoom|meet|plataforma|donde es|donde se imparte|donde me conecto|como me conecto|por donde (es|son|se da)|en vivo|ubicad[oa]s?|ubicacion|sucursal|sucursales|direccion|donde (estan|se encuentran|quedan))\b/,
+    /\b(modalidad|en linea|online|presencial|virtual|zoom|meet|plataforma|donde es|donde se imparte|donde me conecto|como me conecto|por donde (es|son|se da)|en vivo|ubicad[oa]s?|ubicacion|sucursal|sucursales|direccion|donde (estan|se encuentran|quedan)|donde se toma|donde es la clase|donde son las clases)\b/,
     0.8,
   ],
   ['recording', /\b(grabaci|grabad|graban?\b|grabar\b|no puedo asistir|repeticion|ver despues)/, 0.8],
@@ -260,7 +262,7 @@ const PATTERNS = [
   ],
   [
     'greeting',
-    /\b(hola|buen[oa]s?|buen dia|informacion|info|informes|detalles|flyer|imagen|me interesa|saludos|saber mas|cuentame|platicame|explicame)\b/,
+    /\b(hola|buen[oa]s?|buen dia|informacion|info|informes|detalles|datos del curso|flyer|imagen|me interesa|saludos|saber mas|cuentame|platicame|explicame)\b/,
     0.6,
   ],
   // Un agradecimiento no es una pregunta: «¿el curso vale la pena?» debe resolverse con conocimiento o IA, no con «¡con gusto!».
@@ -860,6 +862,13 @@ export function createReplies({
       }
       if (!sales.RECOMMEND.test(said)) return false;
       if (fromKnowledge(0.5)) return true;
+      // Nombró un tema y ningún curso de la marca lo tiene: se dice claro y se ofrece lo que sí hay.
+      if (sales.ASKS_TOPIC.test(said) && sales.topicWords(trigger.text).length) {
+        out.reply = copy.noTopicMatch(ctx, otherCourses(c));
+        out.sources.push(catalogueSource);
+        out.reason = 'Buscó un tema que ningún curso de la marca tiene (título o temario): se dice y se ofrecen los cursos que sí hay.';
+        return true;
+      }
       // «Soy estudiante, ¿me sirve?», «soy técnico, ¿puedo tomarlo?»: pregunta por ESTE curso; contesta la respuesta aprobada de requisitos.
       const req = kb.find(k => k.topic === 'requirements');
       if (req && sales.FITS.test(said)) {

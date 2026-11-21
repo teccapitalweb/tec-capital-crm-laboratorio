@@ -10,7 +10,8 @@ const plain = raw => normalize(raw).replace(/\s+/g, ' ').trim();
 // Ya pagó (verbo en pasado o un comprobante a la vista). Lo usan también el pase obligatorio a una persona y la reanudación.
 const PAID_PAST =
   /\b(pague|pagamos|ya pague|transferi|transferimos|deposite|depositamos|(hice|hicimos|realice|ya hice) (la|el|mi|los) (transferencia|deposito|pago|pagos)|listo (el|mi) (pago|deposito)|ya (quedo|esta|estan) (el|mi|los) (pago|deposito|pagos)|(ahi|aqui) (va|esta|te va|le va|les va|van|estan) (la|el|mi|los) (captura|foto|comprobante|comprobantes|voucher|baucher|bauche|ticket))\b/;
-const RECEIPT = /\b(comprobante|comprobantes|voucher|baucher|bauche|captura del pago|ficha de deposito)\b/;
+const RECEIPT =
+  /\b(comprobante|comprobantes|voucher|baucher|bauche|captura del pago|ficha de deposito|(les |te |le )?(mande|envie|mandamos|enviamos) (el|mi|la|los|las) (captura|capturas|foto|fotos|ticket|recibo))\b/;
 export const claimsPaid = t => PAID_PAST.test(t) || RECEIPT.test(t);
 
 const STATUS =
@@ -198,12 +199,15 @@ export const TIME_OBJECTION =
 // vocabulario de un ramo escrito en el código (hay marcas de veterinaria, odontología, dermocosmética…).
 // Pide una recomendación o busca cursos de un tema («¿cuál me recomiendas?», «¿tienen algo de cirugía?»).
 const ASKS_COURSE =
-  /\b(recomiend\w*|me conviene|cual (me )?(sirve|conviene|tomo)|que curso|cual curso|por cual (empiezo|empezar)|(tienen|hay|manejan|dan|ofrecen) (algo|alguno|algun curso|algun diplomado|algun taller|cursos?|diplomados?|talleres?) (de|sobre|para|con)|tienen de)\b/;
+  /\b(recomiend\w*|me conviene|cual (me )?(sirve|conviene|tomo)|que curso|cual curso|por cual (empiezo|empezar)|(tienen|hay|manejan|dan|ofrecen) (algo|alguno|algun curso|algun diplomado|algun taller|cursos?|diplomados?|talleres?) (de|sobre|para|con)|tienen de|busco (algo|un curso|cursos?|algun curso) (de|sobre|para))\b/;
 // Cuenta su perfil y pregunta si le sirve («soy estudiante, ¿me sirve?»).
 const SAYS_ROLE = /\bsoy (estudiante|tecnico|tecnica|pasante|principiante|profesional)\b/;
 export const FITS = /\b(me sirve|sirve|puedo tomar\w*|lo puedo tomar|es para mi|aplica para|me conviene este)\b/;
 export const wantsCourses = t => ASKS_COURSE.test(t) || (SAYS_ROLE.test(t) && FITS.test(t));
 export const RECOMMEND = { test: wantsCourses };
+// Busca un tema concreto («¿tienen algo de cirugía?», «busco algo de citología»), no pide una recomendación abierta.
+export const ASKS_TOPIC =
+  /\b((tienen|hay|manejan|dan|ofrecen) (algo|alguno|algun curso|algun diplomado|algun taller|cursos?|diplomados?|talleres?) (de|sobre|para|con)|tienen de|busco (algo|un curso|cursos?|algun curso) (de|sobre|para))\b/;
 // Palabras de la lengua que no dicen de qué tema se habla (no de un ramo).
 const STOP = new Set(
   'curso cursos tienen tiene tengo tenemos algo alguno alguna algun hay quiero quisiera busco recomiendas recomienda recomiendan sirve conviene cual cuales manejan dan ofrecen diplomado diplomados taller talleres tomar tomarlo para sobre como este esta ese esa estos tambien trabajo trabajar soy estudiante tecnico tecnica pasante semestre informacion info favor gracias hola puedo puede aplica bien mucho muchos mas'
@@ -242,6 +246,9 @@ export function recommend(text, courses, { max = 5 } = {}) {
     .slice(0, max)
     .map(x => x.k);
 }
+// ¿Nombró un tema? (alguna palabra con contenido después de quitar las de la lengua y las de pedir)
+export const topicWords = text =>
+  contentWords(text).filter(w => !/^(recomend|conveng|interes|algo|cursill)/.test(w));
 // ¿Lo que dice nombra temas que el curso de la conversación no cubre? (palabras con contenido que ni su título ni su
 // temario tienen). «¿este curso aplica para bovinos?» en un curso de aves: sí → no se contesta con «requisitos».
 export function notCovered(text, course) {

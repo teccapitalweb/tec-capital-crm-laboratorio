@@ -31,8 +31,8 @@ const BANK = [
   ['ok perfecto', 'thanks', 'cat'],
   // precisión nueva: antes caían en la ficha equivocada
   ['¿Qué voy a saber hacer cuando termine?', 'unknown', null], // «cuando» no es una pregunta de fechas
-  // antes «unknown» (y la IA); desde docs/PLAN_RESPUESTAS_DE_VENTA.md es posventa: sin inscripción en este chat lo ve una persona
-  ['cuando me mandan el link de la clase', 'access', 'per'],
+  // la posventa («access») sólo existe con una inscripción o un pago en la conversación (PLAN_RESPUESTAS_DE_VENTA); el simulador no los tiene
+  ['cuando me mandan el link de la clase', 'unknown', null],
   ['el curso vale la pena?', 'unknown', null], // «vale» no es precio ni agradecimiento
   ['cuanto tiempo tengo para pagar', 'payment', 'kb'], // no es la duración del curso
   ['¿Quién da el curso?', 'schedule', 'cat'], // docente: ficha de la edición, no «¿para quién es el curso?»

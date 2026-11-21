@@ -614,6 +614,18 @@ export function recommend(ctx, items, { multi = false } = {}) {
     PRICE_NOTE
   );
 }
+// Buscó un tema que ningún curso de la marca tiene.
+export const noTopicMatch = (ctx, titles) =>
+  'Por ahora no tengo un curso de ese tema en ' +
+  ctx.brand.name +
+  '. ' +
+  (titles.length
+    ? 'Estos son los que sí tenemos, además de ' +
+      ctx.course.title +
+      ':\n' +
+      titles.map(t => '• ' + t).join('\n') +
+      '\n\nSi te interesa alguno, escribe «asesor» y una persona te da los detalles.'
+    : 'Por ahora ' + ctx.course.title + ' es el curso que tenemos abierto. ¿Te cuento el precio o las fechas?');
 export const askTopic = ctx =>
   'Con gusto te recomiendo. ¿Qué tema te interesa? Así te digo cuál de los cursos de ' +
   ctx.brand.name +
