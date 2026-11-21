@@ -85,8 +85,9 @@ const EXPLICIT = [
 const NAME_IS = /mi nombre es\s+(.+)/i;
 // Palabras que nunca forman parte de un nombre: saludos, trato, quejas, pagos.
 const NOT_A_NAME = new Set(
-  'hola buenas buenos buen tardes dias noches gracias muchas mil nadie contesta contestan responde responden esposo esposa veo deposito deposite transferencia transferi pago pague pagar tarjeta quiero ok okey favor porfa ayuda curso asesor tengo estoy espero esperando urgente gracias perfecto listo correo telefono celular cel numero whatsapp datos constancia certificado diploma registro inscripcion para'
-    .split(' '),
+  'hola buenas buenos buen tardes dias noches gracias muchas mil nadie contesta contestan responde responden esposo esposa veo deposito deposite transferencia transferi pago pague pagar tarjeta quiero ok okey favor porfa ayuda curso asesor tengo estoy espero esperando urgente gracias perfecto listo correo telefono celular cel numero whatsapp datos constancia certificado diploma registro inscripcion para'.split(
+    ' ',
+  ),
 );
 const PAYMENT_WORDS = /\b(deposit\w*|transfer\w*|pag[oaue]\w*|tarjeta|cuenta|clabe|factura\w*|oxxo|spei)\b/;
 const cleanName = candidate => {
@@ -109,11 +110,21 @@ function cardName(text) {
     .map(l => l.trim())
     .filter(Boolean);
   if (lines.length < 2) return '';
-  const other = lines.some(l => EMAIL.test(l) || /\d{10}/.test(l.replace(/\D/g, '')) || /^(curso|tel|cel|correo)/i.test(l));
+  const other = lines.some(
+    l => EMAIL.test(l) || /\d{10}/.test(l.replace(/\D/g, '')) || /^(curso|tel|cel|correo)/i.test(l),
+  );
   if (!other) return '';
   for (const l of lines) {
     const n = cleanName(l.replace(/^nombre(?: completo)?\s*[:-]?\s*/i, ''));
-    if (n && n.split(' ').length === l.replace(/^nombre(?: completo)?\s*[:-]?\s*/i, '').trim().split(/\s+/).length) return n;
+    if (
+      n &&
+      n.split(' ').length ===
+        l
+          .replace(/^nombre(?: completo)?\s*[:-]?\s*/i, '')
+          .trim()
+          .split(/\s+/).length
+    )
+      return n;
   }
   return '';
 }
@@ -210,8 +221,9 @@ export const ASKS_TOPIC =
   /\b((tienen|hay|manejan|dan|ofrecen) (algo|alguno|algun curso|algun diplomado|algun taller|cursos?|diplomados?|talleres?) (de|sobre|para|con)|tienen de|busco (algo|un curso|cursos?|algun curso) (de|sobre|para))\b/;
 // Palabras de la lengua que no dicen de qué tema se habla (no de un ramo).
 const STOP = new Set(
-  'curso cursos tienen tiene tengo tenemos algo alguno alguna algun hay quiero quisiera busco recomiendas recomienda recomiendan sirve conviene cual cuales manejan dan ofrecen diplomado diplomados taller talleres tomar tomarlo para sobre como este esta ese esa estos tambien trabajo trabajar soy estudiante tecnico tecnica pasante semestre informacion info favor gracias hola puedo puede aplica bien mucho muchos mas'
-    .split(' '),
+  'curso cursos tienen tiene tengo tenemos algo alguno alguna algun hay quiero quisiera busco recomiendas recomienda recomiendan sirve conviene cual cuales manejan dan ofrecen diplomado diplomados taller talleres tomar tomarlo para sobre como este esta ese esa estos tambien trabajo trabajar soy estudiante tecnico tecnica pasante semestre informacion info favor gracias hola puedo puede aplica bien mucho muchos mas'.split(
+    ' ',
+  ),
 );
 // Palabra completa, con el plural y la vocal final de género quitados («perros» = «perro», «bovinas» = «bovino»).
 const wordKey = w => {
@@ -247,8 +259,7 @@ export function recommend(text, courses, { max = 5 } = {}) {
     .map(x => x.k);
 }
 // ¿Nombró un tema? (alguna palabra con contenido después de quitar las de la lengua y las de pedir)
-export const topicWords = text =>
-  contentWords(text).filter(w => !/^(recomend|conveng|interes|algo|cursill)/.test(w));
+export const topicWords = text => contentWords(text).filter(w => !/^(recomend|conveng|interes|algo|cursill)/.test(w));
 // ¿Lo que dice nombra temas que el curso de la conversación no cubre? (palabras con contenido que ni su título ni su
 // temario tienen). «¿este curso aplica para bovinos?» en un curso de aves: sí → no se contesta con «requisitos».
 export function notCovered(text, course) {

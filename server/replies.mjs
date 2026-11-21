@@ -332,8 +332,7 @@ export function createReplies({
           ? { intent: 'thanks', confidence: 0.5 }
           : { intent: 'unknown', confidence: 0 };
     for (const [intent, re, confidence, when] of PATTERNS)
-      if (!skip.includes(intent) && re.test(t) && (!when || when(t, String(raw || ''))))
-        return { intent, confidence };
+      if (!skip.includes(intent) && re.test(t) && (!when || when(t, String(raw || '')))) return { intent, confidence };
     return { intent: 'unknown', confidence: 0 };
   }
   // Todas las intenciones que aparecen en el mensaje, en el orden de las reglas (para contestar varias preguntas a la vez).
@@ -535,9 +534,7 @@ export function createReplies({
       c.id !== 'simulacion' && (enrolledHere(c.id) || ['paid', 'review'].includes(lastOrder(c.id)?.status));
     const ctx = catalogue.info(c.course_id, c.edition_id),
       course = ctx.course,
-      cls = forced
-        ? { intent: forced, confidence: 1 }
-        : classify(trigger.text, { skip: bought ? [] : ['access'] }),
+      cls = forced ? { intent: forced, confidence: 1 } : classify(trigger.text, { skip: bought ? [] : ['access'] }),
       situational =
         !forced &&
         CATALOGUE_INTENTS.includes(cls.intent) &&
@@ -866,7 +863,8 @@ export function createReplies({
       if (sales.ASKS_TOPIC.test(said) && sales.topicWords(trigger.text).length) {
         out.reply = copy.noTopicMatch(ctx, otherCourses(c));
         out.sources.push(catalogueSource);
-        out.reason = 'Buscó un tema que ningún curso de la marca tiene (título o temario): se dice y se ofrecen los cursos que sí hay.';
+        out.reason =
+          'Buscó un tema que ningún curso de la marca tiene (título o temario): se dice y se ofrecen los cursos que sí hay.';
         return true;
       }
       // «Soy estudiante, ¿me sirve?», «soy técnico, ¿puedo tomarlo?»: pregunta por ESTE curso; contesta la respuesta aprobada de requisitos.
@@ -977,7 +975,8 @@ export function createReplies({
       if (sales.hasCertData(data) && live) {
         const kept = nameRequest(live.id),
           // una señal débil (correo o teléfono sueltos) no trae nombre; un nombre explícito sí reemplaza al anterior
-          changedFrom = data.name && kept?.requested_name && kept.requested_name !== data.name ? kept.requested_name : null;
+          changedFrom =
+            data.name && kept?.requested_name && kept.requested_name !== data.name ? kept.requested_name : null;
         out.certData = { ...data, orderId: live.id };
         out.reply = copy.certDataThanks(user?.name, data, {
           enrolled: live.status === 'paid',
@@ -1007,7 +1006,9 @@ export function createReplies({
     ) {
       // Ya inscrita (o la oportunidad ya está ganada): no se intenta otro pedido, que fallaría y la dejaría sin respuesta.
       const st = accessApi?.forConversation(c) || null;
-      out.reply = st?.ready ? copy.alreadyEnrolled(ctx) + '\n\n' + st.text : copy.alreadyEnrolled(ctx, { advisor: true });
+      out.reply = st?.ready
+        ? copy.alreadyEnrolled(ctx) + '\n\n' + st.text
+        : copy.alreadyEnrolled(ctx, { advisor: true });
       if (st?.ready) out.accessResend = { enrollmentId: st.enrollmentId };
       out.sources.push(catalogueSource);
       out.reason =
@@ -1562,14 +1563,28 @@ export function createReplies({
   const nameRequest = orderId =>
     orderId ? db.prepare('SELECT * FROM certificate_name_requests WHERE order_id=?').get(orderId) : null;
   function saveCertData(c, messageId, d) {
-    const o = d.orderId ? db.prepare('SELECT * FROM orders WHERE id=? AND brand_id=?').get(d.orderId, c.brand_id) : null;
+    const o = d.orderId
+      ? db.prepare('SELECT * FROM orders WHERE id=? AND brand_id=?').get(d.orderId, c.brand_id)
+      : null;
     if (!o) return null;
     const t = now(),
       cur = nameRequest(o.id);
     if (!cur) {
       db.prepare(
         "INSERT INTO certificate_name_requests(id,brand_id,contact_id,order_id,conversation_id,requested_name,email,phone,message_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?)",
-      ).run(randomUUID(), c.brand_id, o.contact_id, o.id, c.id, d.name || '', d.email || '', d.phone || '', messageId, t, t);
+      ).run(
+        randomUUID(),
+        c.brand_id,
+        o.contact_id,
+        o.id,
+        c.id,
+        d.name || '',
+        d.email || '',
+        d.phone || '',
+        messageId,
+        t,
+        t,
+      );
       return { changedFrom: null };
     }
     const renamed = Boolean(d.name && d.name !== cur.requested_name);
@@ -1608,7 +1623,9 @@ export function createReplies({
       .get(c.id);
     if (!m || m.attachment_id || contacts.isOptOutText(m.text)) return null;
     const last = db
-      .prepare('SELECT action,created_at FROM reply_log WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1')
+      .prepare(
+        'SELECT action,created_at FROM reply_log WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1',
+      )
       .get(c.id);
     if (last?.action !== 'escalated') return null; // sólo tras un pase del asistente (no el nivel de la marca ni otra vía)
     if (
@@ -1623,10 +1640,7 @@ export function createReplies({
       live = order && ['pending', 'review', 'paid'].includes(order.status) ? order : null,
       data = sales.certData(m.text),
       isData =
-        !asks &&
-        live &&
-        sales.hasCertData(data) &&
-        (sales.certDataSignal(t, m.text) || sales.weakCertData(t, m.text));
+        !asks && live && sales.hasCertData(data) && (sales.certDataSignal(t, m.text) || sales.weakCertData(t, m.text));
     let saved = null;
     if (isData) saved = saveCertData(c, m.id, { ...data, orderId: live.id });
     if (asks) {
@@ -1784,7 +1798,8 @@ export function createReplies({
         buttons = null;
         keepButtons = false;
         move = null;
-        reason += ' No se pudo crear el pedido (' + String(error?.message || '').slice(0, 120) + '): pasa a una persona.';
+        reason +=
+          ' No se pudo crear el pedido (' + String(error?.message || '').slice(0, 120) + '): pasa a una persona.';
       }
     }
     const messageId = insertMessage(
