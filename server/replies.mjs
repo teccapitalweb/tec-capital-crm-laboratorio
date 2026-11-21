@@ -99,7 +99,7 @@ const PATTERNS = [
   ],
   [
     'refund',
-    /\b(reembolso|devolucion|devolver|devuelv|queja|molest|pesimo|fraude|engan)|\b(regres\w*|quiero|y|de vuelta) mi dinero\b|\bmi dinero de (vuelta|regreso)\b/,
+    /\b(reembolso|devolucion|devolver|devuelv|queja|molest|pesimo|fraude|engan)|\b(regres\w*|quiero|y|de vuelta) mi dinero\b|\bmi dinero de (vuelta|regreso)\b|\bcancel\w* (mi |el |la )?(pedido|inscripcion|compra|lugar)\b/,
     0.9,
   ],
   // «No», «no gracias», «ya no me interesa», «no quiero inscribirme»: se despide sin insistir. Va antes de «enroll» y de «greeting» («me interesa»).
@@ -120,7 +120,13 @@ const PATTERNS = [
   // «Ya realicé el pago de mi inscripción»: avisar de un pago gana siempre a la inscripción (antes creaba otro pedido).
   ['payment', /\S/, 0.85, t => sales.claimsPaid(t)],
   // «¿Ya quedó mi inscripción?»: pregunta el estado de su pedido, no pide otro.
-  ['payment', /\b((ya )?quedo (mi |la )?inscripcion|ya estoy inscrit[oa])\b/, 0.8],
+  ['payment', /\b((ya )?quedo (mi |la )?(inscripcion|lugar)|ya estoy inscrit[oa]|ya tengo (mi )?lugar)\b/, 0.8],
+  // «no me llegó la confirmación»: algo que no le llegó; lo ve una persona (sin decir que se revisa un pago)
+  [
+    'payment',
+    /\b(no|nunca|todavia no|aun no)( me)? (llego|llega|ha llegado) (la|el|mi) (confirmacion|recibo|correo de confirmacion)\b/,
+    0.8,
+  ],
   // «¿Hasta qué día me puedo registrar?» pregunta un plazo: no pide crear un pedido todavía.
   ['schedule', sales.DEADLINE, 0.8],
   [
@@ -133,6 +139,8 @@ const PATTERNS = [
       ) &&
       // «me registré pero no me llegó nada», «ya me inscribí»: dice que ya lo hizo, no pide un pedido nuevo
       !/\b(ya )?(me )?(registre|inscribi|apunte|anote)\b/.test(t) &&
+      // «aún no me inscribo, ¿hay cupo?», «si me inscribo hoy, ¿me dan descuento?»: preguntan otra cosa
+      !/\b(no|aun no|todavia no) me (inscribo|registro|apunto)\b|\bsi me (inscribo|registro|apunto)\b/.test(t) &&
       // «quiero información del registro»: pide información, no un pedido
       !/\b(informacion|info|informes)\b/.test(t),
   ],
@@ -173,7 +181,10 @@ const PATTERNS = [
     /\b(comprobante|pague|pago|pagos|pagar|transferencia|transferi|transfiero|deposito|deposite|depositar|tarjeta|oxxo|spei|factura|facturan?|facturar|cfdi|iva|meses sin intereses|msi|parcialidades|mensualidades|en (dos|2|tres|3) (partes|pagos)|numero de cuenta|cuenta bancaria|clabe|voucher|baucher|bauche)\b/,
     0.85,
     // «¿hay descuento si pago de contado?» pregunta por un descuento: lo contesta el precio
-    t => !/\b(descuentos?|promos?|promocion|promociones|ofertas?)\b/.test(t),
+    // y «¿si lo pago hoy me llega la constancia?» pregunta por la constancia
+    t =>
+      !/\b(descuentos?|promos?|promocion|promociones|ofertas?)\b/.test(t) &&
+      (sales.claimsPaid(t) || !/\b(constancia|certificado|diploma)\b/.test(t)),
   ],
   // Duración va antes que precio: «¿cuánto dura?» no es una pregunta de precio. «¿Cuánto tiempo tengo para…?» tampoco es de duración.
   [
@@ -774,7 +785,7 @@ export function createReplies({
     const paidClaim = sales.claimsPaid(said);
     const several = (only = null) => {
       if (!only) {
-        if (situational || paidClaim || !INFO.includes(intent)) return false;
+        if (situational || paidClaim || !INFO.includes(intent) || sales.DEADLINE.test(said)) return false;
         // señal de que son dos preguntas y no una: un conector («y», «también»…), una coma o dos signos de cierre de pregunta
         if (
           !/\b(y|e|tambien|ademas|aparte)\b|[,;]|\?.*\S.*\?/.test(

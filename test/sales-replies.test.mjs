@@ -330,6 +330,17 @@ test('respuestas de venta de punta a punta', async t => {
   assert.match(withCoupon.reply, /cupón/);
   db.prepare("DELETE FROM coupons WHERE id='cupon-ficticio'").run();
 
+  // frases vecinas nuevas (sonda propia tras la segunda revisión)
+  assert.equal((await sim('¿si lo pago hoy me llega la constancia?')).intent, 'certificate');
+  assert.equal((await sim('aun no me inscribo, hay cupo?')).intent, 'seats');
+  assert.notEqual((await sim('si me inscribo hoy ¿me dan descuento?')).intent, 'enroll');
+  assert.equal((await sim('no lo voy a tomar, cancelen mi pedido')).handoff, true);
+  assert.match((await sim('¿me reenvias el enlace para pagar?')).reply, /te mando tu enlace de pago/);
+  assert.equal((await sim('el link de pago no me abre')).handoff, true);
+  assert.match((await sim('no he podido pagar, ¿me guardan el lugar?')).reply, /asegurado cuando se confirma el pago/);
+  assert.match((await sim('ya casi pago, ¿cual es el ultimo dia?')).reply, /fecha de vencimiento/);
+  assert.equal((await sim('¿ya quedo mi lugar?')).intent, 'payment');
+
   // ---- reglas que no gastan IA
   const intents = {
     'buen dia': 'greeting',

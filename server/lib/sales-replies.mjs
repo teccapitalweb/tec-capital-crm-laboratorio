@@ -27,10 +27,15 @@ export const claimsPaid = t => {
 const NOT_ARRIVED = /\b(no|nunca|todavia no|aun no)( me)? (llego|llega|ha llegado|han llegado)\b/;
 // «El link para pagar no abre»: una falla del enlace de pago.
 const LINK_BROKEN =
-  /\b(link|enlace|liga|pagina|boton)\b.*\b(no abre|no funciona|no carga|no sirve|da error|marca error|no me deja)\b/;
+  /\b(link|enlace|liga|pagina|boton)\b.*\b(no (me |nos )?(abre|funciona|carga|sirve|deja)|da error|marca error)\b/;
+// «¿me reenvías el enlace para pagar?», «mándame otra vez el link»: el enlace de su pedido.
+const LINK_AGAIN =
+  /\b(reenvi\w*|vuelve\w* a mandar|vuelve\w* a enviar|me (mandas|pasas|envias|mandan|pasan) (otra vez |de nuevo )?(el|la)|mandame|pasame)\b.*\b(link|enlace|liga)\b/;
+// «¿me guardan el lugar?»: pide apartar sin pagar.
+const HOLD = /\b(guardan|guardas|apartan|apartas|reservan|reservas) (el|mi) lugar\b/;
 
 const STATUS =
-  /\b((ya )?(pudieron|pueden|podrian|alcanzaron a) (verificar|validar|revisar|confirmar|ver)|ya (verificaron|validaron|revisaron|confirmaron|vieron|checaron|registraron)|(les|te|le) llego (mi|el) (pago|deposito|transferencia|comprobante)|(estatus|status|estado) de mi (pago|pedido|inscripcion)|ya (quedo|se reflejo) (mi|el) pago|(ya )?quedo (mi |la )?inscripcion|ya estoy inscrit[oa]|(desde ayer|desde hace|y nada|y no me|nadie me (contesta|responde|dice)|no me (han )?(contestado|confirmado|respondido|dicho nada)))\b/;
+  /\b((ya )?(pudieron|pueden|podrian|alcanzaron a) (verificar|validar|revisar|confirmar|ver)|ya (verificaron|validaron|revisaron|confirmaron|vieron|checaron|registraron)|(les|te|le) llego (mi|el) (pago|deposito|transferencia|comprobante)|(estatus|status|estado) de mi (pago|pedido|inscripcion)|ya (quedo|se reflejo) (mi|el) pago|(ya )?quedo (mi |la )?(inscripcion|lugar)|ya estoy inscrit[oa]|ya tengo (mi )?lugar|(desde ayer|desde hace|y nada|y no me|nadie me (contesta|responde|dice)|no me (han )?(contestado|confirmado|respondido|dicho nada)))\b/;
 const FUTURE =
   /\b(manana|pasado manana|quincena|ahorita|al rato|mas tarde|en un rato|en la tarde|en la noche|hoy (mismo|en la tarde|en la noche)|el (lunes|martes|miercoles|jueves|viernes|sabado|domingo)|la (proxima|otra|siguiente) semana|fin de (semana|mes)|cuando (cobre|me paguen|me depositen)|en cuanto (pueda|cobre|me paguen)|en unos dias|esta semana|luego)\b/;
 const PAY_VERB =
@@ -47,10 +52,12 @@ export function paymentKind(t) {
   if (LINK_BROKEN.test(t)) return 'broken';
   if (
     STATUS.test(t) &&
-    /\b(pago|pague|pedido|comprobante|deposito|transferencia|inscripcion|deposite|transferi)\b/.test(t)
+    /\b(pago|pague|pedido|comprobante|deposito|transferencia|inscripcion|deposite|transferi|lugar)\b/.test(t)
   )
     return 'status';
   if (claimsPaid(t)) return 'paid';
+  if (LINK_AGAIN.test(t) && /\bpag\w*/.test(t)) return 'link';
+  if (HOLD.test(t)) return 'later';
   if (NOT_ARRIVED.test(t) && /\b(link|enlace|liga)\b/.test(t)) return 'link'; // «no me llegó el enlace de pago»
   if (DENIED.test(t) && NOT_ARRIVED.test(t)) return 'missing';
   if (FUTURE.test(t) && PAY_VERB.test(t)) return 'later';
@@ -180,7 +187,7 @@ const CERT_WORDS = /\b(constancia|certificado|diploma|registro|inscripcion)\b/;
 const OFFERS =
   /\b((te|les|le) (paso|mando|envio|comparto|dejo) (mis|mi) (datos|nombre|correo|cel|celular|telefono|numero|whats)|mis datos (son|para|van)|aqui (van|estan|te van|les van) mis datos)\b/;
 const HOW_NAME =
-  /\b(el nombre va (con|en)|como (pongo|escribo|pongo mi|escribo mi) (mi |el )?nombre|nombre (va )?con mayusculas)\b/;
+  /\b(el nombre va (con|en)|como (pongo|escribo|pongo mi|escribo mi) (mi |el )?nombre|nombre (va )?con mayusculas|cambiar (mi |el )?nombre)\b/;
 // Un mensaje que pide algo (que le llamen, un asesor) no es sólo un dato: no se contesta con «anoté…».
 export const ASKS_SOMETHING =
   /\b(llam\w*|marc(a|ar|en|ame|enme)|asesor\w*|persona|alguien|ayud\w*|contest\w*|urgente|queja|reembolso)\b/;
@@ -221,7 +228,7 @@ const ACCESS_NOUN =
 // Lo que pide un prospecto («el link para pagar», «me mandan información», «el temario»): nunca es posventa.
 const PROSPECT = /\b(pagar|de pago|para el pago|precio|costo|temario|informacion|info|informes|datos|ficha|flyer)\b/;
 const ACCESS_ASK =
-  /\b(no (me )?(llega|llego|ha llegado|han llegado|abre|funciona|deja|carga|puedo entrar|aparece)|donde (entro|ingreso|veo|me conecto|esta|estan|lo veo|la veo)|como (entro|ingreso|accedo|veo|me meto)|me (pasan|pasas|pasa|mandan|mandas|envian|envias|comparten|agregan|agregas|agregaran)|cuando me (mandan|envian|agregan|pasan|llega|llegan|dan)|no me (agregan|han agregado|han mandado|han enviado|llega|llego)|todavia no me|aun no me|ya empezo|como ingreso|despues del pago como|se (corto|cayo|trabo|congelo)|no se (escucha|oye|ve))\b/;
+  /\b(no (me )?(llega|llego|ha llegado|han llegado|abre|funciona|deja|carga|puedo entrar|aparece)|donde (entro|ingreso|veo|me conecto|esta|estan|lo veo|la veo)|como (entro|ingreso|accedo|veo|me meto)|me (pasan|pasas|pasa|mandan|mandas|envian|envias|comparten|agregan|agregas|agregaran)|cuando me (mandan|envian|agregan|pasan|llega|llegan|dan)|no me (agregan|han agregado|han mandado|han enviado|llega|llego)|nunca me (llego|llega|llegaron)|todavia no me|aun no me|ya empezo|como ingreso|despues del pago como|se (corto|cayo|trabo|congelo)|no se (escucha|oye|ve))\b/;
 export const ACCESS_PROBLEM =
   /\b(no (abre|funciona|deja|carga|sirve|puedo entrar)|se (corto|cayo|trabo|congelo)|no se (escucha|oye|ve)|marca error|da error)\b/;
 // Sólo la forma del mensaje: replies.mjs además exige una inscripción activa o un pedido pagado o en revisión.
