@@ -525,6 +525,9 @@ export const ACTIONS = Object.freeze({
     screen: { view: 'courses', label: 'Catálogo' },
     // En un lote va después de publicar las aperturas: la imagen se liga a los datos de su apertura ya publicada.
     batchOrder: 2,
+    // Si la apertura cambió desde que se subió la imagen, aprobar la vuelve a ligar a los datos de hoy: sólo con los
+    // avisos que la persona vio (que llevan esos datos); un aviso nuevo o distinto no se aprueba a ciegas.
+    confirmWarnings: true,
     effect:
       'La imagen queda aprobada para esta apertura: el asistente y el equipo la envían como imagen del curso mientras la apertura esté a la venta y sus datos no cambien. Si la apertura cambió desde que se subió la imagen, al aprobar se vuelve a ligar a los datos que ves aquí. Se puede archivar en el Catálogo.',
     name: e => e.course_title + ' · ' + e.edition_name,
@@ -551,9 +554,25 @@ export const ACTIONS = Object.freeze({
             : 'Publica primero la apertura (si hay una propuesta para publicarla, apruébala antes).',
         );
       }
-      if (e.binding !== bindingOf(e) && e.edition_status === 'published')
+      // Los datos de la apertura a los que la imagen queda ligada. Van en la tarjeta para compararlos con lo que dice la
+      // imagen, y DENTRO del aviso cuando la apertura cambió después de subirla: así, si vuelven a cambiar entre que la
+      // persona vio la tarjeta y aprobó, el aviso ya no es el que vio y no se aprueba (confirmWarnings).
+      const zone = e.timezone || 'America/Mexico_City';
+      const current = [
+        ['Inicio', when(e.starts_at, zone)],
+        ['Precio', money(e.price_cents, e.currency)],
+        ['Docente', plain(e.instructor, 120) || 'Sin docente'],
+        ['Modalidad', MODALITY[e.modality] || e.modality || 'Sin modalidad'],
+        ['Lugar', plain(e.location, 160) || 'Sin lugar'],
+      ];
+      // Se vuelve a ligar al aprobar cuando la apertura cambió desde la subida o cuando todavía hay que publicarla
+      // (publicar cambia su revisión). El aviso es el MISMO texto antes y después de publicarla mientras sus datos no
+      // cambien, así un lote que publica primero y aprueba después no se frena, y un cambio de precio o fecha sí.
+      if (e.binding !== bindingOf(e) || e.edition_status === 'draft')
         warnings.push(
-          'La apertura cambió desde que se subió la imagen: al aprobar se vuelve a ligar a los datos actuales de la apertura.',
+          'Al aprobar, la imagen queda ligada a los datos de hoy de la apertura (' +
+            current.map(([k, v]) => k.toLowerCase() + ': ' + v).join('; ') +
+            '). Comprueba que la imagen dice lo mismo.',
         );
       return {
         problems,
@@ -562,6 +581,7 @@ export const ACTIONS = Object.freeze({
           ['Curso', plain(e.course_title, 180)],
           ['Apertura', plain(e.edition_name, 120)],
           ['Estado de la apertura', EDITION_STATUS[e.edition_status] || e.edition_status],
+          ...current,
           ['Formato', e.mime],
         ],
         // La miniatura: la sirve la ruta del catálogo con sesión y alcance por marca (mismo origen).

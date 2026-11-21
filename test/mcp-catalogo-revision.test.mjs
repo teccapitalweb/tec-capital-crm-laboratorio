@@ -300,6 +300,74 @@ test('revisión de seguridad del alta de catálogo: siete puntos de punta a punt
     await decide(pArch.propuestaId, 200, { warningsSeen: nowCard.warnings });
     assert.equal(db.prepare('SELECT active FROM courses WHERE id=?').get(arch.id).active, 0);
   });
+  await t.test('(8) aprobar una imagen la liga a los datos que la persona vio, no a otros', async () => {
+    // Una apertura en borrador con su imagen subida por el conector y las dos propuestas (publicar y aprobar imagen).
+    const prepare = async (title, price) => {
+      const made = (
+        await api('/api/catalogue/courses', { body: { brandId: 'globalvet', title, syllabus: 'Tema' }, expected: 201 })
+      ).item;
+      const e0 = db.prepare("SELECT * FROM editions WHERE course_id=? AND status='draft'").get(made.id);
+      const save = (amount, status) =>
+        api('/api/catalogue/editions/' + e0.id, {
+          method: 'PATCH',
+          body: {
+            name: 'Julio 2027',
+            startsAt: Date.parse('2027-07-01T18:00:00Z'),
+            endsAt: null,
+            timezone: 'America/Mexico_City',
+            instructor: 'Docente',
+            modality: 'online',
+            location: '',
+            infoUrl: '',
+            capacity: null,
+            availableSeats: null,
+            price: amount,
+            sessionPrice: null,
+            currency: 'MXN',
+            status,
+            expectedRevision: db.prepare('SELECT revision FROM editions WHERE id=?').get(e0.id).revision,
+          },
+        });
+      await save(price, 'draft');
+      const up = await upload(
+        (await ok(gv.token, 'preparar_subida_imagen', { aperturaId: e0.id })).direccion,
+        png(title),
+      );
+      assert.equal(up.status, 201);
+      const publish = await ok(gv.token, 'proponer_accion', { accion: 'publicar_apertura', id: e0.id });
+      const image = await ok(gv.token, 'proponer_accion', { accion: 'aprobar_imagen', id: up.body.imagenId });
+      return { save, flyer: up.body.imagenId, publish: publish.propuestaId, image: image.propuestaId };
+    };
+    const flyerStatus = id => db.prepare('SELECT status FROM flyers WHERE id=?').get(id).status;
+    const bound = card => card.warnings.find(w => /queda ligada a los datos de hoy de la apertura/.test(w));
+
+    // a) Alguien cambia el precio y publica DESPUÉS de que la persona vio la tarjeta: no se aprueba con lo que vio.
+    const a = await prepare('Curso con imagen y precio que cambia', 500);
+    const seen = await cardOf(a.image);
+    assert.match(JSON.stringify(seen.details), /Precio/);
+    assert.match(JSON.stringify(seen.details), /\$500\.00/);
+    assert.match(bound(seen), /precio: \$500\.00/, 'el aviso lleva los datos a los que quedaría ligada');
+    await a.save(900, 'published');
+    const refused = await decide(a.image, 409, { warningsSeen: seen.warnings });
+    assert.equal(refused.code, 'warnings_changed');
+    assert.match(refused.error, /precio: \$900\.00/);
+    assert.equal(flyerStatus(a.flyer), 'draft', 'no se aprobó');
+    assert.equal(db.prepare('SELECT status FROM mcp_proposals WHERE id=?').get(a.image).status, 'pending');
+    // con la tarjeta de hoy (precio nuevo) vista, sí
+    const today = await cardOf(a.image);
+    assert.match(bound(today), /precio: \$900\.00/);
+    await decide(a.image, 200, { warningsSeen: today.warnings });
+    assert.equal(flyerStatus(a.flyer), 'approved');
+
+    // b) El lote normal no se frena: se publica la apertura y la imagen se aprueba con lo visto antes de publicarla,
+    //    porque publicar no cambia los datos del aviso.
+    const b = await prepare('Curso con imagen en un lote normal', 650);
+    const before = await cardOf(b.image);
+    assert.match(bound(before), /precio: \$650\.00/);
+    await decide(b.publish, 200, { warningsSeen: (await cardOf(b.publish)).warnings });
+    await decide(b.image, 200, { warningsSeen: before.warnings });
+    assert.equal(flyerStatus(b.flyer), 'approved');
+  });
   await t.test('(7) tope de bytes por marca y día', async () => {
     const odDraft = await draft(od.token, 'Curso de odonteck para el tope');
     const prepOd = await ok(od.token, 'preparar_subida_imagen', { cursoBorradorId: odDraft.cursoBorradorId });

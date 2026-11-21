@@ -43,7 +43,8 @@ export function createRepo(db) {
     flyer: (b, id) =>
       one(
         `SELECT f.id,f.title,f.status,f.revision,f.binding,f.file_id,f.edition_id,f.course_id,f.promotion_id,f.channel,
-           f.expires_at,e.name edition_name,e.status edition_status,e.revision edition_revision,k.title course_title,
+           f.expires_at,e.name edition_name,e.status edition_status,e.revision edition_revision,e.starts_at,
+           e.timezone,e.instructor,e.modality,e.location,e.price_cents,e.currency,k.title course_title,
            k.active course_active,k.version course_version,l.mime,l.builtin_id
          FROM flyers f JOIN editions e ON e.id=f.edition_id JOIN courses k ON k.id=f.course_id
            JOIN library_files l ON l.id=f.file_id
