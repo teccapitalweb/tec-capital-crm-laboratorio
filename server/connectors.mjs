@@ -981,24 +981,27 @@ export function metaChannel({
         const kind = IMAGE_MIME.has(m.media.mime) ? 'image' : 'document',
           withButtons = Boolean(buttons.length && text && text.length <= 1024),
           caption = !withButtons && text.length <= 1024 ? text : '';
-        parts.push({
-          type: kind,
-          [kind]: {
-            id,
-            ...(caption ? { caption } : {}),
-            ...(kind === 'document' ? { filename: String(m.media.filename || 'archivo').slice(0, 120) } : {}),
-          },
-        });
+        const file = {
+          id,
+          ...(kind === 'document' ? { filename: String(m.media.filename || 'archivo').slice(0, 120) } : {}),
+        };
         if (withButtons)
+          // Archivo con botones (la ficha del curso del asistente, Botones con encabezado): UN mensaje interactivo con
+          // el archivo de encabezado, así llegan juntos y en orden. El cuerpo cabe (≤ 1024); si no, abajo: el archivo
+          // primero y el texto aparte, con el margen tras un archivo entre los dos.
           parts.push({
             type: 'interactive',
             interactive: {
               type: 'button',
+              header: { type: kind, [kind]: file },
               body: { text },
               action: { buttons: buttons.map((title, i) => ({ type: 'reply', reply: { id: 'b' + (i + 1), title } })) },
             },
           });
-        else if (text && !caption) parts.push({ type: 'text', text: { body: text, preview_url: false } });
+        else {
+          parts.push({ type: kind, [kind]: { ...file, ...(caption ? { caption } : {}) } });
+          if (text && !caption) parts.push({ type: 'text', text: { body: text, preview_url: false } });
+        }
       } else if (!text) throw fail(422, 'Este mensaje no tiene texto ni un archivo que WhatsApp admita.');
       else if (listOf(m.list)) parts.push({ type: 'interactive', interactive: listOf(m.list) });
       else if (buttons.length && text.length <= 1024)
@@ -1012,7 +1015,11 @@ export function metaChannel({
         });
       else parts.push({ type: 'text', text: { body: text, preview_url: false } });
       let ref = null;
-      const isMedia = part => part.type === 'image' || part.type === 'document';
+      // un archivo suelto o un interactivo con archivo de encabezado: WhatsApp lo entrega más tarde que un texto
+      const isMedia = part =>
+        part.type === 'image' ||
+        part.type === 'document' ||
+        ['image', 'document'].includes(part.interactive?.header?.type);
       for (const [i, part] of parts.entries()) {
         try {
           if (i > 0 && MEDIA_GAP > 0 && isMedia(parts[i - 1])) await new Promise(done => setTimeout(done, MEDIA_GAP));

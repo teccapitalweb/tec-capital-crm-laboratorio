@@ -6,9 +6,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { PNG, metaStatus, metaText } from './helpers/fake-meta.mjs';
+import { NUMBER, PNG, metaStatus, metaText, startFakeMeta } from './helpers/fake-meta.mjs';
 import { call, crash, sleep, until, whatsappLab } from './helpers/crm.mjs';
 import { mediaGapMs } from '../server/lib/media-gap.mjs';
+import { metaChannel } from '../server/connectors.mjs';
 
 const ref = () => randomUUID();
 const node = (id, type, data = {}) => ({ id, type, x: 0, y: 0, data });
@@ -179,4 +180,101 @@ test('tras un reinicio el margen sigue en la base: los botones no se adelantan y
   assert.deepEqual(kindsTo(W.meta, ANA), ['text', 'image', 'interactive']);
   await sleep(1000);
   assert.equal(kindsTo(W.meta, ANA).length, 3, 'una sola vez');
+});
+
+// Segunda prueba real (21 nov 2026): la ficha que manda el asistente por su cuenta llegó en dos mensajes, el texto con
+// sus tres botones y DESPUÉS la imagen. Un archivo con botones ahora es UN mensaje interactivo con el archivo de
+// encabezado; si el cuerpo no cabe (más de 1024), el archivo primero y el texto aparte, con el margen entre los dos.
+test('adaptador de Meta: archivo con botones en un solo interactivo con encabezado; si no cabe, archivo y luego texto con margen', async t => {
+  const meta = await startFakeMeta();
+  t.after(() => meta.close());
+  const GAP = 400;
+  const adapter = metaChannel({ env: { ...meta.env, NODE_ENV: 'test', WA_MEDIA_GAP_MS: String(GAP) } });
+  const to = '5215533333333';
+  const sentTo = () => meta.sent.filter(m => m.to === to);
+  // imagen + texto + botones → un solo mensaje
+  let r = await adapter.send({
+    to,
+    from: NUMBER,
+    text: 'Plan sanitario para aves · Noviembre\n• Inicio: lunes, 23 de noviembre de 2026',
+    buttons: ['Precio', 'Temario', 'Fechas'],
+    media: { buffer: PNG, mime: 'image/png', filename: 'ficha.png' },
+  });
+  assert.equal(sentTo().length, 1);
+  const one = sentTo()[0];
+  assert.equal(one.type, 'interactive');
+  assert.equal(one.interactive.type, 'button');
+  assert.equal(one.interactive.header.type, 'image');
+  assert.match(one.interactive.header.image.id, /^media-/);
+  assert.match(one.interactive.body.text, /^Plan sanitario para aves/);
+  assert.deepEqual(
+    one.interactive.action.buttons.map(b => b.reply.title),
+    ['Precio', 'Temario', 'Fechas'],
+  );
+  assert.equal(r.media, true, 'cuenta como archivo para el margen del siguiente mensaje');
+  // un PDF con botones: encabezado de documento con su nombre
+  await adapter.send({
+    to,
+    from: NUMBER,
+    text: 'El temario',
+    buttons: ['Sí'],
+    media: { buffer: Buffer.from('%PDF-1.4'), mime: 'application/pdf', filename: 'temario.pdf' },
+  });
+  const doc = sentTo()[1].interactive.header;
+  assert.equal(doc.type, 'document');
+  assert.equal(doc.document.filename, 'temario.pdf');
+  // cuerpo de más de 1024: imagen primero y el texto aparte, después del margen
+  const before = meta.sent.length;
+  const times = [];
+  const timer = setInterval(() => {
+    while (times.length < meta.sent.length - before) times.push(Date.now());
+  }, 5);
+  r = await adapter.send({
+    to,
+    from: NUMBER,
+    text: 'x'.repeat(1500),
+    buttons: ['Precio'],
+    media: { buffer: PNG, mime: 'image/png', filename: 'ficha.png' },
+  });
+  await sleep(20);
+  clearInterval(timer);
+  const split = meta.sent.slice(before);
+  assert.deepEqual(
+    split.map(m => m.type),
+    ['image', 'text'],
+  );
+  assert.equal(split[0].image.caption, undefined);
+  assert.ok(times[1] - times[0] >= GAP - 30, 'el texto esperó el margen: ' + (times[1] - times[0]) + ' ms');
+  assert.equal(r.media, undefined, 'lo último fue el texto');
+  // sin archivo, los botones de siempre (sin encabezado)
+  await adapter.send({ to, from: NUMBER, text: '¿Te cuento más?', buttons: ['Sí', 'No'] });
+  assert.equal(sentTo().at(-1).interactive.header, undefined);
+});
+
+test('la ficha del asistente por WhatsApp real sale como un solo mensaje: imagen de encabezado, texto y botones', async t => {
+  const W = await whatsappLab(t, { AI_PROVIDER: '', WA_MEDIA_GAP_MS: '0' });
+  await metaText(W.origin(), ANA, 'wamid.ficha.1', 'Hola');
+  const card = await until(
+    () => W.meta.sent.find(m => m.to === ANA && m.type === 'interactive' && m.interactive?.header),
+    'la ficha salió a Meta',
+    { logs: W.state.server.logs },
+  );
+  await sleep(800);
+  const mine = W.meta.sent.filter(m => m.to === ANA);
+  assert.equal(mine.length, 1, 'un solo mensaje: ' + JSON.stringify(mine.map(m => m.type)));
+  assert.equal(card.interactive.header.type, 'image');
+  assert.deepEqual(
+    card.interactive.action.buttons.map(b => b.reply.title),
+    ['Precio', 'Temario', 'Fechas'],
+  );
+  assert.ok(card.interactive.body.text.length <= 1024);
+  // en el CRM sigue siendo un solo mensaje con su ficha y sus botones
+  const saved = W.db
+    .prepare(
+      "SELECT m.buttons,m.flyer_snapshot FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.wa_peer=? AND m.sender_kind='automation'",
+    )
+    .all(ANA);
+  assert.equal(saved.length, 1);
+  assert.ok(saved[0].flyer_snapshot);
+  assert.deepEqual(JSON.parse(saved[0].buttons), ['Precio', 'Temario', 'Fechas']);
 });
