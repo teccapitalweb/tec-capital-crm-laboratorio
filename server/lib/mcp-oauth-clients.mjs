@@ -22,6 +22,7 @@ export const CLIENT_LIMITS = Object.freeze({
   uriMax: 300,
   redirectMax: 500,
   redirects: 10,
+  grantsMax: 10,
   documentBytes: 16 * 1024,
   fetchTimeoutMs: 5000,
   cacheEntries: 100,
@@ -97,13 +98,17 @@ export function validateMetadata(input, { document = false } = {}) {
       });
     if (!redirects.includes(r)) redirects.push(r);
   }
+  // La aplicación debe saber usar authorization_code. Lo demás que declare (por ejemplo, la aplicación de Claude
+  // anuncia además jwt-bearer) no se rechaza ni se concede: el canje (/oauth/token) sólo atiende authorization_code y
+  // refresh_token, diga lo que diga este documento.
   const grants = input.grant_types ?? ['authorization_code'];
   if (
     !Array.isArray(grants) ||
-    !grants.includes('authorization_code') ||
-    grants.some(g => !['authorization_code', 'refresh_token'].includes(g))
+    grants.length > CLIENT_LIMITS.grantsMax ||
+    grants.some(g => typeof g !== 'string' || g.length > 120) ||
+    !grants.includes('authorization_code')
   )
-    throw fail(400, 'Sólo se admite authorization_code (con refresh_token).', { code: 'invalid_client_metadata' });
+    throw fail(400, 'La aplicación debe admitir authorization_code.', { code: 'invalid_client_metadata' });
   const responses = input.response_types ?? ['code'];
   if (!Array.isArray(responses) || responses.some(r => r !== 'code'))
     throw fail(400, 'Sólo se admite response_type=code.', { code: 'invalid_client_metadata' });

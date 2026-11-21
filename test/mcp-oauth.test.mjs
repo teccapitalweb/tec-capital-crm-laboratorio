@@ -217,6 +217,34 @@ test('las direcciones de regreso y los metadatos de una aplicación se validan e
     () => validateMetadata({ client_name: 'App', redirect_uris: [ok], grant_types: ['password'] }),
     /authorization_code/,
   );
+  // El documento real de la aplicación de Claude declara además jwt-bearer: se acepta (no se concede: el canje sólo
+  // atiende authorization_code y refresh_token), pero sin authorization_code, con algo que no es texto o con una lista
+  // desmedida, no.
+  const likeClaude = {
+    client_id: 'https://assistant.example/oauth/client-metadata',
+    client_name: 'Asistente',
+    client_uri: 'https://assistant.example',
+    redirect_uris: ['https://assistant.example/api/mcp/auth_callback'],
+    grant_types: ['authorization_code', 'refresh_token', 'urn:ietf:params:oauth:grant-type:jwt-bearer'],
+    response_types: ['code'],
+    token_endpoint_auth_method: 'none',
+  };
+  assert.deepEqual(validateMetadata(likeClaude, { document: true }), {
+    name: 'Asistente',
+    uri: 'https://assistant.example',
+    redirects: ['https://assistant.example/api/mcp/auth_callback'],
+  });
+  for (const grant_types of [
+    ['refresh_token', 'urn:ietf:params:oauth:grant-type:jwt-bearer'],
+    ['authorization_code', 7],
+    'authorization_code',
+    Array.from({ length: 11 }, (_, i) => (i ? 'extra-' + i : 'authorization_code')),
+  ])
+    assert.throws(
+      () => validateMetadata({ ...likeClaude, grant_types }, { document: true }),
+      /authorization_code/,
+      JSON.stringify(grant_types),
+    );
   assert.throws(
     () => validateMetadata({ client_name: 'App', redirect_uris: [ok], response_types: ['token'] }),
     /response_type=code/,
@@ -830,6 +858,17 @@ test('conectar un asistente con un clic: descubrimiento, permiso, fichas, renova
     'unsupported_grant_type',
   );
   assert.equal((await form('/oauth/token', { grant_type: 'client_credentials' })).body.error, 'unsupported_grant_type');
+  // lo que una aplicación declare de más en sus metadatos no se concede en el canje
+  assert.equal(
+    (
+      await form('/oauth/token', {
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: 'x.y.z',
+        client_id: client.client_id,
+      })
+    ).body.error,
+    'unsupported_grant_type',
+  );
 
   // ---- 10) ficha de acceso vencida y revocación por la aplicación
   const g5 = await grant({ client: client.client_id, redirect: loop });
