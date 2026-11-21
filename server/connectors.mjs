@@ -4,6 +4,7 @@ import { createWebhookInbox } from './app/webhook-inbox.mjs';
 import { createPeerHash, loadPeerKey } from './lib/peer-key.mjs';
 import { isBsuid } from './lib/identity.mjs';
 import { mediaGapMs } from './lib/media-gap.mjs';
+import { BUTTONS_PROMPT } from './reply-copy.mjs';
 
 // Contrato de conectores (Fase 1 · bloque 6). Define la interfaz que tendrán los proveedores reales de canal (Meta:
 // WhatsApp Cloud API, Instagram, Messenger) y de pago (Stripe, Conekta), y la cumple hoy con adaptadores simulados.
@@ -599,6 +600,24 @@ function metaNoticeEvents(entry, field, v, account, peerHash) {
     });
   return [];
 }
+// Título de un botón de WhatsApp (hasta 20): recortado sin partir un emoji ni ningún otro par sustituto.
+export function buttonTitle(v) {
+  let out = '';
+  for (const ch of String(v ?? '').trim()) {
+    if (out.length + ch.length > 20) break;
+    out += ch;
+  }
+  return out.trim();
+}
+// ¿Meta rechazó el interactivo con imagen de encabezado por algo que el camino de dos partes no comparte? No, si fue
+// la autenticación o un permiso, el ritmo, la ventana de 24 horas, o un error de red (no se sabe si salió).
+const NO_PLAN_B = new Set([190, 10, 200, 4, 80007, 130429, 131048, 131056, 131047]);
+export const headerRefusal = e =>
+  Boolean(e) &&
+  !e.network &&
+  ![401, 403, 429].includes(e.status) &&
+  !NO_PLAN_B.has(e.metaCode) &&
+  (e.metaCode > 0 || (e.status >= 400 && e.status < 500));
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png']),
   MEDIA_HOSTS = ['fbsbx.com', 'facebook.com', 'fbcdn.net', 'whatsapp.net', 'whatsapp.com'];
 // Una lista interactiva de WhatsApp (la Lista de un recorrido) dentro de los límites de Meta: cuerpo hasta 1 024,
@@ -968,75 +987,88 @@ export function metaChannel({
           .trim()
           .slice(0, 4096),
         buttons = (Array.isArray(m.buttons) ? m.buttons : [])
-          .map(b =>
-            String(b || '')
-              .trim()
-              .slice(0, 20),
-          )
+          .map(b => buttonTitle(b))
           .filter(Boolean)
-          .slice(0, 3),
-        parts = [];
+          .slice(0, 3);
+      const buttonsPart = (body, header = null) => ({
+        type: 'interactive',
+        interactive: {
+          type: 'button',
+          ...(header ? { header } : {}),
+          body: { text: body },
+          action: { buttons: buttons.map((title, i) => ({ type: 'reply', reply: { id: 'b' + (i + 1), title } })) },
+        },
+      });
+      const textPart = body => ({ type: 'text', text: { body, preview_url: false } });
+      // Un texto de más de 1024 caracteres no cabe en el cuerpo de unos botones: sale el texto y, al final, un
+      // interactivo corto con los botones (antes los botones se perdían sin aviso).
+      const textWithButtons = () =>
+        !buttons.length
+          ? [textPart(text)]
+          : text.length <= 1024
+            ? [buttonsPart(text)]
+            : [textPart(text), buttonsPart(BUTTONS_PROMPT)];
+      let parts = [],
+        fallback = null;
       if (m.media) {
         const id = await uploadMedia(from, m.media);
         const kind = IMAGE_MIME.has(m.media.mime) ? 'image' : 'document',
-          withButtons = Boolean(buttons.length && text && text.length <= 1024),
-          caption = !withButtons && text.length <= 1024 ? text : '';
-        const file = {
-          id,
-          ...(kind === 'document' ? { filename: String(m.media.filename || 'archivo').slice(0, 120) } : {}),
+          file = {
+            id,
+            ...(kind === 'document' ? { filename: String(m.media.filename || 'archivo').slice(0, 120) } : {}),
+          };
+        // El camino de dos partes de siempre: el archivo (con su pie si cabe y no hay botones) y después el texto, con
+        // sus botones si los lleva; entre las dos, el margen tras un archivo.
+        const twoParts = () => {
+          const caption = !buttons.length && text.length <= 1024 ? text : '';
+          return [
+            { type: kind, [kind]: { ...file, ...(caption ? { caption } : {}) } },
+            ...(text && !caption ? textWithButtons() : []),
+          ];
         };
-        if (withButtons)
-          // Archivo con botones (la ficha del curso del asistente, Botones con encabezado): UN mensaje interactivo con
-          // el archivo de encabezado, así llegan juntos y en orden. El cuerpo cabe (≤ 1024); si no, abajo: el archivo
-          // primero y el texto aparte, con el margen tras un archivo entre los dos.
-          parts.push({
-            type: 'interactive',
-            interactive: {
-              type: 'button',
-              header: { type: kind, [kind]: file },
-              body: { text },
-              action: { buttons: buttons.map((title, i) => ({ type: 'reply', reply: { id: 'b' + (i + 1), title } })) },
-            },
-          });
-        else {
-          parts.push({ type: kind, [kind]: { ...file, ...(caption ? { caption } : {}) } });
-          if (text && !caption) parts.push({ type: 'text', text: { body: text, preview_url: false } });
-        }
+        // Imagen JPEG o PNG con botones y un cuerpo que cabe (la ficha del curso del asistente, Botones con
+        // encabezado): UN mensaje interactivo con la imagen de encabezado, así llegan juntos y en orden. Si Meta lo
+        // rechaza, una vez por el camino de dos partes. Otro tipo (PDF, WebP, GIF…) va siempre en dos partes.
+        if (kind === 'image' && buttons.length && text && text.length <= 1024) {
+          parts = [buttonsPart(text, { type: 'image', image: file })];
+          fallback = twoParts();
+        } else parts = twoParts();
       } else if (!text) throw fail(422, 'Este mensaje no tiene texto ni un archivo que WhatsApp admita.');
       else if (listOf(m.list)) parts.push({ type: 'interactive', interactive: listOf(m.list) });
-      else if (buttons.length && text.length <= 1024)
-        parts.push({
-          type: 'interactive',
-          interactive: {
-            type: 'button',
-            body: { text },
-            action: { buttons: buttons.map((title, i) => ({ type: 'reply', reply: { id: 'b' + (i + 1), title } })) },
-          },
-        });
-      else parts.push({ type: 'text', text: { body: text, preview_url: false } });
-      let ref = null;
+      else parts = textWithButtons();
       // un archivo suelto o un interactivo con archivo de encabezado: WhatsApp lo entrega más tarde que un texto
       const isMedia = part =>
         part.type === 'image' ||
         part.type === 'document' ||
         ['image', 'document'].includes(part.interactive?.header?.type);
-      for (const [i, part] of parts.entries()) {
-        try {
-          if (i > 0 && MEDIA_GAP > 0 && isMedia(parts[i - 1])) await new Promise(done => setTimeout(done, MEDIA_GAP));
-          ref = (await post(from, to, part)).messages?.[0]?.id || ref;
-        } catch (e) {
-          if (!ref) throw e;
-          return {
-            providerRef: ref,
-            state: 'sent',
-            reason:
-              'Sólo salió una parte del mensaje (el archivo); el texto no: ' + String(e?.message || '').slice(0, 140),
-          };
-        } // la persona ya recibió el archivo: reintentar lo duplicaría
+      const sendParts = async list => {
+        let ref = null;
+        for (const [i, part] of list.entries()) {
+          try {
+            if (i > 0 && MEDIA_GAP > 0 && isMedia(list[i - 1])) await new Promise(done => setTimeout(done, MEDIA_GAP));
+            ref = (await post(from, to, part)).messages?.[0]?.id || ref;
+          } catch (e) {
+            if (!ref) throw e;
+            return {
+              providerRef: ref,
+              state: 'sent',
+              reason:
+                'Sólo salió una parte del mensaje (el archivo); el texto no: ' + String(e?.message || '').slice(0, 140),
+            };
+          } // la persona ya recibió el archivo: reintentar lo duplicaría
+        }
+        if (!ref) throw fail(502, 'Meta aceptó la petición pero no devolvió la referencia del mensaje.');
+        // `media`: lo último que salió fue un archivo (el canal deja el margen antes del siguiente mensaje)
+        return { providerRef: ref, state: 'sent', reason: null, ...(isMedia(list.at(-1)) ? { media: true } : {}) };
+      };
+      try {
+        return await sendParts(parts);
+      } catch (e) {
+        // Plan B del interactivo con imagen de encabezado: un solo mensaje que Meta RECHAZÓ (no salió nada) se manda
+        // una vez como antes, salvo que el motivo también tumbaría el plan B o no se sepa si salió (red).
+        if (!fallback || !headerRefusal(e)) throw e;
+        return sendParts(fallback);
       }
-      if (!ref) throw fail(502, 'Meta aceptó la petición pero no devolvió la referencia del mensaje.');
-      // `media`: lo último que salió fue un archivo (el canal deja el margen antes del siguiente mensaje)
-      return { providerRef: ref, state: 'sent', reason: null, ...(isMedia(parts.at(-1)) ? { media: true } : {}) };
     },
     // Descarga un archivo que envió la persona: primero su URL temporal y después los bytes, siempre con el token y sólo desde servidores de Meta.
     async fetchMedia(id, { maxBytes = 4 * 1024 * 1024 } = {}) {

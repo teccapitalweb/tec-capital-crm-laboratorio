@@ -243,7 +243,7 @@ test('catálogo por el conector: subir imágenes, proponer, aprobar en orden de 
   assert.equal(prep.usos, 1);
   assert.equal(prep.venceEnMinutos, 10);
   assert.ok(prep.comando.includes('--data-binary') && prep.comando.includes(prep.direccion));
-  assert.deepEqual(prep.limites.formatos, ['JPEG', 'PNG', 'WebP']);
+  assert.deepEqual(prep.limites.formatos, ['JPEG', 'PNG']);
   assert.equal(prep.apertura.cursoId, courses[0].id);
   // sólo se guarda la huella: la ficha no está en la base
   const token = prep.direccion.split('/').pop();
@@ -269,10 +269,14 @@ test('catálogo por el conector: subir imágenes, proponer, aprobar en orden de 
     ['<!doctype html><html><body>hola</body></html>', 'image/jpeg'],
     ['GIF89a-de-prueba', 'image/gif'],
     ['%PDF-1.4 de prueba', 'image/webp'],
+    // WebP de verdad: WhatsApp no la envía como imagen (revisión del 21 nov 2026)
+    [webp('no'), 'image/webp'],
   ]) {
     const r = await upload(prep.direccion, Buffer.from(body), type);
-    assert.equal(r.status, 415, body);
-    assert.match(r.body.error, /JPEG, PNG o WebP/);
+    assert.equal(r.status, 415, String(body));
+    assert.match(r.body.error, /JPEG o PNG/);
+    assert.match(r.body.error, /convierte la imagen a JPG o PNG/);
+    if (Buffer.isBuffer(body)) assert.match(r.body.error, /WebP/);
   }
   assert.equal(db.prepare('SELECT status FROM mcp_upload_tokens WHERE id=?').get(row.id).status, 'open');
   // vacía
@@ -364,11 +368,11 @@ test('catálogo por el conector: subir imágenes, proponer, aprobar en orden de 
     1,
   );
 
-  // ---- imágenes de las otras dos aperturas (una WebP)
+  // ---- imágenes de las otras dos aperturas
   const uploads = [{ ...up1b.body, bytes: img1b }];
   for (const [i, bytes] of [
     [1, png('2')],
-    [2, webp('3')],
+    [2, png('3')],
   ]) {
     const p = await ok(gv.token, 'preparar_subida_imagen', { aperturaId: courses[i].editionId });
     const u = await upload(p.direccion, bytes, 'application/octet-stream');

@@ -109,7 +109,7 @@ export const UPLOAD_TOOLS = [
     scope: CONFIG_SCOPE,
     annotations: write('Preparar la subida de la imagen de un curso', false),
     description:
-      'Devuelve una dirección para subir la imagen (flyer) de un curso: vale una sola vez y vence a los 10 minutos. Manda aperturaId (una apertura que ya existe: la imagen queda como imagen en borrador de esa apertura; luego propón «aprobar_imagen» con el imagenId) o cursoBorradorId (un curso en borrador tuyo: la imagen queda ligada al borrador y se aprueba al darlo de alta). Sube el archivo con el comando que devuelve (curl --data-binary con los bytes). Sólo JPEG, PNG o WebP de hasta 4 MB (se comprueba por su contenido). Otra imagen para lo mismo sustituye a la anterior. ' +
+      'Devuelve una dirección para subir la imagen (flyer) de un curso: vale una sola vez y vence a los 10 minutos. Manda aperturaId (una apertura que ya existe: la imagen queda como imagen en borrador de esa apertura; luego propón «aprobar_imagen» con el imagenId) o cursoBorradorId (un curso en borrador tuyo: la imagen queda ligada al borrador y se aprueba al darlo de alta). Sube el archivo con el comando que devuelve (curl --data-binary con los bytes). Sólo JPEG o PNG de hasta 4 MB (se comprueba por su contenido; WebP no: WhatsApp no la envía como imagen, conviértela a JPG o PNG). Otra imagen para lo mismo sustituye a la anterior. ' +
       ORDEN,
     inputSchema: obj({ aperturaId: { type: 'string', maxLength: 64 }, cursoBorradorId: DRAFT_ID }),
   },
@@ -173,7 +173,7 @@ export function createUploadTools({ module, actorOf, audit }) {
         usos: 1,
         comando: `curl --fail-with-body -X POST --data-binary @"RUTA/DEL/ARCHIVO.jpg" -H "Content-Type: image/jpeg" "${made.url}"`,
         limites: {
-          formatos: ['JPEG', 'PNG', 'WebP'],
+          formatos: ['JPEG', 'PNG'],
           tamanoMaximo: limits.maxBytes / (1024 * 1024) + ' MB',
           imagenesEnBorradorPorApertura: limits.draftsPerEdition,
         },
@@ -190,7 +190,7 @@ export function createUploadTools({ module, actorOf, audit }) {
           : { cursoBorrador: { cursoBorradorId: made.draft.id, titulo: made.draft.title } }),
         aviso: AVISO,
         nota:
-          'La dirección es secreta y de un solo uso: no la compartas. Cambia RUTA/DEL/ARCHIVO.jpg por el archivo (y el Content-Type si es PNG o WebP; el CRM comprueba el tipo por su contenido). ' +
+          'La dirección es secreta y de un solo uso: no la compartas. Cambia RUTA/DEL/ARCHIVO.jpg por el archivo (y el Content-Type si es PNG; el CRM comprueba el tipo por su contenido). ' +
           (made.edition
             ? 'Al subirla queda en BORRADOR; luego propón «aprobar_imagen» con el imagenId que devuelve la subida.'
             : 'Al subirla queda ligada al curso en borrador; luego propón «dar_de_alta_curso».'),

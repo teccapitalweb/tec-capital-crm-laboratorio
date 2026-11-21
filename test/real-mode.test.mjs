@@ -96,6 +96,7 @@ const TEXTS = {
     copy.paymentConfirmed({ name: 'Ana', ...ORDER }) +
     copy.paymentConfirmed({ name: 'Ana', ...ORDER, perSession: true }),
   REAL_PAYMENT_METHODS: () => copy.REAL_PAYMENT_METHODS,
+  BUTTONS_PROMPT: () => copy.BUTTONS_PROMPT,
 };
 const NOT_TEXT = ['firstName', 'noHour', 'startText', 'whenText', 'zoneWords', 'priceText', 'facts', 'LAB_SWAPS'];
 

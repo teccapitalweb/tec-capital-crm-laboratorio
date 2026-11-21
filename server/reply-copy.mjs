@@ -47,6 +47,8 @@ export const noHour = (t, zone) =>
   }).format(t) === '00:00';
 // El nombre de la zona para una persona: «hora del centro de México»; una zona que no está en la lista se dice por su
 // ciudad («America/Guatemala» → «hora de Guatemala»), nunca con el identificador técnico.
+// Cuerpo del mensaje corto con los botones cuando el texto no cabe en el cuerpo de unos botones de WhatsApp (1024).
+export const BUTTONS_PROMPT = '¿Qué te gustaría hacer?';
 // «UTC», «GMT» y las zonas Etc/* se dicen por su desfase real: en «Etc/GMT+6» el signo va al revés (POSIX) y es UTC−6.
 export const zoneWords = zone => {
   const z = String(zone || 'America/Mexico_City');
