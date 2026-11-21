@@ -49,6 +49,7 @@ test('propuestas: herramientas, permiso propio, lista cerrada y ninguna herramie
   assert.equal(SCOPE_KINDS.proposals, 'write');
   // lista cerrada: exactamente estas acciones, cada una con el permiso de borradores que cubre su entidad
   assert.deepEqual(ACTION_KEYS, [
+    'dar_de_alta_curso',
     'publicar_recorrido',
     'activar_recorrido',
     'encender_secuencia',

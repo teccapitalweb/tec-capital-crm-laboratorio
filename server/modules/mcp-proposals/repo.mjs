@@ -51,6 +51,18 @@ export function createRepo(db) {
         id,
         b,
       ),
+    // Un curso en borrador del conector, con su imagen (si sigue en la biblioteca de la marca) y lo que ya se creó en
+    // un intento anterior de darlo de alta.
+    course_draft: (b, id) =>
+      one(
+        `SELECT d.*,l.mime file_mime,k.active created_course_active
+         FROM mcp_course_drafts d
+           LEFT JOIN library_files l ON l.id=d.file_id AND l.brand_id=d.brand_id
+           LEFT JOIN courses k ON k.id=d.course_id AND k.brand_id=d.brand_id
+         WHERE d.id=? AND d.brand_id=?`,
+        id,
+        b,
+      ),
     // Un curso: su «revisión» es su versión (la que pide la ruta de archivar como expectedRevision).
     course: (b, id) =>
       one('SELECT id,brand_id,title name,active,version revision FROM courses WHERE id=? AND brand_id=?', id, b),
@@ -142,6 +154,17 @@ export function createRepo(db) {
   return {
     entity: (brandId, type, id) => (Object.hasOwn(ENTITY, type) ? ENTITY[type](brandId, id) : null),
     courseUsage,
+    // Lecturas para el alta paso a paso (siempre dentro de la marca).
+    read: {
+      draftEdition: (brandId, courseId) =>
+        one(
+          "SELECT id FROM editions WHERE brand_id=? AND course_id=? AND status='draft' ORDER BY created_at LIMIT 1",
+          brandId,
+          courseId,
+        )?.id ?? null,
+      edition: (brandId, id) => one('SELECT id,status,revision FROM editions WHERE id=? AND brand_id=?', id, brandId),
+      flyer: (brandId, id) => one('SELECT id,status,revision FROM flyers WHERE id=? AND brand_id=?', id, brandId),
+    },
     // ¿Hay una propuesta pendiente de publicar esta apertura? (la imagen se puede aprobar en el mismo lote, después)
     pendingPublish: (brandId, editionId) =>
       Boolean(

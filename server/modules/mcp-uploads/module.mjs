@@ -28,6 +28,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createRouteCaller } from '../../lib/mcp-call.mjs';
 import { sniff } from '../../lib/media-sniff.mjs';
 import { createRepo } from './repo.mjs';
+import { createCourseDrafts } from './drafts.mjs';
 
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
@@ -113,6 +114,7 @@ export default {
     const { db, transaction, fail, json, audit, rate } = host;
     const { crm, catalogue } = host.services;
     const repo = createRepo(db);
+    const drafts = createCourseDrafts({ db, repo, fail, transaction });
     const now = () => Date.now();
     const routes = createRouteCaller({
       routes: UPLOAD_ROUTES,
@@ -144,19 +146,33 @@ export default {
     };
 
     // ---- para el conector: la llave ya se comprobó (permiso, marca y firma)
-    function prepare(key, actor, editionId) {
+    // `target`: {editionId} (imagen de una apertura que ya existe) o {draftId} (imagen de un curso en borrador del
+    // mismo origen).
+    function prepare(key, actor, target) {
       const brandId = key.brand_id;
-      const e =
-        typeof editionId === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(editionId)
-          ? repo.edition(brandId, editionId)
-          : null;
-      if (!e) throw fail(404, 'Esa apertura no existe en esta marca.', { code: 'not_found' });
-      if (e.status === 'archived') throw fail(409, 'Esa apertura está archivada.', { code: 'archived' });
-      if (!e.course_active) throw fail(409, 'El curso de esa apertura está archivado.', { code: 'archived' });
+      const source = sourceOf(key);
+      let e = null;
+      let draft = null;
+      if (target?.draftId !== undefined) {
+        draft = drafts.own(key, source, target.draftId);
+        if (draft.status !== 'draft') throw fail(409, 'Ese curso ya no está en borrador.', { code: 'not_draft' });
+        if (draft.course_id)
+          throw fail(409, 'Una parte ya se creó en el catálogo: sube la imagen a su apertura (aperturaId).', {
+            code: 'partly_created',
+          });
+      } else {
+        const editionId = target?.editionId;
+        e =
+          typeof editionId === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(editionId)
+            ? repo.edition(brandId, editionId)
+            : null;
+        if (!e) throw fail(404, 'Esa apertura no existe en esta marca.', { code: 'not_found' });
+        if (e.status === 'archived') throw fail(409, 'Esa apertura está archivada.', { code: 'archived' });
+        if (!e.course_active) throw fail(409, 'El curso de esa apertura está archivado.', { code: 'archived' });
+      }
       const origin = publicOrigin();
       if (!origin)
         throw fail(503, 'Falta configurar la dirección pública del CRM (APP_ORIGIN): la subida no está disponible.');
-      const source = sourceOf(key);
       const t = now();
       const token = 'tci_' + randomBytes(32).toString('base64url');
       const id = randomUUID();
@@ -177,7 +193,8 @@ export default {
         repo.insert({
           id,
           brandId,
-          editionId: e.id,
+          editionId: e?.id ?? null,
+          draftId: draft?.id ?? null,
           hash: sha(token),
           ...source,
           createdBy: actor.id,
@@ -185,7 +202,37 @@ export default {
           expiresAt: t + UPLOAD_LIMITS.tokenMs,
         });
       });
-      return { id, url: origin + UPLOAD_PREFIX + '/' + token, expiresAt: t + UPLOAD_LIMITS.tokenMs, edition: e };
+      return {
+        id,
+        url: origin + UPLOAD_PREFIX + '/' + token,
+        expiresAt: t + UPLOAD_LIMITS.tokenMs,
+        edition: e,
+        draft,
+      };
+    }
+
+    // La imagen de un curso en borrador: sólo el archivo en la biblioteca de la marca (todavía no hay apertura, así que
+    // no hay flyer) y queda ligado al borrador, sustituyendo al anterior.
+    async function storeForDraft(row, actor, bytes, real) {
+      const d = repo.draft(row.brand_id, row.course_draft_id);
+      if (!d || d.source_kind !== row.source_kind || d.source_id !== row.source_id)
+        throw fail(404, 'El curso en borrador ya no existe.', { code: 'not_found' });
+      if (d.status !== 'draft' || d.course_id)
+        throw fail(409, 'Ese curso ya no está en borrador.', { code: 'not_draft' });
+      if (repo.usedSince(row.brand_id, now() - DAY) > UPLOAD_LIMITS.uploadsPerBrandPerDay)
+        throw fail(429, `La marca ya subió ${UPLOAD_LIMITS.uploadsPerBrandPerDay} imágenes hoy: sigue mañana.`, {
+          code: 'daily_limit',
+        });
+      const file = await routes.call(actor, 'catalogue', 'POST', '/api/catalogue/files', {
+        brandId: row.brand_id,
+        file: { name: fileName(d.title, real.ext), type: real.mime, base64: bytes.toString('base64') },
+      });
+      if (!drafts.attachFile(row.brand_id, d.id, file.id))
+        throw fail(409, 'El curso en borrador cambió mientras se subía: vuelve a intentarlo.', {
+          code: 'stale_record',
+        });
+      audit(actor, 'mcp.course_draft.image', d.id);
+      return { fileId: file.id, draft: repo.draft(row.brand_id, d.id), replaced: d.file_id ? 1 : 0 };
     }
 
     // ---- guardar la imagen por las rutas del catálogo, ya gastada la ficha
@@ -200,6 +247,7 @@ export default {
         );
       const actor = signer(row.created_by, row.brand_id);
       if (!actor) throw fail(403, 'Quien creó la llave ya no administra la marca.', { code: 'forbidden' });
+      if (row.course_draft_id) return storeForDraft(row, actor, bytes, real);
       const e = repo.edition(row.brand_id, row.edition_id);
       if (!e) throw fail(404, 'La apertura ya no existe en esta marca.', { code: 'not_found' });
       if (e.status === 'archived' || !e.course_active)
@@ -297,7 +345,21 @@ export default {
         });
         throw error;
       }
-      repo.finish(row.id, { status: 'done', fileId: out.fileId, flyerId: out.flyer.id });
+      repo.finish(row.id, { status: 'done', fileId: out.fileId, flyerId: out.flyer?.id ?? null });
+      if (out.draft) {
+        json(res, 201, {
+          guardada: true,
+          archivoId: out.fileId,
+          cursoBorradorId: out.draft.id,
+          revision: out.draft.revision,
+          formato: real.mime,
+          tamano: bytes.length,
+          sustituyoImagenAnterior: out.replaced,
+          siguientePaso:
+            'Quedó ligada al curso en borrador (nadie la ve todavía). Cuando el borrador esté listo, propón «dar_de_alta_curso» con este cursoBorradorId.',
+        });
+        return true;
+      }
       json(res, 201, {
         guardada: true,
         imagenId: out.flyer.id,
@@ -323,6 +385,33 @@ export default {
       return { purged: repo.purge(t - UPLOAD_LIMITS.keepMs, UPLOAD_LIMITS.purgeChunk) };
     }
 
-    return { handle: async () => false, handlePublic, prepare, sweep, useSourceCheck, limits: UPLOAD_LIMITS };
+    // Para el conector (server/lib/mcp-uploads.mjs): los cursos en borrador de su propio origen.
+    const courseDrafts = {
+      create: (key, actor, a) => drafts.create(key, sourceOf(key), actor, a),
+      update: (key, a) => drafts.update(key, sourceOf(key), a),
+      discard: (key, a) => drafts.discard(key, sourceOf(key), a),
+      list: key => drafts.list(key, sourceOf(key)),
+      view: drafts.view,
+    };
+    // Para las propuestas (server/modules/mcp-proposals): revisar y anotar el avance del alta.
+    const launch = {
+      review: drafts.review,
+      progress: drafts.progress,
+      markCreated: drafts.markCreated,
+      ownedBy: (d, key) => {
+        const s = sourceOf(key);
+        return d.source_kind === s.sourceKind && d.source_id === s.sourceId;
+      },
+    };
+    return {
+      handle: async () => false,
+      handlePublic,
+      prepare,
+      sweep,
+      useSourceCheck,
+      courseDrafts,
+      launch,
+      limits: UPLOAD_LIMITS,
+    };
   },
 };

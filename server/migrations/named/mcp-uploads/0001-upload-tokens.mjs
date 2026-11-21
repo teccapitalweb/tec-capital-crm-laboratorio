@@ -19,7 +19,8 @@ export default {
       CREATE TABLE mcp_upload_tokens(
         id TEXT PRIMARY KEY,
         brand_id TEXT NOT NULL REFERENCES brands(id),
-        edition_id TEXT NOT NULL REFERENCES editions(id),
+        -- la apertura a la que va la imagen; vacía si va a un curso en borrador del conector (0002, course_draft_id)
+        edition_id TEXT REFERENCES editions(id),
         token_hash TEXT NOT NULL UNIQUE,
         source_kind TEXT NOT NULL CHECK(source_kind IN ('key','oauth')),
         source_id TEXT NOT NULL,

@@ -175,3 +175,82 @@ test('propuestas: aprobar por lote, con la imagen del curso y una que queda obso
   await expect(page.locator('#page .k-page')).toHaveCount(0);
   watcher.done();
 });
+
+// Tres cursos NUEVOS en borrador del conector, cada uno con su imagen, propuestos con «dar_de_alta_curso» y aprobados
+// en un lote: la tarjeta muestra lo que verán los clientes y la imagen; al terminar los tres cursos se ofrecen con ella.
+test('propuestas: dar de alta tres cursos en borrador con su imagen en un lote', async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  const watcher = watch(page);
+  const tag = `${testInfo.project.name} ${randomUUID().slice(0, 6)}`;
+  const tool = await assistant(page.request, baseURL);
+  const drafts = [];
+  for (const n of [1, 2, 3]) {
+    const d = await tool('crear_curso_borrador', {
+      titulo: `Curso nuevo ${n} · ${tag}`,
+      temario: `Tema ${n}.1 de prueba\nTema ${n}.2 de prueba`,
+      apertura: {
+        nombre: 'Abril 2027',
+        inicio: `2027-04-1${n} 18:00`,
+        docente: 'Docente de prueba',
+        precio: 800 + n,
+        cupo: 20,
+      },
+      clientRef: 'ui-alta-' + randomUUID(),
+    });
+    expect(d.listoParaProponer, JSON.stringify(d.loQueFalta)).toBe(true);
+    const prep = await tool('preparar_subida_imagen', { cursoBorradorId: d.cursoBorradorId });
+    const sent = await page.request.post(prep.direccion, {
+      data: PNG_1X1,
+      headers: { 'Content-Type': 'image/png' },
+    });
+    expect(sent.status(), await sent.text()).toBe(201);
+    await tool('proponer_accion', { accion: 'dar_de_alta_curso', id: d.cursoBorradorId });
+    drafts.push(d);
+  }
+
+  await page.goto('/crm');
+  await page.locator('.nav [data-view="propuestas"]').click();
+  await expect(page.locator('#breadcrumb-title')).toHaveText('Propuestas del asistente');
+  await settled(page);
+
+  const cardOf = d => page.locator('#page .pp-tarjeta', { has: page.locator('.pp-nombre dd', { hasText: d.titulo }) });
+  const first = cardOf(drafts[0]);
+  await expect(first.locator('.k-item__title')).toHaveText('Dar de alta el curso');
+  await expect(first).toContainText('queda PUBLICADA');
+  const sends = first.locator('.pp-envios');
+  await expect(sends).toContainText('Tema 1.1 de prueba');
+  await expect(sends).toContainText('Docente de prueba');
+  await expect(sends).toContainText('abril de 2027');
+  const img = first.locator('.pp-imagen__img');
+  await img.scrollIntoViewIfNeeded();
+  await expect.poll(() => img.evaluate(el => el.complete && el.naturalWidth)).toBe(1);
+
+  for (const d of drafts) await cardOf(d).getByRole('checkbox', { name: 'Elegir para el lote' }).check();
+  await expect(page.getByRole('button', { name: /Aprobar las seleccionadas \(3\)/ })).toBeVisible();
+  await expectNiebla(page, 'propuestas', testInfo);
+  await page.getByRole('button', { name: /Aprobar las seleccionadas \(3\)/ }).click();
+  const dialog = page.locator('.k-dialog');
+  await expect(dialog.locator('.pp-confirma-lote__fila')).toHaveCount(3);
+  for (const d of drafts) await expect(dialog).toContainText(d.titulo);
+  await dialog.getByRole('button', { name: 'Aprobar 3' }).click();
+
+  const result = page.locator('#page .pp-resultado');
+  await expect(result.locator('.pp-resultado__fila[data-estado="aprobada"]')).toHaveCount(3);
+  await settled(page);
+  await expectNiebla(page, 'propuestas', testInfo);
+
+  // los tres cursos quedaron dados de alta, con su apertura publicada y su imagen vigente
+  const listed = (await tool('listar_cursos_borrador', {})).cursos;
+  for (const d of drafts) {
+    const done = listed.find(c => c.cursoBorradorId === d.cursoBorradorId);
+    expect(done.estado).toBe('created');
+    const image = await page.request.get(
+      `/api/courses/${done.creado.cursoId}/flyer?editionId=${done.creado.aperturaId}`,
+    );
+    expect(image.status()).toBe(200);
+    expect(image.headers()['content-type']).toBe('image/png');
+  }
+  watcher.done();
+});

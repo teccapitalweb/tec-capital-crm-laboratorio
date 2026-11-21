@@ -64,6 +64,10 @@ export const TOOL_LABELS = Object.freeze({
   actualizar_regla: 'Guardó una regla en borrador',
   probar_regla: 'Probó una regla',
   preparar_subida_imagen: 'Preparó la subida de la imagen de un curso',
+  crear_curso_borrador: 'Creó un curso en borrador',
+  actualizar_curso_borrador: 'Guardó un curso en borrador',
+  listar_cursos_borrador: 'Consultó sus cursos en borrador',
+  descartar_curso_borrador: 'Descartó un curso en borrador',
   proponer_accion: 'Dejó una propuesta para que la apruebe una persona',
   listar_propuestas: 'Consultó sus propuestas',
   retirar_propuesta: 'Retiró una propuesta',
@@ -86,6 +90,7 @@ export const ENTITY_LABELS = Object.freeze({
   proposal: 'Propuesta',
   upload: 'Dirección de subida de una imagen',
   flyer: 'Imagen del curso',
+  course_draft: 'Curso en borrador',
 });
 
 // Motivo de una llamada que no salió bien: clave cerrada → resultado y texto. «scope» lleva el nombre del permiso,

@@ -72,7 +72,171 @@ const steps = raw => {
   }
 };
 
+// ---- dar de alta un curso en borrador del conector (server/modules/mcp-uploads/drafts.mjs)
+const LAUNCH_STEPS = ['crear el curso', 'publicar la apertura', 'crear la imagen', 'aprobar la imagen'];
+// Paso a paso por las rutas del catálogo, a nombre de quien aprueba. Cada id creado se anota en el borrador en cuanto
+// existe: un reintento (otra propuesta del mismo borrador) sigue desde donde quedó y no repite nada. Si algo ya quedó
+// hecho y un paso falla, se lanza un 409 que dice qué quedó hecho y qué no (la propuesta queda «no se pudo aplicar»).
+async function launchCourse({ call, entity: d, read, launch, fail, failFlyerOnce }) {
+  const b = d.brand_id;
+  let courseId = d.course_id;
+  let editionId = d.edition_id;
+  let flyerId = d.flyer_id;
+  const state = () => {
+    const ed = editionId ? read.edition(b, editionId) : null;
+    const fl = flyerId ? read.flyer(b, flyerId) : null;
+    return [
+      Boolean(courseId),
+      ed?.status === 'published',
+      !d.file_id || Boolean(fl),
+      !d.file_id || fl?.status === 'approved',
+    ];
+  };
+  const before = state();
+  try {
+    if (!courseId) {
+      const c = (
+        await call('catalogue', 'POST', '/api/catalogue/courses', {
+          brandId: b,
+          title: d.title,
+          syllabus: d.syllabus,
+          welcome: d.welcome,
+        })
+      ).item;
+      courseId = c.id;
+      // «un curso nuevo reutiliza su edición inicial» (como la importación por CSV): la apertura en borrador que crea
+      // el catálogo con el curso es la que se completa y se publica.
+      editionId = read.draftEdition(b, courseId);
+      launch.progress(b, d.id, { course_id: courseId, edition_id: editionId });
+    }
+    const ed = read.edition(b, editionId);
+    if (!ed) throw fail(404, 'La apertura del curso ya no existe.');
+    if (ed.status !== 'published')
+      await call('catalogue', 'PATCH', `/api/catalogue/editions/${editionId}`, {
+        name: d.edition_name,
+        startsAt: d.starts_at,
+        endsAt: d.ends_at,
+        timezone: d.timezone,
+        instructor: d.instructor,
+        modality: d.modality,
+        location: d.location,
+        infoUrl: d.info_url,
+        capacity: d.capacity,
+        availableSeats: d.capacity,
+        price: d.price_cents / 100,
+        sessionPrice: null,
+        currency: d.currency,
+        status: 'published',
+        expectedRevision: ed.revision,
+      });
+    if (d.file_id) {
+      if (!flyerId) {
+        if (failFlyerOnce?.(d)) throw fail(503, 'Falla simulada al crear la imagen (sólo en pruebas).');
+        const f = (
+          await call('catalogue', 'POST', '/api/catalogue/flyers', {
+            editionId,
+            fileId: d.file_id,
+            title: (d.title + ' · ' + d.edition_name).slice(0, 180),
+            channel: 'all',
+          })
+        ).item;
+        flyerId = f.id;
+        launch.progress(b, d.id, { flyer_id: flyerId });
+      }
+      const fl = read.flyer(b, flyerId);
+      if (fl?.status === 'draft')
+        await call('catalogue', 'POST', `/api/catalogue/flyers/${flyerId}/approve`, {
+          expectedRevision: fl.revision,
+        });
+    }
+    launch.markCreated(b, d.id);
+  } catch (error) {
+    const after = state();
+    // Sin curso creado (ni antes ni ahora) nada quedó hecho: el manejo normal de la propuesta (pendiente o «no se pudo»).
+    if (!after[0] && !before[0]) throw error;
+    const done = LAUNCH_STEPS.filter((_, i) => after[i] && (d.file_id || i < 2));
+    const missing = LAUNCH_STEPS.filter((_, i) => !after[i]);
+    throw fail(
+      409,
+      `Quedó hecho: ${done.join(', ') || 'nada'}. Falta: ${missing.join(', ')}. Motivo: ${String(error?.status ? error.message : 'error interno').slice(0, 200)} Para terminar, propón de nuevo «dar_de_alta_curso» con el mismo borrador: sigue desde aquí sin repetir lo hecho.`,
+    );
+  }
+}
+
 export const ACTIONS = Object.freeze({
+  dar_de_alta_curso: {
+    entity: 'course_draft',
+    scope: CONFIG,
+    noun: 'curso en borrador',
+    label: 'Dar de alta el curso',
+    permission: 'course_launch',
+    screen: { view: 'courses', label: 'Catálogo' },
+    // Sólo lo propone la misma llave o conexión que armó el borrador.
+    sourceBound: true,
+    batchOrder: 0,
+    effect:
+      'Se crea el curso en el catálogo y su apertura queda PUBLICADA: desde ese momento el asistente lo ofrece a los clientes con estos datos y se puede vender. Si trae imagen, queda aprobada como imagen del curso. Se puede retirar en el Catálogo (devolver la apertura a borrador o archivar el curso).',
+    name: e => e.title,
+    check(e, ctx) {
+      const problems = [];
+      const warnings = [];
+      if (e.status === 'created') problems.push('Ese curso ya se dio de alta.');
+      else if (e.status === 'discarded') problems.push('Ese curso en borrador se descartó.');
+      if (e.file_id && !e.file_mime) problems.push('La imagen ya no está en la biblioteca de la marca.');
+      if (e.course_id && !e.created_course_active)
+        problems.push('El curso que se creó en un intento anterior está archivado: reactívalo en el Catálogo.');
+      if (e.status === 'draft') {
+        const r = ctx.launchReview(e);
+        problems.push(...r.missing);
+        warnings.push(...r.warnings);
+      }
+      if (e.course_id)
+        warnings.push(
+          'Un intento anterior ya creó parte (el curso' +
+            (e.flyer_id ? ' y la imagen' : '') +
+            '): al aprobar se continúa sin repetirlo.',
+        );
+      const money =
+        e.price_cents === null
+          ? 'Sin precio'
+          : (() => {
+              try {
+                return new Intl.NumberFormat('es-MX', { style: 'currency', currency: e.currency }).format(
+                  e.price_cents / 100,
+                );
+              } catch {
+                return String(e.price_cents / 100);
+              }
+            })();
+      return {
+        problems,
+        warnings,
+        details: [
+          ['Estado al aprobar', 'Curso activo y apertura publicada'],
+          ['Imagen', e.file_id ? 'Sí (se aprueba con el curso)' : 'Sin imagen'],
+        ],
+        sends: sendsOf([
+          { label: 'Curso', value: e.title },
+          { label: 'Temario', value: e.syllabus },
+          { label: 'Bienvenida', value: e.welcome },
+          { label: 'Apertura', value: e.edition_name },
+          { label: 'Inicio', value: ctx.when(e.starts_at, e.timezone) },
+          { label: 'Fin', value: e.ends_at === null ? '' : ctx.when(e.ends_at, e.timezone) },
+          { label: 'Modalidad', value: MODALITY[e.modality] || e.modality },
+          { label: 'Docente', value: e.instructor || 'Por confirmar' },
+          { label: 'Lugar', value: e.location },
+          { label: 'Enlace de información', value: e.info_url },
+          { label: 'Precio', value: money },
+          { label: 'Cupo', value: e.capacity === null ? 'Sin límite' : String(e.capacity) },
+        ]),
+        image:
+          e.file_id && e.file_mime
+            ? { url: '/api/library/files/' + e.file_id, alt: 'Imagen propuesta para ' + plain(e.title, 120) }
+            : null,
+      };
+    },
+    run: launchCourse,
+  },
   publicar_recorrido: {
     entity: 'chatflow',
     scope: DRAFTS,
@@ -500,6 +664,8 @@ export const EXEC_ROUTES = Object.freeze([
   // el único retiro: archivar un curso (active=0, reversible desde el Catálogo)
   ['catalogue', 'POST', new RegExp(`^/api/catalogue/courses/${ID}/archive$`)],
   ['course-access', 'PUT', new RegExp(`^/api/course-access/editions/${ID}$`)],
+  // dar de alta un curso en borrador: crear el curso y su imagen (publicar la apertura y aprobar la imagen, arriba)
+  ['catalogue', 'POST', /^\/api\/catalogue\/(courses|flyers)$/],
 ]);
 
 export const STATUS = Object.freeze({

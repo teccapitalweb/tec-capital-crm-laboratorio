@@ -25,7 +25,7 @@ import { assertSchemaCurrent } from './helpers/schema.mjs';
 import { startServer } from './helpers/server.mjs';
 import { PASSWORD, call, openDb, registerAdmin } from './helpers/crm.mjs';
 
-const MIGRATION = 'mcp-uploads/0001-upload-tokens';
+const MIGRATIONS = ['mcp-uploads/0001-upload-tokens', 'mcp-uploads/0002-course-drafts'];
 const ref = () => 'mcp-cat-' + randomUUID();
 const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const png = tag => Buffer.concat([Buffer.from(PNG_SIG), Buffer.from('imagen-de-prueba-' + tag + '-' + randomUUID())]);
@@ -36,14 +36,22 @@ const webp = tag =>
 test('subidas: herramienta, permiso, rutas cerradas y lectura con tope', async () => {
   assert.deepEqual(
     UPLOAD_TOOLS.map(t => t.name),
-    ['preparar_subida_imagen'],
+    [
+      'crear_curso_borrador',
+      'actualizar_curso_borrador',
+      'listar_cursos_borrador',
+      'descartar_curso_borrador',
+      'preparar_subida_imagen',
+    ],
   );
-  const tool = UPLOAD_TOOLS[0];
+  const tool = UPLOAD_TOOLS.find(t => t.name === 'preparar_subida_imagen');
+  for (const t of UPLOAD_TOOLS) assert.equal(t.scope, 'config_drafts');
   assert.equal(tool.scope, 'config_drafts');
   assert.ok(TOOLS.includes(tool));
   // el asistente lee el orden completo en la descripción
-  assert.match(tool.description, /crear_apertura_borrador.*preparar_subida_imagen.*publicar_apertura.*aprobar_imagen/s);
-  assert.deepEqual(Object.keys(tool.inputSchema.properties), ['aperturaId']);
+  assert.match(tool.description, /crear_curso_borrador.*preparar_subida_imagen.*cursoBorradorId.*dar_de_alta_curso/s);
+  assert.match(UPLOAD_TOOLS[0].description, /NO entra al catálogo/);
+  assert.deepEqual(Object.keys(tool.inputSchema.properties), ['aperturaId', 'cursoBorradorId']);
   // la subida sólo toca tres rutas del catálogo: archivo, imagen en borrador y archivar el borrador anterior
   assert.equal(UPLOAD_ROUTES.length, 3);
   for (const [name, method, re] of UPLOAD_ROUTES) {
@@ -79,9 +87,9 @@ test('migración mcp-uploads/0001: sobre una base ya publicada, sin filas y huel
     db.close();
     await rm(dir, { recursive: true, force: true });
   });
-  migrate(db, { backup: false, registry: defineRegistry(NAMED.filter(m => m.name !== MIGRATION)) });
+  migrate(db, { backup: false, registry: defineRegistry(NAMED.filter(m => !MIGRATIONS.includes(m.name))) });
   const flyers = db.prepare('SELECT count(*) n FROM flyers').get().n;
-  assert.deepEqual(migrate(db, { backup: false }).applied, [MIGRATION]);
+  assert.deepEqual(migrate(db, { backup: false }).applied, MIGRATIONS);
   assertSchemaCurrent(db);
   assert.equal(db.prepare('SELECT count(*) n FROM mcp_upload_tokens').get().n, 0);
   assert.equal(db.prepare('SELECT count(*) n FROM flyers').get().n, flyers, 'no toca lo que había');

@@ -26,6 +26,7 @@ import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { fromConnector } from '../../lib/connector-call.mjs';
 import { problemsOf } from '../course-access/module.mjs';
+import { whenWords } from '../../lib/course-draft-rules.mjs';
 import { ACTIONS, EXEC_ROUTES, STATUS, actionOf } from './actions.mjs';
 import { createRepo } from './repo.mjs';
 
@@ -103,6 +104,21 @@ export default {
     const { crm, catalogue, content, automation } = host.services;
     const access = host.access;
     const repo = createRepo(db);
+    // Los cursos en borrador y su alta viven en el módulo mcp-uploads.
+    const uploads = () => {
+      const found = host.module('mcp-uploads');
+      if (!found?.launch) throw fail(503, 'Esa parte del CRM no está disponible ahora. Inténtalo más tarde.');
+      return found;
+    };
+    // Sólo en pruebas: hace fallar UNA vez el paso de crear la imagen de un curso cuyo título lleva esta marca, para
+    // comprobar el alta a medias y su reintento.
+    const failMark = process.env.NODE_ENV === 'test' ? process.env.MCP_TEST_FAIL_FLYER_TITLE || '' : '';
+    const failedOnce = new Set();
+    const failFlyerOnce = d => {
+      if (!failMark || !String(d.title).includes(failMark) || failedOnce.has(d.id)) return false;
+      failedOnce.add(d.id);
+      return true;
+    };
     const now = () => Date.now();
 
     const emit = brandId => {
@@ -157,6 +173,12 @@ export default {
         'Aprobarla pide poder administrar los accesos del curso de esta marca.',
       ],
       catalogue: [(u, b) => u.role === 'admin' && crm.canBrand(u, b), 'Aprobarla pide ser administración de la marca.'],
+      // dar de alta un curso: lo que piden sus rutas (crear el curso y publicar la apertura: administración; crear y
+      // aprobar la imagen: aprobar contenido)
+      course_launch: [
+        (u, b) => u.role === 'admin' && crm.canBrand(u, b) && Boolean(content?.access?.(u)?.approve),
+        'Aprobarla pide ser administración de la marca y poder aprobar contenido.',
+      ],
       content: [
         (u, b) => crm.canBrand(u, b) && Boolean(content?.access?.(u)?.approve),
         'Aprobarla pide poder aprobar textos de contenido.',
@@ -183,6 +205,9 @@ export default {
         now: now(),
         pendingPublish: editionId => repo.pendingPublish(brandId, editionId),
         courseUsage: courseId => repo.courseUsage(brandId, courseId),
+        // un curso en borrador del conector: lo que le falta y sus avisos, con las reglas del alta
+        launchReview: d => uploads().launch.review(d),
+        when: whenWords,
         automationOn: (() => {
           try {
             return Boolean(automation?.enabledFor?.(brandId));
@@ -343,6 +368,9 @@ export default {
       host.rate('mcp-proposals.propose:' + key.id, LIMITS.proposePerMinute);
       const seen = await inspect(actor, brandId, action, entityId, { strict: true, mode: 'propose' });
       if (!seen) throw fail(404, `Ese ${a.noun} no existe en esta marca.`, { code: 'not_found' });
+      // Lo que es de un origen (un curso en borrador) sólo lo propone ese mismo origen: para otro «no existe».
+      if (a.sourceBound && !uploads().launch.ownedBy(seen.e, key))
+        throw fail(404, `Ese ${a.noun} no existe en esta marca.`, { code: 'not_found' });
       if (seen.problems.length)
         throw fail(409, 'Todavía no se puede proponer: ' + seen.problems[0], {
           code: 'not_ready',
@@ -489,8 +517,22 @@ export default {
       try {
         // Una acción de varios pasos (aprobar una imagen cuya apertura cambió: guardarla y aprobarla) los hace en serie.
         // Si un paso posterior falla, lo anterior ya quedó (sigue en borrador) y la entidad cambió: queda obsoleta.
-        const steps = a.steps ? a.steps(entity, row.entity_revision) : [a.request(entity, row.entity_revision)];
-        for (const [name, method, path, input] of steps) await moduleCall(user, name, method, path, input);
+        const call = (name, method, path, input) => moduleCall(user, name, method, path, input);
+        if (a.run)
+          // Una acción de varios pasos que depende de lo que crea (dar de alta un curso): la acción misma los encadena.
+          await a.run({
+            call,
+            entity,
+            revision: row.entity_revision,
+            read: repo.read,
+            launch: uploads().launch,
+            fail,
+            failFlyerOnce,
+          });
+        else {
+          const steps = a.steps ? a.steps(entity, row.entity_revision) : [a.request(entity, row.entity_revision)];
+          for (const [name, method, path, input] of steps) await call(name, method, path, input);
+        }
       } catch (error) {
         // Nada se aplicó (las rutas de los módulos hacen su cambio en una sola transacción). Si la entidad cambió entre
         // tanto, la propuesta queda obsoleta; si fue un permiso, la disponibilidad o un fallo interno, vuelve a quedar
