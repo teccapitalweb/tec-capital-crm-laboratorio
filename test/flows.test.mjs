@@ -71,7 +71,9 @@ test('flujo de bienvenida: validación de los pasos, datos por su nombre y compa
   assert.deepEqual(Object.keys(ACTIONS), ['price', 'syllabus', 'schedule', 'enroll', 'human']);
 });
 
-test('WhatsApp real: un saludo con ficha y botones sale como imagen y, aparte, el mensaje con sus botones', async () => {
+// Desde el 21 nov 2026 (docs/PLAN_WHATSAPP_REAL.md, «Archivo con botones en un solo mensaje»): un solo interactivo con
+// la imagen de encabezado, para que en el teléfono no lleguen los botones antes que la imagen.
+test('WhatsApp real: un saludo con ficha y botones sale como un solo mensaje con la imagen de encabezado', async () => {
   const calls = [],
     meta = metaChannel({
       env: {
@@ -99,12 +101,12 @@ test('WhatsApp real: un saludo con ficha y botones sale como imagen y, aparte, e
   const parts = calls.slice(1).map(c => JSON.parse(c.init.body));
   assert.deepEqual(
     parts.map(p => p.type),
-    ['image', 'interactive'],
+    ['interactive'],
   );
-  assert.deepEqual(parts[0].image, { id: 'm1' });
-  assert.equal(parts[1].interactive.body.text, '¡Hola, María! ¿Qué te gustaría saber?');
+  assert.deepEqual(parts[0].interactive.header, { type: 'image', image: { id: 'm1' } });
+  assert.equal(parts[0].interactive.body.text, '¡Hola, María! ¿Qué te gustaría saber?');
   assert.deepEqual(
-    parts[1].interactive.action.buttons.map(b => b.reply.title),
+    parts[0].interactive.action.buttons.map(b => b.reply.title),
     ['Precio', 'Temario', 'Más opciones'],
   );
 });
