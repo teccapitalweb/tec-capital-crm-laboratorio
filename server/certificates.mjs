@@ -159,22 +159,48 @@ export function createCertificates({
       .trim();
   const nameRequestOf = en =>
     db.prepare('SELECT * FROM certificate_name_requests WHERE order_id=? AND brand_id=?').get(en.order_id, en.brand_id);
-  function holderFor(en, base) {
+  // El nombre de la persona como sale hoy en un certificado sin solicitud: el de la persona fusionada o el del contacto.
+  function baseHolder(en) {
+    const contact = db.prepare('SELECT * FROM contacts WHERE id=?').get(en.contact_id);
+    const person = contact?.persona_id
+      ? db.prepare('SELECT name FROM persons WHERE id=?').get(contact.persona_id)
+      : null;
+    return (person?.name || contact?.name || 'Alumno').trim();
+  }
+  // Un nombre confirmado por el equipo gana (aunque después la persona haya pedido otro, que queda pendiente); si no, el
+  // pedido sólo si es el mismo nombre de la persona; si no, el de siempre.
+  function holderFor(en, base = baseHolder(en)) {
     const r = nameRequestOf(en);
-    if (r?.status === 'confirmed' && String(r.confirmed_name || '').trim()) return r.confirmed_name.trim();
+    if (String(r?.confirmed_name || '').trim()) return r.confirmed_name.trim();
     if (r?.requested_name && plainName(r.requested_name) === plainName(base)) return r.requested_name.trim();
     return base;
   }
-  // Confirmar (o corregir) el nombre que pidió: queda como el del certificado de esa inscripción.
+  // Limpieza del nombre que escribe el equipo: letras, espacios, guion, apóstrofo y punto, hasta 120 caracteres.
+  const cleanHolder = v => {
+    const name = text(v, 200).replace(/\s+/g, ' ').trim();
+    if (name.length < 3 || name.length > 120 || !/^[\p{L}][\p{L}\s'’.-]*$/u.test(name) || !/\s/.test(name)) return '';
+    return name;
+  };
+  // Confirmar (o corregir) el nombre que pidió: queda como el del certificado de esa inscripción. `expectedRequestedName`
+  // es el nombre pedido que la persona del equipo vio: si cambió mientras tanto, 409 y la pantalla recarga.
   function confirmHolderName(user, enrollmentId, input) {
     const en = db.prepare('SELECT * FROM enrollments WHERE id=?').get(enrollmentId);
     if (!en) throw fail(404, 'Inscripción no disponible.');
     const e = edition(en.edition_id);
     requireIssuer(user, e);
-    const name = text(input?.name, 120).replace(/\s+/g, ' ');
-    if (name.length < 3) throw fail(400, 'Escribe el nombre completo para el certificado.');
+    if (en.status !== 'enrolled') throw fail(409, 'La inscripción está dada de baja.');
+    if (db.prepare("SELECT 1 FROM certificates WHERE enrollment_id=? AND status='issued'").get(en.id))
+      throw fail(409, 'Esta inscripción ya tiene certificado: para cambiar el nombre, revócalo y emítelo de nuevo.');
+    const name = cleanHolder(input?.name);
+    if (!name) throw fail(400, 'Escribe el nombre completo (nombre y apellido) para el certificado, sólo con letras.');
     const r = nameRequestOf(en),
-      t = now();
+      seen = typeof input?.expectedRequestedName === 'string' ? input.expectedRequestedName : null;
+    if (seen !== null && seen !== (r?.requested_name || ''))
+      throw Object.assign(fail(409, 'La persona pidió otro nombre mientras tanto. Recarga para verlo.'), {
+        code: 'stale_record',
+      });
+    const t = now(),
+      before = holderFor(en);
     transaction(db, () => {
       if (r)
         db.prepare(
@@ -184,6 +210,9 @@ export function createCertificates({
         db.prepare(
           "INSERT INTO certificate_name_requests(id,brand_id,contact_id,order_id,status,confirmed_name,confirmed_by,confirmed_at,created_at,updated_at) VALUES(?,?,?,?,'confirmed',?,?,?,?,?)",
         ).run(randomUUID(), en.brand_id, en.contact_id, en.order_id, name, user.id, t, t, t);
+      db.prepare(
+        'INSERT INTO certificate_name_events(id,brand_id,contact_id,order_id,actor_id,from_name,to_name,created_at) VALUES(?,?,?,?,?,?,?,?)',
+      ).run(randomUUID(), en.brand_id, en.contact_id, en.order_id, user.id, before, name, t);
     });
     audit(user, 'certificate.holder_name', en.id);
     return editionView(e, user);
@@ -460,7 +489,7 @@ export function createCertificates({
               ? { name: r.requested_name || null, status: r.status, confirmedName: r.confirmed_name || null }
               : null;
           })(),
-          holderName: holderFor(en, en.contact_name),
+          holderName: holderFor(en),
         };
       });
     return {
