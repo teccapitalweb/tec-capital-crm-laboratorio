@@ -97,17 +97,22 @@ const revision = (row, input) => {
 // Una fecha del catálogo tal como la lee el cliente ({{fecha}}, {{vigencia}}, la ficha, los materiales): la misma
 // redacción que la ficha del asistente (reply-copy: whenText), con la zona dicha en palabras y nunca su identificador
 // técnico («America/Mexico_City»). Medianoche exacta = sólo se conoce el día: sin hora.
-const timeText = (value, zone) => (value === null || value === undefined ? 'Por confirmar' : whenText(value, zone));
+const timeText = (value, zone) => whenText(value, zone) ?? 'Por confirmar';
 // La versión corta para el flyer generado (cabe en un renglón): «23 nov 2026, 7:00 p.m. (hora del centro de México)».
-export const shortTimeText = (value, zone) =>
-  value === null || value === undefined
-    ? 'Por confirmar'
-    : noHour(value, zone)
+// Nunca lanza: una fecha o una zona no válidas caen a «Por confirmar».
+export const shortTimeText = (value, zone) => {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return 'Por confirmar';
+  try {
+    return noHour(value, zone)
       ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeZone: zone }).format(value)
       : new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short', timeZone: zone }).format(value) +
-        ' (' +
-        zoneWords(zone) +
-        ')';
+          ' (' +
+          zoneWords(zone) +
+          ')';
+  } catch {
+    return 'Por confirmar';
+  }
+};
 
 // Valores de las variables de una plantilla para un curso/edición (los usa también Contenido para las plantillas por evento).
 export function templateValues(ctx, name) {
