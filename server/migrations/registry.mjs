@@ -23,6 +23,7 @@ import jobs from './named/jobs/index.mjs';
 import lifecycle from './named/lifecycle/index.mjs';
 import mcpActivity from './named/mcp-activity/index.mjs';
 import mcpOauth from './named/mcp-oauth/index.mjs';
+import mcpProposals from './named/mcp-proposals/index.mjs';
 import messages from './named/messages/index.mjs';
 import queues from './named/queues/index.mjs';
 import realMode from './named/real-mode/index.mjs';
@@ -46,6 +47,7 @@ import waCutover from './named/wa-cutover/index.mjs';
 // «course-access» va al final: tablas propias (accesos del curso) y llegó después de todas las publicadas.
 // «mcp-oauth» va al final: tablas propias (conectar un asistente con un clic) y llegó después de todas las publicadas.
 // «mcp-activity» va al final: tabla propia (actividad del asistente) y llegó después de todas las publicadas.
+// «mcp-proposals» va al final: tabla propia (propuestas del asistente que aprueba una persona), después de las publicadas.
 export const NAMED = defineRegistry([
   ...attributes,
   ...broadcasts,
@@ -69,4 +71,5 @@ export const NAMED = defineRegistry([
   ...courseAccess,
   ...mcpOauth,
   ...mcpActivity,
+  ...mcpProposals,
 ]);

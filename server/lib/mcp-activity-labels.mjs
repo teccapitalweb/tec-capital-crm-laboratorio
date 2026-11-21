@@ -63,6 +63,9 @@ export const TOOL_LABELS = Object.freeze({
   crear_regla: 'Creó una regla en borrador',
   actualizar_regla: 'Guardó una regla en borrador',
   probar_regla: 'Probó una regla',
+  proponer_accion: 'Dejó una propuesta para que la apruebe una persona',
+  listar_propuestas: 'Consultó sus propuestas',
+  retirar_propuesta: 'Retiró una propuesta',
 });
 
 // Qué es la entidad que la herramienta audita (la parte central de la acción de auditoría: «mcp.flow.create» → flow).
@@ -79,6 +82,7 @@ export const ENTITY_LABELS = Object.freeze({
   broadcast: 'Difusión',
   segment: 'Segmento',
   rule: 'Regla',
+  proposal: 'Propuesta',
 });
 
 // Motivo de una llamada que no salió bien: clave cerrada → resultado y texto. «scope» lleva el nombre del permiso,

@@ -1,0 +1,149 @@
+/*
+ * Pantalla «Propuestas del asistente»: sólo lo que el kit no trae, con el prefijo pp- y variables de public/tokens.css.
+ * Cada pendiente es una tarjeta del kit; la nota del asistente va en una pieza aparte, con su rótulo.
+ */
+
+.pp-subtitulo {
+  margin: 0;
+  font-size: var(--font-section);
+  font-weight: var(--weight-black);
+}
+
+.pp-tarjeta {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.pp-datos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.pp-datos dd,
+.pp-detalle dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pp-bloque {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.pp-grupo {
+  margin: 0;
+  font-weight: var(--weight-bold);
+}
+
+.pp-texto {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.pp-detalles {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.pp-detalle {
+  display: grid;
+  grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+}
+
+.pp-detalle dt {
+  font-weight: var(--weight-bold);
+}
+
+.pp-detalle dd {
+  white-space: pre-line;
+}
+
+.pp-lista {
+  margin: 0;
+  padding-left: var(--space-8);
+  display: grid;
+  gap: var(--space-1);
+}
+
+/* Un aviso con su título y su lista, uno debajo del otro (el kit los pone en fila). */
+.pp-aviso {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+}
+
+.pp-nota {
+  margin: 0;
+  padding: var(--space-5) var(--space-7);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.pp-nota__quien {
+  font-weight: var(--weight-bold);
+  color: var(--text-2);
+}
+
+.pp-nota__texto {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.pp-acciones .k-btn {
+  min-height: 40px;
+}
+
+.pp-historial {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.pp-historia {
+  display: grid;
+  gap: var(--space-1);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.pp-historia:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.pp-historia__fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.pp-historia__titulo {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pp-historia .k-hint {
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .pp-detalle {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+}
