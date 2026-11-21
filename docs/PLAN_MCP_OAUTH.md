@@ -1,6 +1,6 @@
 # Conectar un asistente con un clic (OAuth del conector MCP) · 20 nov 2026
 
-**Sin publicar** (rama de trabajo). **Esquema nuevo:** migración con nombre `mcp-oauth/0001-tables`. `MCP_OAUTH_DISABLED=1` lo apaga (las llaves de la API siguen igual). Falta probarlo con una aplicación de asistente real contra el servidor público.
+**Publicado en `main`** (commit `615d329`, 20 nov 2026; en producción `APP_ORIGIN` está puesto y la conexión se anuncia). **Esquema nuevo:** migración con nombre `mcp-oauth/0001-tables`. `MCP_OAUTH_DISABLED=1` lo apaga (las llaves de la API siguen igual). Falta probarlo con una aplicación de asistente real contra el servidor público.
 
 **Activación: en producción hace falta `APP_ORIGIN`** (la dirección pública del CRM, por ejemplo `https://crm-laboratorio-production.up.railway.app`). Sin ella OAuth queda **apagado**: los documentos `/.well-known/…` responden 404, el 401 de `/mcp` no invita a iniciar sesión y `/oauth/authorize`, `/oauth/token`, `/oauth/register`, `/oauth/revoke` y `/oauth/decision` responden 503; el registro del servidor dice «mcp-oauth: APP_ORIGIN es obligatorio en producción…» al arrancar y, como mucho una vez por minuto, al rechazar. Así la dirección que se anuncia nunca sale de la cabecera `Host`, que la escribe quien llama. Fuera de producción (pruebas, uso local) se deduce del pedido.
 
