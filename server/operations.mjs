@@ -210,10 +210,30 @@ export function createOperations({
       kind: s.first_human_at ? 'next' : 'first',
     });
   }
+  // Quien quiera enterarse de que la persona escribió mientras su conversación espera a alguien del equipo (el acuse del
+  // asistente, server/replies.mjs). Corre dentro de la transacción de quien guarda el mensaje y en un SAVEPOINT: si falla,
+  // lo suyo se deshace y el mensaje se guarda igual.
+  let waitingHook = null;
+  const useCustomerWaiting = fn => {
+    waitingHook = fn;
+  };
   function message(c, kind, actor = null) {
     const current = db.prepare('SELECT * FROM conversations WHERE id=?').get(c.id),
       s = state(current);
-    if (kind === 'customer' && !current.bot_enabled) requestHuman(current);
+    if (kind === 'customer' && !current.bot_enabled) {
+      requestHuman(current);
+      if (waitingHook) {
+        db.exec('SAVEPOINT customer_waiting');
+        try {
+          waitingHook(current);
+          db.exec('RELEASE customer_waiting');
+        } catch (error) {
+          db.exec('ROLLBACK TO customer_waiting');
+          db.exec('RELEASE customer_waiting');
+          console.error('Waiting acknowledgement failed', error?.name);
+        }
+      }
+    }
     if (kind === 'agent') {
       if (s.waiting_since !== null)
         event(current, actor, 'response', {
@@ -878,5 +898,5 @@ export function createOperations({
     }
     throw fail(404, 'Acción de operación no disponible.');
   }
-  return { handle, message, requestHuman, reset, reconcile, settings, state, assign };
+  return { handle, message, requestHuman, reset, reconcile, settings, state, assign, useCustomerWaiting };
 }

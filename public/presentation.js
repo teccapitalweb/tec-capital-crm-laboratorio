@@ -47,6 +47,8 @@ window.createPresentationUI = function ({ state, api, esc, icon, icons, toast, s
     help: 'pide ayuda',
     menu: 'opciones',
     choose_course: 'elige curso',
+    access: 'pide sus accesos',
+    cert_data: 'datos para la constancia',
   };
   const nav = () =>
     `<button data-view="presentation" class="${state.view === 'presentation' ? 'active' : ''}" aria-label="Modo presentación">${icon('presentation')}<span class="nav-label-text">Presentación</span></button>`;

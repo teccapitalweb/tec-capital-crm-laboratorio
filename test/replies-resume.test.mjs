@@ -141,7 +141,13 @@ test('un chat que sólo esperaba por el nivel «Sugerir» vuelve a contestarse s
   assert.equal(conv(a).status, 'waiting');
   const n = bot(a).length;
   await say(ana, a, '¿Cuánto cuesta?', false);
-  assert.equal(bot(a).length, n, 'tras pedir una persona, el asistente no se mete');
+  // tras pedir una persona el asistente no retoma la conversación: sólo deja un acuse, una vez por espera
+  // (docs/PLAN_RESPUESTAS_DE_VENTA.md; antes no recibía nada)
+  assert.equal(bot(a).length, n + 1);
+  assert.match(bot(a).at(-1), /Ya le avisé al equipo/);
+  assert.doesNotMatch(bot(a).at(-1), /\$\d/, 'no contesta el precio: la conversación es de una persona');
+  await say(ana, a, '¿Siguen ahí?', false);
+  assert.equal(bot(a).length, n + 1, 'una sola vez por espera');
   assert.equal(conv(a).bot_enabled, 0);
 
   // 4) un chat que una persona tomó tampoco se reanuda

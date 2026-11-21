@@ -31,7 +31,8 @@ const BANK = [
   ['ok perfecto', 'thanks', 'cat'],
   // precisión nueva: antes caían en la ficha equivocada
   ['¿Qué voy a saber hacer cuando termine?', 'unknown', null], // «cuando» no es una pregunta de fechas
-  ['cuando me mandan el link de la clase', 'unknown', null],
+  // antes «unknown» (y la IA); desde docs/PLAN_RESPUESTAS_DE_VENTA.md es posventa: sin inscripción en este chat lo ve una persona
+  ['cuando me mandan el link de la clase', 'access', 'per'],
   ['el curso vale la pena?', 'unknown', null], // «vale» no es precio ni agradecimiento
   ['cuanto tiempo tengo para pagar', 'payment', 'kb'], // no es la duración del curso
   ['¿Quién da el curso?', 'schedule', 'cat'], // docente: ficha de la edición, no «¿para quién es el curso?»
@@ -129,7 +130,7 @@ test('reglas de intención: cada frase del banco va a la ruta correcta y las res
   const sim = async text => (await call('/api/replies/test', admin.cookie, { brandId: 'globalvet', text })).result;
   const route = r => {
     const types = [...new Set(r.sources.map(s => s.type))];
-    return r.handoff && ['human', 'refund', 'payment'].includes(r.intent)
+    return r.handoff && ['human', 'refund', 'payment', 'access'].includes(r.intent)
       ? 'per'
       : r.provider.used
         ? 'ia'
@@ -173,7 +174,8 @@ test('reglas de intención: cada frase del banco va a la ruta correcta y las res
   assert.doesNotMatch(how.reply, /revisará tu pago/);
 
   // varias preguntas en un mismo mensaje: se contestan todas (antes sólo la primera)
-  const two = await sim('Que temas incluye, y tiene certificado oficial?');
+  // (antes la frase decía «certificado oficial» y se contestaba con la respuesta aprobada «Sí…»: ver más abajo)
+  const two = await sim('Que temas incluye, y tiene certificado?');
   assert.equal(two.intent, 'syllabus');
   assert.match(two.reply, /Esto es lo que verás en /);
   assert.match(two.reply, /• /);
@@ -182,6 +184,11 @@ test('reglas de intención: cada frase del banco va a la ruta correcta y las res
   assert.match(two.reason, /Varias preguntas en un mensaje \(syllabus, certificate\)/);
   assert.equal((two.reply.match(/Quiero inscribirme/g) || []).length, 1, 'un solo cierre para todo el mensaje');
   assert.doesNotMatch(two.reply, /¿Te cuento el precio o las fechas\?/);
+  // «certificado oficial» dentro de varias preguntas: nunca «Sí» a una validez oficial que no consta (PLAN_RESPUESTAS_DE_VENTA)
+  const official = await sim('Que temas incluye, y tiene certificado oficial?');
+  assert.match(official.reply, /Esto es lo que verás en /);
+  assert.match(official.reply, /no te puedo confirmar nada por aquí/);
+  assert.doesNotMatch(official.reply, /(^|\n)Sí\./);
   const pd = await sim('¿Cuánto cuesta y cuándo empieza?');
   assert.equal(pd.intent, 'price');
   assert.match(pd.reply, /El precio de .+ es de \$/);
