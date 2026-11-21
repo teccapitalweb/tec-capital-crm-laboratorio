@@ -9,6 +9,22 @@ window.createCertificatesUI = function ({ state, api, esc, icon, showModal, toas
   const btn = (action, label, id = '', extra = '', klass = '') =>
     `<button type="button" class="btn ${klass}" data-action="cert-${action}" data-id="${esc(id)}" ${extra}>${label}</button>`;
   const note = copy => `<p class="crm-hint">${copy}</p>`;
+  // Nombre que la persona pidió por el chat para su constancia (docs/PLAN_RESPUESTAS_DE_VENTA.md): es una propuesta; sale en
+  // el certificado sólo si alguien lo confirma aquí (o si es el mismo nombre de la persona).
+  const requested = (r, e, certs) => {
+    const q = r.requestedName;
+    if (!q || (!q.name && !q.confirmedName)) return '';
+    const line =
+      q.status === 'confirmed'
+        ? `<small>Nombre para su constancia (confirmado): ${esc(q.confirmedName)}</small>`
+        : `<small>Nombre que pidió para su constancia: ${esc(q.name)} · hoy el certificado saldría como «${esc(r.holderName)}»</small>`;
+    const enrollment = `data-enrollment="${esc(r.enrollmentId)}"`;
+    const actions =
+      certs.canIssue && !r.certificate
+        ? `<span class="actions">${q.status !== 'confirmed' && q.name ? btn('name-use', 'Usar este nombre', e.id, `${enrollment} data-name="${esc(q.name)}"`) : ''}${btn('name-fix', 'Corregir nombre', e.id, `${enrollment} data-name="${esc(q.confirmedName || q.name || r.holderName)}"`)}</span>`
+        : '';
+    return line + actions;
+  };
   const kpi = (label, value, sub = '') =>
     `<div class="an-kpi"><span>${label}</span><strong>${esc(String(value))}</strong>${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
   let data = null,
@@ -58,7 +74,7 @@ window.createCertificatesUI = function ({ state, api, esc, icon, showModal, toas
     if (!certs) return '';
     const e = d.edition,
       rows = certs.enrollments.filter(r => r.status === 'enrolled');
-    return `<section class="co-section"><h3>Certificados</h3><div class="co-meta"><span>Asistencia mínima ${certs.settings.min_attendance_pct} %</span><span>${certs.settings.auto_issue ? 'Emisión automática al cerrar' : 'Emisión manual'}</span>${certs.settings.credits_enabled ? `<span>${certs.settings.balance} créditos</span>` : ''}<span>${certs.issued} emitidos · ${certs.eligible} por emitir</span></div><div class="co-list">${rows.map(r => `<div class="co-row"><div><strong>${esc(r.contactName)}</strong><small>Asistencia ${r.pct} % (${r.attended} de ${r.held})</small>${r.certificate ? `<small>${esc(r.certificate.folio)} · ${esc(r.certificate.issuedLabel)}</small>` : r.reason ? `<small>${esc(r.reason)}</small>` : ''}</div><div>${r.certificate ? chip('Certificado', 'good') : r.eligible ? chip('Listo para emitir', 'good') : chip('No elegible')}</div><div class="actions">${r.certificate ? btn('view', 'Ver', r.certificate.id, `data-url="${esc(r.certificate.svgUrl)}"`) + btn('link', 'Enlace', r.certificate.id, `data-url="${esc(r.certificate.verifyUrl)}" data-folio="${esc(r.certificate.folio)}"`) + (certs.canIssue ? btn('revoke', 'Revocar', r.certificate.id) : '') : r.eligible && certs.canIssue ? btn('issue-one', 'Emitir', e.id, `data-enrollment="${esc(r.enrollmentId)}"`) : ''}</div></div>`).join('') || note('Sin inscritos activos.')}</div>${certs.canIssue && certs.eligible ? `<div class="actions">${btn('issue-all', 'Emitir los ' + certs.eligible + ' elegibles', e.id, '', 'primary')}</div>` : ''}${
+    return `<section class="co-section"><h3>Certificados</h3><div class="co-meta"><span>Asistencia mínima ${certs.settings.min_attendance_pct} %</span><span>${certs.settings.auto_issue ? 'Emisión automática al cerrar' : 'Emisión manual'}</span>${certs.settings.credits_enabled ? `<span>${certs.settings.balance} créditos</span>` : ''}<span>${certs.issued} emitidos · ${certs.eligible} por emitir</span></div><div class="co-list">${rows.map(r => `<div class="co-row"><div><strong>${esc(r.contactName)}</strong><small>Asistencia ${r.pct} % (${r.attended} de ${r.held})</small>${requested(r, e, certs)}${r.certificate ? `<small>${esc(r.certificate.folio)} · ${esc(r.certificate.issuedLabel)}</small>` : r.reason ? `<small>${esc(r.reason)}</small>` : ''}</div><div>${r.certificate ? chip('Certificado', 'good') : r.eligible ? chip('Listo para emitir', 'good') : chip('No elegible')}</div><div class="actions">${r.certificate ? btn('view', 'Ver', r.certificate.id, `data-url="${esc(r.certificate.svgUrl)}"`) + btn('link', 'Enlace', r.certificate.id, `data-url="${esc(r.certificate.verifyUrl)}" data-folio="${esc(r.certificate.folio)}"`) + (certs.canIssue ? btn('revoke', 'Revocar', r.certificate.id) : '') : r.eligible && certs.canIssue ? btn('issue-one', 'Emitir', e.id, `data-enrollment="${esc(r.enrollmentId)}"`) : ''}</div></div>`).join('') || note('Sin inscritos activos.')}</div>${certs.canIssue && certs.eligible ? `<div class="actions">${btn('issue-all', 'Emitir los ' + certs.eligible + ' elegibles', e.id, '', 'primary')}</div>` : ''}${
       certs.certificates.some(c => c.status === 'revoked')
         ? `<details class="ctc-history"><summary>Revocados (${certs.certificates.filter(c => c.status === 'revoked').length})</summary>${certs.certificates
             .filter(c => c.status === 'revoked')
@@ -94,6 +110,20 @@ window.createCertificatesUI = function ({ state, api, esc, icon, showModal, toas
           toast('Copia el enlace manualmente.');
         }
         return true;
+      }
+      if (name === 'cert-name-use' || name === 'cert-name-fix') {
+        const value =
+          name === 'cert-name-use'
+            ? el.dataset.name
+            : window.prompt('Nombre completo para el certificado', el.dataset.name || '');
+        if (!value) return true;
+        await api('/api/certificates/enrollments/' + el.dataset.enrollment + '/holder-name', {
+          method: 'POST',
+          body: { name: value },
+        });
+        toast('Nombre del certificado confirmado.');
+        await refreshCoordination();
+        return 'reload';
       }
       if (name === 'cert-issue-one' || name === 'cert-issue-all') {
         const r = await api('/api/certificates/editions/' + id + '/issue', {

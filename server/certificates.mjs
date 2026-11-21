@@ -147,6 +147,47 @@ export function createCertificates({
     const n = db.prepare('UPDATE certificate_sequences SET last=last+1 WHERE year=? RETURNING last').get(year).last;
     return 'IPCI-' + year + '-' + String(n).padStart(5, '0');
   }
+  // Nombre que la persona pidió por el chat para su constancia (docs/PLAN_RESPUESTAS_DE_VENTA.md): es una PROPUESTA. Sale en
+  // el certificado sólo si alguien del equipo la confirmó (con el nombre que haya confirmado) o si es el mismo nombre de la
+  // persona (sólo cambian mayúsculas o acentos). Si no, el certificado lleva el nombre de siempre.
+  const plainName = v =>
+    String(v || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const nameRequestOf = en =>
+    db.prepare('SELECT * FROM certificate_name_requests WHERE order_id=? AND brand_id=?').get(en.order_id, en.brand_id);
+  function holderFor(en, base) {
+    const r = nameRequestOf(en);
+    if (r?.status === 'confirmed' && String(r.confirmed_name || '').trim()) return r.confirmed_name.trim();
+    if (r?.requested_name && plainName(r.requested_name) === plainName(base)) return r.requested_name.trim();
+    return base;
+  }
+  // Confirmar (o corregir) el nombre que pidió: queda como el del certificado de esa inscripción.
+  function confirmHolderName(user, enrollmentId, input) {
+    const en = db.prepare('SELECT * FROM enrollments WHERE id=?').get(enrollmentId);
+    if (!en) throw fail(404, 'Inscripción no disponible.');
+    const e = edition(en.edition_id);
+    requireIssuer(user, e);
+    const name = text(input?.name, 120).replace(/\s+/g, ' ');
+    if (name.length < 3) throw fail(400, 'Escribe el nombre completo para el certificado.');
+    const r = nameRequestOf(en),
+      t = now();
+    transaction(db, () => {
+      if (r)
+        db.prepare(
+          "UPDATE certificate_name_requests SET status='confirmed',confirmed_name=?,confirmed_by=?,confirmed_at=?,updated_at=? WHERE id=?",
+        ).run(name, user.id, t, t, r.id);
+      else
+        db.prepare(
+          "INSERT INTO certificate_name_requests(id,brand_id,contact_id,order_id,status,confirmed_name,confirmed_by,confirmed_at,created_at,updated_at) VALUES(?,?,?,?,'confirmed',?,?,?,?,?)",
+        ).run(randomUUID(), en.brand_id, en.contact_id, en.order_id, name, user.id, t, t, t);
+    });
+    audit(user, 'certificate.holder_name', en.id);
+    return editionView(e, user);
+  }
   function issueOne(en, e, s, actor, source) {
     const el = eligibility(en, e, s);
     if (!el.eligible) throw fail(409, el.reason);
@@ -160,13 +201,8 @@ export function createCertificates({
     const person = contact?.persona_id
         ? db.prepare('SELECT id,name FROM persons WHERE id=?').get(contact.persona_id)
         : null,
-      // El nombre que la persona dio en el chat para su constancia (docs/PLAN_RESPUESTAS_DE_VENTA.md) gana sobre el del contacto.
-      stated = db
-        .prepare(
-          "SELECT d.full_name FROM certificate_details d JOIN orders o ON o.conversation_id=d.conversation_id WHERE o.id=? AND d.brand_id=? AND d.full_name!=''",
-        )
-        .get(en.order_id, en.brand_id)?.full_name,
-      holder = (stated || person?.name || contact?.name || 'Alumno').trim();
+      base = (person?.name || contact?.name || 'Alumno').trim(),
+      holder = holderFor(en, base);
     const hours = db
       .prepare("SELECT COALESCE(sum(duration_min),0) m FROM edition_sessions WHERE edition_id=? AND status='done'")
       .get(e.id).m;
@@ -417,6 +453,14 @@ export function createCertificates({
           eligible: el.eligible,
           reason: el.reason,
           certificate: el.certificate ? view(el.certificate) : null,
+          // nombre que pidió por el chat para su constancia, y con qué nombre saldría hoy el certificado
+          requestedName: (() => {
+            const r = nameRequestOf(en);
+            return r && (r.requested_name || r.confirmed_name)
+              ? { name: r.requested_name || null, status: r.status, confirmedName: r.confirmed_name || null }
+              : null;
+          })(),
+          holderName: holderFor(en, en.contact_name),
         };
       });
     return {
@@ -707,6 +751,10 @@ ${s.realMode ? '' : `<text x="${W / 2}" y="${H - 52}" font-size="11" fill="#b0b6
         return true;
       }
       throw fail(405, 'Método no permitido.');
+    }
+    if ((x = path.match(/^\/api\/certificates\/enrollments\/([a-f0-9-]{36})\/holder-name$/)) && req.method === 'POST') {
+      json(res, 200, confirmHolderName(user, x[1], await body(req)));
+      return true;
     }
     if ((x = path.match(/^\/api\/certificates\/([a-f0-9-]{36})(?:\.(svg)|\/(revoke))?$/))) {
       const c = get(x[1]);

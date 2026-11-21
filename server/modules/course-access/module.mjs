@@ -30,6 +30,7 @@ const MAX_BODY = 2000;
 const MIN_BODY = 20;
 const BULK = 100;
 const RECENT_MS = 30 * 24 * 3600 * 1000;
+const ASSISTANT_RESENDS_PER_DAY = 2; // reenvíos que hace el asistente por inscripción en 24 horas
 
 export const VARIABLES = Object.freeze([
   { key: 'nombre', label: 'Nombre de la persona' },
@@ -392,6 +393,15 @@ export default {
           ? { id: r.id, filename: r.filename, mime: r.mime, url: '/api/files/' + r.attachment_id, at: r.created_at }
           : null,
         enrollment: n ? { id: n.id, status: n.status, at: n.created_at } : null,
+        // nombre que pidió por el chat para su constancia (propuesta; se confirma en Certificados)
+        certificateName: (() => {
+          const r = db
+            .prepare(
+              "SELECT requested_name,status,confirmed_name FROM certificate_name_requests WHERE order_id=? AND requested_name!=''",
+            )
+            .get(o.id);
+          return r ? { name: r.requested_name, status: r.status, confirmedName: r.confirmed_name } : null;
+        })(),
         access: {
           state: stateOf(a),
           sent: n ? repo.wasSent(n.id) : false,
@@ -426,7 +436,31 @@ export default {
         const n = repo.enrollment(n0.id),
           e = repo.edition(n.brand_id, n.edition_id),
           a = repo.access(n.edition_id);
-        const reason = !e ? 'empty' : problemsOf(a.body, e).length ? 'empty' : repo.wasSent(n.id) ? '' : autoSkip(a, n);
+        // Sólo se reenvía lo MISMO que ya recibió esa persona: entrega encendida, texto vigente en la misma revisión que su
+        // última entrega enviada y un tope de reenvíos del asistente por inscripción y día. Si no, lo ve una persona.
+        const lastSent = db
+          .prepare(
+            "SELECT access_revision FROM course_access_deliveries WHERE enrollment_id=? AND status='sent' ORDER BY created_at DESC,rowid DESC LIMIT 1",
+          )
+          .get(n.id);
+        const today = db
+          .prepare(
+            "SELECT count(*) n FROM course_access_deliveries WHERE enrollment_id=? AND client_ref LIKE 'assistant:%' AND created_at>?",
+          )
+          .get(n.id, now() - 24 * 3600 * 1000).n;
+        const reason = !e
+          ? 'empty'
+          : a.enabled !== 1
+            ? 'off'
+            : problemsOf(a.body, e).length
+              ? 'empty'
+              : !lastSent
+                ? 'not_sent'
+                : lastSent.access_revision !== a.revision
+                  ? 'changed'
+                  : today >= ASSISTANT_RESENDS_PER_DAY
+                    ? 'limit'
+                    : '';
         if (reason) return { enrolled: true, ready: false, reason };
         return {
           enrolled: true,
@@ -453,6 +487,7 @@ export default {
           clientRef: 'assistant:' + messageId,
           at: now(),
         });
+        audit(null, 'course_access.resend_assistant', n.id);
         emit(n.brand_id);
       },
     });

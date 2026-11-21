@@ -115,7 +115,10 @@ const PATTERNS = [
   // certificado ni una inscripción nueva. Un correo o un nombre sueltos se reconocen en plan(), sólo si ya hay un pedido.
   ['cert_data', /\S/, 0.8, (t, raw) => sales.certDataSignal(t, raw)],
   // Accesos después de pagar («¿dónde entro?», «no me llegó el enlace», «no me han agregado al grupo»).
+  // Sólo con una inscripción activa o un pedido pagado o en revisión (plan() la vuelve a leer sin esta regla si no los hay).
   ['access', /\S/, 0.8, t => sales.isAccess(t)],
+  // «Ya realicé el pago de mi inscripción»: avisar de un pago gana siempre a la inscripción (antes creaba otro pedido).
+  ['payment', /\S/, 0.85, t => sales.claimsPaid(t)],
   // «¿Hasta qué día me puedo registrar?» pregunta un plazo: no pide crear un pedido todavía.
   ['schedule', sales.DEADLINE, 0.8],
   [
@@ -132,7 +135,11 @@ const PATTERNS = [
     'enroll',
     /\b(inscripcion|apartar (mi |el |un )?lugar|aparto (mi )?lugar|lo tomo|la tomo|lo quiero tomar|quiero tomar(lo)?|me apunto|estoy interesad[oa] en (tomarlo|tomar|inscribirme|el curso))\b/,
     0.8,
-    t => !/\b(cuanto|costo|precio|cuesta|requisitos?|cierran|hasta)\b|\bno (quiero|voy a|pienso)\b/.test(t),
+    // «¿qué incluye la inscripción?» y «gracias, lo tomo en cuenta» no piden un pedido
+    t =>
+      !/\b(cuanto|costo|precio|cuesta|requisitos?|cierran|hasta|incluye|incluyen|en cuenta)\b|\bno (quiero|voy a|pienso)\b/.test(
+        t,
+      ),
   ],
   // «Está caro», «no me alcanza»: no es una pregunta de pago ni de precio; se contesta con el precio vigente y la opción de hablar con una persona.
   [
@@ -211,7 +218,9 @@ const PATTERNS = [
     'seats',
     /\b(cupos?|lugar|lugares|vacantes?|lleno|espacio|espacios)\b/,
     0.8,
-    t => /\b(hay|queda|quedan|cuantos|todavia|aun|tienen|lleno|disponibles?|cupos?)\b/.test(t),
+    t =>
+      /\b(hay|queda|quedan|cuantos|todavia|aun|tienen|lleno|disponibles?|cupos?)\b/.test(t) &&
+      !/\b(estacion\w*|parking|auto|autos|carro|coche|lugar de (la clase|reunion))\b/.test(t), // «¿hay espacio para estacionarse?»
   ],
   // Pide una recomendación o nombra una especie o un tema («¿cuál me recomiendas?», «tengo un rancho», «¿tienen algo de
   // cirugía?»): se contesta con los cursos de la marca que coinciden (plan()), sin IA.
@@ -310,7 +319,8 @@ export function createReplies({
       .all(brandId, courseId)
       .map(view);
 
-  function classify(raw) {
+  // `skip`: intenciones que no aplican a esta conversación (p. ej. 'access' sin inscripción ni pedido pagado).
+  function classify(raw, { skip = [] } = {}) {
     if (contacts.isOptOutText(raw)) return { intent: 'opt_out', confidence: 0.95 };
     const t = clean(raw);
     if (!t)
@@ -320,7 +330,8 @@ export function createReplies({
           ? { intent: 'thanks', confidence: 0.5 }
           : { intent: 'unknown', confidence: 0 };
     for (const [intent, re, confidence, when] of PATTERNS)
-      if (re.test(t) && (!when || when(t, String(raw || '')))) return { intent, confidence };
+      if (!skip.includes(intent) && re.test(t) && (!when || when(t, String(raw || ''))))
+        return { intent, confidence };
     return { intent: 'unknown', confidence: 0 };
   }
   // Todas las intenciones que aparecen en el mensaje, en el orden de las reglas (para contestar varias preguntas a la vez).
@@ -472,10 +483,36 @@ export function createReplies({
     accessApi = api;
   };
 
+  // Ningún fallo del asistente deja a la persona sin respuesta ni sin pase (docs/PLAN_RESPUESTAS_DE_VENTA.md): si armar la
+  // respuesta falla (un dato del catálogo que ya no existe, una consulta que lanza), se contesta que una persona la atiende y
+  // se pasa la conversación. El error queda en la bitácora del servidor.
+  function plan(c, trigger, opts = {}) {
+    try {
+      return planOrThrow(c, trigger, opts);
+    } catch (error) {
+      console.error('Reply plan failed', error?.name, String(error?.message || '').slice(0, 160));
+      return {
+        mode: settings(c.brand_id).mode,
+        intent: 'unknown',
+        confidence: 0,
+        reply: copy.escalate,
+        sources: [],
+        stage: null,
+        handoff: true,
+        prepared: null,
+        reason: 'No se pudo armar la respuesta automática: pasa a una persona.',
+        needsProvider: false,
+        knowledge: [],
+        buttons: null,
+        order: false,
+        course: { courseId: c.course_id, editionId: c.edition_id },
+      };
+    }
+  }
   // Plan síncrono: decide intención, texto, fuentes y si hace falta el proveedor. No escribe nada.
   // `opts.noFlow`: hay un recorrido en curso (docs/PLAN_RECORRIDOS.md); el flujo de bienvenida no decora esta respuesta.
   // `opts.forcedIntent`: la persona pulsó una opción del recorrido que contesta el asistente (precio, temario…).
-  function plan(c, trigger, opts = {}) {
+  function planOrThrow(c, trigger, opts = {}) {
     // El curso de ESTE mensaje: si lo elige o lo cambia, todo lo demás (catálogo, conocimiento, ficha) se planea ya con el curso nuevo; commit() lo guarda.
     const routed = route(c, trigger);
     if (routed?.course)
@@ -490,9 +527,15 @@ export function createReplies({
       forced =
         (INTENTS.includes(opts?.forcedIntent) && opts.forcedIntent) ||
         (pressed?.kind === 'action' ? pressed.target : null);
+    // Posventa sólo para quien ya compró: inscripción activa o pedido pagado o en revisión en esta conversación. Sin eso,
+    // «¿me pasas el link para pagar?» o «¿me mandan información?» se leen como siempre (pago, ficha, temario…).
+    const bought =
+      c.id !== 'simulacion' && (enrolledHere(c.id) || ['paid', 'review'].includes(lastOrder(c.id)?.status));
     const ctx = catalogue.info(c.course_id, c.edition_id),
       course = ctx.course,
-      cls = forced ? { intent: forced, confidence: 1 } : classify(trigger.text),
+      cls = forced
+        ? { intent: forced, confidence: 1 }
+        : classify(trigger.text, { skip: bought ? [] : ['access'] }),
       situational =
         !forced &&
         CATALOGUE_INTENTS.includes(cls.intent) &&
@@ -780,6 +823,7 @@ export function createReplies({
     // Recomendar sin IA («¿cuál me recomiendas?», «tengo un rancho», «¿tienen algo de reptiles?»): con los títulos y temarios
     // de los cursos de la marca que tienen una apertura disponible, hasta 5, con su inicio y precio vigentes. Si no dice
     // especie ni tema, se le pregunta (o contesta una respuesta aprobada) en lugar de soltar la lista completa.
+    let notMine = false;
     const recommendation = () => {
       const list = brandCourses(db, catalogue, c.brand_id).map(k => ({
         ...k,
@@ -805,14 +849,20 @@ export function createReplies({
           ' curso(s) que coinciden con lo que dijo (título y temario), con su inicio y precio vigentes.';
         return true;
       }
+      if (!sales.RECOMMEND.test(said) && !sales.FITS.test(said)) return false;
+      // Nombra temas que ESTE curso no cubre («¿este curso aplica para bovinos?» en uno de aves): ni requisitos (sonaría a
+      // «sí») ni la lista: se resuelve como una pregunta sin intención (conocimiento, IA o una persona).
+      if (sales.FITS.test(said) && sales.notCovered(trigger.text, course).length) {
+        notMine = true;
+        out.intent = 'unknown';
+        out.confidence = 0.3;
+        return false;
+      }
       if (!sales.RECOMMEND.test(said)) return false;
       if (fromKnowledge(0.5)) return true;
       // «Soy estudiante, ¿me sirve?», «soy técnico, ¿puedo tomarlo?»: pregunta por ESTE curso; contesta la respuesta aprobada de requisitos.
       const req = kb.find(k => k.topic === 'requirements');
-      if (
-        req &&
-        /\b(me sirve|sirve|puedo tomar\w*|lo puedo tomar|es para mi|aplica para|me conviene este)\b/.test(said)
-      ) {
+      if (req && sales.FITS.test(said)) {
         out.reply = req.answer;
         out.sources.push({ type: 'knowledge', id: req.id, revision: req.revision, question: req.question });
         out.reason = 'Pregunta si el curso le sirve: respuesta aprobada de requisitos «' + req.question + '».';
@@ -910,21 +960,50 @@ export function createReplies({
         }
       }
     } else if (intent === 'cert_data') {
-      // Datos para la constancia: se guardan con la conversación (commit) y se acusan. Ni pedido nuevo ni texto del certificado.
+      // Datos para la constancia: se guardan como PROPUESTA ligada al pedido (commit) y se acusan. Ni pedido nuevo ni texto
+      // del certificado; el nombre lo confirma una persona del equipo antes de emitir.
       const data = sales.certData(trigger.text),
-        order = c.id === 'simulacion' ? null : lastOrder(c.id);
-      if (sales.hasCertData(data)) {
-        out.certData = data;
+        order = c.id === 'simulacion' ? null : lastOrder(c.id),
+        live = order && ['pending', 'review', 'paid'].includes(order.status) ? order : null;
+      if (sales.hasCertData(data) && live) {
+        const kept = nameRequest(live.id),
+          // una señal débil (correo o teléfono sueltos) no trae nombre; un nombre explícito sí reemplaza al anterior
+          changedFrom = data.name && kept?.requested_name && kept.requested_name !== data.name ? kept.requested_name : null;
+        out.certData = { ...data, orderId: live.id };
         out.reply = copy.certDataThanks(user?.name, data, {
-          enrolled: order?.status === 'paid',
-          order: Boolean(order && ['pending', 'review', 'paid'].includes(order.status)),
+          enrolled: live.status === 'paid',
+          order: true,
+          changedFrom,
         });
         out.reason =
-          'Datos para la constancia: se guardan con la conversación y se acusa recibo, sin crear otro pedido.';
+          'Datos para la constancia: se guardan como propuesta con el pedido ' +
+          live.reference +
+          ' (el nombre lo confirma el equipo al emitir) y se acusa recibo, sin crear otro pedido.';
+      } else if (sales.hasCertData(data)) {
+        out.reply = copy.certDataNoOrder;
+        out.reason = 'Datos para la constancia sin pedido en este chat: no se guardan; se le invita a inscribirse.';
       } else {
         out.reply = copy.certDataAsk;
         out.reason = 'Ofrece sus datos o pregunta cómo escribir su nombre: se le piden en un solo mensaje.';
       }
+    } else if (
+      intent === 'enroll' &&
+      c.id !== 'simulacion' &&
+      (enrolledHere(c.id) ||
+        db
+          .prepare(
+            "SELECT 1 FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id WHERE co.conversation_id=? AND o.stage='ganada'",
+          )
+          .get(c.id))
+    ) {
+      // Ya inscrita (o la oportunidad ya está ganada): no se intenta otro pedido, que fallaría y la dejaría sin respuesta.
+      const st = accessApi?.forConversation(c) || null;
+      out.reply = st?.ready ? copy.alreadyEnrolled(ctx) + '\n\n' + st.text : copy.alreadyEnrolled(ctx, { advisor: true });
+      if (st?.ready) out.accessResend = { enrollmentId: st.enrollmentId };
+      out.sources.push(catalogueSource);
+      out.reason =
+        'Pide inscribirse pero ya está inscrita (o la oportunidad está ganada): no se crea otro pedido' +
+        (st?.ready ? '; se le reenvían sus accesos.' : '; se le ofrece una persona.');
     } else if (payKind === 'paid') {
       // Quien avisa que YA pagó no pregunta cómo pagar: se le agradece, se le dice el estado de su pedido y pasa a una persona, que es quien valida.
       // Nunca se confirma un pago desde aquí.
@@ -935,14 +1014,25 @@ export function createReplies({
     } else if (payKind === 'status') {
       // «¿Ya verificaron mi pago?»: el estado real del pedido. En revisión (o sin pedido) se avisa al equipo.
       const o = c.id === 'simulacion' ? null : lastOrder(c.id),
-        state = !o ? 'none' : ['paid', 'review', 'pending'].includes(o.status) ? o.status : 'none',
+        // pagado pero con la inscripción dada de baja: no se dice «activa»; lo revisa una persona
+        cancelled =
+          o?.status === 'paid' &&
+          !db.prepare("SELECT 1 FROM enrollments WHERE order_id=? AND status='enrolled'").get(o.id),
+        state = !o
+          ? 'none'
+          : cancelled
+            ? 'cancelled'
+            : ['paid', 'review', 'pending'].includes(o.status)
+              ? o.status
+              : 'none',
         v = o && state !== 'none' ? payments?.view(o) : null;
       out.reply = copy.payStatus(state, {
         reference: o?.reference || null,
         course: v?.courseTitle || course.title,
         edition: v?.editionName || '',
       });
-      out.handoff = state === 'none' || state === 'review' || (state === 'pending' && paidClaim);
+      out.handoff =
+        state === 'none' || state === 'review' || state === 'cancelled' || (state === 'pending' && paidClaim);
       out.reason =
         'Pregunta por el estado de su pago: ' +
         (state === 'none' ? 'no hay pedido en este chat' : 'el pedido ' + o.reference + ' está «' + o.status + '»') +
@@ -1079,6 +1169,32 @@ export function createReplies({
       out.handoff = true;
       out.sources.push(catalogueSource);
       out.reason = 'Pide que le avisen de la siguiente fecha: se le pasa al equipo.';
+    } else if (
+      intent === 'schedule' &&
+      sales.DEADLINE.test(said) &&
+      /\b(promo|promos|promocion|promociones|oferta|descuento)\b/.test(said)
+    ) {
+      // «¿Hasta cuándo es la promoción?»: el fin de la promoción vigente del catálogo, o que no hay.
+      out.reply = copy.promoUntil(ctx);
+      out.stage = 'interesado';
+      out.sources.push(catalogueSource);
+      out.reason = ctx.promotion
+        ? 'Pregunta hasta cuándo dura la promoción: su vigencia en el catálogo.'
+        : 'Pregunta hasta cuándo dura la promoción: el catálogo no tiene promoción vigente y se dice claro.';
+    } else if (intent === 'schedule' && sales.DEADLINE.test(said) && /\bpag\w*/.test(said)) {
+      // «¿Cuál es el último día para pagar?»: la vigencia de su pedido si lo hay.
+      const o = c.id === 'simulacion' ? null : payments?.openOrder(c.id);
+      out.reply = copy.payUntil(
+        o
+          ? {
+              reference: o.reference,
+              until: copy.startText({ starts_at: o.expires_at, timezone: ctx.edition.timezone }),
+            }
+          : {},
+      );
+      out.reason = o
+        ? 'Pregunta el último día para pagar: la vigencia de su pedido ' + o.reference + '.'
+        : 'Pregunta el último día para pagar sin pedido: el enlace de pago llega con su vigencia al inscribirse.';
     } else if (intent === 'schedule' && (sales.NEXT.test(said) || sales.DEADLINE.test(said))) {
       out.prepared = catalogue.prepare(c, { kind: 'schedule' });
       out.reply = sales.NEXT.test(said) ? copy.nextEdition(ctx) : copy.deadline(ctx);
@@ -1168,7 +1284,7 @@ export function createReplies({
       out.reason = 'Cupo de la edición consultado en el catálogo al responder.';
     } else if (intent === 'courses' && recommendation()) {
       /* recomendación con el catálogo: respondida */
-    } else if (intent === 'courses') {
+    } else if (intent === 'courses' && !notMine) {
       out.reply =
         routed?.multi && routed.list.length > 1
           ? copy.courseMenu(
@@ -1196,7 +1312,20 @@ export function createReplies({
         .all(c.id, trigger.id || '')
         .map(m => m.text)
         .join(' ');
-      const picked = rankKnowledge(trigger.text, kb, { k: TOP_K, extraQuery: recent });
+      let picked = rankKnowledge(trigger.text, kb, { k: TOP_K, extraQuery: recent });
+      // Con pocas respuestas aprobadas (TOP_K o menos) y ninguna parecida, una PREGUNTA real (con signo o de 6 palabras o
+      // más) sí va a la IA: el ahorro sale de las reglas (saludos, cortesías, pagos, posventa…), no de dejar sin IA una
+      // pregunta. Se manda el conocimiento chico completo porque el validador exige que la IA cite una respuesta aprobada:
+      // sin ninguna, cualquier borrador se descartaría y la llamada se pagaría para nada. Un mensaje corto que no es
+      // pregunta no llega a la IA.
+      if (!picked.sent && kb.length && kb.length <= TOP_K && looksLikeQuestion(trigger.text))
+        picked = {
+          selected: kb.map((entry, i) => ({ entry, score: 0, i })),
+          considered: kb.length,
+          sent: kb.length,
+          truncated: false,
+          mode: 'pocas-pregunta',
+        };
       out.knowledge = picked.selected.map(x => ({
         id: x.entry.id,
         question: x.entry.question,
@@ -1417,26 +1546,48 @@ export function createReplies({
     } // aprender nunca debe impedir que la respuesta salga
   }
 
-  // Datos para la constancia (docs/PLAN_RESPUESTAS_DE_VENTA.md): uno por conversación; lo nuevo reemplaza sólo lo que trae.
-  // server/certificates.mjs usa el nombre al emitir el certificado de la inscripción de esta conversación.
-  function saveCertData(c, trigger, d) {
+  // Datos para la constancia (docs/PLAN_RESPUESTAS_DE_VENTA.md): una PROPUESTA por pedido (certificate_name_requests). Un
+  // nombre explícito reemplaza al anterior y vuelve a quedar por confirmar; el correo y el teléfono sólo llenan lo vacío si
+  // llegan sueltos. server/certificates.mjs muestra la propuesta al equipo y sólo usa un nombre confirmado (o idéntico al
+  // de la persona).
+  const nameRequest = orderId =>
+    orderId ? db.prepare('SELECT * FROM certificate_name_requests WHERE order_id=?').get(orderId) : null;
+  function saveCertData(c, messageId, d) {
+    const o = d.orderId ? db.prepare('SELECT * FROM orders WHERE id=? AND brand_id=?').get(d.orderId, c.brand_id) : null;
+    if (!o) return null;
     const t = now(),
-      cur = db.prepare('SELECT * FROM certificate_details WHERE conversation_id=?').get(c.id);
-    if (cur)
+      cur = nameRequest(o.id);
+    if (!cur) {
       db.prepare(
-        'UPDATE certificate_details SET full_name=?,email=?,phone=?,message_id=?,updated_at=? WHERE conversation_id=?',
-      ).run(d.name || cur.full_name, d.email || cur.email, d.phone || cur.phone, trigger.id, t, c.id);
-    else
-      db.prepare(
-        'INSERT INTO certificate_details(conversation_id,brand_id,full_name,email,phone,message_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',
-      ).run(c.id, c.brand_id, d.name || '', d.email || '', d.phone || '', trigger.id, t, t);
+        "INSERT INTO certificate_name_requests(id,brand_id,contact_id,order_id,conversation_id,requested_name,email,phone,message_id,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?)",
+      ).run(randomUUID(), c.brand_id, o.contact_id, o.id, c.id, d.name || '', d.email || '', d.phone || '', messageId, t, t);
+      return { changedFrom: null };
+    }
+    const renamed = Boolean(d.name && d.name !== cur.requested_name);
+    db.prepare(
+      'UPDATE certificate_name_requests SET requested_name=?,email=?,phone=?,message_id=?,status=?,confirmed_name=?,confirmed_by=?,confirmed_at=?,updated_at=? WHERE id=?',
+    ).run(
+      d.name || cur.requested_name,
+      d.email || cur.email,
+      d.phone || cur.phone,
+      messageId,
+      renamed ? 'pending' : cur.status,
+      renamed ? null : cur.confirmed_name,
+      renamed ? null : cur.confirmed_by,
+      renamed ? null : cur.confirmed_at,
+      t,
+      cur.id,
+    );
+    return { changedFrom: renamed && cur.requested_name ? cur.requested_name : null };
   }
 
   // Mientras la conversación espera a una persona porque el asistente la pasó (docs/PLAN_RESPUESTAS_DE_VENTA.md): antes, lo que
-  // la persona escribía después («¿ya verificaron mi pago?», «nadie me contesta») no recibía nada. Ahora recibe UN acuse breve por
-  // espera, sin que el asistente retome la conversación. No aplica si alguien del equipo la tomó o ya escribió, si el nivel de la
-  // marca es «Apagado» o «Sugerir», ni a un archivo (un comprobante sigue su propio camino). Lo llama server/operations.mjs al
-  // guardar el mensaje de la persona, dentro de la misma transacción.
+  // la persona escribía después («¿ya verificaron mi pago?», «nadie me contesta») no recibía nada. Ahora recibe UNA sola
+  // respuesta automática por espera (el acuse, o el acuse de sus datos para la constancia si eso fue lo que escribió), sin
+  // que el asistente retome la conversación. Los datos que lleguen después se guardan sin contestar. No aplica si alguien del
+  // equipo la tomó o ya escribió, si el nivel de la marca es «Apagado» o «Sugerir», ni a un archivo (un comprobante sigue su
+  // propio camino). Un mensaje que pide algo (que le llamen, un asesor) nunca recibe «anoté…»: es el acuse de siempre y
+  // vuelve a avisar al equipo. Lo llama server/operations.mjs al guardar el mensaje, dentro de la misma transacción.
   function ackWhileWaiting(c0) {
     const c = db.prepare('SELECT * FROM conversations WHERE id=?').get(c0.id);
     if (!c || c.bot_enabled || c.assigned_to || c.status !== 'waiting') return null;
@@ -1448,27 +1599,51 @@ export function createReplies({
       .get(c.id);
     if (!m || m.attachment_id || contacts.isOptOutText(m.text)) return null;
     const last = db
-      .prepare(
-        'SELECT action,created_at FROM reply_log WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1',
-      )
+      .prepare('SELECT action,created_at FROM reply_log WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1')
       .get(c.id);
     if (last?.action !== 'escalated') return null; // sólo tras un pase del asistente (no el nivel de la marca ni otra vía)
-    const person = db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id)?.name;
-    // Los datos para la constancia suelen llegar justo después de «ya pagué» (cuando la conversación ya espera a una persona):
-    // se guardan y se acusan, cada vez que llegan, sin contestar nada más.
-    const t = clean(m.text),
-      data = sales.certData(m.text),
-      order = lastOrder(c.id);
     if (
-      sales.hasCertData(data) &&
-      (sales.certDataSignal(t, m.text) ||
-        (order && ['pending', 'review', 'paid'].includes(order.status) && sales.weakCertData(t, m.text)))
-    ) {
-      saveCertData(c, { id: m.id }, data);
+      db
+        .prepare("SELECT 1 FROM messages WHERE conversation_id=? AND created_at>=? AND sender_kind='agent' LIMIT 1")
+        .get(c.id, last.created_at)
+    )
+      return null; // una persona ya escribió: la conversación es suya
+    const t = clean(m.text),
+      asks = sales.ASKS_SOMETHING.test(t) || ['human', 'refund'].includes(classify(m.text).intent),
+      order = lastOrder(c.id),
+      live = order && ['pending', 'review', 'paid'].includes(order.status) ? order : null,
+      data = sales.certData(m.text),
+      isData =
+        !asks &&
+        live &&
+        sales.hasCertData(data) &&
+        (sales.certDataSignal(t, m.text) || sales.weakCertData(t, m.text));
+    let saved = null;
+    if (isData) saved = saveCertData(c, m.id, { ...data, orderId: live.id });
+    if (asks) {
+      // pide algo: la conversación sigue en la cola del equipo (si el aviso se había cerrado, se abre otra vez)
+      try {
+        operations.requestHuman(c, now());
+      } catch {}
+    }
+    if (
+      db
+        .prepare(
+          "SELECT 1 FROM messages WHERE conversation_id=? AND created_at>=? AND (client_ref LIKE 'wait-ack:%' OR client_ref LIKE 'wait-data:%') LIMIT 1",
+        )
+        .get(c.id, last.created_at)
+    )
+      return null; // una sola respuesta automática por espera
+    const person = db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id)?.name;
+    if (saved)
       return insertMessage(
         c,
         null,
-        copy.certDataThanks(person, data, { enrolled: order?.status === 'paid', order: Boolean(order) }),
+        copy.certDataThanks(person, data, {
+          enrolled: live.status === 'paid',
+          order: true,
+          changedFrom: saved.changedFrom,
+        }),
         'automation',
         'wait-data:' + m.id,
         null,
@@ -1476,15 +1651,6 @@ export function createReplies({
         null,
         { category: 'service' },
       );
-    }
-    if (
-      db
-        .prepare(
-          "SELECT 1 FROM messages WHERE conversation_id=? AND created_at>=? AND (sender_kind='agent' OR client_ref LIKE 'wait-ack:%') LIMIT 1",
-        )
-        .get(c.id, last.created_at)
-    )
-      return null; // una vez por espera; si una persona ya escribió, la conversación es suya
     const o = payments?.openOrder(c.id);
     return insertMessage(
       c,
@@ -1591,9 +1757,26 @@ export function createReplies({
       escalate(c, trigger);
       return { action: 'suggested', reply, reason };
     }
+    let orderFailed = false;
     if (p.order) {
-      const made = payments.createOrder(c, { user: null, source: 'bot' });
-      reply = reply.replace('{{pedido}}', payments.linkMessage(made.order));
+      // Si el pedido no se puede crear (p. ej. la oportunidad ya está cerrada), la persona no se queda sin respuesta: pasa
+      // a una persona del equipo en lugar de que el trabajo falle y se reintente en silencio.
+      db.exec('SAVEPOINT reply_order');
+      try {
+        const made = payments.createOrder(c, { user: null, source: 'bot' });
+        reply = reply.replace('{{pedido}}', payments.linkMessage(made.order));
+        db.exec('RELEASE reply_order');
+      } catch (error) {
+        db.exec('ROLLBACK TO reply_order');
+        db.exec('RELEASE reply_order');
+        orderFailed = true;
+        reply = forBrand(db, c.brand_id, copy.orderFailed);
+        handoff = true;
+        buttons = null;
+        keepButtons = false;
+        move = null;
+        reason += ' No se pudo crear el pedido (' + String(error?.message || '').slice(0, 120) + '): pasa a una persona.';
+      }
     }
     const messageId = insertMessage(
       c,
@@ -1607,10 +1790,20 @@ export function createReplies({
       { buttons, keepButtons, category: 'service' },
     ); // responde a un mensaje entrante: siempre dentro de la ventana de servicio
     log(handoff ? 'escalated' : 'replied', messageId);
-    if (p.certData) saveCertData(c, trigger, p.certData);
+    if (p.certData) saveCertData(c, trigger.id, p.certData);
     if (p.accessResend) accessApi?.record?.(p.accessResend.enrollmentId, messageId);
     if (move) flows?.apply(c.id, move);
-    if (p.stage) crm.setStage(c, p.stage);
+    if (p.stage && !orderFailed) {
+      // una etapa que ya no se puede mover (oportunidad cerrada) no tumba la respuesta que ya salió
+      db.exec('SAVEPOINT reply_stage');
+      try {
+        crm.setStage(c, p.stage);
+        db.exec('RELEASE reply_stage');
+      } catch {
+        db.exec('ROLLBACK TO reply_stage');
+        db.exec('RELEASE reply_stage');
+      }
+    }
     if (handoff) escalate(c, trigger);
     return { action: handoff ? 'escalated' : 'replied', messageId, reply, reason };
   }

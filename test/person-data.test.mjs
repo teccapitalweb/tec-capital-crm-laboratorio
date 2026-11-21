@@ -190,6 +190,12 @@ const SEEDS = {
         "INSERT INTO legacy_records(id,batch_id,brand_id,kind,external_id,person_id,contact_id,created_at) VALUES(?,'b',?,'alumno',?,?,?,1)",
       )
       .run(randomUUID(), c.brand, 'ext-' + s, c.person, c.id),
+  certificate_name_requests: (db, c, s) =>
+    db
+      .prepare(
+        "INSERT INTO certificate_name_requests(id,brand_id,contact_id,order_id,requested_name,email,status,created_at,updated_at) VALUES(?,?,?,?,?,?,'pending',1,1)",
+      )
+      .run(randomUUID(), c.brand, c.id, 'order-' + s, 'Nombre Ejemplo ' + s, s + '@correo.test'),
   survey_invites: (db, c, s) =>
     db
       .prepare(
