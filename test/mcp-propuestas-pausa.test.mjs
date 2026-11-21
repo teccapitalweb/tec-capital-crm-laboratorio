@@ -151,9 +151,9 @@ test('pausar un recorrido desde una propuesta: avisos con datos, permiso de quie
       grafo: JSON.parse(JSON.stringify(EXAMPLE_GRAPH)),
       clientRef: ref(),
     });
-    let r = await api('/api/chatflows/' + f.recorridoId + '/publish', { body: { expectedRevision: f.revision } });
+    const r = await api('/api/chatflows/' + f.recorridoId + '/publish', { body: { expectedRevision: f.revision } });
     if (activate)
-      r = await api('/api/chatflows/' + f.recorridoId + '/activate', { body: { expectedRevision: r.flow.revision } });
+      await api('/api/chatflows/' + f.recorridoId + '/activate', { body: { expectedRevision: r.flow.revision } });
     return f.recorridoId;
   };
   const old = await make('Reptiles viejo', keyword('reptiles'), { activate: true });
