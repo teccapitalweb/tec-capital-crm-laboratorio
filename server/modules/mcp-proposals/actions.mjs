@@ -326,6 +326,9 @@ export const ACTIONS = Object.freeze({
     label: 'Activar el recorrido',
     permission: 'automation',
     screen: { view: 'automatizacion', label: 'Automatización' },
+    // Sus avisos de choque de palabras de inicio salen de OTROS recorridos: se comparan al aprobar con los que vio la
+    // persona (warningsSeen); uno nuevo no pasa sin verlo.
+    confirmWarnings: true,
     effect:
       'El recorrido publicado empieza a atender conversaciones según su inicio. Se puede pausar en cualquier momento en Automatización.',
     name: e => e.name,

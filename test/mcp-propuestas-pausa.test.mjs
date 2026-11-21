@@ -260,4 +260,24 @@ test('pausar un recorrido desde una propuesta: avisos con datos, permiso de quie
     pLast.avisos.some(w => /único recorrido activo/.test(w)),
     JSON.stringify(pLast.avisos),
   );
+
+  // ---- un choque que aparece entre ver la tarjeta y aprobarla no pasa sin verlo (confirmWarnings, como archivar_curso)
+  const older = await make('Gatos viejo', keyword('gatos'), { activate: false });
+  await new Promise(done => setTimeout(done, 5));
+  const newer = await make('Gatos nuevo', keyword('gatos'), { activate: false });
+  const pNew = await ok('proponer_accion', { accion: 'activar_recorrido', id: newer });
+  const seen = (await cards()).find(p => p.id === pNew.propuestaId).warnings;
+  assert.ok(!seen.some(w => /arrancaría antes/.test(w)), 'al verla no había choque');
+  const olderRev = flowRow(older).revision;
+  await api('/api/chatflows/' + older + '/activate', { body: { expectedRevision: olderRev } });
+  const changed = await fetch(origin + `/api/mcp-proposals/${pNew.propuestaId}/approve`, {
+    method: 'POST',
+    headers: { Cookie: approver, Origin: origin, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ warningsSeen: seen }),
+  });
+  const changedBody = await changed.json();
+  assert.equal(changed.status, 409, JSON.stringify(changedBody));
+  assert.equal(changedBody.code, 'warnings_changed');
+  assert.match(changedBody.error, /«Gatos viejo» arrancaría antes con la palabra «gatos»/);
+  assert.notEqual(flowRow(newer).status, 'active', 'no se activó');
 });
