@@ -17,7 +17,7 @@ import {
 } from '../server/modules/chatflows/engine.mjs';
 import { createNode, normalizeGraph } from '../public/kit/shared/flow-model.js';
 import { UNAVAILABLE_TYPES } from '../public/kit/shared/flow-support.js';
-import { byNumber, matchCourse } from '../server/course-match.mjs';
+import { byNumber, candidates, matchCourse } from '../server/course-match.mjs';
 
 const NOW = Date.UTC(2026, 10, 16, 15, 0);
 
@@ -263,6 +263,121 @@ test('«¿Qué curso te interesa?» con un pedido vigente: no cambia de curso, l
   const same = courseRun({ skipIfKnown: false }, { known: true, order: true });
   same.answer('el de perros');
   assert.deepEqual(same.exits(), [['next', 'answer']]);
+});
+
+// Prueba real del 21 nov 2026: el recorrido saludó y la pregunta del curso volvió a saludar («¡Hola! Soy el asistente
+// de…»). Si el negocio ya habló en la atención, la pregunta sale sin saludo; y si el mensaje inicial acota («algo de
+// reptiles»), se ofrecen primero sólo esos cursos, con «ver todos» para la lista completa.
+const FOUR = [
+  { id: 'nutricion', title: 'Nutrición en perros y gatos', editionId: 'e-n' },
+  { id: 'aves', title: 'Plan sanitario para aves', editionId: 'e-a' },
+  { id: 'rep1', title: 'Reptiles: manejo básico', editionId: 'e-r1' },
+  { id: 'rep2', title: 'Reptiles: medicina clínica', editionId: 'e-r2' },
+];
+function greetRun({ greeting = true, start = '', list = FOUR } = {}) {
+  const f = courseIo({ list, start });
+  // como el real: el negocio ya habló si el recorrido dijo algo antes de la pregunta
+  f.io.spoke = () => f.sent.length > 0;
+  f.io.courseCandidates = (text, opts) => candidates(list, text, opts);
+  const nodes = [
+    ...(greeting ? [['hi', 'message', { parts: [{ kind: 'text', text: '¡Hola! Gracias por escribir.' }] }]] : []),
+    ['c', 'choose_course', { skipIfKnown: true, useMessage: true, attempts: 2 }],
+    ['ok', 'end', { text: 'Curso elegido' }],
+    ['no', 'end', { text: 'Sin curso' }],
+  ];
+  const edges = [
+    ...(greeting
+      ? [
+          ['n1', 'next', 'hi'],
+          ['hi', 'next', 'c'],
+        ]
+      : [['n1', 'next', 'c']]),
+    ['c', 'next', 'ok'],
+    ['c', 'none', 'no'],
+  ];
+  const env = makeEnv({ graph: graphOf(nodes, edges), settings: {}, io: f.io, now: NOW });
+  const s = session(env);
+  advance(s, env);
+  const answer = text => input(s, env, route(s, env, { text }, classify));
+  return { ...f, env, s, answer, texts: () => f.sent.map(p => p.text) };
+}
+
+test('«¿Qué curso te interesa?» después de un saludo: la pregunta sale sin otro saludo ni presentación', () => {
+  const r = greetRun();
+  const titles = FOUR.map(k => k.title);
+  assert.equal(r.texts().length, 2);
+  assert.equal(r.texts()[1], copy.chooseCourse('GlobalVet', titles, { greeted: true }));
+  assert.match(r.texts()[1], /^¿Sobre qué curso te gustaría información\?\n\n1\. /);
+  assert.doesNotMatch(r.texts()[1], /Hola|Soy el asistente/);
+  // sin nada antes, la pregunta del asistente de siempre, con su saludo
+  const alone = greetRun({ greeting: false });
+  assert.equal(alone.texts()[0], copy.chooseCourse('GlobalVet', titles));
+  assert.match(alone.texts()[0], /^¡Hola! Soy el asistente de GlobalVet\./);
+  // la del asistente fuera de un recorrido no cambia
+  assert.match(copy.chooseCourse('GlobalVet', titles), /^¡Hola! Soy el asistente de GlobalVet\. ¿Sobre qué curso/);
+  // reintentar sigue con su texto «otra vez»
+  r.answer('no sé');
+  assert.equal(r.texts().at(-1), copy.chooseCourse('GlobalVet', titles, { again: true }));
+});
+
+test('«¿Qué curso te interesa?» con un mensaje que acota: primero sólo esos cursos y «ver todos» trae la lista', () => {
+  let r = greetRun({ start: 'Hola, busco algo de reptiles' });
+  const reptiles = ['Reptiles: manejo básico', 'Reptiles: medicina clínica'];
+  assert.equal(r.texts()[1], copy.whichCourse(reptiles, { seeAll: true }));
+  assert.match(r.texts()[1], /^Tenemos 2 cursos de ese tema\. ¿Cuál te interesa\?\n\n1\. Reptiles: manejo básico\n2\./);
+  assert.match(r.texts()[1], /o escribe «ver todos» para ver la lista completa\.$/);
+  assert.deepEqual(r.s.waiting.titles, reptiles);
+  assert.equal(r.s.waiting.narrowed, true);
+  // «2» es el renglón 2 de ESA lista corta
+  r.answer('2');
+  assert.deepEqual(r.state.moves, ['rep2']);
+  // «ver todos»: la lista completa sin saludo, sin gastar un intento; después «1» es el renglón 1 de la completa
+  r = greetRun({ start: 'Hola, busco algo de reptiles' });
+  assert.equal(route(r.s, r.env, { text: 'Ver todos' }, classify).kind, 'course_all');
+  r.answer('ver todos!');
+  assert.equal(
+    r.texts().at(-1),
+    copy.chooseCourse(
+      'GlobalVet',
+      FOUR.map(k => k.title),
+      { greeted: true },
+    ),
+  );
+  assert.equal(r.s.waiting.tries, 0);
+  assert.equal(r.s.waiting.narrowed, undefined);
+  assert.deepEqual(
+    r.s.waiting.titles,
+    FOUR.map(k => k.title),
+  );
+  r.answer('1');
+  assert.deepEqual(r.state.moves, ['nutricion']);
+  // con la lista completa a la vista, «ver todos» ya no es nada especial: cuenta como respuesta no válida
+  r = greetRun({ greeting: false });
+  assert.equal(route(r.s, r.env, { text: 'ver todos' }, classify).kind, 'invalid');
+  // un mensaje que nombra un solo curso lo toma sin preguntar (como antes); uno que no acota, la lista completa
+  r = greetRun({ start: 'Quiero el de aves' });
+  assert.deepEqual(r.state.moves, ['aves']);
+  r = greetRun({ start: 'Hola, buenas tardes' });
+  assert.equal(
+    r.texts()[1],
+    copy.chooseCourse(
+      'GlobalVet',
+      FOUR.map(k => k.title),
+      { greeted: true },
+    ),
+  );
+  // «Tomar el curso del mensaje» apagado: tampoco acota
+  const off = courseIo({ list: FOUR, start: 'algo de reptiles' });
+  off.io.courseCandidates = (text, opts) => candidates(FOUR, text, opts);
+  const env = makeEnv({ graph: courseGraph({ useMessage: false }), settings: {}, io: off.io, now: NOW });
+  advance(session(env), env);
+  assert.equal(
+    off.sent[0].text,
+    copy.chooseCourse(
+      'GlobalVet',
+      FOUR.map(k => k.title),
+    ),
+  );
 });
 
 // Una lista de seis cursos: tres secciones de dos filas.

@@ -18,6 +18,7 @@ import { forBrand } from '../../lib/real-mode.mjs';
 import { isOpen } from '../../service-hours.mjs';
 import { templateValues } from '../../catalogue.mjs';
 import * as copy from '../../reply-copy.mjs';
+import { candidates } from '../../course-match.mjs';
 import { FLOW_FILE_MIMES } from '../../../public/kit/shared/flow-support.js';
 import { advance, input, makeEnv, newSession, numberedOptions, rememberChoice, route } from './engine.mjs';
 
@@ -339,6 +340,31 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
       courseFrom(text, opts) {
         if (!String(text || '').trim()) return null;
         return svc.replies.pickCourse(svc.replies.courseList(brandId), text, opts) || null;
+      },
+      // Los cursos que comparten lo que nombró el texto («reptiles», «perros y gatos»), con la misma regla que el
+      // asistente (course-match: candidates). Vacío si no acota o si serían demasiados para una lista corta.
+      courseCandidates(text, { strict = false } = {}) {
+        if (!String(text || '').trim()) return [];
+        return candidates(svc.replies.courseList(brandId), text, { strict });
+      },
+      // ¿El negocio ya le habló en esta atención? Lo que este recorrido ya dijo en este turno o, en la base, un
+      // mensaje del asistente, de un recorrido o del equipo desde que se abrió el ciclo de atención (o, sin ciclo,
+      // desde que empezó esta sesión). Así «¿Qué curso te interesa?» no repite el saludo.
+      spoke() {
+        if (ctx.sent.length) return true;
+        const c = conv();
+        const cycle = c.cycle_id
+          ? db.prepare('SELECT opened_at FROM conversation_cycles WHERE id=?').get(c.cycle_id)
+          : null;
+        const since = Math.min(cycle?.opened_at ?? Infinity, s.startedAt ?? Infinity);
+        if (!Number.isFinite(since)) return false;
+        return Boolean(
+          db
+            .prepare(
+              "SELECT 1 FROM messages WHERE conversation_id=? AND sender_kind IN ('agent','automation') AND created_at>=? LIMIT 1",
+            )
+            .get(c.id, since),
+        );
       },
       startText() {
         if (ctx.startText === undefined) ctx.startText = repo.startMessageText(brandId, s.id);

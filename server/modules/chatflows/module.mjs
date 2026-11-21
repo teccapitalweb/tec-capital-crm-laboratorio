@@ -601,6 +601,9 @@ export default {
           courses: () => ({ list: offered(), known }),
           courseFrom: (said, opts) =>
             String(said || '').trim() ? svc.replies.pickCourse(offered(), said, opts) || null : null,
+          courseCandidates: () => [], // en la prueba no hay mensaje inicial que acote la lista
+          // la prueba ya mostró algo del recorrido (o viene de un turno anterior): la pregunta sale sin saludo
+          spoke: () => Boolean(given) || messages.some(m => m.from !== 'person'),
           startText() {
             notes.push(
               'En la prueba no hay un mensaje inicial: si el recorrido empezara con un mensaje que nombra un curso, lo tomaría sin preguntar.',

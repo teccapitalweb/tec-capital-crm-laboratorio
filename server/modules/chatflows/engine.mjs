@@ -301,7 +301,7 @@ function cannotSend(node, env, s, reason) {
 // a ofrecer como botones (WhatsApp admite 3), sino como lista o como texto numerado.
 // «¿Qué curso te interesa?» espera una respuesta de curso (`kind: 'course'`): `titles` son los cursos que se le
 // mostraron, en orden, para entender «2» como el renglón 2 de ESA lista aunque el catálogo cambie mientras contesta.
-export function waitOf(node, env, { misses = 0, tries = 0, titles = [] } = {}) {
+export function waitOf(node, env, { misses = 0, tries = 0, titles = [], narrowed = false } = {}) {
   const def = typeOf(node?.type);
   if (!def || !['buttons', 'list', 'template', 'question', 'choose_course'].includes(node.type)) return null;
   const d = def.clean(node.data);
@@ -312,6 +312,8 @@ export function waitOf(node, env, { misses = 0, tries = 0, titles = [] } = {}) {
       titles: titles.map(t => String(t)),
       attempts: Math.min(Math.max(d.attempts || 2, 1), LIMITS.attempts),
       tries,
+      // `narrowed`: se le mostró sólo una parte de los cursos (los que nombró su mensaje); «ver todos» trae la lista
+      ...(narrowed ? { narrowed: true } : {}),
     };
   if (node.type === 'buttons')
     return {
@@ -398,8 +400,18 @@ function takeCourse(env, s, course, how) {
   }
   return null;
 }
+// La pregunta del asistente. Si el negocio ya habló en esta atención (el recorrido saludó antes, o el asistente o el
+// equipo escribieron en el ciclo), sale sin saludo ni presentación: «¿Sobre qué curso te gustaría información?».
 const askCourse = (env, s, titles, again = false) =>
-  say(env, s, { text: env.io.copy.chooseCourse(env.io.brandName(), titles, { again }) });
+  say(env, s, {
+    text: env.io.copy.chooseCourse(env.io.brandName(), titles, {
+      again,
+      greeted: !again && Boolean(env.io.spoke?.()),
+    }),
+  });
+// Pedir la lista completa después de una lista acotada: «ver todos», «todos», «ver todos los cursos», «la lista completa».
+const SEE_ALL =
+  /^(?:(?:ver|mostrar|muestrame|ensename|dame|quiero ver)\s+)?(?:todos(?:\s+los\s+cursos)?|la\s+lista(?:\s+completa)?|lista\s+completa|los\s+demas|otros|otros\s+cursos)$/;
 
 // Qué hace cada tipo de paso. Devuelve {next: salida} | {wait} | {delay: ms} | {end: resultado, …acciones finales}.
 const EXEC = {
@@ -497,11 +509,21 @@ const EXEC = {
     if (d.skipIfKnown && known) return { next: 'next', detail: 'known' };
     if (!list.length) return { next: 'none', detail: 'no_courses' };
     if (list.length === 1) return takeCourse(env, s, list[0], 'single') || { next: 'none', detail: 'taken' };
+    let narrow = [];
     if (d.useMessage) {
       // A media conversación (ya con curso) hace falta además una señal, como al cambiar de curso con el asistente.
-      const hit = env.io.courseFrom(env.io.startText(), { strict: known });
+      const start = env.io.startText();
+      const hit = env.io.courseFrom(start, { strict: known });
       const taken = hit ? takeCourse(env, s, hit, 'message') : null;
       if (taken) return taken;
+      // Nombró algo que comparten varios cursos («algo de reptiles»): como el asistente, se le ofrecen sólo ésos
+      // (course-match: candidates), con «ver todos» para la lista completa.
+      if (!hit) narrow = env.io.courseCandidates?.(start, { strict: known }) || [];
+    }
+    if (narrow.length) {
+      const titles = narrow.map(k => k.title);
+      say(env, s, { text: env.io.copy.whichCourse(titles, { seeAll: true }) });
+      return { wait: waitOf(node, env, { titles, narrowed: true }) };
     }
     const titles = list.map(k => k.title);
     askCourse(env, s, titles);
@@ -716,6 +738,7 @@ export function route(s, env, message, classify) {
     // la lógica del asistente: el número de la lista que se le mostró o el nombre del curso.
     const cls = classify(text);
     if (INTERRUPT.includes(cls.intent) || (cls.intent === 'payment' && PAID.test(key))) return { kind: 'interrupt' };
+    if (w.narrowed && SEE_ALL.test(key)) return { kind: 'course_all' };
     const course = env.io.courseFrom(text, { titles: w.titles, strict: false });
     if (course) return { kind: 'course', course };
     return cls.intent === 'decline' ? { kind: 'course_none' } : { kind: 'invalid' };
@@ -749,6 +772,15 @@ export function input(s, env, r) {
   if (r.kind === 'default') return follow(s, env, 'default');
   if (w?.kind === 'course') {
     if (r.kind === 'course_none') return follow(s, env, 'none', 'declined');
+    if (r.kind === 'course_all') {
+      // Pidió la lista completa: no cuenta como intento; la pregunta sale sin saludo (ya se le habló).
+      const titles = env.io.courses().list.map(k => k.title);
+      if (!titles.length) return follow(s, env, 'none', 'no_courses');
+      w.titles = titles;
+      delete w.narrowed;
+      say(env, s, { text: env.io.copy.chooseCourse(env.io.brandName(), titles, { greeted: true }) });
+      return {};
+    }
     if (r.kind === 'course') {
       const taken = takeCourse(env, s, r.course, 'answer');
       if (taken) return follow(s, env, taken.next, taken.detail);
@@ -758,6 +790,7 @@ export function input(s, env, r) {
     const titles = env.io.courses().list.map(k => k.title);
     if (w.tries >= w.attempts || !titles.length) return follow(s, env, 'none', 'invalid');
     w.titles = titles;
+    delete w.narrowed;
     askCourse(env, s, titles, true);
     env.io.log('miss', { nodeId: s.nodeId, detail: 'invalid' });
     return {};

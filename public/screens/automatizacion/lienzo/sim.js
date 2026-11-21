@@ -515,16 +515,26 @@ const RUN = {
       return go(env, s, node, 'next');
     }
     if (d.useMessage) note(s, node, 'Si el mensaje que inició el recorrido nombra un curso, lo tomaría sin preguntar.');
-    say(s, node, { text: askCourse(env, courses, false) });
+    // Si el recorrido ya dijo algo (un saludo), la pregunta sale sin otro saludo, como en el servidor.
+    say(s, node, {
+      text: askCourse(
+        env,
+        courses,
+        false,
+        s.transcript.some(e => e.who === 'out'),
+      ),
+    });
     return hold(s, node, { kind: 'course' });
   },
 };
 
 // La misma pregunta que hace el asistente (server/reply-copy.mjs, chooseCourse).
-const askCourse = (env, courses, again) =>
+const askCourse = (env, courses, again, greeted = false) =>
   (again
     ? 'Para darte la información correcta necesito saber qué curso te interesa:'
-    : `¡Hola! Soy el asistente de ${shown(env.catalogue.brand?.name, 'marca')}. ¿Sobre qué curso te gustaría información?`) +
+    : greeted
+      ? '¿Sobre qué curso te gustaría información?'
+      : `¡Hola! Soy el asistente de ${shown(env.catalogue.brand?.name, 'marca')}. ¿Sobre qué curso te gustaría información?`) +
   '\n\n' +
   courses.map((c, i) => `${i + 1}. ${c.title}`).join('\n') +
   '\n\nResponde con el número o el nombre del curso.' +

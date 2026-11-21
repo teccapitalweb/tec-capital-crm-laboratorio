@@ -226,10 +226,14 @@ export const courses = (ctx, titles) =>
       '. ¿Te cuento el precio o las fechas?';
 // ---- Un número de WhatsApp para toda la marca (docs/PLAN_NUMERO_POR_CONSULTORA.md): se pregunta el curso antes de hablar de precios o fechas.
 const numbered = titles => titles.map((t, i) => i + 1 + '. ' + t).join('\n');
-export const chooseCourse = (brand, titles, { again = false } = {}) =>
+// `greeted`: la conversación ya oyó al negocio en esta atención (un recorrido que saludó antes de preguntar): la
+// pregunta sale sin saludo ni presentación, para que no lleguen dos saludos seguidos.
+export const chooseCourse = (brand, titles, { again = false, greeted = false } = {}) =>
   (again
     ? 'Para darte la información correcta necesito saber qué curso te interesa:'
-    : '¡Hola! Soy el asistente de ' + brand + '. ¿Sobre qué curso te gustaría información?') +
+    : greeted
+      ? '¿Sobre qué curso te gustaría información?'
+      : '¡Hola! Soy el asistente de ' + brand + '. ¿Sobre qué curso te gustaría información?') +
   '\n\n' +
   numbered(titles) +
   '\n\nResponde con el número o el nombre del curso.' +
@@ -242,13 +246,16 @@ export const courseMenu = (ctx, titles) =>
   '\n\nAhora estamos viendo ' +
   ctx.course.title +
   '. Para cambiar, responde con el número o el nombre del curso.';
-// Nombró algo que comparten varios cursos («el de reptiles»): se le ofrecen sólo ésos.
-export const whichCourse = titles =>
+// Nombró algo que comparten varios cursos («el de reptiles»): se le ofrecen sólo ésos. `seeAll`: el paso «¿Qué curso
+// te interesa?» de un recorrido además deja pedir la lista completa con «ver todos».
+export const whichCourse = (titles, { seeAll = false } = {}) =>
   'Tenemos ' +
   titles.length +
   ' cursos de ese tema. ¿Cuál te interesa?\n\n' +
   numbered(titles) +
-  '\n\nResponde con el número o el nombre del curso.';
+  (seeAll
+    ? '\n\nResponde con el número o el nombre del curso, o escribe «ver todos» para ver la lista completa.'
+    : '\n\nResponde con el número o el nombre del curso.');
 export const switchBlocked = (ctx, other) =>
   'Tienes un pedido pendiente de ' +
   ctx.course.title +

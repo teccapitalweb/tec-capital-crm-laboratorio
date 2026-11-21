@@ -1132,6 +1132,90 @@ test('«¿Qué curso te interesa?» con un pedido vigente: no cambia de curso y 
   assert.equal(L.session(ana.conv).outcome, 'completed');
 });
 
+// Prueba real del 21 nov 2026: saludo del recorrido y, en seguida, la pregunta del curso con OTRO saludo. Con el
+// servidor real: la pregunta sale sin saludo cuando el recorrido ya habló, y un mensaje inicial que acota («algo de
+// reptiles») recibe primero sólo esos cursos, con «ver todos» para la lista completa.
+test('«¿Qué curso te interesa?» tras un saludo: sin doble saludo, y la lista acotada por el mensaje inicial', async t => {
+  const L = await lab(t);
+  const { db } = L;
+  await L.enableAutomation();
+  // Dos cursos de reptiles en la marca, copiados de uno real con su edición publicada (datos inventados).
+  const clone = (table, id, over) => {
+    const row = { ...db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id), ...over };
+    const cols = Object.keys(row);
+    db.prepare(`INSERT INTO ${table}(${cols.join(',')}) VALUES(${cols.map(() => '?').join(',')})`).run(
+      ...cols.map(c => row[c]),
+    );
+  };
+  const avesEdition = db.prepare("SELECT id FROM editions WHERE course_id='aves' AND status='published'").get().id;
+  for (const [id, title] of [
+    ['rep-manejo', 'Reptiles: manejo básico'],
+    ['rep-clinica', 'Reptiles: medicina clínica'],
+  ]) {
+    clone('courses', 'aves', { id, title });
+    clone('editions', avesEdition, { id: 'ed-' + id, course_id: id });
+  }
+  const graph = {
+    v: 1,
+    start: 'n1',
+    variables: [],
+    nodes: [
+      node('n1', 'start'),
+      node('hi', 'message', { parts: [{ kind: 'text', text: '¡Hola! Gracias por escribir a GlobalVet.' }] }),
+      node('c', 'choose_course', { skipIfKnown: true, useMessage: true, attempts: 2 }),
+      node('ok', 'end', { text: 'Listo con {{curso}}.' }),
+      node('no', 'end', { text: 'Sin curso.' }),
+    ],
+    edges: [
+      ['n1', 'next', 'hi'],
+      ['hi', 'next', 'c'],
+      ['c', 'next', 'ok'],
+      ['c', 'none', 'no'],
+    ].map(([from, port, to]) => ({ from, port, to })),
+  };
+  await L.publishFlow({ name: 'Saludo y curso', graph });
+  const pending = async name => {
+    const who = await L.customer(name);
+    db.prepare('UPDATE conversations SET course_pending=1 WHERE id=?').run(who.conv);
+    return who;
+  };
+  const texts = conv => L.outgoing(conv).map(m => m.text);
+
+  // Sin acotar: el saludo del recorrido y la pregunta SIN otro saludo, con la lista completa.
+  const ana = await pending('Ana Pérez');
+  await ana.say('Hola');
+  const [hello, question] = texts(ana.conv);
+  assert.equal(hello, '¡Hola! Gracias por escribir a GlobalVet.');
+  assert.match(question, /^¿Sobre qué curso te gustaría información\?\n\n1\. /);
+  assert.doesNotMatch(question, /Soy el asistente|¡Hola!/);
+  assert.ok(question.includes('Reptiles: manejo básico') && question.includes('Plan sanitario'));
+
+  // Acota: sólo los dos de reptiles, con «ver todos»; «ver todos» trae la lista completa (sin saludo) y se elige.
+  const beto = await pending('Beto Ruiz');
+  await beto.say('Hola, me interesa algo de reptiles');
+  const short = texts(beto.conv)[1];
+  assert.equal(
+    short,
+    'Tenemos 2 cursos de ese tema. ¿Cuál te interesa?\n\n1. Reptiles: manejo básico\n2. Reptiles: medicina clínica\n\nResponde con el número o el nombre del curso, o escribe «ver todos» para ver la lista completa.',
+  );
+  assert.equal(JSON.parse(L.session(beto.conv).waiting).narrowed, true);
+  await beto.say('ver todos');
+  const full = texts(beto.conv).at(-1);
+  assert.match(full, /^¿Sobre qué curso te gustaría información\?\n\n1\. /);
+  assert.ok(full.includes('Plan sanitario') && full.includes('Reptiles: medicina clínica'));
+  assert.equal(JSON.parse(L.session(beto.conv).waiting).tries, 0, '«ver todos» no gasta un intento');
+  const line = full.split('\n').find(l => l.endsWith('Reptiles: medicina clínica'));
+  await beto.say(line.split('.')[0]);
+  assert.equal(L.conversation(beto.conv).course_id, 'rep-clinica');
+  assert.equal(texts(beto.conv).at(-1), 'Listo con Reptiles: medicina clínica.');
+
+  // Desde la lista corta también se elige por su número.
+  const caro = await pending('Caro Díaz');
+  await caro.say('quiero algo de reptiles');
+  await caro.say('1');
+  assert.equal(L.conversation(caro.conv).course_id, 'rep-manejo');
+});
+
 // WhatsApp real, con un número que atiende toda la marca: la pregunta sale a Meta como texto, igual que la del
 // asistente (la persona contesta con el número o el nombre); un webhook repetido no la manda dos veces y la respuesta
 // mueve la conversación al curso elegido.
