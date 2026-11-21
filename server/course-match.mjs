@@ -50,6 +50,11 @@ const words = v => [
 // Señal de que la persona habla de un curso («el de aves», «también me interesa…»), y no sólo usa una palabra que coincide con un título.
 const CUE =
   /\b(curso|cursos|diplomado|taller|el de|la de|los de|las de|el otro|otro|tambien|cambiar|cambio|cambiame|mejor|informacion|info|informes|interesa)\b/;
+// Señal ESPECÍFICA de curso, para cambiar el curso que una conversación ya tiene desde el mensaje que inició un recorrido
+// (`strict: 'course'`): «curso de…», «el de…», «cambiar a…», «mejor el de…», «diplomado de…». Los genéricos «info»,
+// «información» o «me interesa», que están en casi cualquier primer mensaje, no bastan solos.
+const COURSE_CUE =
+  /\b((curso|cursos|diplomado|diplomados|taller|talleres|seminario) (de|del|sobre|en)|(el|la|los|las) de|el otro|la otra|cambia(r|me)? (a|al|de)|mejor (el|la) de)\b/;
 
 // Cursos activos de la marca que tienen una edición disponible, por título. Es la lista que se ofrece y contra la que se reconoce.
 export function brandCourses(db, catalogue, brandId) {
@@ -90,7 +95,9 @@ export function matchCourse(list, text, { strict = false } = {}) {
   list.forEach((k, i) => {
     const own = bags[i].filter(w => freq.get(w) === 1 && said.has(w)).length;
     if (!own) return;
-    if (strict && own < 2 && !CUE.test(plain)) return;
+    // `strict: 'course'` (cambiar el curso que ya tiene la conversación desde un recorrido): dos palabras propias, o
+    // una señal específica de curso más una propia; `strict: true`, cualquier señal (como siempre).
+    if (strict && own < 2 && !(strict === 'course' ? COURSE_CUE : CUE).test(plain)) return;
     const score = own * 10 + bags[i].filter(w => said.has(w)).length;
     if (!best || score > best.score) {
       best = { course: k, score };
