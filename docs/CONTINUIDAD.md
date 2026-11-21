@@ -34,7 +34,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Conector: dar de alta el catálogo de una consultora (construido el 21 nov 2026, sin publicar)
+## Conector: dar de alta el catálogo de una consultora (publicado en `main`, 21 nov 2026)
 
 - **Qué pidió el dueño:** cargar los cursos de GlobalVet (18 flyers en una carpeta) y armar la entrada por anuncio, «todo por el conector» y no manejando su navegador. El conector no podía crear cursos ni subir imágenes.
 - **Cursos:** `crear_curso_borrador`, `actualizar_curso_borrador`, `listar_cursos_borrador` y `descartar_curso_borrador` (permiso `config_drafts`) guardan el curso y su apertura inicial en una tabla propia (`mcp_course_drafts`). No entra al catálogo: se decidió así porque un curso activo con su apertura en borrador SÍ lo ve hoy un cliente del laboratorio (`/api/bootstrap` devuelve todos los cursos activos) y no se quiso cambiar eso sin el dueño.
@@ -45,7 +45,9 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Hallado a mano:** con una conexión OAuth la subida respondía `source_inactive` porque `grantInUse` no devolvía los permisos; corregido (commit `9b87a41`) y cubierto con una prueba nueva.
 - **Verificado en local:** `npm run check`, 791 pruebas de servidor y 93 de navegador; a mano, con una aplicación de ejemplo conectada por OAuth: dos borradores con su flyer real subido con `curl` (la misma dirección da 404 al segundo uso), cuatro altas y un recorrido aprobados en un lote, y los cursos publicados con su imagen aprobada a nombre de quien aprobó.
 - **También ese día, por el conector de producción:** recorrido «Entrada por anuncio (todos los cursos)» en borrador, con su propuesta de publicar pendiente; datos de los 17 cursos nuevos en `data/cursos-globalvet/` (fuera de Git), con horario, cupo, temario, tres docentes y la fecha de siete cursos inventados para la prueba, con permiso del dueño.
-- **Falta:** publicarlo («Sí, publicar»); que el dueño reconecte el conector con el permiso de preparar configuración; cargar los 17 cursos y sus imágenes por el conector y aprobarlos por lote.
+- **Publicado:** commit `0a70b62`; producción en `41+30.1c5d2c5d` y las pruebas automáticas del commit pasaron.
+- **Después de publicar:** La revisión automática del push señaló después que `aprobar_imagen` volvía a ligar la imagen a los datos actuales de la apertura sin que quien aprueba los viera: ahora la tarjeta muestra inicio, precio, docente, modalidad y lugar, el aviso lleva esos mismos datos y aprobar con un aviso distinto del que la persona vio responde `warnings_changed` (un lote que publica primero y aprueba después no se frena); corregido en local, pendiente de publicar.
+- **Falta:** que el dueño reconecte el conector con el permiso de preparar configuración; cargar los 17 cursos y sus imágenes por el conector y aprobarlos por lote.
 
 ## Conector: actividad del asistente y propuestas con un botón (publicado en `main`, 20 nov 2026)
 
