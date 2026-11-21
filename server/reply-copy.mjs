@@ -464,12 +464,26 @@ const ADVISOR = {
 };
 export const paymentAdvisor = kind => (ADVISOR[kind] || ADVISOR.invoice) + ' Ya le avisé y te escribe por aquí.';
 // «¿Hay descuento?» sin promoción vigente: se dice claro, con el precio del catálogo.
-export const noPromotion = ctx =>
+// `coupons`: la marca tiene cupones que la persona puede escribir en su página de pago (no se niega que haya descuento).
+// `enrolled`: ya pagó; no se le invita a inscribirse otra vez.
+export const noPromotion = (ctx, { enrolled = false, coupons = false } = {}) =>
   priceBody(ctx) +
-  ' Por ahora no hay una promoción vigente para esta apertura.\n\n' +
-  ENROLL_CTA +
-  ' Si quieres que una persona del equipo revise tu caso, escribe «asesor».\n' +
+  (coupons
+    ? ' Si tienes un cupón de descuento, puedes escribirlo en tu página de pago.'
+    : ' Por ahora no hay una promoción vigente para esta apertura.') +
+  '\n\n' +
+  (enrolled ? '' : ENROLL_CTA + ' ') +
+  'Si quieres que una persona del equipo revise tu caso, escribe «asesor».\n' +
   PRICE_NOTE;
+// Pide inscribirse con la oportunidad ganada sin inscripción viva, o con una inscripción dada de baja: lo ve una persona.
+export const enrollmentCheck = ctx =>
+  'Le pedí a una persona del equipo que revise tu inscripción a ' + title(ctx) + '; te escribe por aquí.';
+// «El link para pagar no abre».
+export const payLinkProblem = name =>
+  'Lamento la falla' + hi(name) + '. Ya le avisé al equipo para que revise tu enlace de pago y te escriba por aquí.';
+// «Nunca me llegó el comprobante»: algo que no le llegó, sin decir que se revisa un pago.
+export const notArrived = name =>
+  'Gracias por avisar' + hi(name) + '. Ya le avisé al equipo para que lo revise y te escriba por aquí.';
 // «¿Hasta cuándo es la promoción?»: la vigencia de la promoción del catálogo, o que no hay.
 export const promoUntil = ctx =>
   ctx.promotion
@@ -500,10 +514,14 @@ export const alreadyEnrolled = (ctx, { advisor = false } = {}) =>
 export const orderFailed =
   'No pude generar tu pedido en este momento, así que ya le avisé al equipo: una persona te escribe por aquí para completar tu inscripción.';
 // Validez del certificado: lo que consta (digital, emisor, folio y QR) y nada más. Nunca se afirma validez oficial.
-export const validity = (ctx, issuer) =>
-  'El certificado que emitimos es digital: lo emite ' +
-  issuer +
-  ', lleva folio y un código QR para verificarlo en línea. Sobre su validez ante la SEP, para tu cédula, puntos o valor curricular no te puedo confirmar nada por aquí. Si lo necesitas para un trámite, escribe «asesor» y una persona del equipo te dice exactamente qué ampara.';
+// Sin emisor configurado (`issuer` vacío) no se afirma emisor ni formato (revisión, M6).
+export const validity = (ctx, issuer = '') =>
+  (issuer
+    ? 'El certificado que emitimos es digital: lo emite ' +
+      issuer +
+      ', lleva folio y un código QR para verificarlo en línea. '
+    : '') +
+  'Sobre su validez ante la SEP, para tu cédula, puntos o valor curricular no te puedo confirmar nada por aquí. Si lo necesitas para un trámite, escribe «asesor» y una persona del equipo te dice exactamente qué ampara.';
 // Datos para la constancia: se acusa lo que se anotó, sin crear pedidos ni repetir el texto del certificado. El nombre es una
 // propuesta: el equipo lo revisa antes de emitir. `changedFrom`: el nombre anterior, para que la persona vea el cambio.
 export function certDataThanks(name, data, { enrolled = false, order = false, changedFrom = null } = {}) {
@@ -536,6 +554,12 @@ export const certDataAsk =
 export const accessResend = (name, text) => 'Claro' + hi(name) + ', aquí tienes de nuevo tus accesos:\n\n' + text;
 export const accessPending =
   'Tu inscripción está activa, pero tus accesos todavía no están listos en este chat. Ya le avisé al equipo para que te los envíe por aquí.';
+// Ya se le reenviaron hoy las veces que el asistente puede (revisión, M5).
+export const accessLimit =
+  'Ya te reenvié tus accesos hace un rato. Para no llenarte el chat, le pedí a una persona del equipo que revise contigo qué pasa; te escribe por aquí.';
+// Los accesos de la apertura cambiaron desde que se le entregaron: los nuevos los envía una persona.
+export const accessChanged =
+  'Los accesos de tu curso se actualizaron después de que te los enviamos, así que le pedí a una persona del equipo que te mande los vigentes por aquí.';
 export const accessProblem = name =>
   'Lamento la falla' + hi(name) + '. Ya le avisé al equipo para que lo revise contigo y te escriba por aquí.';
 export const accessAfterPayment = (reference, status) =>

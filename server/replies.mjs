@@ -119,6 +119,8 @@ const PATTERNS = [
   ['access', /\S/, 0.8, t => sales.isAccess(t)],
   // «Ya realicé el pago de mi inscripción»: avisar de un pago gana siempre a la inscripción (antes creaba otro pedido).
   ['payment', /\S/, 0.85, t => sales.claimsPaid(t)],
+  // «¿Ya quedó mi inscripción?»: pregunta el estado de su pedido, no pide otro.
+  ['payment', /\b((ya )?quedo (mi |la )?inscripcion|ya estoy inscrit[oa])\b/, 0.8],
   // «¿Hasta qué día me puedo registrar?» pregunta un plazo: no pide crear un pedido todavía.
   ['schedule', sales.DEADLINE, 0.8],
   [
@@ -130,7 +132,9 @@ const PATTERNS = [
         t,
       ) &&
       // «me registré pero no me llegó nada», «ya me inscribí»: dice que ya lo hizo, no pide un pedido nuevo
-      !/\b(ya )?(me )?(registre|inscribi|apunte|anote)\b/.test(t),
+      !/\b(ya )?(me )?(registre|inscribi|apunte|anote)\b/.test(t) &&
+      // «quiero información del registro»: pide información, no un pedido
+      !/\b(informacion|info|informes)\b/.test(t),
   ],
   // Inscripción dicha como sustantivo o decisión: «el proceso de inscripción», «apartar mi lugar», «lo tomo», «me apunto».
   [
@@ -138,8 +142,11 @@ const PATTERNS = [
     /\b(inscripcion|apartar (mi |el |un )?lugar|aparto (mi )?lugar|lo tomo|la tomo|lo quiero tomar|quiero tomar(lo)?|me apunto|estoy interesad[oa] en (tomarlo|tomar|inscribirme|el curso))\b/,
     0.8,
     // «¿qué incluye la inscripción?» y «gracias, lo tomo en cuenta» no piden un pedido
-    t =>
-      !/\b(cuanto|costo|precio|cuesta|requisitos?|cierran|hasta|incluye|incluyen|en cuenta)\b|\bno (quiero|voy a|pienso)\b/.test(
+    // Sólo una decisión dicha sin pregunta (revisión, M1): «¿la inscripción es en línea?», «si lo tomo, ¿me dan constancia?»
+    // y «¿ya quedó mi inscripción?» piden información, no un pedido.
+    (t, raw) =>
+      !/[?¿]/.test(String(raw || '')) &&
+      !/\b(cuanto|costo|precio|cuesta|requisitos?|cierran|hasta|incluye|incluyen|en cuenta|si lo tomo|si la tomo|ya quedo|quedo|en linea|constancia|certificado)\b|\bno (quiero|voy a|pienso)\b/.test(
         t,
       ),
   ],
@@ -165,6 +172,8 @@ const PATTERNS = [
     'payment',
     /\b(comprobante|pague|pago|pagos|pagar|transferencia|transferi|transfiero|deposito|deposite|depositar|tarjeta|oxxo|spei|factura|facturan?|facturar|cfdi|iva|meses sin intereses|msi|parcialidades|mensualidades|en (dos|2|tres|3) (partes|pagos)|numero de cuenta|cuenta bancaria|clabe|voucher|baucher|bauche)\b/,
     0.85,
+    // «¿hay descuento si pago de contado?» pregunta por un descuento: lo contesta el precio
+    t => !/\b(descuentos?|promos?|promocion|promociones|ofertas?)\b/.test(t),
   ],
   // Duración va antes que precio: «¿cuánto dura?» no es una pregunta de precio. «¿Cuánto tiempo tengo para…?» tampoco es de duración.
   [
@@ -192,7 +201,7 @@ const PATTERNS = [
   ],
   [
     'schedule',
-    /\b(fecha|fechas|horario|horarios|calendario|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|a que hora|que hora|(que|cual|primer|ultimo|proximo) dias?|cuando (es|son|seria|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|abren|hay|toca)|para cuando|quien (lo |la |los |las |nos )?(da|dara|imparte|impartira|ensena|va a dar|va a impartir)|docente|docentes|profesor|profesora|maestro|maestra|instructor|ponente|(es|son|sera|seria) (en la|por la|de) (noche|tarde|manana)|hoy (es|hay) (la )?clase|es hoy|ya empezo|ya inicio|ya comenzo|ya arranco)\b|^cuando$/,
+    /\b(fecha|fechas|horario|horarios|calendario|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|a que hora|que hora|(que|cual|primer|ultimo|proximo) dias?|cuando (es|son|seria|empieza|empiezan|inicia|inician|comienza|comienzan|arranca|abren|hay|toca)|para cuando|quien (lo |la |los |las |nos )?(da|dara|imparte|impartira|ensena|va a dar|va a impartir)|docente|docentes|profesor|profesora|maestro|maestra|instructor|ponente|(es|son|sera|seria) (en la|por la|de) (noche|tarde|manana)|hoy (es|hay) (la )?clase|es hoy|ya empezo|ya inicio|ya comenzo|ya arranco|q dias?|a q hora|q hora)\b|^cuando$/,
     0.8,
   ],
   [
@@ -211,7 +220,7 @@ const PATTERNS = [
   ],
   [
     'modality',
-    /\b(modalidad|en linea|online|presencial|virtual|zoom|meet|plataforma|donde es|donde se imparte|donde me conecto|como me conecto|por donde (es|son|se da)|en vivo|ubicad[oa]s?|ubicacion|sucursal|sucursales|direccion|donde (estan|se encuentran|quedan)|donde se toma|donde es la clase|donde son las clases)\b/,
+    /\b(modalidad|en linea|online|presencial|virtual|zoom|meet|plataforma|donde es|donde se imparte|donde me conecto|como me conecto|por donde (es|son|se da)|en vivo|ubicad[oa]s?|ubicacion|sucursal|sucursales|direccion|donde (estan|se encuentran|quedan)|donde se toma|donde es la clase|donde son las clases|como entro a la clase|como ingreso a la clase|como entro a las clases)\b/,
     0.8,
   ],
   ['recording', /\b(grabaci|grabad|graban?\b|grabar\b|no puedo asistir|repeticion|ver despues)/, 0.8],
@@ -457,27 +466,30 @@ export function createReplies({
       .slice(0, 6)
       .map(k => k.title);
   // ---- Venta y posventa (docs/PLAN_RESPUESTAS_DE_VENTA.md). Sólo leen.
-  // El pedido más reciente del curso en esta conversación (cualquier estado) y si la persona ya está inscrita por aquí.
-  const lastOrder = conversationId =>
+  // El pedido más reciente del CURSO de la conversación (cualquier estado) y su inscripción viva: tras cambiar de curso, lo
+  // del curso anterior no cuenta (revisión, A1).
+  const lastOrder = c =>
     db
       .prepare(
-        "SELECT * FROM orders WHERE conversation_id=? AND COALESCE(kind,'course')='course' ORDER BY created_at DESC,rowid DESC LIMIT 1",
+        "SELECT * FROM orders WHERE conversation_id=? AND course_id=? AND COALESCE(kind,'course')='course' ORDER BY created_at DESC,rowid DESC LIMIT 1",
       )
-      .get(conversationId);
-  const enrolledHere = conversationId =>
+      .get(c.id, c.course_id);
+  const enrolledHere = c =>
     Boolean(
       db
         .prepare(
-          "SELECT 1 FROM enrollments n JOIN orders o ON o.id=n.order_id WHERE o.conversation_id=? AND n.status='enrolled' LIMIT 1",
+          "SELECT 1 FROM enrollments n JOIN orders o ON o.id=n.order_id WHERE o.conversation_id=? AND n.course_id=? AND n.status='enrolled' LIMIT 1",
         )
-        .get(conversationId),
+        .get(c.id, c.course_id),
     );
   const sessionsOf = editionId =>
     db.prepare("SELECT count(*) n FROM edition_sessions WHERE edition_id=? AND status!='cancelled'").get(editionId).n;
-  // Quien emite el certificado de la marca (Certificados → ajustes); el mismo valor por omisión que server/certificates.mjs.
+  // Quien emite el certificado de la marca, sólo si la marca configuró sus certificados (Certificados → ajustes). Sin eso no
+  // se afirma emisor ni formato (revisión, M6).
   const issuerOf = brandId =>
-    db.prepare('SELECT issuer_name FROM certificate_settings WHERE brand_id=?').get(brandId)?.issuer_name ||
-    'IPCI · TEC Capital';
+    String(
+      db.prepare('SELECT issuer_name FROM certificate_settings WHERE brand_id=?').get(brandId)?.issuer_name || '',
+    ).trim();
   // Accesos del curso (server/modules/course-access): el módulo se registra al crearse. Sin él, nadie reenvía accesos.
   let accessApi = null;
   const useAccess = api => {
@@ -530,11 +542,14 @@ export function createReplies({
         (pressed?.kind === 'action' ? pressed.target : null);
     // Posventa sólo para quien ya compró: inscripción activa o pedido pagado o en revisión en esta conversación. Sin eso,
     // «¿me pasas el link para pagar?» o «¿me mandan información?» se leen como siempre (pago, ficha, temario…).
-    const bought =
-      c.id !== 'simulacion' && (enrolledHere(c.id) || ['paid', 'review'].includes(lastOrder(c.id)?.status));
+    const bought = c.id !== 'simulacion' && (enrolledHere(c) || ['paid', 'review'].includes(lastOrder(c)?.status));
+    // Con un pedido pendiente, «¿cómo entro a la clase?» recibe que los accesos llegan al confirmarse el pago (sin pase).
+    const pendingOrder = c.id !== 'simulacion' && lastOrder(c)?.status === 'pending';
     const ctx = catalogue.info(c.course_id, c.edition_id),
       course = ctx.course,
-      cls = forced ? { intent: forced, confidence: 1 } : classify(trigger.text, { skip: bought ? [] : ['access'] }),
+      cls = forced
+        ? { intent: forced, confidence: 1 }
+        : classify(trigger.text, { skip: bought || pendingOrder ? [] : ['access'] }),
       situational =
         !forced &&
         CATALOGUE_INTENTS.includes(cls.intent) &&
@@ -946,8 +961,14 @@ export function createReplies({
         out.reply = copy.accessResend(user?.name, st.text);
         out.accessResend = { enrollmentId: st.enrollmentId };
         out.reason = 'Pidió sus accesos con una inscripción activa: se le reenvían los accesos de su apertura.';
-      } else if (problem || st?.enrolled || enrolledHere(c.id)) {
-        out.reply = problem ? copy.accessProblem(user?.name) : copy.accessPending;
+      } else if (problem || st?.enrolled || enrolledHere(c)) {
+        out.reply = problem
+          ? copy.accessProblem(user?.name)
+          : st?.reason === 'limit'
+            ? copy.accessLimit
+            : st?.reason === 'changed'
+              ? copy.accessChanged
+              : copy.accessPending;
         out.handoff = true;
         out.reason = problem
           ? 'Inscrito con una falla en el acceso: la revisa una persona.'
@@ -971,7 +992,7 @@ export function createReplies({
       // Datos para la constancia: se guardan como PROPUESTA ligada al pedido (commit) y se acusan. Ni pedido nuevo ni texto
       // del certificado; el nombre lo confirma una persona del equipo antes de emitir.
       const data = sales.certData(trigger.text),
-        order = c.id === 'simulacion' ? null : lastOrder(c.id),
+        order = c.id === 'simulacion' ? null : lastOrder(c),
         live = order && ['pending', 'review', 'paid'].includes(order.status) ? order : null;
       if (sales.hasCertData(data) && live) {
         const kept = nameRequest(live.id),
@@ -988,33 +1009,55 @@ export function createReplies({
           'Datos para la constancia: se guardan como propuesta con el pedido ' +
           live.reference +
           ' (el nombre lo confirma el equipo al emitir) y se acusa recibo, sin crear otro pedido.';
-      } else if (sales.hasCertData(data)) {
+      } else if (sales.hasCertData(data) || !live) {
+        // sin pedido no se piden ni se guardan los datos del certificado (ni se arma un círculo de «mándame tus datos»)
         out.reply = copy.certDataNoOrder;
         out.reason = 'Datos para la constancia sin pedido en este chat: no se guardan; se le invita a inscribirse.';
       } else {
         out.reply = copy.certDataAsk;
         out.reason = 'Ofrece sus datos o pregunta cómo escribir su nombre: se le piden en un solo mensaje.';
       }
+    } else if (['enroll', 'price'].includes(intent) && !paidClaim && sales.GROUP.test(said)) {
+      // Varias personas («mi esposa también quiere inscribirse», «cuánto sería por los dos»): cada quien necesita su lugar;
+      // lo arma una persona del equipo. Va antes que «ya está inscrita» para que el aviso llegue al equipo.
+      out.reply = copy.paymentAdvisor('group');
+      out.stage = intent === 'enroll' ? 'inscripcion' : null;
+      out.handoff = true;
+      out.reason = 'Quiere inscribir o pagar por varias personas: lo atiende una persona del equipo.';
+      out.sources.push(catalogueSource);
+    } else if (intent === 'enroll' && sales.OTHER_COURSE.test(said)) {
+      // «Quiero inscribirme a otro curso también»: no es este curso; los cursos de la marca y una persona para inscribirse.
+      out.intent = 'courses';
+      out.reply = copy.courses(ctx, otherCourses(c));
+      out.sources.push(catalogueSource);
+      out.reason =
+        'Quiere inscribirse a otro curso: se le muestran los demás cursos de la marca, sin crear un pedido de éste.';
+    } else if (intent === 'enroll' && c.id !== 'simulacion' && enrolledHere(c)) {
+      // Inscripción viva en ESTE curso: no se intenta otro pedido (fallaría) ni se mandan accesos que no pidió.
+      out.reply = copy.alreadyEnrolled(ctx, { advisor: true });
+      out.sources.push(catalogueSource);
+      out.reason = 'Pide inscribirse y ya tiene una inscripción activa en este curso: no se crea otro pedido.';
     } else if (
       intent === 'enroll' &&
       c.id !== 'simulacion' &&
-      (enrolledHere(c.id) ||
+      (db
+        .prepare(
+          "SELECT 1 FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id WHERE co.conversation_id=? AND o.stage='ganada'",
+        )
+        .get(c.id) ||
         db
           .prepare(
-            "SELECT 1 FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id WHERE co.conversation_id=? AND o.stage='ganada'",
+            "SELECT 1 FROM enrollments n JOIN orders o ON o.id=n.order_id WHERE o.conversation_id=? AND n.course_id=? AND n.status='cancelled'",
           )
-          .get(c.id))
+          .get(c.id, c.course_id))
     ) {
-      // Ya inscrita (o la oportunidad ya está ganada): no se intenta otro pedido, que fallaría y la dejaría sin respuesta.
-      const st = accessApi?.forConversation(c) || null;
-      out.reply = st?.ready
-        ? copy.alreadyEnrolled(ctx) + '\n\n' + st.text
-        : copy.alreadyEnrolled(ctx, { advisor: true });
-      if (st?.ready) out.accessResend = { enrollmentId: st.enrollmentId };
+      // Oportunidad ganada sin inscripción viva, o una inscripción dada de baja: no se dice «activa» ni se intenta un
+      // pedido que fallaría; lo revisa una persona.
+      out.reply = copy.enrollmentCheck(ctx);
+      out.handoff = true;
       out.sources.push(catalogueSource);
       out.reason =
-        'Pide inscribirse pero ya está inscrita (o la oportunidad está ganada): no se crea otro pedido' +
-        (st?.ready ? '; se le reenvían sus accesos.' : '; se le ofrece una persona.');
+        'Pide inscribirse con la oportunidad ganada o una inscripción dada de baja, sin inscripción activa: lo revisa una persona.';
     } else if (payKind === 'paid') {
       // Quien avisa que YA pagó no pregunta cómo pagar: se le agradece, se le dice el estado de su pedido y pasa a una persona, que es quien valida.
       // Nunca se confirma un pago desde aquí.
@@ -1024,7 +1067,7 @@ export function createReplies({
       out.reason = 'Menciona un pago realizado: lo valida una persona.';
     } else if (payKind === 'status') {
       // «¿Ya verificaron mi pago?»: el estado real del pedido. En revisión (o sin pedido) se avisa al equipo.
-      const o = c.id === 'simulacion' ? null : lastOrder(c.id),
+      const o = c.id === 'simulacion' ? null : lastOrder(c),
         // pagado pero con la inscripción dada de baja: no se dice «activa»; lo revisa una persona
         cancelled =
           o?.status === 'paid' &&
@@ -1086,7 +1129,22 @@ export function createReplies({
       }
     } else if (intent === 'payment') {
       // «Ya pagué» y «¿ya verificaron?» se contestaron arriba. Aquí: pagar después, factura, meses, varias personas, cuenta, o cómo pagar.
-      if (payKind === 'later') {
+      if (payKind === 'link') {
+        // «no me llegó el enlace de pago»: el de su pedido vigente, o el camino para pedirlo
+        const open = payments?.openOrder(c.id);
+        out.reply = open ? copy.orderReminder(open.reference) + payments.linkMessage(open) : copy.payUntil({});
+        out.reason = open
+          ? 'No le llegó el enlace de pago: se le vuelve a mandar el de su pedido ' + open.reference + '.'
+          : 'Pide el enlace de pago sin pedido: se le dice cómo pedirlo.';
+      } else if (payKind === 'broken' || payKind === 'missing') {
+        // «el link para pagar no abre», «nunca me llegó el comprobante»: una persona lo revisa (sin decir que se revisa un pago)
+        out.reply = payKind === 'broken' ? copy.payLinkProblem(user?.name) : copy.notArrived(user?.name);
+        out.handoff = true;
+        out.reason =
+          payKind === 'broken'
+            ? 'El enlace de pago no le funciona: lo revisa una persona.'
+            : 'Algo no le llegó: lo revisa una persona.';
+      } else if (payKind === 'later') {
         const o = payments?.openOrder(c.id);
         out.reply = copy.payLater(user?.name, {
           reference: o?.reference || null,
@@ -1116,7 +1174,10 @@ export function createReplies({
           });
           out.reason = 'Conocimiento aprobado «' + hit.entry.question + '».';
         } else {
-          out.reply = copy.paymentAdvisor(payKind);
+          // «¿cuánto cuesta y tienen meses sin intereses?»: el precio del catálogo no se pierde
+          out.reply =
+            (classifyAll(trigger.text).includes('price') ? copy.priceBody(ctx) + '\n\n' : '') +
+            copy.paymentAdvisor(payKind);
           out.handoff = true;
           out.reason =
             ({
@@ -1155,7 +1216,16 @@ export function createReplies({
         out.reason = 'Pide descuento para un grupo y el catálogo no tiene promoción vigente: lo atiende una persona.';
       } else {
         out.prepared = catalogue.prepare(c, { kind: 'price' });
-        out.reply = copy.noPromotion(ctx);
+        // sin «escribe Quiero inscribirme» a quien ya pagó; y si la marca tiene cupones que el cliente puede escribir en la
+        // página de pago, no se niega que haya descuento
+        const coupons = Boolean(
+          db
+            .prepare(
+              "SELECT 1 FROM coupons WHERE brand_id=? AND customer_entry=1 AND status='active' AND (course_id IS NULL OR course_id=?) AND (edition_id IS NULL OR edition_id=?) AND (starts_at IS NULL OR starts_at<=?) AND (ends_at IS NULL OR ends_at>=?) LIMIT 1",
+            )
+            .get(c.brand_id, c.course_id, ctx.edition.id, now(), now()),
+        );
+        out.reply = copy.noPromotion(ctx, { enrolled: bought, coupons });
         out.reason =
           'Pregunta por descuentos: el catálogo no tiene promoción vigente para esta apertura y se dice claro.';
       }
@@ -1251,7 +1321,7 @@ export function createReplies({
         'No le acomoda el horario: se le dice lo que el conocimiento aprobado dice de la grabación y cómo preguntar por otra fecha.';
     } else if (intent === 'greeting' || (fresh && !asks && !DIRECT_INTENTS.includes(intent))) welcome();
     else if (intent === 'thanks') {
-      const done = c.id !== 'simulacion' && (enrolledHere(c.id) || lastOrder(c.id)?.status === 'review');
+      const done = c.id !== 'simulacion' && (enrolledHere(c) || lastOrder(c)?.status === 'review');
       out.reply = done
         ? copy.thanksEnrolled(user?.name)
         : prev?.intent === 'thanks'
@@ -1589,17 +1659,16 @@ export function createReplies({
       return { changedFrom: null };
     }
     const renamed = Boolean(d.name && d.name !== cur.requested_name);
+    // Un nombre nuevo queda como solicitud pendiente y visible; el que el equipo ya confirmó NO se borra: sigue siendo el del
+    // certificado hasta que alguien confirme el nuevo (revisión, B4).
     db.prepare(
-      'UPDATE certificate_name_requests SET requested_name=?,email=?,phone=?,message_id=?,status=?,confirmed_name=?,confirmed_by=?,confirmed_at=?,updated_at=? WHERE id=?',
+      'UPDATE certificate_name_requests SET requested_name=?,email=?,phone=?,message_id=?,status=?,updated_at=? WHERE id=?',
     ).run(
       d.name || cur.requested_name,
       d.email || cur.email,
       d.phone || cur.phone,
       messageId,
       renamed ? 'pending' : cur.status,
-      renamed ? null : cur.confirmed_name,
-      renamed ? null : cur.confirmed_by,
-      renamed ? null : cur.confirmed_at,
       t,
       cur.id,
     );
@@ -1637,19 +1706,14 @@ export function createReplies({
       return null; // una persona ya escribió: la conversación es suya
     const t = clean(m.text),
       asks = sales.ASKS_SOMETHING.test(t) || ['human', 'refund'].includes(classify(m.text).intent),
-      order = lastOrder(c.id),
+      order = lastOrder(c),
       live = order && ['pending', 'review', 'paid'].includes(order.status) ? order : null,
       data = sales.certData(m.text),
       isData =
         !asks && live && sales.hasCertData(data) && (sales.certDataSignal(t, m.text) || sales.weakCertData(t, m.text));
     let saved = null;
     if (isData) saved = saveCertData(c, m.id, { ...data, orderId: live.id });
-    if (asks) {
-      // pide algo: la conversación sigue en la cola del equipo (si el aviso se había cerrado, se abre otra vez)
-      try {
-        operations.requestHuman(c, now());
-      } catch {}
-    }
+    // pide algo: no se contesta «anoté…»; la conversación ya está en la cola del equipo (operations.message la mantiene)
     if (
       db
         .prepare(

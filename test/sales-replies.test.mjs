@@ -25,6 +25,7 @@ import {
   weakCertData,
   wantsCourses,
 } from '../server/lib/sales-replies.mjs';
+import { ASSISTANT_RESENDS_PER_DAY, assistantResends } from '../server/modules/course-access/module.mjs';
 import { assertSchemaCurrent } from './helpers/schema.mjs';
 import { startServer } from './helpers/server.mjs';
 import { PASSWORD, call, openDb, registerAdmin, until } from './helpers/crm.mjs';
@@ -146,23 +147,29 @@ test('lectura fina: pago, datos para la constancia, accesos, validez y recomenda
   assert.deepEqual(notCovered('¿me sirve este curso si no tengo conocimientos previos?', aves), []);
 });
 
-test('migraciones replies/0001 y 0002: sobre una base ya publicada queda sólo la propuesta por pedido', async t => {
+test('migración replies/0001: sobre una base sin el área «replies» (como la de main) crea la propuesta y su historial', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'crm-ventas-mig-'));
   const db = openDatabase(dir);
   t.after(async () => {
     db.close();
     await rm(dir, { recursive: true, force: true });
   });
-  const names = ['replies/0001-certificate-details', 'replies/0002-certificate-name-requests'];
-  migrate(db, { backup: false, registry: defineRegistry(NAMED.filter(m => !names.includes(m.name))) });
-  assert.deepEqual(migrate(db, { backup: false }).applied, names);
+  // main no tiene ninguna migración del área «replies» (ninguna se publicó): la base de partida es el registro sin ella
+  const name = 'replies/0001-certificate-name-requests';
+  assert.deepEqual(
+    NAMED.filter(m => m.name.startsWith('replies/')).map(m => m.name),
+    [name],
+    'una sola migración del área',
+  );
+  migrate(db, { backup: false, registry: defineRegistry(NAMED.filter(m => !m.name.startsWith('replies/'))) });
+  assert.deepEqual(migrate(db, { backup: false }).applied, [name]);
   assertSchemaCurrent(db);
   const tables = db
     .prepare("SELECT name FROM sqlite_master WHERE type='table'")
     .all()
     .map(r => r.name);
-  assert.ok(tables.includes('certificate_name_requests'));
-  assert.ok(!tables.includes('certificate_details'), 'la tabla por conversación (nunca publicada) ya no existe');
+  assert.ok(tables.includes('certificate_name_requests') && tables.includes('certificate_name_events'));
+  assert.ok(!tables.includes('certificate_details'), 'la tabla por conversación ya no existe ni se crea');
   assert.deepEqual(migrate(db, { backup: false }).applied, [], 'una sola vez');
 });
 
@@ -259,10 +266,74 @@ test('respuestas de venta de punta a punta', async t => {
     assert.equal(r.handoff, false, text);
   }
 
+  // ---- segunda revisión: frases exactas y sus negativos
+  // M1: preguntas que mencionan la inscripción no crean un pedido
+  for (const text of ['¿la inscripcion es en linea?', 'si lo tomo me dan constancia?', '¿Ya quedó mi inscripción?']) {
+    const r = await sim(text);
+    assert.notEqual(r.intent, 'enroll', text);
+    assert.doesNotMatch(r.reply, /Ya tengo listo tu pedido/, text);
+  }
+  assert.equal((await sim('si lo tomo me dan constancia?')).intent, 'certificate');
+  assert.equal((await sim('lo tomo')).intent, 'enroll', 'vecino: la decisión sin pregunta sí');
+  // M2: «todavía no pagué» no es «ya pagué»
+  for (const text of ['todavia no pague', 'todavia no pague, lo hago mañana', 'aun no deposite, me pasas la cuenta?']) {
+    const r = await sim(text);
+    assert.doesNotMatch(r.reply, /revisará tu pago/, text);
+    assert.equal(r.handoff, false, text);
+  }
+  assert.match((await sim('aun no deposite, me pasas la cuenta?')).reply, /Puedes pagar con|Al inscribirte te mando/);
+  const missing = await sim('nunca me llego el comprobante de pago');
+  assert.equal(missing.handoff, true);
+  assert.doesNotMatch(missing.reply, /revisará tu pago/);
+  assert.match((await sim('pague pero no me llego nada')).reply, /revisará tu pago/, 'vecino: sí avisa un pago');
+  // M3: «vacantes» del curso son cupo; buscar trabajo, no
+  for (const text of ['aun hay vacantes?', 'quedan vacantes para el curso?'])
+    assert.equal((await sim(text)).intent, 'seats', text);
+  assert.equal((await sim('busco trabajo de auxiliar, tienen vacante?')).intent, 'help');
+  // M4: datos para la factura o para inscribirse no son datos del certificado; pedir información tampoco
+  assert.doesNotMatch((await sim('les paso mis datos para la factura')).reply, /certificado/);
+  assert.doesNotMatch((await sim('te mando mis datos para inscribirme')).reply, /certificado/);
+  const info = await sim('Hola mi nombre es Juan Perez y quiero informacion del registro');
+  assert.equal(info.intent, 'greeting', 'pide información: la ficha, ni datos ni pedido');
+  // M6: sin ajustes de certificados de la marca no se afirma emisor ni formato
+  const noIssuer = await sim('tiene validez ante la SEP?');
+  assert.doesNotMatch(noIssuer.reply, /lo emite|digital|folio/);
+  assert.match(noIssuer.reply, /no te puedo confirmar nada por aquí/);
+  db.prepare(
+    "INSERT INTO certificate_settings(brand_id,issuer_name,updated_at) VALUES('globalvet','Emisor Ejemplo',?)",
+  ).run(Date.now());
+  assert.match((await sim('tiene validez ante la SEP?')).reply, /lo emite Emisor Ejemplo, lleva folio/);
+  // B3
+  assert.equal((await sim('q dias son las clases y a q hora')).intent, 'schedule');
+  const cash = await sim('hay descuento si pago de contado?');
+  assert.equal(cash.intent, 'price');
+  assert.match(cash.reply, /promoción vigente/);
+  const broken = await sim('el link para pagar no abre');
+  assert.equal(broken.handoff, true);
+  assert.doesNotMatch(broken.reply, /Puedes pagar con/);
+  const both = await sim('cuanto cuesta y tienen meses sin intereses?');
+  assert.match(both.reply, /\$379\.00 MXN/, 'no pierde el precio');
+  assert.match(both.reply, /meses/);
+  const two = await sim('mi esposa tambien quiere el curso, cuanto seria por los dos');
+  assert.equal(two.handoff, true);
+  assert.match(two.reply, /varias personas/);
+  assert.equal((await sim('¿hay espacio para estacionarse?')).intent !== 'seats', true);
+  db.prepare(
+    "INSERT INTO coupons(id,brand_id,code,name,kind,value,customer_entry,status,created_at,updated_at) VALUES('cupon-ficticio','globalvet','EJEMPLO10','Cupón ejemplo','percent',10,1,'active',?,?)",
+  ).run(Date.now(), Date.now());
+  const withCoupon = await sim('¿tienen descuento?');
+  assert.doesNotMatch(
+    withCoupon.reply,
+    /no hay una promoción vigente/,
+    'con cupones que el cliente escribe no se niega',
+  );
+  assert.match(withCoupon.reply, /cupón/);
+  db.prepare("DELETE FROM coupons WHERE id='cupon-ficticio'").run();
+
   // ---- reglas que no gastan IA
   const intents = {
     'buen dia': 'greeting',
-    'cual es el proceso de inscripcion?': 'enroll',
+    'quiero apartar mi lugar': 'enroll',
     'si quiero apartar mi lugar': 'enroll',
     'lo tomo': 'enroll',
     'cuanto cuesta la inscripcion?': 'price', // vecino: preguntar el costo no crea un pedido
@@ -418,6 +489,16 @@ test('respuestas de venta de punta a punta', async t => {
   const mail = await ana.say('ana.ejemplo@correo.test 55 1234 5678');
   assert.equal(mail.log.intent, 'cert_data', 'con un pedido, un correo suelto es un dato');
   assert.equal(request(order.id).requested_name, 'ANA EJEMPLO PRUEBA', 'una señal débil no pisa el nombre');
+  // M4: datos de otra persona no se guardan como suyos
+  const sisterPhone = await ana.say('el numero de mi hermana es 5598765432');
+  assert.notEqual(sisterPhone.log.intent, 'cert_data');
+  await ana.say('mi correo es otra@correo.test, y el de mi hermana luisa@correo.test');
+  assert.equal(request(order.id).email, 'ana.ejemplo@correo.test');
+  assert.equal(request(order.id).phone, '5512345678');
+  // B3: con pedido pendiente, «¿cómo entro a la clase?» dice que los accesos llegan al confirmarse el pago
+  const howIn = await ana.say('¿cómo entro a la clase?');
+  assert.match(howIn.text, /llegan por este chat cuando tu pago queda confirmado/);
+  assert.equal(howIn.log.action, 'replied');
   const renamed = await ana.say('mi nombre completo es ANA MARIA EJEMPLO PRUEBA');
   assert.match(renamed.text, /Cambié el nombre de tu certificado de «ANA EJEMPLO PRUEBA» a «ANA MARIA EJEMPLO PRUEBA»/);
   assert.deepEqual(
@@ -466,29 +547,47 @@ test('respuestas de venta de punta a punta', async t => {
   );
   ana.reopen();
   const enrolled = await ana.say('quiero inscribirme');
-  assert.match(enrolled.text, /ya está activa: no hace falta otro pedido/, 'punto 2: ya inscrita, sin otro pedido');
+  assert.match(
+    enrolled.text,
+    /ya está activa: no hace falta otro pedido/,
+    'ya inscrita en este curso, sin otro pedido',
+  );
+  assert.doesNotMatch(enrolled.text, /clases\.example\.test/, 'A1: una petición de inscripción no trae accesos');
   assert.equal(ana.orders().length, 1);
+  // A1: otro curso o alguien más no son «ya está activa»
+  const other = await ana.say('quiero inscribirme a otro curso también');
+  assert.doesNotMatch(other.text, /ya está activa/);
+  assert.match(other.text, /también tenemos|es el curso que tenemos abierto/);
+  const spouse = await ana.say('mi esposa también quiere inscribirse');
+  assert.doesNotMatch(spouse.text, /ya está activa/);
+  assert.equal(spouse.log.action, 'escalated', 'A1: el aviso de grupo llega al equipo');
+  ana.reopen();
   const resends = () =>
     db.prepare("SELECT * FROM course_access_deliveries WHERE conversation_id=? AND kind='manual'").all(ana.id);
+  assert.equal(resends().length, 0);
   const thanks = await ana.say('gracias!');
   assert.doesNotMatch(thanks.text, /inscribirte/, 'a quien ya pagó no se le ofrece inscribirse');
+  // B3: con inscripción activa, el descuento no invita a inscribirse otra vez
+  assert.doesNotMatch((await ana.say('hay descuento para la siguiente?')).text, /Quiero inscribirme/);
   const again = await ana.say('no me llegó el enlace, ¿dónde entro a la clase?');
   assert.equal(again.log.intent, 'access');
   assert.match(again.text, /aquí tienes de nuevo tus accesos/);
   assert.ok(again.text.includes('https://clases.example.test/aves-ficticio'));
-  // tope: 2 reenvíos del asistente por inscripción y día (el de «ya está activa» fue el primero)
+  assert.equal((await ana.say('¿me pasan el link de la clase?')).log.action, 'replied');
   assert.equal(resends().length, 2);
+  // tope: 2 reenvíos del asistente por inscripción y día; el tercero lo ve una persona, con su propio texto (M5)
   const third = await ana.say('¿me pasan el link de la clase?');
   assert.equal(third.log.action, 'escalated', 'punto 4: el tercer reenvío del día lo hace una persona');
+  assert.match(third.text, /Ya te reenvié tus accesos hace un rato/);
+  assert.doesNotMatch(third.text, /todavía no están listos/);
   assert.equal(resends().length, 2);
   assert.equal(
     db.prepare("SELECT count(*) n FROM audit WHERE action='course_access.resend_assistant'").get().n,
     2,
     'cada reenvío queda auditado',
   );
-  db.prepare("DELETE FROM course_access_deliveries WHERE client_ref LIKE 'assistant:%'").run();
   ana.reopen();
-  // texto cambiado después de entregarlo: no se reenvía el nuevo sin que lo vea una persona
+  // texto cambiado después de entregarlo: no se reenvía el nuevo sin que lo vea una persona (gana sobre el tope)
   const edited = await call(origin, '/api/course-access/editions/' + edition, {
     cookie: admin,
     method: 'PUT',
@@ -498,7 +597,9 @@ test('respuestas de venta de punta a punta', async t => {
       expectedRevision: access.edition.access.revision,
     },
   });
-  assert.equal((await ana.say('¿me pasan el link de la clase?')).log.action, 'escalated', 'punto 4: texto cambiado');
+  const changed = await ana.say('¿me pasan el link de la clase?');
+  assert.equal(changed.log.action, 'escalated', 'punto 4: texto cambiado');
+  assert.match(changed.text, /se actualizaron después de que te los enviamos/);
   ana.reopen();
   await call(origin, '/api/course-access/editions/' + edition, {
     cookie: admin,
@@ -506,7 +607,7 @@ test('respuestas de venta de punta a punta', async t => {
     body: { enabled: false, expectedRevision: edited.edition.access.revision },
   });
   assert.equal((await ana.say('¿me pasan el link de la clase?')).log.action, 'escalated', 'punto 4: entrega apagada');
-  assert.equal(resends().length, 0);
+  assert.equal(resends().length, 2, 'ninguno más');
   ana.reopen();
   assert.equal((await ana.say('el link no abre')).log.action, 'escalated', 'una falla la revisa una persona');
   ana.reopen();
@@ -527,25 +628,68 @@ test('respuestas de venta de punta a punta', async t => {
   const row = view.enrollments.find(r => r.enrollmentId === enrollment);
   assert.deepEqual(row.requestedName, { name: 'ANA MARIA EJEMPLO PRUEBA', status: 'pending', confirmedName: null });
   assert.equal(row.holderName, 'Ana Ejemplo', 'sin confirmar, el certificado sale con el nombre de siempre');
-  await call(origin, '/api/certificates/enrollments/' + enrollment + '/holder-name', {
-    cookie: admin,
-    body: { name: 'Ana María Ejemplo Prueba' },
-  });
+  // B1: autorización, nombre válido y control de concurrencia
+  const holderName = (cookie, body, expected = 200) =>
+    call(origin, '/api/certificates/enrollments/' + enrollment + '/holder-name', { cookie, body, expected });
+  const staff = async (username, brand) => {
+    const cookie = await register(username, 'Equipo ' + username);
+    const id = db.prepare('SELECT id FROM users WHERE username=?').get(username).id;
+    db.prepare("UPDATE users SET role='agent' WHERE id=?").run(id);
+    db.prepare('INSERT INTO brand_members(user_id,brand_id) VALUES(?,?)').run(id, brand);
+    return cookie;
+  };
+  await holderName(await staff('asesor-otra', 'odonteck'), { name: 'Ana María Ejemplo Prueba' }, 404);
+  await holderName(await staff('asesor-gv', 'globalvet'), { name: 'Ana María Ejemplo Prueba' }, 403);
+  await holderName(admin, { name: 'Ana' }, 400);
+  await holderName(admin, { name: 'Ana <b>Ejemplo</b>' }, 400);
+  const stale = await holderName(
+    admin,
+    { name: 'Ana María Ejemplo Prueba', expectedRequestedName: 'ANA EJEMPLO PRUEBA' },
+    409,
+  );
+  assert.equal(stale.code, 'stale_record', 'pidió otro nombre mientras tanto');
+  await holderName(admin, { name: 'Ana María Ejemplo Prueba', expectedRequestedName: 'ANA MARIA EJEMPLO PRUEBA' });
+  assert.deepEqual(
+    { ...db.prepare('SELECT from_name,to_name FROM certificate_name_events WHERE order_id=?').get(order.id) },
+    { from_name: 'Ana Ejemplo', to_name: 'Ana María Ejemplo Prueba' },
+    'la corrección queda con el nombre anterior y el nuevo',
+  );
+  const confirmedView = (
+    await call(origin, '/api/certificates/editions/' + edition, { cookie: admin })
+  ).enrollments.find(r => r.enrollmentId === enrollment);
   await call(origin, '/api/certificates/editions/' + edition + '/issue', {
     cookie: admin,
     body: { enrollmentIds: [enrollment] },
   });
-  assert.equal(
-    db.prepare('SELECT holder_name FROM certificates WHERE enrollment_id=?').get(enrollment).holder_name,
-    'Ana María Ejemplo Prueba',
-    'con el nombre que confirmó el equipo',
-  );
+  const issuedName = db
+    .prepare('SELECT holder_name FROM certificates WHERE enrollment_id=?')
+    .get(enrollment).holder_name;
+  assert.equal(issuedName, 'Ana María Ejemplo Prueba', 'con el nombre que confirmó el equipo');
+  assert.equal(confirmedView.holderName, issuedName, '«hoy saldría como…» es el mismo nombre que sale al emitir');
+  await holderName(admin, { name: 'Otro Nombre Ejemplo' }, 409); // ya certificada
   // punto 7: dada de baja, no se dice «activa»
   db.prepare("UPDATE enrollments SET status='cancelled' WHERE id=?").run(enrollment);
   const cancelled = await ana.say('ya pudieron verificar mi pago?');
   assert.match(cancelled.text, /tu inscripción no está activa/);
   assert.doesNotMatch(cancelled.text, /tu inscripción a .+ está activa/);
   assert.equal(cancelled.log.action, 'escalated');
+  ana.reopen();
+  // A1: dada de baja y pide inscribirse: no «ya está activa», lo revisa una persona
+  const reEnroll = await ana.say('quiero inscribirme');
+  assert.doesNotMatch(reEnroll.text, /ya está activa/);
+  assert.match(reEnroll.text, /revise tu inscripción/);
+  assert.equal(reEnroll.log.action, 'escalated');
+  assert.equal(ana.orders().length, 1, 'tampoco intenta otro pedido');
+  // A1: oportunidad «ganada» a mano, sin pedido ni pago
+  const won = await chat(await register('gana', 'Gana Ejemplo'));
+  await won.say('Hola');
+  db.prepare(
+    "UPDATE opportunities SET stage='ganada' WHERE id=(SELECT opportunity_id FROM conversation_opportunities WHERE conversation_id=?)",
+  ).run(won.id);
+  const wonReply = await won.say('quiero inscribirme');
+  assert.doesNotMatch(wonReply.text, /ya está activa/);
+  assert.equal(wonReply.log.action, 'escalated');
+  assert.equal(won.orders().length, 0);
 
   // ---- después de pasar a una persona: UNA respuesta automática por espera (puntos 5 y 1)
   const carla = await chat(await register('carla', 'Carla Ejemplo'));
@@ -558,13 +702,33 @@ test('respuestas de venta de punta a punta', async t => {
   assert.equal(automatic().length, 1);
   assert.match(automatic()[0].text, /Ya le avisé al equipo/);
   assert.ok(!request(carlaOrder.id)?.requested_name, 'quien depositó no es el nombre del certificado');
+  // B4: el equipo ya había confirmado un nombre; uno nuevo que llega en la espera queda pendiente y visible
+  db.prepare(
+    "INSERT INTO certificate_name_requests(id,brand_id,contact_id,order_id,conversation_id,requested_name,status,confirmed_name,created_at,updated_at) VALUES(?,'globalvet',?,?,?,'CARLA EJEMPLO','confirmed','Carla Confirmada Ejemplo',1,1)",
+  ).run(randomUUID(), carlaOrder.contact_id, carlaOrder.id, carla.id);
   await carla.post('mi nombre completo para la constancia es CARLA EJEMPLO RUIZ');
   await carla.post('mi correo es carla@correo.test');
   await carla.post('mi numero es 5512345678 llamenme');
-  assert.equal(automatic().length, 1, 'tres mensajes con datos: una sola respuesta automática en la espera');
+  await carla.post('el numero de mi hermana es 5598765432');
+  assert.equal(automatic().length, 1, 'mensajes con datos: una sola respuesta automática en la espera');
   assert.doesNotMatch(texts(carla.id).at(-1).text, /Anoté tu teléfono/);
-  assert.equal(request(carlaOrder.id).requested_name, 'CARLA EJEMPLO RUIZ', 'los datos sí se guardan');
-  assert.equal(request(carlaOrder.id).phone, '', 'un mensaje que pide algo no se toma como dato');
+  assert.deepEqual(
+    {
+      ...db
+        .prepare(
+          'SELECT requested_name,status,confirmed_name,email,phone FROM certificate_name_requests WHERE order_id=?',
+        )
+        .get(carlaOrder.id),
+    },
+    {
+      requested_name: 'CARLA EJEMPLO RUIZ',
+      status: 'pending',
+      confirmed_name: 'Carla Confirmada Ejemplo',
+      email: 'carla@correo.test',
+      phone: '',
+    },
+    'el confirmado sigue; lo nuevo queda pendiente; ni «llámenme» ni el teléfono de su hermana son sus datos',
+  );
   assert.deepEqual(carla.state(), { bot_enabled: 0, status: 'waiting' }, 'el asistente no retoma la conversación');
   // primera respuesta de la espera con datos: el acuse de los datos
   const dani = await chat(await register('dani', 'Dani Ejemplo'));
@@ -587,4 +751,31 @@ test('respuestas de venta de punta a punta', async t => {
   await tom.say('Hola');
   await tom.post('¿siguen ahí?');
   assert.equal(texts(tom.id).length, 0);
+});
+
+test('tope de reenvíos del asistente: cuenta las últimas 24 horas con el reloj que se le da (B6)', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'crm-ventas-tope-'));
+  const db = openDatabase(dir);
+  t.after(async () => {
+    db.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+  migrate(db, { backup: false });
+  db.exec('PRAGMA foreign_keys=OFF');
+  const hour = 3600e3,
+    base = Date.UTC(2026, 10, 21, 12);
+  const add = (at, ref) =>
+    db
+      .prepare(
+        "INSERT INTO course_access_deliveries(id,brand_id,edition_id,enrollment_id,conversation_id,kind,status,client_ref,created_at) VALUES(?,'globalvet','e1','n1','c1','manual','sent',?,?)",
+      )
+      .run(randomUUID(), ref, at);
+  add(base, 'assistant:m1');
+  add(base + hour, 'assistant:m2');
+  add(base + 2 * hour, 'persona:m3'); // un reenvío de una persona no cuenta para el tope del asistente
+  assert.equal(ASSISTANT_RESENDS_PER_DAY, 2);
+  assert.equal(assistantResends(db, 'n1', base + 2 * hour), 2, 'dentro del día: tope alcanzado');
+  assert.equal(assistantResends(db, 'n1', base + 24 * hour + 1), 1, 'pasadas 24 horas del primero, sólo cuenta uno');
+  assert.equal(assistantResends(db, 'n1', base + 26 * hour), 0, 'al día siguiente se puede de nuevo');
+  assert.equal(assistantResends(db, 'otra', base + hour), 0, 'por inscripción');
 });

@@ -79,6 +79,15 @@ export function problemsOf(body, edition) {
   return out;
 }
 
+// Reenvíos que el asistente hizo de los accesos de una inscripción en las 24 horas anteriores a `at` (el tope es por día).
+export const assistantResends = (db, enrollmentId, at) =>
+  db
+    .prepare(
+      "SELECT count(*) n FROM course_access_deliveries WHERE enrollment_id=? AND client_ref LIKE 'assistant:%' AND created_at>?",
+    )
+    .get(enrollmentId, at - 24 * 3600 * 1000).n;
+export { ASSISTANT_RESENDS_PER_DAY };
+
 export default {
   name: 'course-access',
   create(host) {
@@ -430,7 +439,8 @@ export default {
     host.services.replies?.useAccess?.({
       forConversation(c) {
         const o = repo.latestOrder(c.id);
-        if (!o || o.status !== 'paid' || o.brand_id !== c.brand_id) return null;
+        // del curso de ESTA conversación: tras cambiar de curso, lo del anterior no cuenta
+        if (!o || o.status !== 'paid' || o.brand_id !== c.brand_id || o.course_id !== c.course_id) return null;
         const n0 = repo.enrollmentOfOrder(o.id);
         if (!n0 || n0.status !== 'enrolled') return null;
         const n = repo.enrollment(n0.id),
@@ -443,11 +453,7 @@ export default {
             "SELECT access_revision FROM course_access_deliveries WHERE enrollment_id=? AND status='sent' ORDER BY created_at DESC,rowid DESC LIMIT 1",
           )
           .get(n.id);
-        const today = db
-          .prepare(
-            "SELECT count(*) n FROM course_access_deliveries WHERE enrollment_id=? AND client_ref LIKE 'assistant:%' AND created_at>?",
-          )
-          .get(n.id, now() - 24 * 3600 * 1000).n;
+        const today = assistantResends(db, n.id, now());
         const reason = !e
           ? 'empty'
           : a.enabled !== 1
