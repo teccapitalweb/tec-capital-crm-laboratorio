@@ -108,8 +108,15 @@ const TEXTS = {
     copy.payLater('Ana', { canOrder: false }),
   paymentAdvisor: () =>
     ['invoice', 'installments', 'group', 'account', 'discount'].map(k => copy.paymentAdvisor(k)).join('\n'),
-  noPromotion: () => copy.noPromotion({ ...ctx, promotion: null }),
-  validity: () => copy.validity(ctx, 'Emisor Uno'),
+  noPromotion: () =>
+    copy.noPromotion({ ...ctx, promotion: null }) +
+    copy.noPromotion({ ...ctx, promotion: null }, { enrolled: true, coupons: true }),
+  enrollmentCheck: () => copy.enrollmentCheck(ctx),
+  payLinkProblem: () => copy.payLinkProblem('Ana'),
+  notArrived: () => copy.notArrived('Ana'),
+  accessLimit: () => copy.accessLimit,
+  accessChanged: () => copy.accessChanged,
+  validity: () => copy.validity(ctx, 'Emisor Uno') + copy.validity(ctx),
   certDataThanks: () =>
     copy.certDataThanks('Ana', { name: 'ANA RUIZ', email: 'a@b.test', phone: '5512345678' }) +
     copy.certDataThanks('Ana', { name: 'ANA RUIZ' }, { order: true }) +

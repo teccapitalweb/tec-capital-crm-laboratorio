@@ -196,6 +196,12 @@ const SEEDS = {
         "INSERT INTO certificate_name_requests(id,brand_id,contact_id,order_id,requested_name,email,status,created_at,updated_at) VALUES(?,?,?,?,?,?,'pending',1,1)",
       )
       .run(randomUUID(), c.brand, c.id, 'order-' + s, 'Nombre Ejemplo ' + s, s + '@correo.test'),
+  certificate_name_events: (db, c, s) =>
+    db
+      .prepare(
+        "INSERT INTO certificate_name_events(id,brand_id,contact_id,order_id,from_name,to_name,created_at) VALUES(?,?,?,?,'A',?,1)",
+      )
+      .run(randomUUID(), c.brand, c.id, 'order-' + s, 'Nombre Ejemplo ' + s),
   survey_invites: (db, c, s) =>
     db
       .prepare(
@@ -460,7 +466,9 @@ test('fusión manual por la API: usa la fusión interna y la vista previa cuenta
   }
 });
 
-test('nombre pedido para la constancia: registrado como dato de persona, con exportación y borrado', async t => {
+// Las funciones export y erase se declaran para cuando existan el expediente y la supresión; hoy ningún proceso del servidor
+// las llama. Esta prueba sólo comprueba que, llamadas, alcanzan las dos tablas por contact_id.
+test('nombre pedido para la constancia: registrado como dato de persona (sus funciones de exportación y borrado, todavía sin quien las llame)', async t => {
   const db = await workspace(t);
   const defs = [];
   registerExistingTables({ register: d => defs.push(d) }, db);
@@ -476,4 +484,5 @@ test('nombre pedido para la constancia: registrado como dato de persona, con exp
   assert.deepEqual(def.export({ contactIds: ['otro'] }).certificate_name_requests, []);
   assert.equal(def.erase({ contactIds: ['c-uno'] }).certificate_name_requests, 1);
   assert.equal(db.prepare('SELECT count(*) n FROM certificate_name_requests').get().n, 0);
+  assert.ok(def.tables.includes('certificate_name_events'), 'el historial de correcciones también es dato de persona');
 });

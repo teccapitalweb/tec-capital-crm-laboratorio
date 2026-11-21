@@ -12,10 +12,30 @@ const PAID_PAST =
   /\b(pague|pagamos|ya pague|transferi|transferimos|deposite|depositamos|(hice|hicimos|realice|ya hice) (la|el|mi|los) (transferencia|deposito|pago|pagos)|listo (el|mi) (pago|deposito)|ya (quedo|esta|estan) (el|mi|los) (pago|deposito|pagos)|(ahi|aqui) (va|esta|te va|le va|les va|van|estan) (la|el|mi|los) (captura|foto|comprobante|comprobantes|voucher|baucher|bauche|ticket))\b/;
 const RECEIPT =
   /\b(comprobante|comprobantes|voucher|baucher|bauche|captura del pago|ficha de deposito|(les |te |le )?(mande|envie|mandamos|enviamos) (el|mi|la|los|las) (captura|capturas|foto|fotos|ticket|recibo))\b/;
-export const claimsPaid = t => PAID_PAST.test(t) || RECEIPT.test(t);
+// «Todavía no pagué», «aún no deposité», «nunca me llegó el comprobante»: una negación delante del verbo no es un aviso de
+// pago (revisión independiente, M2).
+const DENIED =
+  /\b(no|todavia no|aun no|nunca|ni)( (me|le|les|te|lo|la|he|hemos|han|ha|se))* (pague|pagamos|transferi|transferimos|deposite|depositamos|hice|hicimos|realice|mande|envie|mandamos|enviamos|llego|llega|ha llegado|han llegado)\b/;
+export const deniesPaid = t => DENIED.test(t);
+// Lo negado se quita antes de buscar el aviso: «pagué pero no me llegó nada» sí avisa un pago; «todavía no pagué», no.
+const withoutDenied = t => t.replace(new RegExp(DENIED.source, 'g'), ' ');
+export const claimsPaid = t => {
+  const rest = withoutDenied(t);
+  return PAID_PAST.test(rest) || (RECEIPT.test(rest) && !NOT_ARRIVED.test(t));
+};
+// «Nunca me llegó el comprobante de pago»: algo que no le llegó; lo ve una persona sin decir que se revisa un pago.
+const NOT_ARRIVED = /\b(no|nunca|todavia no|aun no)( me)? (llego|llega|ha llegado|han llegado)\b/;
+// «El link para pagar no abre»: una falla del enlace de pago.
+const LINK_BROKEN =
+  /\b(link|enlace|liga|pagina|boton)\b.*\b(no (me |nos )?(abre|funciona|carga|sirve|deja)|da error|marca error)\b/;
+// «¿me reenvías el enlace para pagar?», «mándame otra vez el link»: el enlace de su pedido.
+const LINK_AGAIN =
+  /\b(reenvi\w*|vuelve\w* a mandar|vuelve\w* a enviar|me (mandas|pasas|envias|mandan|pasan) (otra vez |de nuevo )?(el|la)|mandame|pasame)\b.*\b(link|enlace|liga)\b/;
+// «¿me guardan el lugar?»: pide apartar sin pagar.
+const HOLD = /\b(guardan|guardas|apartan|apartas|reservan|reservas) (el|mi) lugar\b/;
 
 const STATUS =
-  /\b((ya )?(pudieron|pueden|podrian|alcanzaron a) (verificar|validar|revisar|confirmar|ver)|ya (verificaron|validaron|revisaron|confirmaron|vieron|checaron|registraron)|(les|te|le) llego (mi|el) (pago|deposito|transferencia|comprobante)|(estatus|status|estado) de mi (pago|pedido|inscripcion)|ya (quedo|se reflejo) (mi|el) pago|(desde ayer|desde hace|y nada|y no me|nadie me (contesta|responde|dice)|no me (han )?(contestado|confirmado|respondido|dicho nada)))\b/;
+  /\b((ya )?(pudieron|pueden|podrian|alcanzaron a) (verificar|validar|revisar|confirmar|ver)|ya (verificaron|validaron|revisaron|confirmaron|vieron|checaron|registraron)|(les|te|le) llego (mi|el) (pago|deposito|transferencia|comprobante)|(estatus|status|estado) de mi (pago|pedido|inscripcion)|ya (quedo|se reflejo) (mi|el) pago|(ya )?quedo (mi |la )?(inscripcion|lugar)|ya estoy inscrit[oa]|ya tengo (mi )?lugar|(desde ayer|desde hace|y nada|y no me|nadie me (contesta|responde|dice)|no me (han )?(contestado|confirmado|respondido|dicho nada)))\b/;
 const FUTURE =
   /\b(manana|pasado manana|quincena|ahorita|al rato|mas tarde|en un rato|en la tarde|en la noche|hoy (mismo|en la tarde|en la noche)|el (lunes|martes|miercoles|jueves|viernes|sabado|domingo)|la (proxima|otra|siguiente) semana|fin de (semana|mes)|cuando (cobre|me paguen|me depositen)|en cuanto (pueda|cobre|me paguen)|en unos dias|esta semana|luego)\b/;
 const PAY_VERB =
@@ -24,19 +44,23 @@ const INVOICE = /\b(factura|facturas|facturan|facturar|facturacion|cfdi|rfc|iva|
 const INSTALLMENTS =
   /\b(meses sin intereses|a meses|msi|parcialidades|parcialidad|mensualidades|abonos?|en (dos|2|tres|3|cuatro|4) (partes|pagos|exhibiciones)|pagos? (parciales|diferidos)|(pagar|pago|pagarlo) (en partes|una parte|la mitad)|en partes|anticipo)\b/;
 export const GROUP =
-  /\b((dos|2|tres|3|cuatro|4|cinco|5|varias|varios) (personas|lugares|inscripciones|alumnos|companeros|companeras)|(los|las|el de|la de) (dos|2|tres|3) (personas|lugares)?|somos (dos|2|tres|3|cuatro|4|cinco|5|varios|varias)|para (mi|un|una) (hermana|hermano|amiga|amigo|esposa|esposo|companera|companero|socio|socia|hija|hijo)|tambien a mi|(otra|otras) personas?|en un solo deposito|(mi|una|un) (hermana|hermano|amiga|amigo|esposa|esposo|companera|companero|socio|socia|hija|hijo|prima|primo|mama|papa) (tambien )?(quiere|se quiere|desea|va a|quisiera))\b/;
+  /\b((dos|2|tres|3|cuatro|4|cinco|5|varias|varios) (personas|lugares|inscripciones|alumnos|companeros|companeras)|(los|las|el de|la de) (dos|2|tres|3) (personas|lugares)?|somos (dos|2|tres|3|cuatro|4|cinco|5|varios|varias)|para (mi|un|una) (hermana|hermano|amiga|amigo|esposa|esposo|companera|companero|socio|socia|hija|hijo)|tambien a mi|(otra|otras) personas?|en un solo deposito|por (los|las) (dos|tres|2|3)|(mi|una|un) (hermana|hermano|amiga|amigo|esposa|esposo|companera|companero|socio|socia|hija|hijo|prima|primo|mama|papa) (tambien )?(quiere|se quiere|desea|va a|quisiera))\b/;
 const ACCOUNT =
   /\b(numero de cuenta|cuenta (bancaria|para (depositar|transferir|pagar))|clabe|a nombre de quien|datos (bancarios|de (la )?cuenta|para (pagar|depositar|transferir))|a que cuenta)\b/;
 // status · paid · later · invoice · installments · group · account · methods (la pregunta general de siempre)
 export function paymentKind(t) {
+  if (LINK_BROKEN.test(t)) return 'broken';
   if (
     STATUS.test(t) &&
-    /\b(pago|pague|pedido|comprobante|deposito|transferencia|inscripcion|deposite|transferi)\b/.test(t)
+    /\b(pago|pague|pedido|comprobante|deposito|transferencia|inscripcion|deposite|transferi|lugar)\b/.test(t)
   )
     return 'status';
-  if (PAID_PAST.test(t)) return 'paid';
+  if (claimsPaid(t)) return 'paid';
+  if (LINK_AGAIN.test(t) && /\bpag\w*/.test(t)) return 'link';
+  if (HOLD.test(t)) return 'later';
+  if (NOT_ARRIVED.test(t) && /\b(link|enlace|liga)\b/.test(t)) return 'link'; // «no me llegó el enlace de pago»
+  if (DENIED.test(t) && NOT_ARRIVED.test(t)) return 'missing';
   if (FUTURE.test(t) && PAY_VERB.test(t)) return 'later';
-  if (RECEIPT.test(t)) return 'paid';
   if (INVOICE.test(t)) return 'invoice';
   if (INSTALLMENTS.test(t)) return 'installments';
   if (GROUP.test(t)) return 'group';
@@ -163,21 +187,36 @@ const CERT_WORDS = /\b(constancia|certificado|diploma|registro|inscripcion)\b/;
 const OFFERS =
   /\b((te|les|le) (paso|mando|envio|comparto|dejo) (mis|mi) (datos|nombre|correo|cel|celular|telefono|numero|whats)|mis datos (son|para|van)|aqui (van|estan|te van|les van) mis datos)\b/;
 const HOW_NAME =
-  /\b(el nombre va (con|en)|como (pongo|escribo|pongo mi|escribo mi) (mi |el )?nombre|nombre (va )?con mayusculas)\b/;
+  /\b(el nombre va (con|en)|como (pongo|escribo|pongo mi|escribo mi) (mi |el )?nombre|nombre (va )?con mayusculas|cambiar (mi |el )?nombre)\b/;
 // Un mensaje que pide algo (que le llamen, un asesor) no es sólo un dato: no se contesta con «anoté…».
 export const ASKS_SOMETHING =
   /\b(llam\w*|marc(a|ar|en|ame|enme)|asesor\w*|persona|alguien|ayud\w*|contest\w*|urgente|queja|reembolso)\b/;
+// Datos de otra persona («el número de mi hermana», «y el de mi esposo»): no son los suyos (revisión, M4).
+const OTHERS =
+  /\b(mi|de mi|tu|su) (hermana|hermano|esposa|esposo|mama|papa|madre|padre|hijo|hija|amiga|amigo|companer\w*|jefe|jefa|socio|socia|prima|primo|novia|novio|pareja)\b|\b(el|la) de (mi|mis)\b/;
+// Pide información (precio, fechas, temario…): no es sólo un dato para la constancia.
+const INFO_ASK = /\b(informacion|info|informes|precio|costo|cuanto|cuando|temario|fechas?|horario|detalles)\b/;
 export function certDataSignal(t, raw) {
   if (ASKS_SOMETHING.test(t) && !HOW_NAME.test(t)) return false;
-  if (HOW_NAME.test(t) || OFFERS.test(t)) return true;
-  if (/\b(factura|quien)\b/.test(t)) return false; // «factura a nombre de…», «¿a nombre de quién pago?»
+  if (/\b(factura|facturar|rfc|fiscal|quien)\b/.test(t)) return false; // «datos para la factura», «¿a nombre de quién?»
+  if (OTHERS.test(t) || INFO_ASK.test(t)) return false;
+  if (HOW_NAME.test(t)) return true;
+  // «te mando mis datos para inscribirme»: quiere inscribirse; los datos del certificado se piden después
+  if (OFFERS.test(t)) return !/\b(inscribirme|inscribir|registrarme|apuntarme)\b/.test(t) || CERT_WORDS_STRICT.test(t);
   const d = certData(raw);
   if (d.name) return true;
   return CERT_WORDS.test(t) && Boolean(d.email || d.phone);
 }
+const CERT_WORDS_STRICT = /\b(constancia|certificado|diploma)\b/;
 // Señal débil: un correo o un teléfono sueltos (nunca un nombre). Sólo cuenta tras un pedido y no pisa lo ya guardado.
 export const weakCertData = (t, raw) => {
-  if (/[?¿]/.test(String(raw || '')) || ASKS_SOMETHING.test(t) || /\b(factura|cuenta|clabe|quien)\b/.test(t))
+  if (
+    /[?¿]/.test(String(raw || '')) ||
+    ASKS_SOMETHING.test(t) ||
+    OTHERS.test(t) ||
+    INFO_ASK.test(t) ||
+    /\b(factura|rfc|fiscal|cuenta|clabe|quien)\b/.test(t)
+  )
     return false;
   const d = certData(raw);
   return Boolean(d.email || d.phone);
@@ -189,7 +228,7 @@ const ACCESS_NOUN =
 // Lo que pide un prospecto («el link para pagar», «me mandan información», «el temario»): nunca es posventa.
 const PROSPECT = /\b(pagar|de pago|para el pago|precio|costo|temario|informacion|info|informes|datos|ficha|flyer)\b/;
 const ACCESS_ASK =
-  /\b(no (me )?(llega|llego|ha llegado|han llegado|abre|funciona|deja|carga|puedo entrar|aparece)|donde (entro|ingreso|veo|me conecto|esta|estan|lo veo|la veo)|como (entro|ingreso|accedo|veo|me meto)|me (pasan|pasas|pasa|mandan|mandas|envian|envias|comparten|agregan|agregas|agregaran)|cuando me (mandan|envian|agregan|pasan|llega|llegan|dan)|no me (agregan|han agregado|han mandado|han enviado|llega|llego)|todavia no me|aun no me|ya empezo|como ingreso|despues del pago como|se (corto|cayo|trabo|congelo)|no se (escucha|oye|ve))\b/;
+  /\b(no (me )?(llega|llego|ha llegado|han llegado|abre|funciona|deja|carga|puedo entrar|aparece)|donde (entro|ingreso|veo|me conecto|esta|estan|lo veo|la veo)|como (entro|ingreso|accedo|veo|me meto)|me (pasan|pasas|pasa|mandan|mandas|envian|envias|comparten|agregan|agregas|agregaran)|cuando me (mandan|envian|agregan|pasan|llega|llegan|dan)|no me (agregan|han agregado|han mandado|han enviado|llega|llego)|nunca me (llego|llega|llegaron)|todavia no me|aun no me|ya empezo|como ingreso|despues del pago como|se (corto|cayo|trabo|congelo)|no se (escucha|oye|ve))\b/;
 export const ACCESS_PROBLEM =
   /\b(no (abre|funciona|deja|carga|sirve|puedo entrar)|se (corto|cayo|trabo|congelo)|no se (escucha|oye|ve)|marca error|da error)\b/;
 // Sólo la forma del mensaje: replies.mjs además exige una inscripción activa o un pedido pagado o en revisión.
@@ -273,4 +312,7 @@ export const INTERESTED =
 
 // ---- Saber si la persona busca trabajo, no un curso.
 export const JOBS =
-  /\b(vacante|vacantes|empleo|busco trabajo|bolsa de trabajo|contratan|estan contratando|dar clases con ustedes|ser (docente|instructor|instructora|ponente|maestro|maestra) con ustedes|trabajar con ustedes|colaborar con ustedes)\b/;
+  /\b(vacantes? (de|para) (trabajo|empleo|auxiliar|asistente|docente|recepcion\w*|trabajar)|empleo|busco trabajo|bolsa de trabajo|contratan|estan contratando|dar clases con ustedes|ser (docente|instructor|instructora|ponente|maestro|maestra) con ustedes|trabajar con ustedes|colaborar con ustedes)\b/;
+
+// «Quiero inscribirme a otro curso también»: no es una inscripción a ESTE curso (revisión, A1).
+export const OTHER_COURSE = /\b(otro|otra|otros) (curso|cursos|apertura|taller|diplomado)\b/;

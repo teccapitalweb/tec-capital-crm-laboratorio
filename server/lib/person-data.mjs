@@ -176,32 +176,28 @@ export function registerExistingTables(personData, db) {
   ])
     personData.register({ name, tables: [table], merge: move(table), mergePerson: move(table, 'person_id') });
   personData.register({ name: 'surveys', tables: ['survey_invites'], merge: move('survey_invites') });
-  // Nombre, correo y teléfono que la persona dio por el chat para su constancia (docs/PLAN_RESPUESTAS_DE_VENTA.md): son
-  // datos personales; pasan al contacto que queda y el expediente y la supresión los alcanzan por contact_id.
-  const nameRequests = ids =>
-    (ids || []).length
-      ? db
-          .prepare(
-            `SELECT * FROM certificate_name_requests WHERE contact_id IN (${ids.map(() => '?').join(',')}) ORDER BY created_at`,
-          )
-          .all(...ids)
-      : [];
+  // Nombre, correo y teléfono que la persona dio por el chat para su constancia, y las correcciones del equipo
+  // (docs/PLAN_RESPUESTAS_DE_VENTA.md): son datos personales y pasan al contacto que queda en una fusión. Se declaran
+  // también export y erase por contact_id para cuando existan el expediente y la supresión; HOY ningún proceso del servidor
+  // los llama (igual que en el resto del registro), así que no hay exportación ni borrado en marcha para estas tablas.
+  const TABLES = ['certificate_name_requests', 'certificate_name_events'];
+  const inContacts = (table, ids, verb) =>
+    db.prepare(`${verb} FROM ${table} WHERE contact_id IN (${ids.map(() => '?').join(',')})`);
   personData.register({
     name: 'certificate-names',
-    tables: ['certificate_name_requests'],
-    merge: move('certificate_name_requests'),
-    export: ({ contactIds = [] } = {}) => ({ certificate_name_requests: nameRequests(contactIds) }),
-    erase: ({ contactIds = [] } = {}) => ({
-      certificate_name_requests: contactIds.length
-        ? Number(
-            db
-              .prepare(
-                `DELETE FROM certificate_name_requests WHERE contact_id IN (${contactIds.map(() => '?').join(',')})`,
-              )
-              .run(...contactIds).changes,
-          )
-        : 0,
-    }),
+    tables: TABLES,
+    merge: both(TABLES),
+    export: ({ contactIds = [] } = {}) =>
+      Object.fromEntries(
+        TABLES.map(t => [t, contactIds.length ? inContacts(t, contactIds, 'SELECT *').all(...contactIds) : []]),
+      ),
+    erase: ({ contactIds = [] } = {}) =>
+      Object.fromEntries(
+        TABLES.map(t => [
+          t,
+          contactIds.length ? Number(inContacts(t, contactIds, 'DELETE').run(...contactIds).changes) : 0,
+        ]),
+      ),
   });
   // Destinatarios de campaña: una fila por campaña y contacto. Si los dos recibieron la misma campaña se conserva la
   // fila del que queda (la campaña le llegó una vez a esa persona) y la del absorbido se retira; el paso de envío y

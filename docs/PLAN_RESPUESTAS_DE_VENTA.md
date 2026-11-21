@@ -1,6 +1,6 @@
 # Respuestas de venta: pagos, constancia, posventa y menos IA (21 nov 2026)
 
-Rama de trabajo (sin publicar). Migraciones con nombre: `replies/0001-certificate-details` y `replies/0002-certificate-name-requests` (la segunda sustituye la tabla de la primera, que nunca llegó a `main`).
+Rama de trabajo (sin publicar). Una migración con nombre: `replies/0001-certificate-name-requests` (tablas `certificate_name_requests` y `certificate_name_events`; esquema `41+32.c05a5695`). Las dos migraciones anteriores de esta rama nunca llegaron a `main` y se fundieron en ésta.
 
 ## Por qué
 
@@ -16,7 +16,7 @@ Lo que salió: el motor contestaba muy bien lo que más llega (la frase del anun
 | # | Hueco medido | Qué hace ahora | Dónde |
 | --- | --- | --- | --- |
 | 1 | Todo lo que sonaba a pago recibía «Puedes pagar con…» | El pago se parte: **cómo pago** (igual que antes), **ya pagué** (gana siempre a la inscripción; acuse con el estado real del pedido y pasa a una persona), **pago después** (acuse sin presionar y la vigencia de su pedido; «el lugar queda asegurado cuando se confirma el pago»), **¿ya verificaron?** (el estado real; «activa» sólo si la inscripción lo está), **último día para pagar** (la vigencia de su pedido), **factura**, **meses o en partes**, **varias personas** y **datos de la cuenta** (sólo con una respuesta aprobada que de verdad hable de eso; si no, pasa a una persona). Nunca confirma un pago. | `server/lib/sales-replies.mjs` (`paymentKind`), `server/replies.mjs`, textos en `server/reply-copy.mjs` |
-| 2 | «Mi nombre para la constancia es…» recibía el texto del certificado o **creaba un pedido** | Los datos (nombre completo, correo, teléfono) se acusan sin crear pedido y se guardan como **propuesta ligada al pedido** (`certificate_name_requests`). Un nombre sólo con señal explícita; nunca de un saludo, agradecimiento, queja o frase de pago. El certificado sale con ese nombre **sólo si alguien del equipo lo confirma** en la ficha de la apertura (Coordinación → Certificados: «Usar este nombre» o «Corregir nombre»), salvo que sea el mismo nombre de la persona. La franja de la venta en el chat también lo muestra. | migración `replies/0002`, `server/replies.mjs`, `server/certificates.mjs`, `public/certificates.js`, `public/sale.js` |
+| 2 | «Mi nombre para la constancia es…» recibía el texto del certificado o **creaba un pedido** | Los datos (nombre completo, correo, teléfono) se acusan sin crear pedido y se guardan como **propuesta ligada al pedido** (`certificate_name_requests`). Un nombre sólo con señal explícita; nunca de un saludo, agradecimiento, queja o frase de pago. El certificado sale con ese nombre **sólo si alguien del equipo lo confirma** en la ficha de la apertura (Coordinación → Certificados: «Usar este nombre» o «Corregir nombre»), salvo que sea el mismo nombre de la persona. La franja de la venta en el chat también lo muestra. | migración `replies/0001`, `server/replies.mjs`, `server/certificates.mjs`, `public/certificates.js`, `public/sale.js` |
 | 3 | «Sí, me interesa» (botón de una plantilla de seguimiento) **reenviaba la ficha** | Fuera de la pregunta de la ficha sigue el camino de la inscripción. Ya inscrita, no se intenta otro pedido: «tu inscripción ya está activa». | `server/replies.mjs` |
 | 4 | Frases claras que iban a la IA o a la ficha equivocada | Reglas sin gasto: «buen día»; inscripción como sustantivo o decisión (sin «¿qué incluye la inscripción?», «lo tomo en cuenta» ni «¿cuánto cuesta la inscripción?»); plazo para inscribirse sin crear pedido; «número de cuenta»; «me **puede** llamar»; **validez oficial, SEP, cédula, valor curricular**: sólo lo que consta y nunca «Sí»; cupo con el tamaño del grupo (y «¿hay espacio para estacionarse?» no es cupo); duración con las fechas de la apertura; «¿hay repetición?» es grabación; «¿ya empezó?» son fechas; hasta cuándo la promoción. | `PATTERNS` en `server/replies.mjs` |
 | 5 | Con 6 respuestas aprobadas o menos, **todo** el conocimiento iba a la IA ante cualquier mensaje sin intención | `rankKnowledge` exige parecido también con pocas entradas. Si nada se parece: un mensaje corto que no pregunta no va a la IA; una **pregunta real** sí, con el conocimiento chico completo (el validador exige que la IA cite una respuesta aprobada; sin ninguna, el borrador se descartaría y la llamada se pagaría para nada). | `server/retrieval.mjs`, `server/replies.mjs` |
@@ -46,6 +46,29 @@ Una revisión independiente del primer commit encontró 4 fallos altos, 5 medios
 13. El perfil «Sensible al precio» del simulador vuelve a preguntar por meses sin intereses; sin respuesta aprobada, su conversación queda con una persona (`test/simulator.test.mjs`).
 
 Además: la prueba intermitente de `test/mcp-cursos-borrador.test.mjs` acepta las dos respuestas correctas de la carrera entre el reloj de mantenimiento y la aprobación (`stale_proposal`, o `already_decided` con estado `stale`). Y se pasaron 58 frases vecinas nuevas (prospecto, cliente que ya pagó, quien espera a una persona) por el motor; lo que salió mal se corrigió («ya les mandé la captura», «me registré pero no me llegó nada», «¿dónde se toma la clase?», «¿me pasan los datos del curso?», «busco algo de citología») y lo más representativo quedó en las pruebas.
+
+## Segunda revisión independiente
+
+Una segunda revisión de las correcciones dejó 1 hallazgo alto, 6 medios y 6 bajos, casi todos reproducidos con el motor. Corregidos, cada uno con su frase exacta y su caso negativo en `test/sales-replies.test.mjs` (salvo donde se indica):
+
+- **A1** «Tu inscripción ya está activa» sólo con una inscripción viva (`enrollments.status='enrolled'`) del curso de la conversación; las consultas de pedido e inscripción miran el curso. Oportunidad «ganada» sin inscripción viva, o una baja: pasa a una persona con un texto neutro. «Otro curso» y varias personas se miran antes; una petición de inscripción ya no trae accesos.
+- **M1** Con pregunta, «si lo tomo», «ya quedó», «en línea» o constancia no es inscripción; «¿Ya quedó mi inscripción?» es el estado de su pedido.
+- **M2** Una negación delante del verbo («todavía no pagué», «aún no deposité», «nunca me llegó») no es «ya pagué»; «nunca me llegó el comprobante» pasa a una persona sin decir que se revisa un pago; «no me llegó el enlace de pago» reenvía el de su pedido.
+- **M3** «¿aún hay vacantes?» es cupo; empleo sólo con frases de empleo.
+- **M4** Datos de otra persona, datos para la factura, «para inscribirme» o una petición de información no son datos de la constancia; sin pedido no se piden.
+- **M5** Tope de reenvíos y texto de accesos cambiado tienen su propio texto.
+- **M6** Sin ajustes de certificados de la marca no se afirma emisor ni formato.
+- **B1** Confirmar el nombre: control de concurrencia (409 si la persona pidió otro), rechaza inscripciones dadas de baja o ya certificadas, limpia el nombre, guarda nombre anterior y nuevo en `certificate_name_events`; «hoy saldría como…» se calcula igual que al emitir. Pruebas de autorización (otra marca, agente que no es responsable, nombre corto). La pantalla usa la ventana propia de la app en lugar de `window.prompt`.
+- **B2** El registro de datos de persona dice tal cual que exportación y borrado todavía no tienen quien los llame (`server/lib/person-data.mjs`, `test/person-data.test.mjs`).
+- **B3** «q días…», descuento de contado, enlace de pago que no abre, precio y meses juntos, «cuánto sería por los dos», descuento a quien ya pagó, «¿cómo entro a la clase?» con pedido pendiente; y con cupones que el cliente puede escribir no se niega el descuento.
+- **B4** Un nombre confirmado por el equipo no se borra cuando llega otro: el nuevo queda como solicitud pendiente y visible.
+- **B5** Una sola migración (ver arriba); la prueba parte de una base sin el área `replies`, como `main`.
+- **B6** Ventana de 24 horas del tope con el reloj inyectado (`assistantResends`), sin borrar entregas.
+- La prueba intermitente de `test/mcp-cursos-borrador.test.mjs` acepta las dos respuestas de la carrera.
+
+Además se pasaron 45 frases vecinas nuevas (prospecto, pedido pendiente, inscripción activa, en espera) y las sondas del revisor; lo que salió mal se corrigió y quedó en las pruebas.
+
+La medición del banco de abajo es la de la primera revisión; tras la segunda no se volvió a medir.
 
 ## Medición antes y después
 

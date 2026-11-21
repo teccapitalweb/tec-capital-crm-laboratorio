@@ -14,13 +14,15 @@ window.createCertificatesUI = function ({ state, api, esc, icon, showModal, toas
   const requested = (r, e, certs) => {
     const q = r.requestedName;
     if (!q || (!q.name && !q.confirmedName)) return '';
+    // un nombre confirmado se conserva aunque después pida otro: entonces se ven los dos
     const line =
-      q.status === 'confirmed'
-        ? `<small>Nombre para su constancia (confirmado): ${esc(q.confirmedName)}</small>`
-        : `<small>Nombre que pidió para su constancia: ${esc(q.name)} · hoy el certificado saldría como «${esc(r.holderName)}»</small>`;
-    const enrollment = `data-enrollment="${esc(r.enrollmentId)}"`;
+      (q.confirmedName ? `<small>Nombre para su constancia (confirmado): ${esc(q.confirmedName)}</small>` : '') +
+      (q.status !== 'confirmed' && q.name
+        ? `<small>Nombre que pidió para su constancia: ${esc(q.name)} · hoy el certificado saldría como «${esc(r.holderName)}»</small>`
+        : '');
+    const enrollment = `data-enrollment="${esc(r.enrollmentId)}" data-requested="${esc(q.name || '')}"`;
     const actions =
-      certs.canIssue && !r.certificate
+      certs.canIssue && !r.certificate && r.status === 'enrolled'
         ? `<span class="actions">${q.status !== 'confirmed' && q.name ? btn('name-use', 'Usar este nombre', e.id, `${enrollment} data-name="${esc(q.name)}"`) : ''}${btn('name-fix', 'Corregir nombre', e.id, `${enrollment} data-name="${esc(q.confirmedName || q.name || r.holderName)}"`)}</span>`
         : '';
     return line + actions;
@@ -111,19 +113,25 @@ window.createCertificatesUI = function ({ state, api, esc, icon, showModal, toas
         }
         return true;
       }
-      if (name === 'cert-name-use' || name === 'cert-name-fix') {
-        const value =
-          name === 'cert-name-use'
-            ? el.dataset.name
-            : window.prompt('Nombre completo para el certificado', el.dataset.name || '');
-        if (!value) return true;
-        await api('/api/certificates/enrollments/' + el.dataset.enrollment + '/holder-name', {
-          method: 'POST',
-          body: { name: value },
-        });
-        toast('Nombre del certificado confirmado.');
+      if (name === 'cert-name-use') {
+        try {
+          await api('/api/certificates/enrollments/' + el.dataset.enrollment + '/holder-name', {
+            method: 'POST',
+            body: { name: el.dataset.name, expectedRequestedName: el.dataset.requested || '' },
+          });
+          toast('Nombre del certificado confirmado.');
+        } catch (error) {
+          toast(error.message); // p. ej. pidió otro nombre mientras tanto: se recarga para verlo
+        }
         await refreshCoordination();
         return 'reload';
+      }
+      if (name === 'cert-name-fix') {
+        showModal(
+          'Nombre para el certificado',
+          `<form id="cert-name-form" class="form-grid"><input type="hidden" name="enrollment" value="${esc(el.dataset.enrollment)}"><input type="hidden" name="expectedRequestedName" value="${esc(el.dataset.requested || '')}">${note('Escribe el nombre completo tal como debe salir en el certificado.')}<label class="field">Nombre completo<input name="name" required minlength="3" maxlength="120" autocomplete="off" value="${esc(el.dataset.name || '')}"></label><div class="actions"><button class="btn primary" type="submit">Guardar nombre</button></div><div class="ops-feedback" role="status"></div></form>`,
+        );
+        return true;
       }
       if (name === 'cert-issue-one' || name === 'cert-issue-all') {
         const r = await api('/api/certificates/editions/' + id + '/issue', {
@@ -189,6 +197,16 @@ window.createCertificatesUI = function ({ state, api, esc, icon, showModal, toas
           body: { credits: Number(input.credits), reason: input.reason },
         });
         toast('Saldo: ' + r.balance + ' créditos.');
+        return 'reload';
+      }
+      if (id === 'cert-name-form') {
+        await api('/api/certificates/enrollments/' + input.enrollment + '/holder-name', {
+          method: 'POST',
+          body: { name: input.name, expectedRequestedName: input.expectedRequestedName || '' },
+        });
+        $('#modal').close();
+        toast('Nombre del certificado guardado.');
+        await refreshCoordination();
         return 'reload';
       }
       if (id === 'cert-revoke-form') {
