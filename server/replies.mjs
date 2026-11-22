@@ -751,7 +751,12 @@ export function createReplies({
     const fromKnowledge = (threshold = 0.5) => {
       const hit =
         bestMatch(trigger.text, pool, threshold) ||
-        (TOPIC_INTENTS.includes(intent) ? { entry: kb.find(k => k.topic === intent), score: 1 } : null);
+        (TOPIC_INTENTS.includes(intent)
+          ? sales.pickByTopic(
+              trigger.text,
+              kb.filter(k => k.topic === intent),
+            )
+          : null);
       if (!hit?.entry) return false;
       out.reply = hit.entry.answer;
       out.sources.push({
@@ -1318,11 +1323,28 @@ export function createReplies({
           'Pregunta por la validez oficial del certificado: se dice lo que consta (digital, emisor, folio y QR) y nunca se afirma una validez oficial.';
       }
     } else if (intent === 'duration' && durationKnown) {
+      // Una respuesta aprobada que se parezca mucho a la pregunta («¿cuánto dura cada clase?») añade lo suyo antes del
+      // calendario; sus frases que remiten a la ficha sobran, porque la ficha va debajo. La de «dime qué edición» no añade nada.
+      const own = sales.pickSpecific(
+          trigger.text,
+          kb.filter(k => k.topic === 'duration'),
+        ),
+        facts = sales.durationFacts(own?.entry);
       out.prepared = catalogue.prepare(c, { kind: 'schedule' });
-      out.reply = copy.duration(ctx, sessions);
+      out.reply = (facts ? facts + '\n\n' : '') + copy.duration(ctx, sessions);
       out.sources.push(catalogueSource);
-      out.reason =
-        'Duración con el calendario de la apertura de esta conversación (inicio, fin y sesiones del catálogo).';
+      if (facts)
+        out.sources.push({
+          type: 'knowledge',
+          id: own.entry.id,
+          revision: own.entry.revision,
+          question: own.entry.question,
+        });
+      out.reason = facts
+        ? 'Conocimiento aprobado «' +
+          own.entry.question +
+          '» y, debajo, el calendario de la apertura de esta conversación (inicio, fin y sesiones del catálogo).'
+        : 'Duración con el calendario de la apertura de esta conversación (inicio, fin y sesiones del catálogo).';
     } else if (intent === 'objection' && sales.TIME_OBJECTION.test(said)) {
       const rec = kb.find(k => k.topic === 'recording');
       out.reply = copy.timeObjection(ctx, rec?.answer || '');

@@ -1,9 +1,55 @@
 // Lectura fina de los mensajes de venta y posventa (docs/PLAN_RESPUESTAS_DE_VENTA.md). Funciones puras: reciben el texto
 // (normalizado con `normalize` de server/ai-provider.mjs: minúsculas, sin acentos ni signos) y devuelven qué pide la
 // persona. No leen la base ni la red; quien decide qué contestar es server/replies.mjs.
-import { normalize, stem, tokens } from '../ai-provider.mjs';
+import { bestMatch, normalize, similarity, stem, tokens } from '../ai-provider.mjs';
 
 const plain = raw => normalize(raw).replace(/\s+/g, ' ').trim();
+
+// ---- Elegir entre varias respuestas aprobadas del mismo tema cuando ninguna se parece lo bastante a la pregunta.
+// Antes se tomaba «la primera del tema», que es la última tocada (la lista va por fecha de cambio): con dos respuestas de
+// pago, «¿puedo pagar por OXXO?» recibía la de «¿dónde deposito?» sólo por haberse aprobado después. Ahora gana la que
+// comparte alguna palabra con contenido y, si ninguna, la más antigua del tema (la base de la marca), que es estable.
+export function pickByTopic(text, entries) {
+  if (!entries.length) return null;
+  const close = bestMatch(text, entries, 0.01);
+  if (close) return close;
+  const oldest = [...entries].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))[0];
+  return { entry: oldest, score: 0 };
+}
+
+// ---- Entre varias respuestas aprobadas que se parecen lo mismo a la pregunta, la más específica: «¿cuánto dura cada
+// clase?» y «¿cuánto dura el curso?» se parecen igual a las dos respuestas de duración (para el motor «curso» es una
+// palabra comodín), así que gana la que más de SUS palabras tiene en la pregunta; en empate, la más antigua de la marca.
+export function pickSpecific(text, entries, threshold = 0.75) {
+  const asked = new Set(tokens(text).map(stem));
+  return (
+    entries
+      .map(e => {
+        const own = [...new Set([e.question, ...(e.variants || [])].flatMap(tokens).map(stem))];
+        return {
+          entry: e,
+          score: similarity(text, e),
+          covered: own.length ? own.filter(t => asked.has(t)).length / own.length : 0,
+        };
+      })
+      .filter(x => x.score >= threshold)
+      .sort(
+        (a, b) => b.score - a.score || b.covered - a.covered || (a.entry.created_at || 0) - (b.entry.created_at || 0),
+      )[0] || null
+  );
+}
+
+// ---- Duración: lo que una respuesta aprobada añade al calendario del catálogo (cuánto dura cada sesión, cuántas semanas…).
+// El calendario de la apertura (inicio, fin, sesiones) va debajo, así que las frases que remiten a la ficha, la edición o el
+// calendario sobran; si no queda ninguna frase con contenido propio, la respuesta aprobada no añade nada.
+export function durationFacts(entry) {
+  if (!entry?.answer) return null;
+  const kept = String(entry.answer)
+    .split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(s => s && !/\b(ficha|edicion|ediciones|calendario)\b/.test(plain(s)));
+  return kept.length ? kept.join(' ') : null;
+}
 
 // ---- Pagos: «¿cómo pago?» no es lo mismo que «ya pagué», «pago mañana», «¿ya verificaron?», factura, meses o varias
 // personas. Antes todo recibía «Puedes pagar con…».

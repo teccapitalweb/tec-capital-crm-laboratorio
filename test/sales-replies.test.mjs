@@ -17,6 +17,7 @@ import {
   certData,
   certDataSignal,
   claimsPaid,
+  durationFacts,
   isAccess,
   isValidity,
   notCovered,
@@ -374,6 +375,77 @@ test('respuestas de venta de punta a punta', async t => {
   const length = await sim('cuanto dura el curso');
   assert.match(length.reply, /• Termina: /);
   assert.doesNotMatch(length.reply, /qué edición te interesa/);
+  // Duración con conocimiento propio: «¿cuánto dura cada clase?» (visto en WhatsApp real: recibía sólo las fechas) pone
+  // primero lo que la respuesta aprobada añade y debajo el calendario; la frase que remite a la ficha sobra.
+  const addEntry = async (topic, question, answer, variants) => {
+    const made = (
+      await call(origin, '/api/replies/knowledge', {
+        cookie: admin,
+        body: { brandId: 'globalvet', topic, question, answer, variants },
+        expected: 201,
+      })
+    ).entry;
+    await call(origin, '/api/replies/knowledge/' + made.id + '/approve', {
+      cookie: admin,
+      body: { expectedRevision: made.revision },
+    });
+    return made;
+  };
+  const perClass = await addEntry(
+    'duration',
+    '¿Cuánto dura cada clase?',
+    'Cada sesión en vivo dura alrededor de dos horas. Los días y el horario exactos de tu curso vienen en su ficha: escribe «fechas» y te la vuelvo a mandar.',
+    ['cuanto dura cada clase', 'cuantas horas es cada sesion', 'cuanto tiempo dura la clase'],
+  );
+  const perClassReply = await sim('Cuánto dura cada clase');
+  assert.match(perClassReply.reply, /^Cada sesión en vivo dura alrededor de dos horas\.\n\n/);
+  assert.match(perClassReply.reply, /• Termina: /);
+  assert.doesNotMatch(perClassReply.reply, /vienen en su ficha/, 'la frase que remite a la ficha sobra');
+  assert.ok(perClassReply.sources.some(s => s.type === 'knowledge' && s.id === perClass.id));
+  // «¿cuánto dura el curso?» sigue igual: la respuesta de ejemplo («dime qué edición») no añade nada y la de cada clase no se parece lo bastante
+  const lengthAgain = await sim('cuanto dura el curso');
+  assert.doesNotMatch(lengthAgain.reply, /dos horas|qué edición/);
+  assert.match(lengthAgain.reply, /• Termina: /);
+  assert.equal(
+    durationFacts({
+      answer:
+        'La duración aparece en la ficha de cada edición. Si me dices qué edición te interesa, te comparto el calendario completo.',
+    }),
+    null,
+  );
+  assert.equal(
+    durationFacts({ answer: 'Son seis sesiones de dos horas. El calendario viene en la ficha.' }),
+    'Son seis sesiones de dos horas.',
+  );
+  // Dos respuestas de pago aprobadas, la de «¿dónde deposito?» aprobada al final: «¿puedo pagar por OXXO?» (visto en WhatsApp
+  // real) ya no recibe la última tocada, sino la que comparte palabras con la pregunta.
+  const payA = await addEntry(
+    'payment',
+    '¿Aceptan tarjeta, OXXO o transferencia?',
+    'Desde tu enlace de pago puedes pagar con tarjeta de crédito o débito, transferencia (SPEI) o en efectivo en OXXO. Por ahora no manejamos PayPal.',
+    ['aceptan tarjeta', 'se puede pagar en oxxo', 'puede ser transferencia', 'aceptan efectivo', 'pago con paypal'],
+  );
+  const payB = await addEntry(
+    'payment',
+    '¿Dónde deposito o hago la transferencia?',
+    'El pago se hace desde tu enlace de pago: ahí eliges tarjeta, transferencia (SPEI) u OXXO y te muestra los datos.',
+    ['donde deposito', 'a donde transfiero', 'datos para depositar', 'a que cuenta deposito'],
+  );
+  const oxxo = await sim('Y puedo pagar por Oxxo o algo asi');
+  assert.equal(oxxo.intent, 'payment');
+  assert.match(oxxo.reply, /OXXO/);
+  assert.doesNotMatch(oxxo.reply, /ahí eliges/, 'no la última aprobada del tema, sino la que se parece');
+  assert.match((await sim('donde deposito?')).reply, /ahí eliges/);
+  // se retiran: el resto de la prueba cuenta con las 6 respuestas de ejemplo de la marca
+  for (const e of [perClass, payA, payB]) {
+    const now = (await call(origin, '/api/replies/knowledge?brand=globalvet', { cookie: admin })).entries.find(
+      x => x.id === e.id,
+    );
+    await call(origin, '/api/replies/knowledge/' + e.id + '/archive', {
+      cookie: admin,
+      body: { expectedRevision: now.revision },
+    });
+  }
   const promo = await sim('¿tienen descuento?');
   assert.match(promo.reply, /no hay una promoción vigente/);
   assert.doesNotMatch(promo.reply, /estudiante/, 'punto 12: no sugiere un precio especial por ser estudiante');

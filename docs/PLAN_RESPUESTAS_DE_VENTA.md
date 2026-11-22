@@ -127,6 +127,15 @@ Cautela: el banco se redactó a mano con proporciones de otro ramo y nada se pro
 - `test/replies-resume.test.mjs`: tras pedir una persona, un acuse, una sola vez. `test/replies-intents.test.mjs`: «certificado oficial» en varias preguntas ya no recibe «Sí».
 - `server/summaries.mjs` no cuenta el acuse como respuesta.
 
+## Después de la primera prueba con conocimiento real (21 nov 2026)
+
+Con 30 respuestas de GlobalVet aprobadas, en WhatsApp real salieron dos cosas, corregidas en `server/lib/sales-replies.mjs` y `server/replies.mjs` con su prueba en `test/sales-replies.test.mjs`:
+
+- **«¿Cuánto dura cada clase?»** recibía sólo las fechas del catálogo: la intención `duration` contestaba con el calendario antes de mirar el conocimiento. Ahora, si una respuesta aprobada de duración se parece mucho a la pregunta, lo que añade (`durationFacts`: «cada sesión dura alrededor de dos horas») va primero y el calendario de la apertura debajo; sus frases que remiten a la ficha, la edición o el calendario sobran, porque la ficha va debajo (la respuesta de ejemplo «dime qué edición» no añade nada). Entre varias respuestas de duración gana la más específica (`pickSpecific`: la que más de sus propias palabras tiene en la pregunta; para el motor «curso» es una palabra comodín, así que «¿cuánto dura el curso?» y «¿cuánto dura cada clase?» se parecen igual a las dos), y en empate la más antigua de la marca.
+- **«¿Puedo pagar por OXXO o algo así?»** recibía «¿dónde deposito?»: cuando ninguna respuesta de pago se parecía lo bastante, el motor tomaba «la primera del tema», que es la última tocada (la lista va por fecha de cambio). Ahora (`pickByTopic`) gana la que comparte alguna palabra con contenido y, si ninguna, la más antigua del tema. Vale para todos los temas reconocidos (pago, certificado, requisitos, modalidad, grabación, duración).
+
+Las 58 frases de las sondas de la segunda revisión dan las mismas respuestas que antes de este ajuste.
+
 ## Fuera de este bloque
 
 - **Cambiar de curso en el mismo chat** fuera de un número de WhatsApp de toda la marca («mejor el de geriatría»).
