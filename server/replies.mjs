@@ -763,6 +763,13 @@ export function createReplies({
         }
       }
     };
+    // Botones para seguir tras una respuesta informativa (docs/PLAN_MENSAJES_AMABLES.md): la persona toca en vez de escribir.
+    // Máximo tres; el canal los limita a tres y, fuera de la ventana de 24 h, el conector cae a texto. A quien ya compró no se
+    // le ofrece inscribirse, sino hablar con una persona.
+    const withSteps = (...opts) => {
+      out.buttons = [...opts, bought ? 'Hablar con asesor' : 'Quiero inscribirme'];
+      out.keepButtons = true;
+    };
     const catalogueSource = {
       type: 'catalogue',
       courseId: course.id,
@@ -1343,11 +1350,13 @@ export function createReplies({
       out.reply = copy.price(ctx);
       out.stage = 'interesado';
       out.sources.push(catalogueSource);
+      withSteps('Temario', 'Fechas');
       out.reason = 'Precio y promoción vigentes consultados en el catálogo al responder.';
     } else if (intent === 'syllabus') {
       out.prepared = catalogue.prepare(c, { kind: 'syllabus' });
       out.reply = copy.syllabus(ctx);
       out.sources.push(catalogueSource);
+      withSteps('Precio', 'Fechas');
       out.reason = 'Temario del curso en el catálogo.';
     } else if (
       intent === 'schedule' &&
@@ -1397,6 +1406,7 @@ export function createReplies({
       out.prepared = catalogue.prepare(c, { kind: 'schedule' });
       out.reply = copy.schedule(ctx);
       out.sources.push(catalogueSource);
+      withSteps('Precio', 'Temario');
       out.reason = 'Fecha, horario y docente de la edición en el catálogo.';
     } else if (intent === 'certificate' && sales.isValidity(said)) {
       // Validez oficial, SEP, cédula, valor curricular: sólo lo que consta. Una respuesta aprobada que hable de eso a propósito gana.
@@ -1427,6 +1437,7 @@ export function createReplies({
       out.prepared = catalogue.prepare(c, { kind: 'schedule' });
       out.reply = (facts ? facts + '\n\n' : '') + copy.duration(ctx, sessions);
       out.sources.push(catalogueSource);
+      withSteps('Precio', 'Temario');
       if (facts)
         out.sources.push({
           type: 'knowledge',

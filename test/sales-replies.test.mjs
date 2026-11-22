@@ -612,7 +612,13 @@ test('respuestas de venta de punta a punta', async t => {
   const styled = await sim('¿cuánto cuesta?');
   assert.match(styled.reply, /^💳 El precio de \*.+\* es de \$379\.00 MXN\./);
   assert.match(styled.reply, /👉 Si quieres apartar tu lugar, escribe \*Quiero inscribirme\*/);
-  assert.doesNotMatch((await sim('ya hice la transferencia')).reply, emoji, 'un mensaje serio nunca lleva emojis');
+  // botones de siguiente paso tras las respuestas informativas (precio, temario, fechas)
+  assert.deepEqual(styled.buttons, ['Temario', 'Fechas', 'Quiero inscribirme']);
+  assert.deepEqual((await sim('¿me pasas el temario?')).buttons, ['Precio', 'Fechas', 'Quiero inscribirme']);
+  assert.deepEqual((await sim('¿qué fechas tienen?')).buttons, ['Precio', 'Temario', 'Quiero inscribirme']);
+  const ask = await sim('ya hice la transferencia');
+  assert.doesNotMatch(ask.reply, emoji, 'un mensaje serio nunca lleva emojis');
+  assert.equal(ask.buttons, null, 'un mensaje que pasa a una persona no ofrece botones de siguiente paso');
   await setMode({ emojis: false });
   const flat = await sim('¿cuánto cuesta?');
   assert.doesNotMatch(flat.reply, emoji);

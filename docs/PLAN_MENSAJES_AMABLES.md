@@ -71,6 +71,16 @@ Reglas: **cada parte en su párrafo** (saludo, datos, siguiente paso y nota sepa
 - **El chat del laboratorio pinta las negritas** igual que el teléfono (`rich` en `public/app.js`: sólo pares de asteriscos en una misma línea, sobre el texto ya escapado). WhatsApp real las entiende de origen.
 - **Verificado:** `test/reply-copy.test.mjs` (los dos estilos, un emoji por renglón, los mensajes serios sin emojis), `test/sales-replies.test.mjs` (el interruptor por marca de punta a punta y un valor inválido), `test/ui/bandeja.spec.mjs` (la ficha llega con negritas), y las pruebas que citaban las viñetas se hicieron independientes del estilo. Revisado a la vista en el servidor local de demostración, en computadora y celular (375 px): ficha de bienvenida con flyer, precio y fechas con negritas y un emoji por renglón, la casilla por marca en Seguimientos, y la lista de chats con la vista previa del último mensaje sin los asteriscos (`unbold` en `public/app.js`).
 
+## Botones de siguiente paso (22 nov 2026)
+
+Hasta ahora sólo la bienvenida ofrecía botones para tocar (Precio · Temario · Fechas). Ahora las respuestas informativas también cierran con botones, para que la persona toque en vez de escribir:
+
+- **Precio:** Temario · Fechas · Quiero inscribirme.
+- **Temario:** Precio · Fechas · Quiero inscribirme.
+- **Fechas** y **duración:** Precio · Temario · Quiero inscribirme.
+
+A quien ya compró, el tercer botón es «Hablar con asesor» en vez de «Quiero inscribirme». Son como mucho tres (el canal los limita a tres y, fuera de la ventana de 24 h, el conector de Meta cae a texto); los mensajes que pasan a una persona (pago en revisión, queja, descuento de grupo) no llevan botones. Al tocar un botón, su texto llega como un mensaje de la persona y el motor lo lee con las reglas de siempre (`withSteps` en `server/replies.mjs`; el canal simulado los pinta como chips y la bandeja del equipo los muestra en gris). Verificado en `test/sales-replies.test.mjs` (precio, temario y fechas con sus botones; un mensaje que pasa a una persona sin botones) y a la vista en el chat de prueba.
+
 ## Verificación
 
 - `test/reply-copy.test.mjs`: cada texto con datos completos, sin datos y con promoción; sin huecos (`undefined`, `{{…}}`), sin promesas falsas y sin género.
