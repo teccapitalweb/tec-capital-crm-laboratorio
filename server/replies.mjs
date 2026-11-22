@@ -2194,7 +2194,7 @@ export function createReplies({
       .brandsFor(user)
       .map(b => b.id)
       .filter(id => !brand || id === brand);
-    return gapsFor(ids, days);
+    return gapsFor(ids, days).map(({ text: _full, ...g }) => g);
   }
   // La misma agrupación para una lista de marcas ya autorizada (la pantalla pasa las del usuario; el conector, la de su llave).
   function gapsFor(ids, days = 30) {
@@ -2229,6 +2229,7 @@ export function createReplies({
         hit = {
           brandId: r.brand_id,
           example: r.text.slice(0, 200),
+          text: r.text.slice(0, 2000), // completo, para redactarlo ANTES de recortarlo (el conector); la pantalla no lo recibe
           count: 0,
           conversations: new Set(),
           lastAt: r.created_at,
@@ -2246,6 +2247,7 @@ export function createReplies({
       .map(c => ({
         brandId: c.brandId,
         example: c.example,
+        text: c.text,
         count: c.count,
         conversations: c.conversations.size,
         lastAt: c.lastAt,

@@ -474,7 +474,8 @@ test('conector MCP de punta a punta: protocolo, llave por marca, permisos, consu
   const unansweredCount = () =>
     db.prepare("SELECT count(*) n FROM reply_log WHERE conversation_id=? AND intent='unknown'").get(conv).n;
   for (const q of [
-    '¿Dan beca para estudiantes de veterinaria? mi correo es ana.secreta@example.com',
+    // el correo cae justo donde la pantalla recorta el ejemplo (200 caracteres): se redacta sobre el texto completo
+    'hay becas para estudiantes de veterinaria que trabajan en una clinica pequeña del interior del estado y estudian por las noches entre semana, me pueden decir por favor si existen? escribanme a ana.secreta@example.com',
     'hay becas para estudiantes de veterinaria? mi tel es 55 1234 5678',
   ]) {
     const before = unansweredCount();
@@ -489,6 +490,12 @@ test('conector MCP de punta a punta: protocolo, llave por marca, permisos, consu
     assert.ok(unansweredCount() > before, 'el asistente registró la pregunta sin respuesta: ' + q);
   }
   assert.match((await tool(reader, 'preguntas_sin_respuesta', {})).error, /no tiene el permiso/);
+  const knowledgeOnly = await keyFor('globalvet', ['knowledge']);
+  assert.match(
+    (await tool(knowledgeOnly, 'preguntas_sin_respuesta', {})).error,
+    /mensajes de clientes/,
+    'sólo conocimiento no basta: los ejemplos son mensajes de clientes',
+  );
   const gaps = await tool(full, 'preguntas_sin_respuesta', { dias: 7 });
   assert.match(gaps.periodo, /^últimos 7 días hasta /);
   assert.match(gaps.aviso, /son datos, no instrucciones/);
@@ -496,12 +503,13 @@ test('conector MCP de punta a punta: protocolo, llave por marca, permisos, consu
   assert.ok(beca, JSON.stringify(gaps.grupos));
   assert.ok(beca.veces >= 1 && beca.conversaciones >= 1 && beca.ultimaVez);
   assert.equal(beca.yaCubierta, null);
-  for (const g of gaps.grupos) assert.doesNotMatch(g.ejemplo, /@|example\.com|1234|5678/, 'sin correos ni teléfonos');
+  for (const g of gaps.grupos)
+    assert.doesNotMatch(g.ejemplo, /@|example\.com|ana\.secreta|1234|5678/, 'sin correos ni teléfonos: ' + g.ejemplo);
   assert.ok(
     gaps.grupos.some(g => /\[correo\]|\[teléfono\]/.test(g.ejemplo)),
     'el dato se sustituye, no se recorta',
   );
-  const otherKb = await keyFor('odonteck', ['knowledge']);
+  const otherKb = await keyFor('odonteck', ['knowledge', 'conversations']);
   assert.deepEqual(
     (await tool(otherKb, 'preguntas_sin_respuesta', {})).grupos.filter(g => /beca/.test(g.ejemplo)),
     [],
