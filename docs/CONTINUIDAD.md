@@ -34,11 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Motor: memoria de la conversación (integrado en local, pendiente de publicar, 21 nov 2026)
+## Motor: memoria de la conversación (publicado en `main`, 21 nov 2026)
 
 - **Por qué:** el dueño aceptó mejorar «muchísimo más» el contexto del asistente; primera pieza. En WhatsApp real, «soy estudiante de la UTT, ¿cuál me recomiendas?» recibía «¿Qué tema te interesa?» y la respuesta a esa pregunta no se entendía; y el motor no recordaba lo que la persona había contado dos mensajes antes.
 - **Qué se hizo (sin esquema nuevo, sin IA):** en `server/replies.mjs`, si lo último del asistente fue «¿Qué tema te interesa?» y el mensaje nombra un tema, se lee como la respuesta y se recomienda con él (`topicAnswer`); si ningún curso lo tiene, se dice y se ofrecen los que sí hay. Al pedir una recomendación sin tema se miran los mensajes anteriores de la persona en esta conversación (`saidBefore`, últimos 30) con la lectura del catálogo (`remembered` en `server/lib/sales-replies.mjs`) y se contesta «Por lo que me contaste antes…» (`copy.recommend` con `remembered`). En `server/memory.mjs` la ficha de la IA lleva el perfil dicho (`roleOf`, lista fija) y los cursos con los que coincide lo que contó; el texto libre del cliente no viaja. Sólo mensajes de esta conversación; nada se guarda aparte.
 - **Verificado:** `test/sales-replies.test.mjs` (tres conversaciones reales con las frases exactas y sus vecinos: «astronomía» sin curso, «sí» que no inventa una lista) y `test/memory-context.test.mjs` (perfil en la ficha; una frase hostil no pasa); `npm run check`, la suite del servidor y las de navegador; las 58 frases de las sondas sin cambios.
+- **Publicado:** commit `df43b09`, con `npm run check` limpio, 815 pruebas de servidor y 95 de navegador. Falta probarlo en WhatsApp real.
 - **Siguen:** objeciones con argumentos reales, aprendizaje semanal desde las preguntas sin respuesta y medir con IA real.
 
 ## Motor: recomendar sin tema y «¿hay para vacas?» (publicado en `main`, 21 nov 2026)
