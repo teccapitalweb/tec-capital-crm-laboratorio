@@ -427,6 +427,22 @@ export function createReplies({
       offer: Boolean(r && r.sources.includes('"kind":"offer_human"')),
     };
   };
+  // Memoria de la conversación (docs/PLAN_RESPUESTAS_DE_VENTA.md): lo que la persona escribió ANTES en esta conversación, sus
+  // últimos 30 mensajes sin el actual, del más viejo al más nuevo. Sólo de esta conversación, nunca de otra marca; y de ese texto
+  // sólo se usan las palabras que casan con el catálogo o con una lista fija (nunca se copia al cliente ni a la IA).
+  const saidBefore = (c, trigger) =>
+    c.id === 'simulacion'
+      ? []
+      : db
+          .prepare(
+            "SELECT text FROM messages WHERE conversation_id=? AND sender_kind='customer' AND id!=? ORDER BY seq DESC LIMIT 30",
+          )
+          .all(c.id, trigger.id || '')
+          .map(m => String(m.text || ''))
+          .reverse();
+  // ¿Lo último que dijo el asistente fue preguntar «¿Qué tema te interesa?» (la recomendación sin tema)?
+  const askedTopic = shown =>
+    Boolean(shown && shown.intent === 'courses' && /¿Qué tema te interesa\?/.test(shown.text));
   // ---- Número de WhatsApp que atiende toda la marca (docs/PLAN_NUMERO_POR_CONSULTORA.md). Decide, sin escribir nada, si este mensaje elige o cambia el
   // curso de la conversación: por el número de la lista que se le acaba de ofrecer o porque nombra un curso de la marca. Con el curso todavía por elegir
   // basta una palabra propia del curso; a media conversación hace falta además una señal («el de aves», «también…»), y un pedido vigente lo impide.
@@ -688,6 +704,22 @@ export function createReplies({
       intent = 'cert_data';
       confidence = 0.75;
     }
+    // Contesta la pregunta «¿Qué tema te interesa?» del mensaje anterior («vacas», «trabajo con bovinos», «reptiles»): antes esa
+    // respuesta caía en «sin intención» y recibía «no la tengo a la mano». Ahora recomienda con lo que dijo (visto en WhatsApp real).
+    // Sólo un mensaje sin otra intención: «no entendí», «buenas tardes» o «sí» siguen su camino de siempre.
+    let topicAnswer = false;
+    if (
+      !forced &&
+      !pressed &&
+      intent === 'unknown' &&
+      sales.topicWords(trigger.text).length &&
+      askedTopic(prev || lastBot(c.id))
+    ) {
+      intent = 'courses';
+      confidence = 0.8;
+      topicAnswer = true;
+      followed = 'Contesta a «¿Qué tema te interesa?» del mensaje anterior.';
+    }
     const payKind = intent === 'payment' ? sales.paymentKind(said) : null;
     // ¿El cliente pregunta algo concreto? (un tema del conocimiento, o una pregunta sin intención reconocida)
     const asks = TOPIC_INTENTS.includes(intent) || (intent === 'unknown' && looksLikeQuestion(trigger.text));
@@ -877,33 +909,48 @@ export function createReplies({
     // de los cursos de la marca que tienen una apertura disponible, hasta 5, con su inicio y precio vigentes. Si no dice
     // especie ni tema, se le pregunta (o contesta una respuesta aprobada) en lugar de soltar la lista completa.
     let notMine = false;
-    const recommendation = () => {
+    // Los cursos de la marca con apertura disponible, con su temario y su ficha (alias del conocimiento ligado al curso).
+    const brandList = () => {
       const notes = courseNotes(c.brand_id);
-      const list = brandCourses(db, catalogue, c.brand_id).map(k =>
+      return brandCourses(db, catalogue, c.brand_id).map(k =>
         withNotes(
           { ...k, syllabus: db.prepare('SELECT syllabus FROM courses WHERE id=?').get(k.id)?.syllabus || '' },
           notes,
         ),
       );
+    };
+    const recommendation = () => {
+      const notes = courseNotes(c.brand_id);
+      const list = brandList();
+      const multi = Boolean(routed?.multi && routed.list.length > 1);
+      const toItem = k => {
+        try {
+          const x = catalogue.info(k.id, k.editionId);
+          return { title: k.title, start: copy.startText(x.edition), price: copy.priceText(x) };
+        } catch {
+          return null;
+        }
+      };
       // «soy técnico, ¿puedo tomarlo?» pregunta por ESTE curso: no se le recomienda una lista
       const forThis = sales.FITS.test(said) && !sales.ASKS_TOPIC.test(said) && !/recomiend/.test(said);
-      const items = (forThis ? [] : sales.recommend(trigger.text, list))
-        .map(k => {
-          try {
-            const x = catalogue.info(k.id, k.editionId);
-            return { title: k.title, start: copy.startText(x.edition), price: copy.priceText(x) };
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean);
+      const items = (forThis ? [] : sales.recommend(trigger.text, list)).map(toItem).filter(Boolean);
       if (items.length) {
-        out.reply = copy.recommend(ctx, items, { multi: Boolean(routed?.multi && routed.list.length > 1) });
+        out.reply = copy.recommend(ctx, items, { multi });
         out.sources.push(catalogueSource);
         out.reason =
           'Recomendación con el catálogo de la marca: ' +
           items.length +
           ' curso(s) que coinciden con lo que dijo (título y temario), con su inicio y precio vigentes.';
+        return true;
+      }
+      // Contestó a «¿Qué tema te interesa?» con un tema que ningún curso de la marca tiene: se dice claro y se ofrece lo que sí hay.
+      // «Cualquiera», «el que sea», «todos»: no es un tema; recibe la lista de siempre.
+      if (topicAnswer) {
+        if (/\b(cualquiera|cualquier|el que sea|la que sea|todos|todas|de todo)\b/.test(said)) return false;
+        out.reply = copy.noTopicMatch(ctx, otherCourses(c));
+        out.sources.push(catalogueSource);
+        out.reason =
+          'Contestó con un tema que ningún curso de la marca tiene (título, temario ni ficha): se dice y se ofrecen los cursos que sí hay.';
         return true;
       }
       if (!sales.RECOMMEND.test(said) && !sales.FITS.test(said)) return false;
@@ -933,6 +980,18 @@ export function createReplies({
         out.reply = req.answer;
         out.sources.push({ type: 'knowledge', id: req.id, revision: req.revision, question: req.question });
         out.reason = 'Pregunta si el curso le sirve: respuesta aprobada de requisitos «' + req.question + '».';
+        return true;
+      }
+      // Memoria de la conversación: pide una recomendación sin tema, pero ANTES contó con qué trabaja («tengo un rancho con
+      // vacas», o el tema con el que contestó la vez pasada). Se recomienda con eso en lugar de volver a preguntar.
+      const past = sales.remembered(saidBefore(c, trigger), list).map(toItem).filter(Boolean);
+      if (past.length) {
+        out.reply = copy.recommend(ctx, past, { multi, remembered: true });
+        out.sources.push(catalogueSource);
+        out.reason =
+          'Recomendación con lo que contó antes en esta conversación: ' +
+          past.length +
+          ' curso(s) de la marca coinciden con sus mensajes anteriores (título, temario y ficha), con su inicio y precio vigentes.';
         return true;
       }
       out.reply = copy.askTopic(ctx);
@@ -1482,7 +1541,7 @@ export function createReplies({
       };
       out.needsProvider = Boolean(s.provider_enabled) && picked.sent > 0;
       if (out.needsProvider && c.id !== 'simulacion' && !routed?.pending)
-        out.memory = customerMemory(db, c, { now }).text; // con el curso recién elegido, el interés de relleno todavía figura en su historia: no se le manda a la IA
+        out.memory = customerMemory(db, c, { now, courses: brandList() }).text; // con el curso recién elegido, el interés de relleno todavía figura en su historia: no se le manda a la IA
       out.reply = copy.fallback(ctx);
       if (!flow) {
         out.buttons = WITH_HUMAN;

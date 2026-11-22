@@ -8,6 +8,10 @@
 //  - Lo que escribe el cliente (su nombre) se reduce a una palabra corta de letras; el texto de catálogo se limpia. Y se entrega a la IA como
 //    BLOQUE DE DATOS delimitado, no como instrucciones (ver ai-provider.mjs).
 //  - Corta (máx. ~700 caracteres) y escrita para el modelo; queda a la vista del equipo en el «por qué respondió» de cada respuesta.
+//  - Lo que dijo de sí en ESTA conversación entra sólo por dos filtros: su perfil, de una lista fija («estudiante», «técnico»…), y los
+//    cursos de la marca con los que coincide lo que contó («tengo un rancho con vacas» → el curso de bovinos). Su texto libre no viaja.
+import * as sales from './lib/sales-replies.mjs';
+
 const STAGE = {
   nuevo: 'nuevo interés',
   interesado: 'interesado',
@@ -17,7 +21,9 @@ const STAGE = {
 };
 const day = 86400000;
 
-export function customerMemory(db, c, { now = Date.now } = {}) {
+// `courses`: la lista de cursos de la marca con temario y ficha ([{id, title, syllabus, aliases?}]) si quien llama ya la tiene; si
+// no, se leen los cursos activos de la marca (sin ficha).
+export function customerMemory(db, c, { now = Date.now, courses = null } = {}) {
   const user = db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id);
   // El nombre lo escribe el propio cliente (dato NO confiable): sólo se usa una palabra corta de letras; cualquier otra cosa se descarta
   // para que no pueda colar instrucciones en lo que lee la IA.
@@ -93,6 +99,25 @@ export function customerMemory(db, c, { now = Date.now } = {}) {
         .get(contact.id, c.brand_id).n
     : 0;
 
+  // Lo que contó de sí en ESTA conversación (sus mensajes, los más recientes): perfil de la lista fija y cursos de la marca que
+  // casan con lo que dijo, sin el curso de la conversación, que ya se conoce.
+  const saidHere = c.id
+    ? db
+        .prepare(
+          "SELECT text FROM messages WHERE conversation_id=? AND sender_kind='customer' ORDER BY seq DESC LIMIT 30",
+        )
+        .all(c.id)
+        .map(m => String(m.text || ''))
+        .reverse()
+    : [];
+  const role = sales.roleOf(saidHere.join('\n'));
+  const list =
+    courses || db.prepare('SELECT id,title,syllabus FROM courses WHERE brand_id=? AND active=1').all(c.brand_id);
+  const mentioned = sales
+    .remembered(saidHere, list, { max: 3 })
+    .filter(k => k.id !== c.course_id)
+    .map(k => title(k.id));
+
   const facts = {
     name,
     days,
@@ -102,6 +127,8 @@ export function customerMemory(db, c, { now = Date.now } = {}) {
     enrolled,
     pendingOrders: pending,
     lapsedOrders: lapsed,
+    role,
+    mentioned,
   };
 
   const lines = [];
@@ -120,6 +147,8 @@ export function customerMemory(db, c, { now = Date.now } = {}) {
     );
   const cur = interests.find(i => i.current);
   if (cur?.stage) lines.push('En el curso de esta conversación está: ' + STAGE[cur.stage] + '.');
+  if (role) lines.push('En esta conversación dijo que es ' + role + '.');
+  if (mentioned.length) lines.push('Lo que ha contado apunta también a: ' + mentioned.join('; ') + '.');
   if (enrolled.length) lines.push('Ya está inscrito en: ' + enrolled.slice(0, 3).join('; ') + '.');
   if (pending) lines.push('Tiene un pedido de pago pendiente (no confirmes ni cambies nada: lo ve una persona).');
   else if (lapsed) lines.push('Tuvo un pedido que se canceló o venció.');

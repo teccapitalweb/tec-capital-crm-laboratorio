@@ -143,6 +143,19 @@ Segunda prueba en WhatsApp real, ya con las fichas aprobadas, dejó dos más:
 
 Las 58 frases de las sondas de la segunda revisión dan las mismas respuestas que antes de estos ajustes.
 
+## Memoria de la conversación (21 nov 2026)
+
+El motor no recordaba nada de lo que la persona había dicho dos mensajes antes: «soy estudiante de la UTT, ¿cuál me recomiendas?» recibía «¿Qué tema te interesa?», y la respuesta a esa pregunta («vacas») caía en «sin intención» y recibía «esa pregunta todavía no la tengo a la mano». Primera pieza del plan de contexto aceptado por el dueño (sin esquema nuevo, sin IA):
+
+- **Contestar la pregunta del asistente.** Si lo último que dijo el asistente fue «¿Qué tema te interesa?» (intención `courses`) y el mensaje siguiente nombra un tema («vacas», «trabajo con bovinos», «reptiles»), ese mensaje se lee como la respuesta y se recomienda con él (`topicAnswer` en `server/replies.mjs`, con la misma lectura que `recommend`: título, temario y ficha de cada curso). Si el tema no está en ningún curso de la marca, se dice claro y se ofrecen los que sí hay. Un «sí» o un «no sé» no cuentan como tema. El porqué dice «Contesta a «¿Qué tema te interesa?» del mensaje anterior».
+- **Recordar con qué trabaja.** Al pedir una recomendación sin tema, antes de volver a preguntar se miran los mensajes anteriores de la persona en **esta** conversación (sus últimos 30, `saidBefore`), con la misma lectura del catálogo (`remembered` en `server/lib/sales-replies.mjs`): «tengo un rancho de bovinos y quiero aprender más» → dos mensajes después, «¿cuál me recomiendas?» responde «Por lo que me contaste antes, te pueden servir estos cursos…» con el curso de bovinos. El tema con el que contestó la vez pasada también queda en esa memoria. El porqué dice «Recomendación con lo que contó antes en esta conversación».
+- **Lo que recibe la IA** (`server/memory.mjs`, [PLAN_MEMORIA_CONTEXTO.md](PLAN_MEMORIA_CONTEXTO.md)): la ficha del cliente lleva ahora, de esta conversación, **su perfil** si lo dijo («En esta conversación dijo que es estudiante»; de una lista fija: estudiante, técnico/a, pasante, principiante, profesional, egresado/a, `roleOf`) y **los cursos de la marca con los que coincide lo que contó** («Lo que ha contado apunta también a: Bovinos de leche»). Su texto libre nunca viaja: sólo palabras que casan con la lista o con el catálogo.
+- **Alcance y privacidad.** Sólo mensajes de esta conversación (nunca de otra marca, nunca de otra conversación); nada se guarda aparte: se deriva de `messages` al responder, como el resto de la memoria. La simulación de Seguimientos no tiene historia, así que ahí no cambia nada.
+
+Verificado con las frases exactas en `test/sales-replies.test.mjs` (tres conversaciones reales: recordar el rancho de bovinos, contestar «reptiles» a la pregunta y volver a pedir, «astronomía» sin curso y «sí» que no inventa una lista) y `test/memory-context.test.mjs` (perfil en la ficha de la IA; una frase hostil no pasa). Las 58 frases de las sondas dan las mismas respuestas.
+
+Siguen del mismo plan: objeciones con argumentos reales («está caro», «lo pienso», «no tengo tiempo»), aprendizaje semanal desde las preguntas sin respuesta y medir con IA real.
+
 ## Fuera de este bloque
 
 - **Cambiar de curso en el mismo chat** fuera de un número de WhatsApp de toda la marca («mejor el de geriatría»).

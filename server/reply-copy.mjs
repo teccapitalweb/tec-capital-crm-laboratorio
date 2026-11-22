@@ -622,9 +622,12 @@ export const seatsCapacity = ctx =>
   ' lugares, así que el cupo es limitado. ' +
   ENROLL_CTA;
 // Recomendar cursos de la marca con lo que la persona dice (especie o tema), con inicio y precio vigentes.
-export function recommend(ctx, items, { multi = false } = {}) {
+// `remembered`: no lo dijo ahora, lo contó antes en esta conversación («tengo un rancho con vacas») y se le recuerda.
+export function recommend(ctx, items, { multi = false, remembered = false } = {}) {
   return (
-    'Por lo que me cuentas, te pueden servir estos cursos de ' +
+    (remembered
+      ? 'Por lo que me contaste antes, te pueden servir estos cursos de '
+      : 'Por lo que me cuentas, te pueden servir estos cursos de ') +
     ctx.brand.name +
     ':\n\n' +
     items.map(i => '• ' + i.title + ' — inicia ' + (i.start || 'en fecha por confirmar') + ' · ' + i.price).join('\n') +

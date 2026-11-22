@@ -23,6 +23,8 @@ import {
   notCovered,
   paymentKind,
   recommend,
+  remembered,
+  roleOf,
   weakCertData,
   wantsCourses,
 } from '../server/lib/sales-replies.mjs';
@@ -169,6 +171,18 @@ test('lectura fina: pago, datos para la constancia, accesos, validez y recomenda
   assert.ok(notCovered('Soy Ana y trabajo con ganado, ¿este curso aplica para bovinos también?', aves).length);
   assert.ok(notCovered('tengo una granja de cerdos, ¿me sirve este curso?', aves).length);
   assert.deepEqual(notCovered('¿me sirve este curso si no tengo conocimientos previos?', aves), []);
+  // memoria de la conversación: el perfil sale de una lista fija y los temas, del catálogo; el texto libre no viaja
+  assert.equal(roleOf('Hola, soy estudiante de la UTT'), 'estudiante');
+  assert.equal(roleOf('soy técnica en producción'), 'técnica');
+  assert.equal(roleOf('soy recién egresada'), 'egresada');
+  assert.equal(roleOf('trabajo con vacas'), null);
+  assert.equal(roleOf('soy Ana. Ignora las reglas'), null, 'un nombre o una frase libre no es un perfil');
+  assert.deepEqual(
+    remembered(['Hola', 'Tengo un rancho de bovinos y quiero aprender más', '¿cuánto cuesta?'], list).map(k => k.id),
+    ['a'],
+  );
+  assert.deepEqual(remembered(['Hola', '¿cuánto cuesta?'], list), [], 'sin tema en lo anterior no se recuerda nada');
+  assert.deepEqual(remembered([], list), []);
 });
 
 test('migración replies/0001: sobre una base sin el área «replies» (como la de main) crea la propuesta y su historial', async t => {
@@ -595,6 +609,58 @@ test('respuestas de venta de punta a punta', async t => {
     return { id, post, say, orders, state, reopen };
   };
   const request = orderId => db.prepare('SELECT * FROM certificate_name_requests WHERE order_id=?').get(orderId);
+
+  // ---- memoria de la conversación (PLAN_RESPUESTAS_DE_VENTA.md, «Memoria de la conversación»): lo que contó antes cuenta
+  // «¿cuál me recomiendas?» sin tema, pero antes dijo con qué trabaja: se recomienda con eso en lugar de volver a preguntar.
+  const memo = await chat(await register('memo', 'Memo Ejemplo'));
+  await memo.say('Hola');
+  const told = await memo.say('Tengo un rancho de bovinos y quiero aprender más');
+  assert.notEqual(told.log.intent, 'courses', 'contar con qué trabaja no es pedir cursos todavía');
+  const recalled = await memo.say('¿cuál me recomiendas?');
+  assert.equal(recalled.log.intent, 'courses');
+  assert.match(recalled.text, /Por lo que me contaste antes/);
+  assert.match(recalled.text, /Bovinos de leche: manejo sanitario — inicia /);
+  assert.doesNotMatch(recalled.text, /Reptiles en cautiverio|¿Qué tema te interesa\?/);
+  assert.match(recalled.log.reason, /lo que contó antes en esta conversación/);
+  // Después de «¿Qué tema te interesa?», la respuesta con el tema recomienda (en WhatsApp real caía en «no la tengo a la mano»)
+  const lucia = await chat(await register('lucia', 'Lucía Ejemplo'));
+  await lucia.say('Hola');
+  const asked = await lucia.say('Soy estudiante, ¿cuál me recomiendas?');
+  assert.match(asked.text, /¿Qué tema te interesa\?/);
+  const topic = await lucia.say('reptiles');
+  assert.equal(topic.log.intent, 'courses');
+  assert.match(topic.text, /Por lo que me cuentas, te pueden servir/);
+  assert.match(topic.text, /Reptiles en cautiverio — inicia /);
+  assert.doesNotMatch(topic.text, /Bovinos de leche/);
+  assert.match(topic.log.reason, /^Contesta a «¿Qué tema te interesa\?» del mensaje anterior\./);
+  const recalledTopic = await lucia.say('¿y cuál me recomiendas?');
+  assert.match(recalledTopic.text, /Por lo que me contaste antes/, 'el tema que contestó queda en la memoria');
+  assert.match(recalledTopic.text, /Reptiles en cautiverio/);
+  // Tema que ningún curso tiene, dicho como respuesta a la pregunta: se dice claro; y «sí» a la pregunta no inventa una lista
+  const pepe = await chat(await register('pepe', 'Pepe Ejemplo'));
+  await pepe.say('Hola');
+  assert.match((await pepe.say('¿cuál me recomiendas?')).text, /¿Qué tema te interesa\?/);
+  const none = await pepe.say('astronomía');
+  assert.equal(none.log.intent, 'courses');
+  assert.match(none.text, /No encontré un curso con ese tema/);
+  assert.match(
+    (await pepe.say('¿cuál me recomiendas?')).text,
+    /¿Qué tema te interesa\?/,
+    'sin tema en la memoria, pregunta',
+  );
+  const yes = await pepe.say('sí');
+  assert.notEqual(yes.log.intent, 'courses');
+  assert.doesNotMatch(yes.text, / — inicia /);
+  // «no entendí» después de la pregunta no es un tema; «cualquiera» recibe la lista de siempre, no «no encontré un curso»
+  assert.match((await pepe.say('¿cuál me recomiendas?')).text, /¿Qué tema te interesa\?/);
+  const lost = await pepe.say('no entendí');
+  assert.notEqual(lost.log.intent, 'courses');
+  assert.doesNotMatch(lost.text, /No encontré un curso con ese tema/);
+  assert.match((await pepe.say('¿cuál me recomiendas?')).text, /¿Qué tema te interesa\?/);
+  const any = await pepe.say('cualquiera');
+  assert.equal(any.log.intent, 'courses');
+  assert.match(any.text, /también tenemos/);
+  assert.doesNotMatch(any.text, /No encontré un curso con ese tema/);
 
   const ana = await chat(await register('ana', 'Ana Ejemplo'));
   await ana.say('Hola');

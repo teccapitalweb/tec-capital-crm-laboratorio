@@ -303,7 +303,22 @@ const ASKS_COURSE = new RegExp(
     ')\\b',
 );
 // Cuenta su perfil y pregunta si le sirve («soy estudiante, ¿me sirve?»).
-const SAYS_ROLE = /\bsoy (estudiante|tecnico|tecnica|pasante|principiante|profesional)\b/;
+const SAYS_ROLE =
+  /\bsoy (estudiante|tecnico|tecnica|pasante|principiante|profesional|egresad[oa]|recien egresad[oa])\b/;
+// Lo que la persona dice que es, de una LISTA FIJA (nunca su texto libre): lo que recuerda el motor y lo que recibe la IA.
+const ROLES = {
+  estudiante: 'estudiante',
+  tecnico: 'técnico',
+  tecnica: 'técnica',
+  pasante: 'pasante',
+  principiante: 'principiante',
+  profesional: 'profesional',
+};
+export const roleOf = raw => {
+  const m = SAYS_ROLE.exec(plain(raw));
+  if (!m) return null;
+  return ROLES[m[1]] || (/egresada/.test(m[1]) ? 'egresada' : 'egresado');
+};
 export const FITS = /\b(me sirve|sirve|puedo tomar\w*|lo puedo tomar|es para mi|aplica para|me conviene este)\b/;
 export const wantsCourses = t => ASKS_COURSE.test(t) || (SAYS_ROLE.test(t) && FITS.test(t));
 export const RECOMMEND = { test: wantsCourses };
@@ -360,6 +375,10 @@ export function recommend(text, courses, { max = 5 } = {}) {
     .slice(0, max)
     .map(x => x.k);
 }
+// Memoria de la conversación: los cursos de la marca con los que coincide lo que la persona contó ANTES («tengo un rancho
+// con vacas», «trabajo con reptiles»). Se mira con la misma lectura que `recommend`, sobre sus mensajes anteriores juntos;
+// así «¿cuál me recomiendas?» sin tema se contesta con lo que ya dijo en vez de volver a preguntar.
+export const remembered = (texts, courses, opts) => recommend((texts || []).filter(Boolean).join('\n'), courses, opts);
 // ¿Nombró un tema? (alguna palabra con contenido después de quitar las de la lengua y las de pedir)
 export const topicWords = text => contentWords(text).filter(w => !/^(recomend|conveng|interes|algo|cursill)/.test(w));
 // ¿Lo que dice nombra temas que el curso de la conversación no cubre? (palabras con contenido que ni su título ni su
