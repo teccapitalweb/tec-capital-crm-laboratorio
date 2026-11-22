@@ -34,11 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Asistente: botones de siguiente paso (integrado en local, pendiente de publicar, 22 nov 2026)
+## Asistente: botones de siguiente paso (publicado en `main`, 22 nov 2026)
 
 - **Por qué:** primer bloque de «experiencia del cliente» (el dueño pidió seguir con varios frentes). Sólo la bienvenida ofrecía botones; las respuestas informativas quedaban sin un siguiente paso para tocar.
 - **Qué se hizo (sin esquema nuevo):** en `server/replies.mjs`, un ayudante `withSteps` pone `out.buttons` en las respuestas de precio, temario, fechas y duración (dos opciones de información + «Quiero inscribirme», o «Hablar con asesor» si ya compró). Reusa el camino de botones que ya tenía la bienvenida; el canal los limita a tres y, fuera de la ventana de 24 h, el conector de Meta cae a texto. Los mensajes que pasan a una persona no llevan botones. Detalle en [PLAN_MENSAJES_AMABLES.md](PLAN_MENSAJES_AMABLES.md).
-- **Verificado:** `test/sales-replies.test.mjs` (precio, temario y fechas con sus botones exactos; un «ya pagué» sin botones); `npm run check`, la suite del servidor y las de navegador; captura en el chat de prueba.
+- **Verificado:** `test/sales-replies.test.mjs` (precio, temario y fechas con sus botones exactos; un «ya pagué» sin botones); `npm run check`, 817 pruebas de servidor y 95 de navegador; captura en el chat de prueba.
+- **Publicado:** commit `1257162`. Falta probarlo en WhatsApp real.
 
 ## Asistente: emojis en los mensajes que faltaban (publicado en `main`, 22 nov 2026)
 
