@@ -1,6 +1,6 @@
 # Respuestas de venta: pagos, constancia, posventa y menos IA (21 nov 2026)
 
-Rama de trabajo (sin publicar). Una migración con nombre: `replies/0001-certificate-name-requests` (tablas `certificate_name_requests` y `certificate_name_events`; esquema `41+32.c05a5695`). Las dos migraciones anteriores de esta rama nunca llegaron a `main` y se fundieron en ésta.
+Publicado en `main` el 21 nov 2026 (commit `54556b6`). Una migración con nombre: `replies/0001-certificate-name-requests` (tablas `certificate_name_requests` y `certificate_name_events`; esquema `41+32.c05a5695`). Las dos migraciones anteriores de esta rama nunca llegaron a `main` y se fundieron en ésta.
 
 ## Por qué
 
