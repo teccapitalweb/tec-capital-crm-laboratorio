@@ -34,6 +34,14 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Motor: duración, formas de pago y la ficha de cada curso (integrado en local, pendiente de publicar, 21 nov 2026)
+
+- **Por qué:** con 30 respuestas de GlobalVet aprobadas, en WhatsApp real «¿cuánto dura cada clase?» recibió sólo las fechas (la intención `duration` contestaba con el catálogo sin mirar el conocimiento) y «¿puedo pagar por OXXO?» recibió «¿dónde deposito?» (cuando nada se parecía lo bastante, el motor tomaba «la primera del tema», que es la última tocada). Y el dueño pidió más contexto: fichas de curso que digan a quién va dirigido y palabras parecidas.
+- **Qué se hizo (sin esquema nuevo):** `durationFacts` y `pickSpecific` en `server/lib/sales-replies.mjs` (la respuesta aprobada más específica va antes del calendario, sin sus frases que remiten a la ficha; para el motor «curso» es comodín, así que gana la que más de sus palabras tiene en la pregunta); `pickByTopic` para el respaldo por tema (la que comparte palabras y, si ninguna, la más antigua de la marca); y `courseNotes` en `server/replies.mjs`: el conocimiento aprobado ligado a un curso es su ficha, sus variantes son alias que valen como el título en `recommend` y cuentan como tema cubierto en `notCovered`; lo que muchas fichas comparten no distingue nada.
+- **Datos:** 17 fichas de prueba cargadas por el conector (una por curso de GlobalVet, borradores): a quién va dirigido y nivel inventados; lo que aprende sale del temario. Lista en `data/cursos-globalvet/conocimiento-globalvet-prueba-INVENTADO.md`, fuera de Git.
+- **Verificado:** `test/sales-replies.test.mjs` con la frase exacta de cada caso (duración por clase y por curso, OXXO con dos respuestas de pago aprobadas en el orden real, alias de la ficha, lo compartido no cuenta); `npm run check` y la suite del servidor; las 58 frases de las sondas de la segunda revisión dan las mismas respuestas que antes.
+- **Hallazgo aparte, sin cambiar:** «¿cómo sé que no es fraude?» de un prospecto se trata como queja.
+
 ## Conocimiento: aprobar varios borradores de una vez (publicado en `main`, 21 nov 2026)
 
 - **Por qué:** el dueño pidió cargar por el conector las respuestas del negocio de GlobalVet. Entraron 30 como borrador y la pantalla sólo dejaba aprobar una por una.

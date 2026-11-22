@@ -136,6 +136,24 @@ test('lectura fina: pago, datos para la constancia, accesos, validez y recomenda
   );
   assert.deepEqual(ids('soy auxiliar, ¿cuál me recomiendas?'), [], 'ni «auxiliar» es urgencias ni nada del ramo');
   assert.deepEqual(ids('¿cuál me recomiendas?'), [], 'sin tema no se adivina');
+  // la ficha de cada curso (variantes de su conocimiento aprobado) vale como el título; lo que todas comparten no cuenta
+  const shared = ['para quien es el curso', 'que voy a aprender', 'me sirve si soy estudiante'];
+  const withNotes = [
+    { ...list[0], aliases: ['vacas', 'reses', 'rancho', ...shared] },
+    { ...list[1], aliases: ['iguanas', 'tortugas', ...shared] },
+    { ...list[2], aliases: ['castrar', ...shared] },
+    { ...list[3], aliases: ['pollos', 'gallinas', ...shared] },
+    { id: 'e', title: 'Etología práctica', syllabus: 'Conducta', aliases: ['perro agresivo', ...shared] },
+  ];
+  const ids2 = t => recommend(t, withNotes).map(k => k.id);
+  assert.deepEqual(ids2('tengo vacas, ¿cuál me recomiendas?'), ['a'], 'una palabra parecida de la ficha basta');
+  assert.deepEqual(ids2('quiero castrar gatos'), ['c']);
+  assert.deepEqual(ids2('soy estudiante, ¿qué voy a aprender?'), [], 'lo que todas las fichas comparten no cuenta');
+  assert.deepEqual(
+    notCovered(plain('¿sirve para vacas?'), { title: list[0].title, syllabus: list[0].syllabus, aliases: ['vacas'] }),
+    [],
+    'un alias de la ficha cuenta como tema cubierto',
+  );
   assert.ok(wantsCourses(plain('¿cuál me recomiendas?')));
   assert.ok(
     !wantsCourses(plain('¿Sirve si trabajo en otro estado de la república y viajo mucho?')),
@@ -436,8 +454,28 @@ test('respuestas de venta de punta a punta', async t => {
   assert.match(oxxo.reply, /OXXO/);
   assert.doesNotMatch(oxxo.reply, /ahí eliges/, 'no la última aprobada del tema, sino la que se parece');
   assert.match((await sim('donde deposito?')).reply, /ahí eliges/);
+  // La ficha del curso (conocimiento aprobado ligado al curso) recomienda aunque no diga el nombre técnico.
+  const ficha = (
+    await call(origin, '/api/replies/knowledge', {
+      cookie: admin,
+      body: {
+        brandId: 'globalvet',
+        courseId: 'aves',
+        topic: 'general',
+        question: '¿Para quién es este curso?',
+        answer: 'Para quien cría aves de traspatio o trabaja en una granja.',
+        variants: ['pollitos', 'gallinas de traspatio'],
+      },
+      expected: 201,
+    })
+  ).entry;
+  await call(origin, '/api/replies/knowledge/' + ficha.id + '/approve', {
+    cookie: admin,
+    body: { expectedRevision: ficha.revision },
+  });
+  assert.match((await sim('tengo pollitos, ¿cuál me recomiendas?', 'nutricion')).reply, /Plan sanitario para aves/);
   // se retiran: el resto de la prueba cuenta con las 6 respuestas de ejemplo de la marca
-  for (const e of [perClass, payA, payB]) {
+  for (const e of [perClass, payA, payB, ficha]) {
     const now = (await call(origin, '/api/replies/knowledge?brand=globalvet', { cookie: admin })).entries.find(
       x => x.id === e.id,
     );

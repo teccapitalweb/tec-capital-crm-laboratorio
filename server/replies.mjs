@@ -341,6 +341,29 @@ export function createReplies({
       .all(brandId, courseId)
       .map(view);
 
+  // La ficha de cada curso: el conocimiento aprobado ligado a ese curso. Sus variantes son palabras parecidas (alias) para
+  // recomendar aunque la persona no use el nombre técnico; su pregunta y respuesta cuentan como parte del temario.
+  const courseNotes = brandId => {
+    const map = new Map();
+    for (const e of db
+      .prepare(
+        "SELECT course_id,question,variants,answer FROM knowledge_entries WHERE brand_id=? AND status='approved' AND course_id IS NOT NULL",
+      )
+      .all(brandId)) {
+      const n = map.get(e.course_id) || { aliases: [], text: '' };
+      n.aliases.push(...JSON.parse(e.variants));
+      n.text += '\n' + e.question + '\n' + e.answer;
+      map.set(e.course_id, n);
+    }
+    return map;
+  };
+  const withNotes = (k, notes) =>
+    k && {
+      ...k,
+      syllabus: (k.syllabus || '') + (notes.get(k.id)?.text || ''),
+      aliases: notes.get(k.id)?.aliases || [],
+    };
+
   // `skip`: intenciones que no aplican a esta conversación (p. ej. 'access' sin inscripción ni pedido pagado).
   function classify(raw, { skip = [] } = {}) {
     if (contacts.isOptOutText(raw)) return { intent: 'opt_out', confidence: 0.95 };
@@ -855,10 +878,13 @@ export function createReplies({
     // especie ni tema, se le pregunta (o contesta una respuesta aprobada) en lugar de soltar la lista completa.
     let notMine = false;
     const recommendation = () => {
-      const list = brandCourses(db, catalogue, c.brand_id).map(k => ({
-        ...k,
-        syllabus: db.prepare('SELECT syllabus FROM courses WHERE id=?').get(k.id)?.syllabus || '',
-      }));
+      const notes = courseNotes(c.brand_id);
+      const list = brandCourses(db, catalogue, c.brand_id).map(k =>
+        withNotes(
+          { ...k, syllabus: db.prepare('SELECT syllabus FROM courses WHERE id=?').get(k.id)?.syllabus || '' },
+          notes,
+        ),
+      );
       // «soy técnico, ¿puedo tomarlo?» pregunta por ESTE curso: no se le recomienda una lista
       const forThis = sales.FITS.test(said) && !sales.ASKS_TOPIC.test(said) && !/recomiend/.test(said);
       const items = (forThis ? [] : sales.recommend(trigger.text, list))
@@ -883,7 +909,7 @@ export function createReplies({
       if (!sales.RECOMMEND.test(said) && !sales.FITS.test(said)) return false;
       // Nombra temas que ESTE curso no cubre («¿este curso aplica para bovinos?» en uno de aves): ni requisitos (sonaría a
       // «sí») ni la lista: se resuelve como una pregunta sin intención (conocimiento, IA o una persona).
-      if (sales.FITS.test(said) && sales.notCovered(trigger.text, course).length) {
+      if (sales.FITS.test(said) && sales.notCovered(trigger.text, withNotes(course, notes)).length) {
         notMine = true;
         out.intent = 'unknown';
         out.confidence = 0.3;

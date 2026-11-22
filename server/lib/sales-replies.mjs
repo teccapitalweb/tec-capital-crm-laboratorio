@@ -324,21 +324,29 @@ const contentWords = text => [
 ];
 // Los cursos de la marca que coinciden con lo que dijo: por su TÍTULO, o por dos o más palabras de su temario. Una
 // palabra que aparece en muchos títulos de la marca («clínica») no distingue nada y no cuenta.
-// `courses`: [{id, title, syllabus}].
+// `courses`: [{id, title, syllabus, aliases?}]. `aliases` son las palabras parecidas que el equipo escribió en la ficha del
+// curso (las variantes de su conocimiento aprobado ligado al curso: «vacas», «reses», «rancho»): valen como el título, así
+// que una sola basta. Lo que muchas fichas comparten («para quién es el curso», «qué voy a aprender») no distingue nada.
 export function recommend(text, courses, { max = 5 } = {}) {
   const said = new Set(contentWords(text));
   if (!said.size || !courses.length) return [];
-  const bags = courses.map(k => ({ k, title: contentWords(k.title), body: contentWords(k.syllabus || '') }));
+  const bags = courses.map(k => ({
+    k,
+    title: contentWords(k.title),
+    alias: contentWords((k.aliases || []).join(' ')),
+    body: contentWords(k.syllabus || ''),
+  }));
   const freq = new Map();
-  for (const b of bags) for (const w of b.title) freq.set(w, (freq.get(w) || 0) + 1);
+  for (const b of bags) for (const w of new Set([...b.title, ...b.alias])) freq.set(w, (freq.get(w) || 0) + 1);
   const common = w => (freq.get(w) || 0) >= Math.max(3, Math.ceil(courses.length / 4));
   return bags
     .map(b => {
       const inTitle = b.title.filter(w => said.has(w) && !common(w)).length,
+        inAlias = b.alias.filter(w => said.has(w) && !common(w) && !b.title.includes(w)).length,
         inBody = b.body.filter(w => said.has(w) && !common(w)).length;
-      return { k: b.k, inTitle, inBody, score: 3 * inTitle + inBody };
+      return { k: b.k, inTitle, inAlias, inBody, score: 3 * (inTitle + inAlias) + inBody };
     })
-    .filter(x => x.inTitle >= 1 || x.inBody >= 2)
+    .filter(x => x.inTitle + x.inAlias >= 1 || x.inBody >= 2)
     .sort((a, b) => b.score - a.score)
     .slice(0, max)
     .map(x => x.k);
@@ -348,7 +356,11 @@ export const topicWords = text => contentWords(text).filter(w => !/^(recomend|co
 // ¿Lo que dice nombra temas que el curso de la conversación no cubre? (palabras con contenido que ni su título ni su
 // temario tienen). «¿este curso aplica para bovinos?» en un curso de aves: sí → no se contesta con «requisitos».
 export function notCovered(text, course) {
-  const own = new Set([...contentWords(course?.title || ''), ...contentWords(course?.syllabus || '')]);
+  const own = new Set([
+    ...contentWords(course?.title || ''),
+    ...contentWords(course?.syllabus || ''),
+    ...contentWords((course?.aliases || []).join(' ')),
+  ]);
   return contentWords(text).filter(w => !own.has(w) && !/^(conocimient|previ|requisit|nivel|experienci)/.test(w));
 }
 
