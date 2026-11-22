@@ -98,7 +98,7 @@ test('simulador: «Venta de curso» con dos cursos distintos da la ficha y el ma
     'el estado recibido no se altera (la nota del mensaje inicial y la pregunta)',
   );
   assert.match(notes(asked)[0], /mensaje que inició el recorrido nombra un curso/);
-  assert.match(outs(asked)[0], /^¡Hola! Soy el asistente de .*¿Sobre qué curso te gustaría información\?/);
+  assert.match(outs(asked)[0], /^(👋 )?¡Hola! Soy el asistente de .*¿Sobre qué curso te gustaría información\?/);
 
   // Como el motor: con un solo curso lo toma sin preguntar; sin cursos sale por «Ninguno».
   const one = { ...DEMO_CATALOGUE, courses: DEMO_CATALOGUE.courses.slice(1, 2) };

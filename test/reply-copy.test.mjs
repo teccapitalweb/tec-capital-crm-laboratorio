@@ -107,7 +107,10 @@ test('textos del asistente: datos del catálogo, lo desconocido se dice claro y 
     '¡Qué gusto, Ana! Ya tengo listo tu pedido:\n\n{{pedido}}',
   );
   assert.equal(copy.enrollWithOrder(full, 'Ana Pérez'), '¡Qué gusto, Ana! 🎉 Ya tengo listo tu pedido:\n\n{{pedido}}');
-  assert.match(copy.enrollWithAdvisor(full, ''), /^¡Qué gusto! Anoté tu interés en .+ Un asesor te escribe por aquí/);
+  assert.match(
+    copy.enrollWithAdvisor(plain(full), ''),
+    /^¡Qué gusto! Anoté tu interés en .+ Un asesor te escribe por aquí/,
+  );
   const link = copy.orderLink({
     reference: 'TC-AB12CD',
     course: 'Nutrición en perros y gatos',

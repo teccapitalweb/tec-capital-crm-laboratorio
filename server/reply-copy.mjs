@@ -223,12 +223,15 @@ export const orderReminder = () => 'Tu pedido sigue vigente. Aquí lo tienes de 
 export const enrollWithAdvisor = (ctx, name) =>
   '¡Qué gusto' +
   hi(name) +
-  '! Anoté tu interés en ' +
+  '!' +
+  (on(ctx) ? ' 🙌' : '') +
+  ' Anoté tu interés en ' +
   title(ctx) +
   '. Un asesor te escribe por aquí para completar tu inscripción.\n(Chat de prueba: no se realizan cobros reales.)';
 
-export const paymentMethods =
+const PAYMENT_METHODS =
   'Puedes pagar con tarjeta u OXXO desde el enlace que te mando al inscribirte, o por transferencia enviando tu comprobante por este chat. Si quieres empezar, escribe «Quiero inscribirme».';
+export const paymentMethods = ctx => (on(ctx) ? '💳 ' : '') + PAYMENT_METHODS;
 export const paymentWithAdvisor =
   'Con gusto te paso las formas de pago: ya le avisé a un asesor para que te escriba por aquí.';
 
@@ -247,14 +250,21 @@ export const affirm = ctx =>
   '¡Perfecto!' + (on(ctx) ? ' 👍' : '') + ' ¿Qué te cuento de ' + b(ctx, ctx.course.title) + '?';
 export const decline = name =>
   'Sin problema' + hi(name) + '. Si más adelante quieres retomarlo, escríbeme por aquí y lo vemos con gusto.';
-export const later = name =>
-  '¡Claro' + hi(name) + ', sin prisa! Aquí te queda la información; cuando quieras seguir, escríbeme por este chat.';
-export const bye = name => '¡Hasta pronto' + hi(name) + '! Aquí estaré si necesitas algo más.';
+export const later = (name, ctx = null) =>
+  '¡Claro' +
+  hi(name) +
+  ', sin prisa!' +
+  (on(ctx) ? ' 🙂' : '') +
+  ' Aquí te queda la información; cuando quieras seguir, escríbeme por este chat.';
+export const bye = (name, ctx = null) =>
+  '¡Hasta pronto' + hi(name) + '!' + (on(ctx) ? ' 👋' : '') + ' Aquí estaré si necesitas algo más.';
 export const help = ctx =>
+  (on(ctx) ? '🙂 ' : '') +
   'Aquí estoy para ayudarte. Puedo contarte el precio, el temario o las fechas de ' +
   b(ctx, ctx.course.title) +
   ', o ayudarte a inscribirte.\n\n¿Qué necesitas saber?';
-export const menu = ctx => 'Esto es lo que te puedo contar de ' + b(ctx, ctx.course.title) + ':';
+export const menu = ctx =>
+  (on(ctx) ? '📋 ' : '') + 'Esto es lo que te puedo contar de ' + b(ctx, ctx.course.title) + ':';
 export const identity = ctx =>
   (on(ctx) ? '🤖 ' : '') +
   'Soy el asistente automático de ' +
@@ -304,34 +314,45 @@ export const courses = (ctx, titles) =>
 const numbered = titles => titles.map((t, i) => i + 1 + '. ' + t).join('\n');
 // `greeted`: la conversación ya oyó al negocio en esta atención (un recorrido que saludó antes de preguntar): la
 // pregunta sale sin saludo ni presentación, para que no lleguen dos saludos seguidos.
-export const chooseCourse = (brand, titles, { again = false, greeted = false } = {}) =>
+export const chooseCourse = (brand, titles, { again = false, greeted = false, ctx = null } = {}) =>
   (again
     ? 'Para darte la información correcta necesito saber qué curso te interesa:'
     : greeted
       ? '¿Sobre qué curso te gustaría información?'
-      : '¡Hola! Soy el asistente de ' + brand + '. ¿Sobre qué curso te gustaría información?') +
+      : (on(ctx) ? '👋 ' : '') +
+        '¡Hola! Soy el asistente de ' +
+        brand +
+        '. ¿Sobre qué curso te gustaría información?') +
   '\n\n' +
   numbered(titles) +
-  '\n\nResponde con el número o el nombre del curso.' +
-  (again ? ' Si prefieres que te atienda una persona, escribe «asesor».' : '');
+  '\n\n' +
+  step(ctx, 'Responde con el número o el nombre del curso.') +
+  (again ? '\n\nSi prefieres que te atienda una persona, escribe «asesor».' : '');
 export const courseMenu = (ctx, titles) =>
+  (on(ctx) ? '📋 ' : '') +
   'Estos son los cursos de ' +
   ctx.brand.name +
   ':\n\n' +
   numbered(titles) +
   '\n\nAhora estamos viendo ' +
-  ctx.course.title +
-  '. Para cambiar, responde con el número o el nombre del curso.';
+  b(ctx, ctx.course.title) +
+  '.\n\n' +
+  step(ctx, 'Para cambiar, responde con el número o el nombre del curso.');
 // Nombró algo que comparten varios cursos («el de reptiles»): se le ofrecen sólo ésos. `seeAll`: el paso «¿Qué curso
 // te interesa?» de un recorrido además deja pedir la lista completa con «ver todos».
-export const whichCourse = (titles, { seeAll = false } = {}) =>
+export const whichCourse = (titles, { seeAll = false, ctx = null } = {}) =>
+  (on(ctx) ? '🎓 ' : '') +
   'Tenemos ' +
   titles.length +
   ' cursos de ese tema. ¿Cuál te interesa?\n\n' +
   numbered(titles) +
-  (seeAll
-    ? '\n\nResponde con el número o el nombre del curso, o escribe «ver todos» para ver la lista completa.'
-    : '\n\nResponde con el número o el nombre del curso.');
+  '\n\n' +
+  step(
+    ctx,
+    seeAll
+      ? 'Responde con el número o el nombre del curso, o escribe «ver todos» para ver la lista completa.'
+      : 'Responde con el número o el nombre del curso.',
+  );
 export const switchBlocked = (ctx, other) =>
   'Tienes un pedido pendiente de ' +
   ctx.course.title +
@@ -469,7 +490,7 @@ export function paymentConfirmed({ name, reference, course, edition, perSession 
 export const REAL_PAYMENT_METHODS =
   'Al inscribirte te mando tu pedido con un enlace donde verás cómo pagar. Cuando hayas pagado, envía tu comprobante por este chat y una persona del equipo lo valida. Si quieres empezar, escribe «Quiero inscribirme».';
 export const LAB_SWAPS = Object.freeze([
-  [paymentMethods, REAL_PAYMENT_METHODS],
+  [PAYMENT_METHODS, REAL_PAYMENT_METHODS],
   [
     '\nSi prefieres transferencia, envía tu comprobante por este chat y una persona lo valida.\n\nPago de prueba: no se cobra nada real.',
     '\nCuando hayas pagado, envía tu comprobante por este chat y una persona del equipo lo valida.',
@@ -524,12 +545,14 @@ export function payStatus(state, { reference = null, course = '', edition = '' }
   return 'No encuentro un pedido en este chat, así que le pasé tu mensaje a una persona del equipo para que revise tu pago. Te escribe por aquí.';
 }
 // «Mañana pago», «en la quincena»: sin presionar y con el siguiente paso. No aparta el lugar: se asegura al confirmar el pago.
-export function payLater(name, { reference = null, until = null, hold = false, canOrder = true } = {}) {
+export function payLater(name, { reference = null, until = null, hold = false, canOrder = true, ctx = null } = {}) {
   const asked = hold ? ' El lugar queda asegurado cuando se confirma el pago.' : '';
   return reference
     ? '¡Perfecto' +
         hi(name) +
-        ', sin problema! Tu pedido' +
+        ', sin problema!' +
+        (on(ctx) ? ' 🙂' : '') +
+        ' Tu pedido' +
         refOf(reference) +
         (until ? ' sigue vigente hasta el ' + until + '.' : ' sigue vigente.') +
         asked +
@@ -537,6 +560,7 @@ export function payLater(name, { reference = null, until = null, hold = false, c
     : '¡Claro' +
         hi(name) +
         ', sin prisa!' +
+        (on(ctx) ? ' 🙂' : '') +
         asked +
         (canOrder
           ? ' Cuando estés listo, escribe «Quiero inscribirme» y te mando tu enlace de pago.'
@@ -589,9 +613,10 @@ export const promoUntil = ctx =>
       '\n' +
       PRICE_NOTE;
 // «¿Cuál es el último día para pagar?»: la vigencia de su pedido, si lo hay.
-export const payUntil = ({ reference = null, until = null } = {}) =>
+export const payUntil = ({ reference = null, until = null, ctx = null } = {}) =>
   reference
-    ? 'Tu pedido' +
+    ? (on(ctx) ? '⏳ ' : '') +
+      'Tu pedido' +
       refOf(reference) +
       (until ? ' vence el ' + until + '.' : ' sigue vigente.') +
       ' Cuando pagues, mándame tu comprobante por aquí y una persona del equipo lo valida.'
@@ -617,7 +642,7 @@ export const validity = (ctx, issuer = '') =>
   'Sobre su validez ante la SEP, para tu cédula, puntos o valor curricular no te puedo confirmar nada por aquí. Si lo necesitas para un trámite, escribe «asesor» y una persona del equipo te dice exactamente qué ampara.';
 // Datos para la constancia: se acusa lo que se anotó, sin crear pedidos ni repetir el texto del certificado. El nombre es una
 // propuesta: el equipo lo revisa antes de emitir. `changedFrom`: el nombre anterior, para que la persona vea el cambio.
-export function certDataThanks(name, data, { enrolled = false, order = false, changedFrom = null } = {}) {
+export function certDataThanks(name, data, { enrolled = false, order = false, changedFrom = null, ctx = null } = {}) {
   const got = [
     data.name && !changedFrom ? 'tu nombre «' + data.name + '» para tu certificado' : '',
     data.email ? 'tu correo' : '',
@@ -628,6 +653,7 @@ export function certDataThanks(name, data, { enrolled = false, order = false, ch
     '¡Gracias' +
     hi(name) +
     '!' +
+    (on(ctx) ? ' ✅' : '') +
     (changedFrom ? ' Cambié el nombre de tu certificado de «' + changedFrom + '» a «' + data.name + '».' : '') +
     (list ? ' Anoté ' + list + '.' : '') +
     (data.name ? ' El equipo lo revisa antes de emitir tu certificado.' : '') +
@@ -641,10 +667,12 @@ export function certDataThanks(name, data, { enrolled = false, order = false, ch
 // Datos para la constancia sin pedido: no se guardan todavía.
 export const certDataNoOrder =
   '¡Gracias! Tus datos para el certificado te los pido cuando apartes tu lugar. Si quieres empezar, escribe «Quiero inscribirme».';
-export const certDataAsk =
+export const certDataAsk = (ctx = null) =>
+  (on(ctx) ? '📝 ' : '') +
   'Claro. Escríbeme en un solo mensaje tu nombre completo tal como quieres que aparezca en tu certificado (con acentos y mayúsculas donde van), tu correo y tu teléfono.';
 // Accesos después de pagar.
-export const accessResend = (name, text) => 'Claro' + hi(name) + ', aquí tienes de nuevo tus accesos:\n\n' + text;
+export const accessResend = (name, text, ctx = null) =>
+  (on(ctx) ? '🔑 ' : '') + 'Claro' + hi(name) + ', aquí tienes de nuevo tus accesos:\n\n' + text;
 export const accessPending =
   'Tu inscripción está activa, pero tus accesos todavía no están listos en este chat. Ya le avisé al equipo para que te los envíe por aquí.';
 // Ya se le reenviaron hoy las veces que el asistente puede (revisión, M5).
@@ -747,9 +775,10 @@ export function recommend(ctx, items, { multi = false, remembered = false } = {}
 }
 // Buscó un tema que ningún curso de la marca tiene.
 export const noTopicMatch = (ctx, titles) =>
+  (on(ctx) ? '🔎 ' : '') +
   'No encontré un curso con ese tema en su nombre ni en su temario en ' +
   ctx.brand.name +
-  '. ' +
+  '.\n\n' +
   (titles.length
     ? 'Estos son los que sí tenemos, además de ' +
       b(ctx, ctx.course.title) +
@@ -758,7 +787,9 @@ export const noTopicMatch = (ctx, titles) =>
       '\n\nSi te interesa alguno, escribe «asesor» y una persona te da los detalles.'
     : 'Por ahora ' + ctx.course.title + ' es el curso que tenemos abierto. ¿Te cuento el precio o las fechas?');
 export const askTopic = ctx =>
-  'Con gusto te recomiendo. ¿Qué tema te interesa? Así te digo cuál de los cursos de ' +
+  'Con gusto te recomiendo.' +
+  (on(ctx) ? ' 🙂' : '') +
+  '\n\n¿Qué tema te interesa? Así te digo cuál de los cursos de ' +
   ctx.brand.name +
   ' te conviene.';
 export const jobs = ctx =>

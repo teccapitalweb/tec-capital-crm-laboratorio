@@ -34,6 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Asistente: emojis en los mensajes que faltaban (integrado en local, pendiente de publicar, 22 nov 2026)
+
+- **Por qué:** el dueño probó en WhatsApp real y le gustaron los mensajes nuevos, pero varios seguían secos (la lista de cursos, por ejemplo).
+- **Qué se hizo (sin esquema nuevo):** en `server/reply-copy.mjs`, emoji y siguiente paso con 👉 en `courseMenu`, `chooseCourse`, `whichCourse`, `askTopic`, `noTopicMatch`, `help`, `menu`, `later`, `bye`, `payLater`, `payUntil`, `certDataThanks`, `certDataAsk`, `accessResend`, `enrollWithAdvisor` y `paymentMethods` (ahora función; la constante `PAYMENT_METHODS` sigue en el intercambio de modo real); los puntos de llamada en `server/replies.mjs` pasan el estilo de la marca. Sin emoji a propósito: negativa, pago en revisión, estado del pago, queja, pasar con una persona, enlace que falla, accesos pendientes. Los pasos de los recorridos y la confirmación del nombre no consultan el interruptor y salen con emojis.
+- **Verificado:** las pruebas que anclaban esos textos admiten el emoji; `test/real-mode.test.mjs` prueba las formas de pago y la petición de datos en los dos estilos; `npm run check`, la suite del servidor y las de navegador.
+
 ## Asistente: cada parte en su párrafo (publicado en `main`, 22 nov 2026)
 
 - **Por qué:** al ver los mensajes nuevos, el dueño pidió más aire: un «enter» entre las partes para separarlas mejor; el texto y los emojis le gustan.

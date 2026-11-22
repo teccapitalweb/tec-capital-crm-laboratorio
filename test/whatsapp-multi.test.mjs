@@ -373,7 +373,7 @@ test('un número para toda la marca: pregunta el curso, lo reconoce por anuncio 
   // «¿qué otros cursos tienen?» da la lista numerada y un número cambia
   const a7 = await say('5215511110001', '¿qué otros cursos tienen?');
   assert.equal(a7.log.intent, 'courses');
-  assert.match(a7.text, /Ahora estamos viendo Plan sanitario para aves/);
+  assert.match(a7.text, /Ahora estamos viendo \*?Plan sanitario para aves/);
   const a8 = await say('5215511110001', String(pos(otro)));
   assert.equal(a8.conv.course_id, otro.id);
   assert.match(a8.text, /(• |📅 )Inicio: /);
@@ -549,7 +549,7 @@ test('un número para toda la marca: pregunta el curso, lo reconoce por anuncio 
     const j = await say('5215511110010', 'Hola, quiero el curso de perros');
     assert.equal(j.log.intent, 'choose_course', JSON.stringify([j.log.reason, j.conv, j.text.slice(0, 120)]));
     assert.equal(j.conv.course_pending, 1);
-    assert.match(j.text, /^Tenemos 2 cursos de ese tema\. ¿Cuál te interesa\?/);
+    assert.match(j.text, /^(🎓 )?Tenemos 2 cursos de ese tema\. ¿Cuál te interesa\?/);
     assert.ok(j.text.includes('1. ' + otro.title) && j.text.includes('2. Urgencias en perros'));
     assert.ok(!j.text.includes(aves.title), 'no repite la lista completa');
     const j2 = await say('5215511110010', '2');
@@ -560,7 +560,7 @@ test('un número para toda la marca: pregunta el curso, lo reconoce por anuncio 
     const k1 = await say('5215511110002', '¿y el de perros cuánto cuesta?');
     assert.equal(k1.log.intent, 'choose_course');
     assert.equal(k1.conv.course_id, 'aves');
-    assert.match(k1.text, /^Tenemos 2 cursos/);
+    assert.match(k1.text, /^(🎓 )?Tenemos 2 cursos/);
     const k2 = await say('5215511110002', '1');
     assert.equal(k2.conv.course_id, otro.id);
     const k3 = await say('5215511110002', 'tengo dos perros en casa');

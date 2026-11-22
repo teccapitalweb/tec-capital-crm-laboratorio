@@ -1012,14 +1012,17 @@ export function createReplies({
         out.reply = copy.escalate;
         out.reason = 'Se le preguntó dos veces qué curso le interesa y no se reconoció ninguno: pasa a una persona.';
       } else if (routed.narrow) {
-        out.reply = copy.whichCourse(routed.narrow.map(k => k.title));
+        out.reply = copy.whichCourse(
+          routed.narrow.map(k => k.title),
+          { ctx },
+        );
         out.reason =
           'Nombró algo que comparten ' + routed.narrow.length + ' cursos de la marca: se le pregunta cuál de ésos.';
       } else {
         out.reply = copy.chooseCourse(
           ctx.brand.name,
           routed.list.map(k => k.title),
-          { again: asked > 0 },
+          { again: asked > 0, ctx },
         );
         out.reason =
           'El número atiende toda la marca y todavía no se sabe el curso: se le pregunta antes de hablar de precios o fechas.';
@@ -1062,7 +1065,7 @@ export function createReplies({
       const st = c.id === 'simulacion' ? null : accessApi?.forConversation(c) || null,
         problem = sales.ACCESS_PROBLEM.test(said);
       if (st?.ready && !problem) {
-        out.reply = copy.accessResend(user?.name, st.text);
+        out.reply = copy.accessResend(user?.name, st.text, ctx);
         out.accessResend = { enrollmentId: st.enrollmentId };
         out.reason = 'Pidió sus accesos con una inscripción activa: se le reenvían los accesos de su apertura.';
       } else if (problem || st?.enrolled || enrolledHere(c)) {
@@ -1108,6 +1111,7 @@ export function createReplies({
           enrolled: live.status === 'paid',
           order: true,
           changedFrom,
+          ctx,
         });
         out.reason =
           'Datos para la constancia: se guardan como propuesta con el pedido ' +
@@ -1118,7 +1122,7 @@ export function createReplies({
         out.reply = copy.certDataNoOrder;
         out.reason = 'Datos para la constancia sin pedido en este chat: no se guardan; se le invita a inscribirse.';
       } else {
-        out.reply = copy.certDataAsk;
+        out.reply = copy.certDataAsk(ctx);
         out.reason = 'Ofrece sus datos o pregunta cómo escribir su nombre: se le piden en un solo mensaje.';
       }
     } else if (['enroll', 'price'].includes(intent) && !paidClaim && sales.GROUP.test(said)) {
@@ -1236,7 +1240,7 @@ export function createReplies({
       if (payKind === 'link') {
         // «no me llegó el enlace de pago»: el de su pedido vigente, o el camino para pedirlo
         const open = payments?.openOrder(c.id);
-        out.reply = open ? copy.orderReminder(open.reference) + payments.linkMessage(open) : copy.payUntil({});
+        out.reply = open ? copy.orderReminder(open.reference) + payments.linkMessage(open) : copy.payUntil({ ctx });
         out.reason = open
           ? 'No le llegó el enlace de pago: se le vuelve a mandar el de su pedido ' + open.reference + '.'
           : 'Pide el enlace de pago sin pedido: se le dice cómo pedirlo.';
@@ -1255,6 +1259,7 @@ export function createReplies({
           until: o ? copy.startText({ starts_at: o.expires_at, timezone: ctx.edition.timezone }) : null,
           hold: /\b(apart\w*|reserv\w*|guard\w*)\b/.test(said),
           canOrder: Boolean(payments?.settings(c.brand_id).enabled),
+          ctx,
         });
         out.reason =
           'Avisa que pagará después: acuse sin presionar y el siguiente paso' +
@@ -1294,7 +1299,7 @@ export function createReplies({
         }
       } else {
         if (!fromKnowledge(0.6)) {
-          if (payments?.settings(c.brand_id).enabled) out.reply = copy.paymentMethods;
+          if (payments?.settings(c.brand_id).enabled) out.reply = copy.paymentMethods(ctx);
           else {
             out.reply = copy.paymentWithAdvisor;
             out.handoff = true;
@@ -1373,6 +1378,7 @@ export function createReplies({
         o
           ? {
               reference: o.reference,
+              ctx,
               until: copy.startText({ starts_at: o.expires_at, timezone: ctx.edition.timezone }),
             }
           : {},
@@ -1463,10 +1469,10 @@ export function createReplies({
       out.reason =
         'Quiere pensarlo: se le deja la puerta abierta con lo que el catálogo dice hoy (promoción vigente y hasta cuándo, lugares o inicio), sin descuentos ni presión.';
     } else if (intent === 'later') {
-      out.reply = copy.later(user?.name);
+      out.reply = copy.later(user?.name, ctx);
       out.reason = 'Pidió tiempo o avisará después: se le deja la puerta abierta.';
     } else if (intent === 'bye') {
-      out.reply = copy.bye(user?.name);
+      out.reply = copy.bye(user?.name, ctx);
       out.reason = 'Despedida.';
     } else if (intent === 'help' && sales.JOBS.test(said)) {
       out.reply = copy.jobs(ctx);

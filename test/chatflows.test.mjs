@@ -1194,9 +1194,9 @@ test('«¿Qué curso te interesa?» tras un saludo: sin doble saludo, y la lista
   const beto = await pending('Beto Ruiz');
   await beto.say('Hola, me interesa algo de reptiles');
   const short = texts(beto.conv)[1];
-  assert.equal(
+  assert.match(
     short,
-    'Tenemos 2 cursos de ese tema. ¿Cuál te interesa?\n\n1. Reptiles: manejo básico\n2. Reptiles: medicina clínica\n\nResponde con el número o el nombre del curso, o escribe «ver todos» para ver la lista completa.',
+    /^(🎓 )?Tenemos 2 cursos de ese tema\. ¿Cuál te interesa\?\n\n1\. Reptiles: manejo básico\n2\. Reptiles: medicina clínica\n\n(👉 )?Responde con el número o el nombre del curso, o escribe «ver todos» para ver la lista completa\.$/,
   );
   assert.equal(JSON.parse(L.session(beto.conv).waiting).narrowed, true);
   await beto.say('ver todos');

@@ -312,9 +312,12 @@ test('«¿Qué curso te interesa?» después de un saludo: la pregunta sale sin 
   // sin nada antes, la pregunta del asistente de siempre, con su saludo
   const alone = greetRun({ greeting: false });
   assert.equal(alone.texts()[0], copy.chooseCourse('GlobalVet', titles));
-  assert.match(alone.texts()[0], /^¡Hola! Soy el asistente de GlobalVet\./);
+  assert.match(alone.texts()[0], /^(👋 )?¡Hola! Soy el asistente de GlobalVet\./);
   // la del asistente fuera de un recorrido no cambia
-  assert.match(copy.chooseCourse('GlobalVet', titles), /^¡Hola! Soy el asistente de GlobalVet\. ¿Sobre qué curso/);
+  assert.match(
+    copy.chooseCourse('GlobalVet', titles),
+    /^(👋 )?¡Hola! Soy el asistente de GlobalVet\. ¿Sobre qué curso/,
+  );
   // reintentar sigue con su texto «otra vez»
   r.answer('no sé');
   assert.equal(r.texts().at(-1), copy.chooseCourse('GlobalVet', titles, { again: true }));
@@ -324,7 +327,10 @@ test('«¿Qué curso te interesa?» con un mensaje que acota: primero sólo esos
   let r = greetRun({ start: 'Hola, busco algo de reptiles' });
   const reptiles = ['Reptiles: manejo básico', 'Reptiles: medicina clínica'];
   assert.equal(r.texts()[1], copy.whichCourse(reptiles, { seeAll: true }));
-  assert.match(r.texts()[1], /^Tenemos 2 cursos de ese tema\. ¿Cuál te interesa\?\n\n1\. Reptiles: manejo básico\n2\./);
+  assert.match(
+    r.texts()[1],
+    /^(🎓 )?Tenemos 2 cursos de ese tema\. ¿Cuál te interesa\?\n\n1\. Reptiles: manejo básico\n2\./,
+  );
   assert.match(r.texts()[1], /o escribe «ver todos» para ver la lista completa\.$/);
   assert.deepEqual(r.s.waiting.titles, reptiles);
   assert.equal(r.s.waiting.narrowed, true);

@@ -64,7 +64,7 @@ const TEXTS = {
   enrollWithOrder: () => copy.enrollWithOrder(ctx, 'Ana'),
   orderReminder: () => copy.orderReminder(),
   enrollWithAdvisor: () => copy.enrollWithAdvisor(ctx, 'Ana'),
-  paymentMethods: () => copy.paymentMethods,
+  paymentMethods: () => copy.paymentMethods(ctx) + '\n' + copy.paymentMethods({ ...ctx, style: { emojis: false } }),
   paymentWithAdvisor: () => copy.paymentWithAdvisor,
   thanks: () => copy.thanks('Ana'),
   thanksAgain: () => copy.thanksAgain,
@@ -128,7 +128,7 @@ const TEXTS = {
     copy.certDataThanks('Ana', { name: 'ANA RUIZ', email: 'a@b.test', phone: '5512345678' }) +
     copy.certDataThanks('Ana', { name: 'ANA RUIZ' }, { order: true }) +
     copy.certDataThanks('Ana', { email: 'a@b.test' }, { enrolled: true }),
-  certDataAsk: () => copy.certDataAsk,
+  certDataAsk: () => copy.certDataAsk(ctx) + copy.certDataAsk({ ...ctx, style: { emojis: false } }),
   accessResend: () => copy.accessResend('Ana', 'Enlace: https://clases.example.test/x'),
   accessPending: () => copy.accessPending,
   accessProblem: () => copy.accessProblem('Ana'),
@@ -180,7 +180,7 @@ test('textos fijos del asistente: en modo real ninguno dice prueba, ejemplo ni s
   assert.match(realText(copy.price(ctx)), /\$1,890\.00 MXN con la promoción «Preventa»/);
   assert.match(realText(copy.welcome(ctx, 'Ana')), /Inicio: martes, 1 de diciembre de 2026/);
   assert.match(realText(copy.orderLink(ORDER)), /Cómo pagar: https:\/\/crm\.example\.test\/\?pay=1/);
-  assert.equal(realText(copy.paymentMethods), copy.REAL_PAYMENT_METHODS);
+  assert.equal(realText(copy.paymentMethods({ ...ctx, style: { emojis: false } })), copy.REAL_PAYMENT_METHODS);
   assert.doesNotMatch(copy.REAL_PAYMENT_METHODS, /tarjeta|OXXO/i, 'en modo real no se ofrecen métodos simulados');
   // un curso real que se llama «laboratorio» o habla de práctica simulada no pierde su nombre
   assert.equal(
