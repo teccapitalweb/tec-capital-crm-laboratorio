@@ -57,7 +57,7 @@ Tras una prueba real, `{{fecha}}` en un recorrido salía como «23 nov 2026, 7:0
 - **Pedido con enlace de pago y pago confirmado** (y otros eventos): Catálogo → **Contenido** → plantilla por evento, aprobada. Si hay plantilla aprobada, gana sobre el texto de `reply-copy.mjs`.
 - **Respuestas a preguntas frecuentes:** Catálogo → Conocimiento.
 
-## Estilo: renglones con emoji y negritas (22 nov 2026)
+## Estilo: renglones con emoji y negritas (publicado en `main`, 22 nov 2026)
 
 El dueño pidió que los mensajes se vean ordenados y bonitos. Todos los textos fijos siguen un mismo orden y un mismo estilo, **sin cambiar lo que dicen**:
 
