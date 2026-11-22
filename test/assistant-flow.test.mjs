@@ -230,7 +230,7 @@ test('mensajes de trato: «ok», «sí», «no», «espera», «¿eres un bot?»
   assert.doesNotMatch(caro.reply, /te hago|descuento/i);
   assert.equal(caro.handoff, false);
   const otros = await sim('¿qué otros cursos tienen?');
-  assert.match(otros.reply, /En GlobalVet también tenemos:\n(• |🎓 )Plan sanitario para aves/);
+  assert.match(otros.reply, /En GlobalVet también tenemos:\n\n(• |🎓 )Plan sanitario para aves/);
   for (const k of db.prepare("SELECT title FROM courses WHERE brand_id!='globalvet'").all())
     assert.ok(!otros.reply.includes(k.title), 'no se ofrecen cursos de otra marca: ' + k.title);
   const cupo = await sim('¿todavía hay lugar?');

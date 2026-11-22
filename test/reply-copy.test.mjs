@@ -150,7 +150,10 @@ test('textos del asistente: datos del catálogo, lo desconocido se dice claro y 
     copy.thanks('Ana', plain(full)),
     '¡Con gusto, Ana! Aquí sigo por si quieres ver el precio, las fechas o inscribirte.',
   );
-  assert.match(copy.fallback(full), /precio, el temario o las fechas de Nutrición en perros y gatos\. .*«asesor»/);
+  assert.match(
+    copy.fallback(full),
+    /precio, el temario o las fechas de Nutrición en perros y gatos\.\n\nSi prefieres que te responda una persona, escribe «asesor»/,
+  );
   assert.match(copy.human('Ana'), /^¡Claro, Ana! Ya le avisé al equipo/);
   assert.match(copy.refund(''), /^Lamento mucho la molestia\. Ya pasé tu caso/);
   assert.match(copy.unavailable('Sin cupo disponible'), /no está disponible \(sin cupo disponible\)\./);
@@ -185,6 +188,25 @@ test('estilo de los mensajes: con emojis por omisión, texto plano al apagarlo, 
   assert.match(copy.schedule(full), /\n\n👉 ¿Quieres apartar tu lugar\? Escribe \*Quiero inscribirme\*\.$/);
   assert.match(copy.affirm(full), /^¡Perfecto! 👍 ¿Qué te cuento de \*Nutrición en perros y gatos\*\?$/);
   assert.match(copy.thanks('Ana', full), /^¡Con gusto, Ana! 😊 /);
+  // cada parte en su párrafo: la pregunta del saludo, la ficha, el siguiente paso y la nota van separados por un renglón en blanco
+  assert.match(
+    copy.welcome(full, 'Ana Pérez'),
+    /gatos\.\n\n¿Quieres conocer el temario, el precio o cómo inscribirte\?\n\n\*Nutrición en perros y gatos · Edición general\*\n📅 /,
+  );
+  assert.match(copy.price(full), /enlace de pago\.\n\n\(Precio de ejemplo/);
+  assert.match(copy.fallback(full), /a la mano\.\n\nLo que sí puedo contarte[^\n]+\.\n\nSi prefieres/);
+  assert.match(
+    copy.thinking(full, 'Ana'),
+    /tómate tu tiempo! 🙂\n\nSólo para que lo tengas en cuenta: [^\n]+\.\n\nSi te queda alguna duda[^\n]+\.\n\n👉 Cuando quieras seguir, escribe \*Quiero inscribirme\*\.$/,
+  );
+  assert.doesNotMatch(
+    copy.welcome(
+      { ...full, course: { ...full.course, welcome: 'Hola.\nBienvenida, {{nombre}}. ¿Vemos el curso?' } },
+      'Ana',
+    ),
+    /\?\n\n\n/,
+    'un saludo con sus propios saltos no se toca',
+  );
   // apagado: viñetas, comillas y ningún emoji; el mismo contenido
   for (const t of [
     copy.card(plain(full)),

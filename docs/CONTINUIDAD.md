@@ -34,6 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Asistente: cada parte en su párrafo (integrado en local, pendiente de publicar, 22 nov 2026)
+
+- **Por qué:** al ver los mensajes nuevos, el dueño pidió más aire: un «enter» entre las partes para separarlas mejor; el texto y los emojis le gustan.
+- **Qué se hizo (sin esquema nuevo):** en `server/reply-copy.mjs`, la nota de precio siempre en su propio párrafo; la pregunta final del saludo de la marca pasa a su párrafo cuando el saludo venía en uno solo (`greeting`); «Te entiendo» aparte del dato en la objeción; «lo pienso» en cuatro párrafos; «sin respuesta», identidad y ayuda con la salida a una persona aparte; listas de cursos con renglón en blanco antes; pedido con enlace con la transferencia aparte (el intercambio de modo real sigue encontrando su frase); sin promoción y ya inscrita con cada salida aparte.
+- **Verificado:** `test/reply-copy.test.mjs` (los párrafos de bienvenida, precio, sin respuesta y «lo pienso»; un saludo con sus propios saltos no se toca); las pruebas que citaban esos textos se ajustaron; `npm run check`, la suite del servidor y las de navegador; captura en el servidor local de demostración.
+
 ## Asistente: estilo de los mensajes (publicado en `main`, 22 nov 2026)
 
 - **Por qué:** el dueño quiere que los mensajes del asistente se vean ordenados y bonitos, con negritas y algún emoji, para seguir probando flujos.

@@ -159,8 +159,12 @@ export const LAB_NOTE = 'Chat de prueba: los precios y las fechas son de ejemplo
 
 // Ficha del curso que acompaña a la bienvenida.
 export const card = ctx => b(ctx, title(ctx)) + '\n' + facts(ctx).join('\n') + '\n\n' + LAB_NOTE;
+// El saludo lo escribe la marca; si viene en un solo párrafo, su pregunta final («¿Quieres conocer…?») pasa a su propio párrafo.
+const greeting = t => (/\n/.test(t) ? t : t.replace(/([.!])\s+(¿[^¿?]+\?)\s*$/, '$1\n\n$2'));
 export const welcome = (ctx, name) =>
-  ctx.course.welcome.replaceAll('{{nombre}}', firstName(name) || 'qué tal').replaceAll('{{curso}}', ctx.course.title) +
+  greeting(
+    ctx.course.welcome.replaceAll('{{nombre}}', firstName(name) || 'qué tal').replaceAll('{{curso}}', ctx.course.title),
+  ) +
   '\n\n' +
   card(ctx);
 
@@ -175,7 +179,7 @@ const seatCta = ctx => step(ctx, '¿Quieres apartar tu lugar? Escribe ' + key(ct
 const PRICE_NOTE = '(Precio de ejemplo: este es un chat de prueba.)';
 export const priceBody = ctx =>
   (on(ctx) ? '💳 ' : '') + 'El precio de ' + b(ctx, title(ctx)) + ' es de ' + priceText(ctx) + '.';
-export const price = ctx => priceBody(ctx) + '\n\n' + enrollCta(ctx) + '\n' + PRICE_NOTE;
+export const price = ctx => priceBody(ctx) + '\n\n' + enrollCta(ctx) + '\n\n' + PRICE_NOTE;
 
 export function syllabusBody(ctx) {
   const items = String(ctx.course.syllabus || '')
@@ -205,7 +209,7 @@ export function several(parts, { price = false, ctx = null } = {}) {
     parts.join('\n\n') +
     '\n\n' +
     (price
-      ? enrollCta(ctx) + '\n' + PRICE_NOTE
+      ? enrollCta(ctx) + '\n\n' + PRICE_NOTE
       : step(
           ctx,
           'Si quieres apartar tu lugar, escribe ' + key(ctx, 'Quiero inscribirme') + '. ¿Te ayudo con algo más?',
@@ -249,13 +253,13 @@ export const bye = name => '¡Hasta pronto' + hi(name) + '! Aquí estaré si nec
 export const help = ctx =>
   'Aquí estoy para ayudarte. Puedo contarte el precio, el temario o las fechas de ' +
   b(ctx, ctx.course.title) +
-  ', o ayudarte a inscribirte. ¿Qué necesitas saber?';
+  ', o ayudarte a inscribirte.\n\n¿Qué necesitas saber?';
 export const menu = ctx => 'Esto es lo que te puedo contar de ' + b(ctx, ctx.course.title) + ':';
 export const identity = ctx =>
   (on(ctx) ? '🤖 ' : '') +
   'Soy el asistente automático de ' +
   ctx.brand.name +
-  ': respondo al momento sobre el precio, el temario y las fechas, y te ayudo a inscribirte. Si prefieres que te atienda una persona del equipo, escribe «asesor».';
+  ': respondo al momento sobre el precio, el temario y las fechas, y te ayudo a inscribirte.\n\nSi prefieres que te atienda una persona del equipo, escribe «asesor».';
 // Cupo: sólo lo que dice el catálogo. Con muchos lugares no se da la cifra; con pocos sí, sin decir que queda apartado.
 export function seats(ctx) {
   const n = ctx.edition.available_seats;
@@ -284,7 +288,7 @@ export const courses = (ctx, titles) =>
   titles.length
     ? 'En ' +
       ctx.brand.name +
-      ' también tenemos:\n' +
+      ' también tenemos:\n\n' +
       titles.map(t => item(ctx, '🎓', t)).join('\n') +
       '\n\nEste chat es sobre ' +
       b(ctx, ctx.course.title) +
@@ -352,14 +356,14 @@ function included(ctx, sessions = 0) {
 // «Está caro»: el precio vigente, lo que incluye y, si la marca la tiene, su respuesta aprobada de pago en partes (`installments`),
 // tal cual. Nunca un descuento ni otro precio: eso lo ve una persona.
 export const objection = (ctx, { sessions = 0, installments = '' } = {}) =>
-  'Te entiendo. El precio vigente de ' +
+  'Te entiendo.\n\nEl precio vigente de ' +
   title(ctx) +
   ' es de ' +
   priceText(ctx) +
   '.' +
   included(ctx, sessions) +
   (installments ? '\n\n' + installments : '') +
-  '\n\nPor este chat no puedo ofrecerte otro precio, pero una persona del equipo puede revisar las opciones contigo: escribe «asesor» y le aviso.\n' +
+  '\n\nPor este chat no puedo ofrecerte otro precio, pero una persona del equipo puede revisar las opciones contigo: escribe «asesor» y le aviso.\n\n' +
   PRICE_NOTE;
 // «Lo pienso», «lo consulto», «te aviso»: sin presionar, con lo que sí es cierto hoy según el catálogo (promoción vigente y
 // hasta cuándo, pocos lugares, o el inicio con las inscripciones abiertas) y una invitación a resolver la duda por aquí.
@@ -381,19 +385,17 @@ export function thinking(ctx, name, { seats = null } = {}) {
     hi(name) +
     ', tómate tu tiempo!' +
     (on(ctx) ? ' 🙂' : '') +
-    ' ' +
-    (facts.length ? 'Sólo para que lo tengas en cuenta: ' + facts.join(', y ') + '. ' : '') +
-    'Si te queda alguna duda del precio, las fechas o el temario, dime y te la resuelvo por aquí. Cuando quieras seguir, escribe ' +
-    key(ctx, 'Quiero inscribirme') +
-    '.'
+    (facts.length ? '\n\nSólo para que lo tengas en cuenta: ' + facts.join(', y ') + '.' : '') +
+    '\n\nSi te queda alguna duda del precio, las fechas o el temario, dime y te la resuelvo por aquí.\n\n' +
+    step(ctx, 'Cuando quieras seguir, escribe ' + key(ctx, 'Quiero inscribirme') + '.')
   );
 }
 
 // ---- Cuando no hay respuesta: primero opciones, después se PREGUNTA si quiere una persona, y sólo al final se pasa.
 export const fallback = ctx =>
-  'Esa pregunta todavía no la tengo a la mano. Lo que sí puedo contarte ahora mismo es el precio, el temario o las fechas de ' +
+  'Esa pregunta todavía no la tengo a la mano.\n\nLo que sí puedo contarte ahora mismo es el precio, el temario o las fechas de ' +
   ctx.course.title +
-  '. Si prefieres que te responda una persona, escribe «asesor».';
+  '.\n\nSi prefieres que te responda una persona, escribe «asesor».';
 export const offerHuman =
   'Perdona, no logré darte una buena respuesta. ¿Quieres que te pase con una persona del equipo para que te atienda directamente?';
 export const escalate =
@@ -436,7 +438,7 @@ export function orderLink({ reference, course, edition, amount, note = '', coupo
     '\nEl enlace vence el ' +
     until +
     (String(until).endsWith('.') ? '' : '.') +
-    '\nSi prefieres transferencia, envía tu comprobante por este chat y una persona lo valida.\n\nPago de prueba: no se cobra nada real.'
+    '\n\nSi prefieres transferencia, envía tu comprobante por este chat y una persona lo valida.\n\nPago de prueba: no se cobra nada real.'
   );
 }
 // `accessSoon`: la apertura entrega sus accesos sola al confirmar (server/modules/course-access); si no, llegan después.
@@ -487,7 +489,7 @@ export function paidAck({ reference = null, status = null } = {}) {
     (status === 'review'
       ? ' Tu pedido' + refOf(reference) + ' ya está en revisión.'
       : (status === 'pending' ? ' Tu pedido' + refOf(reference) + ' todavía aparece sin pago confirmado.' : '') +
-        ' Si tienes tu comprobante, puedes enviarlo en este chat.')
+        '\n\nSi tienes tu comprobante, puedes enviarlo en este chat.')
   );
 }
 // «¿Ya verificaron mi pago?»: el estado que dice el pedido, sin confirmar nada por cuenta propia.
@@ -557,13 +559,13 @@ export const paymentAdvisor = kind => (ADVISOR[kind] || ADVISOR.invoice) + ' Ya 
 export const noPromotion = (ctx, { enrolled = false, coupons = false } = {}) =>
   priceBody(ctx) +
   (coupons
-    ? ' Si tienes un cupón de descuento, puedes escribirlo en tu página de pago.'
-    : ' Por ahora no hay una promoción vigente para esta apertura.') +
+    ? '\n\nSi tienes un cupón de descuento, puedes escribirlo en tu página de pago.'
+    : '\n\nPor ahora no hay una promoción vigente para esta apertura.') +
   '\n\n' +
-  (enrolled ? '' : enrollCta(ctx) + ' ') +
+  (enrolled ? '' : enrollCta(ctx) + '\n\n') +
   'Si quieres que una persona del equipo revise tu caso, escribe ' +
   key(ctx, 'asesor') +
-  '.\n' +
+  '.\n\n' +
   PRICE_NOTE;
 // Pide inscribirse con la oportunidad ganada sin inscripción viva, o con una inscripción dada de baja: lo ve una persona.
 export const enrollmentCheck = ctx =>
@@ -577,10 +579,10 @@ export const notArrived = name =>
 // «¿Hasta cuándo es la promoción?»: la vigencia de la promoción del catálogo, o que no hay.
 export const promoUntil = ctx =>
   ctx.promotion
-    ? priceBody(ctx) + '\n\n' + enrollCta(ctx) + '\n' + PRICE_NOTE
+    ? priceBody(ctx) + '\n\n' + enrollCta(ctx) + '\n\n' + PRICE_NOTE
     : 'Por ahora no hay una promoción vigente para ' +
       b(ctx, title(ctx)) +
-      '. ' +
+      '.\n\n' +
       priceBody(ctx) +
       '\n\n' +
       enrollCta(ctx) +
@@ -600,7 +602,7 @@ export const alreadyEnrolled = (ctx, { advisor = false } = {}) =>
   'Tu inscripción a ' +
   b(ctx, title(ctx)) +
   ' ya está activa: no hace falta otro pedido.' +
-  (advisor ? ' Si necesitas tus accesos o algo más, escribe «asesor» y una persona del equipo te ayuda.' : '');
+  (advisor ? '\n\nSi necesitas tus accesos o algo más, escribe «asesor» y una persona del equipo te ayuda.' : '');
 // El pedido no se pudo crear (p. ej. la oportunidad ya estaba cerrada): una persona lo ve.
 export const orderFailed =
   'No pude generar tu pedido en este momento, así que ya le avisé al equipo: una persona te escribe por aquí para completar tu inscripción.';
@@ -751,7 +753,7 @@ export const noTopicMatch = (ctx, titles) =>
   (titles.length
     ? 'Estos son los que sí tenemos, además de ' +
       b(ctx, ctx.course.title) +
-      ':\n' +
+      ':\n\n' +
       titles.map(t => item(ctx, '🎓', t)).join('\n') +
       '\n\nSi te interesa alguno, escribe «asesor» y una persona te da los detalles.'
     : 'Por ahora ' + ctx.course.title + ' es el curso que tenemos abierto. ¿Te cuento el precio o las fechas?');

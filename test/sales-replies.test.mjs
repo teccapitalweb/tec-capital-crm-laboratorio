@@ -555,7 +555,7 @@ test('respuestas de venta de punta a punta', async t => {
   assert.equal(pricey.intent, 'objection');
   assert.match(
     pricey.reply,
-    /^Te entiendo\. El precio vigente de .* es de \$379\.00 MXN\. Lo que incluye ese precio: modalidad en línea, del \d+ de \w+ al \d+ de \w+\./,
+    /^Te entiendo\.\n\nEl precio vigente de .* es de \$379\.00 MXN\. Lo que incluye ese precio: modalidad en línea, del \d+ de \w+ al \d+ de \w+\./,
   );
   assert.match(pricey.reply, /apartas con la mitad y liquidas antes del inicio/);
   assert.match(pricey.reply, /no puedo ofrecerte otro precio/);
