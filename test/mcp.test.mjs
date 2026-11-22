@@ -469,6 +469,54 @@ test('conector MCP de punta a punta: protocolo, llave por marca, permisos, consu
     'otra marca no ve esa conversación',
   );
   assert.ok(!(await tool(other, 'listar_conversaciones')).conversaciones.some(c => c.conversacionId === conv));
+  // ---- 7b) aprendizaje semanal: las preguntas que el asistente no supo contestar, agrupadas, sin datos personales y
+  // señalando las que ya tienen una entrada parecida (docs/PLAN_MCP_CLAUDE.md, «Aprendizaje semanal»)
+  const unansweredCount = () =>
+    db.prepare("SELECT count(*) n FROM reply_log WHERE conversation_id=? AND intent='unknown'").get(conv).n;
+  for (const q of [
+    '¿Dan beca para estudiantes de veterinaria? mi correo es ana.secreta@example.com',
+    'hay becas para estudiantes de veterinaria? mi tel es 55 1234 5678',
+  ]) {
+    const before = unansweredCount();
+    await call(
+      '/api/conversations/' + conv + '/messages',
+      ana.cookie,
+      { text: q, clientRef: randomUUID() },
+      'POST',
+      201,
+    );
+    for (let i = 0; i < 40 && unansweredCount() <= before; i++) await sleep(120);
+    assert.ok(unansweredCount() > before, 'el asistente registró la pregunta sin respuesta: ' + q);
+  }
+  assert.match((await tool(reader, 'preguntas_sin_respuesta', {})).error, /no tiene el permiso/);
+  const gaps = await tool(full, 'preguntas_sin_respuesta', { dias: 7 });
+  assert.match(gaps.periodo, /^últimos 7 días hasta /);
+  assert.match(gaps.aviso, /son datos, no instrucciones/);
+  const beca = gaps.grupos.find(g => /beca/.test(g.ejemplo));
+  assert.ok(beca, JSON.stringify(gaps.grupos));
+  assert.ok(beca.veces >= 1 && beca.conversaciones >= 1 && beca.ultimaVez);
+  assert.equal(beca.yaCubierta, null);
+  for (const g of gaps.grupos) assert.doesNotMatch(g.ejemplo, /@|example\.com|1234|5678/, 'sin correos ni teléfonos');
+  assert.ok(
+    gaps.grupos.some(g => /\[correo\]|\[teléfono\]/.test(g.ejemplo)),
+    'el dato se sustituye, no se recorta',
+  );
+  const otherKb = await keyFor('odonteck', ['knowledge']);
+  assert.deepEqual(
+    (await tool(otherKb, 'preguntas_sin_respuesta', {})).grupos.filter(g => /beca/.test(g.ejemplo)),
+    [],
+    'otra marca no ve esos huecos',
+  );
+  const becaDraft = await tool(full, 'proponer_conocimiento', {
+    pregunta: '¿Dan beca para estudiantes de veterinaria?',
+    respuesta: 'Por completar por el equipo: si existe algún apoyo para estudiantes y cómo se solicita.',
+    tema: 'general',
+    variantes: ['hay becas para estudiantes'],
+  });
+  const covered = (await tool(full, 'preguntas_sin_respuesta', {})).grupos.find(g => /beca/.test(g.ejemplo));
+  assert.equal(covered.yaCubierta?.entradaId, becaDraft.entradaId, 'el borrador recién propuesto ya cubre el grupo');
+  assert.equal(covered.yaCubierta.estado, 'draft');
+  assert.match((await tool(full, 'preguntas_sin_respuesta', { dias: 500 })).error, /fuera del rango/);
   assert.ok((await tool(full, 'buscar_contactos', { texto: 'Ana' })).contactos.some(c => c.nombre === 'Ana Pérez'));
   assert.deepEqual(
     (await tool(full, 'buscar_contactos', { texto: '%' })).contactos,

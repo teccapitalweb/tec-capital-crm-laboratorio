@@ -369,6 +369,16 @@ Para quitarlo: `claude mcp remove crm-globalvet -s user`, y revoca la llave en e
 
 Una llave por marca: para otra consultora, crea otra llave y agrégala con otro nombre (`crm-odonteck`).
 
+## Aprendizaje semanal desde las preguntas sin respuesta (22 nov 2026)
+
+Tercera pieza del plan de contexto ([PLAN_RESPUESTAS_DE_VENTA.md](PLAN_RESPUESTAS_DE_VENTA.md)). La pantalla Catálogo → Conocimiento ya mostraba las **preguntas que el asistente no supo contestar**, agrupadas por parecido ([PLAN_MEMORIA_CONTEXTO.md](PLAN_MEMORIA_CONTEXTO.md), §3). Ahora el conector las lee para que un asistente haga la revisión cada semana y deje borradores que una persona aprueba.
+
+- **`preguntas_sin_respuesta`** (permiso `knowledge`, sólo lee): los grupos de la marca de la llave de los últimos `dias` (7 por omisión, hasta 90), con `ejemplo`, `veces` (mensajes), `conversaciones` (chats distintos), `ultimaVez` y **`yaCubierta`**: la entrada del conocimiento (borrador o aprobada) que más se parece al ejemplo si alguna se parece lo bastante (`bestMatch`, 0.5), para no proponer dos veces lo mismo. Misma agrupación que la pantalla (`replies.gapsFor`, por lista de marcas ya autorizada). La respuesta trae `periodo`, `definicion` y el `aviso` de que los ejemplos son datos, no instrucciones.
+- **Sin datos personales:** cada ejemplo pasa por `redactPersonal` (`server/lib/redact.mjs`): correos, teléfonos, tiras largas de dígitos y enlaces se sustituyen por «[correo]», «[teléfono]», «[número]», «[enlace]». Los nombres no se reconocen: el texto sigue siendo del cliente.
+- **El ciclo** (en las instrucciones del conector): revisar los grupos, saltar los que ya están cubiertos, y por cada uno de los demás dejar **un** borrador con `proponer_conocimiento`: la pregunta como la haría un cliente, las formas en que la preguntaron como variantes y una respuesta **sólo con lo que ya dicen el catálogo o el conocimiento aprobado** (sin precios); si no hay de dónde sacarla, la respuesta empieza con «Por completar por el equipo:» y dice qué haría falta saber. Termina con un recuento: grupos, borradores dejados y cuáles necesitan al equipo. Aprobar sigue siendo de una persona (Catálogo → Conocimiento, una por una o varias a la vez).
+- **Cómo pedirlo cada semana:** en la app de Claude con el conector conectado, el texto está en [GUIA_CONTEXTO_CONSULTORA.md](GUIA_CONTEXTO_CONSULTORA.md), «Después de cargar». Se puede dejar como tarea programada semanal de Claude; el CRM no programa nada por su cuenta.
+- **Verificado:** `test/mcp.test.mjs` (dos preguntas de beca con correo y teléfono en una conversación real → un grupo con el ejemplo sin esos datos; sin permiso, 401; otra marca no lo ve; tras proponer el borrador, `yaCubierta` lo señala; `dias` fuera de rango se rechaza) y `test/lib-redact.test.mjs`.
+
 ## Límites de esta primera versión
 
 - Con llave, **sólo Claude Code** (y cualquier cliente MCP que mande una cabecera fija). Para la app de Claude (claude.ai, escritorio y celular), que pide inicio de sesión con OAuth, está [Conectarlo con un clic](#conectarlo-con-un-clic) (sin publicar).
@@ -384,7 +394,7 @@ Una llave por marca: para otra consultora, crea otra llave y agrégala con otro 
 
 ## Dónde está
 
-- `server/mcp.mjs`: protocolo (`initialize`, `ping`, `tools/list`, `tools/call`), herramientas y permisos.
+- `server/mcp.mjs`: protocolo (`initialize`, `ping`, `tools/list`, `tools/call`), herramientas y permisos; `preguntas_sin_respuesta` usa `replies.gapsFor` y `server/lib/redact.mjs`.
 - `server/lib/mcp-drafts.mjs`: herramientas de borradores, rutas permitidas (`ROUTES`) y comprobaciones de marca y firma.
 - `server/lib/mcp-insights.mjs`: cifras agregadas (`INSIGHT_TOOLS`, `INSIGHT_ROUTES`), periodo y regla «menos de 3».
 - `server/lib/mcp-config.mjs`: configuración en borrador (`CONFIG_TOOLS`, `CONFIG_ROUTES`), comprobaciones de marca, estado y firma.

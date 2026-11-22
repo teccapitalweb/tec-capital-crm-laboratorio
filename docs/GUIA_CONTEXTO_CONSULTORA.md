@@ -42,3 +42,11 @@ Se puede editar en Excel o Google Sheets y guardar como CSV (incluso el formato 
 
 - Revisa las respuestas que da la IA en el simulador con preguntas reales; si una sale mal, corrige la entrada (vuelve a borrador y se aprueba de nuevo).
 - Cuando administración conecte la clave de la IA, el uso del mes se ve en Operación → Seguimientos, junto con el tope de gasto.
+
+## Cada semana: lo que no supo contestar
+
+El asistente anota cada pregunta que no pudo contestar con conocimiento aprobado. Se ven agrupadas en Catálogo → Conocimiento («Preguntas sin respuesta», con el botón **Crear respuesta**) y, desde el 22 nov 2026, también las lee el conector de Claude ([PLAN_MCP_CLAUDE.md](PLAN_MCP_CLAUDE.md), «Aprendizaje semanal»). Una vez por semana, en la app de Claude con el conector de la marca conectado, pide:
+
+> Revisa las preguntas sin respuesta de los últimos 7 días. Salta las que ya están cubiertas. Para cada una de las demás deja un borrador de conocimiento con la pregunta, las variantes con que la preguntaron y una respuesta sólo con lo que ya dice el catálogo o el conocimiento aprobado; si no hay de dónde sacarla, escribe «Por completar por el equipo:» y qué haría falta saber. Al final dime cuántos grupos había, cuántos borradores dejaste y cuáles necesitan al equipo.
+
+Después, administración entra a Catálogo → Conocimiento, completa las respuestas marcadas «Por completar» y aprueba (una por una o con «Revisar y aprobar varios»). Nada llega a los clientes hasta aprobarse. El texto anterior se puede dejar como tarea programada semanal en la app de Claude; el CRM no programa nada por su cuenta.

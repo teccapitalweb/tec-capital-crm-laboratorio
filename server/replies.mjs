@@ -2194,6 +2194,10 @@ export function createReplies({
       .brandsFor(user)
       .map(b => b.id)
       .filter(id => !brand || id === brand);
+    return gapsFor(ids, days);
+  }
+  // La misma agrupación para una lista de marcas ya autorizada (la pantalla pasa las del usuario; el conector, la de su llave).
+  function gapsFor(ids, days = 30) {
     if (!ids.length) return [];
     const since = now() - Math.min(90, Math.max(1, Number(days) || 30)) * 86400000;
     const rows = db
@@ -2541,6 +2545,7 @@ export function createReplies({
     history,
     test,
     createEntry,
+    gapsFor,
     normalizeEntry,
     seedBrand: brandId => seedBrandKnowledge(db, brandId, now()),
   };

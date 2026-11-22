@@ -99,9 +99,11 @@ npm start
 
 `npm run check` comprueba codificación (UTF-8, LF), sintaxis y formato (Prettier); antes de entregar, `npx prettier --write` sobre lo que tocaste.
 
-La referencia vigente es **815 pruebas aprobadas** más 95 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **816 pruebas aprobadas** más 95 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
+
+**22 nov 2026 (conector: aprendizaje semanal desde las preguntas sin respuesta):** **integrado en local, pendiente de publicar** (sin esquema nuevo; [PLAN_MCP_CLAUDE.md](docs/PLAN_MCP_CLAUDE.md), «Aprendizaje semanal»). Herramienta `preguntas_sin_respuesta` (permiso `knowledge`, sólo lee): los grupos de preguntas que el asistente no supo contestar, con la misma agrupación de la pantalla, los ejemplos sin correos ni teléfonos (`server/lib/redact.mjs`) y «yaCubierta» para no proponer dos veces; las instrucciones del conector describen la rutina (un borrador por grupo, respuesta sólo con el catálogo o el conocimiento aprobado, o «Por completar por el equipo»); el texto para pedirla cada semana está en [GUIA_CONTEXTO_CONSULTORA.md](docs/GUIA_CONTEXTO_CONSULTORA.md). Aprobar sigue siendo de una persona.
 
 **22 nov 2026 (motor: objeciones con argumentos reales):** **publicado** en `main` (commit `d5dfb2e`; sin esquema nuevo; falta probarlo en WhatsApp real; [PLAN_RESPUESTAS_DE_VENTA.md](docs/PLAN_RESPUESTAS_DE_VENTA.md), «Objeciones con argumentos reales»). «Está caro» dice lo que incluye ese precio según el catálogo (sesiones, modalidad, fechas) y, si la marca la tiene, su respuesta aprobada de pago en partes, tal cual; «lo pienso» deja la puerta abierta recordando sólo lo que es cierto hoy (promoción vigente y hasta cuándo, pocos lugares o el inicio con inscripciones abiertas); «no tengo tiempo» añade el calendario real. Nada inventado, sin descuentos ni presión; «espera un momento» sigue igual.
 

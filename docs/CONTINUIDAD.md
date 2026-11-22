@@ -34,6 +34,13 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Conector: aprendizaje semanal desde las preguntas sin respuesta (integrado en local, pendiente de publicar, 22 nov 2026)
+
+- **Por qué:** tercera pieza del plan de contexto. La pantalla ya mostraba lo que el asistente no supo contestar; faltaba que alguien lo revisara cada semana y dejara borradores sin trabajo manual.
+- **Qué se hizo (sin esquema nuevo):** `replies.gapsFor(marcas, dias)` separa la agrupación de la pantalla de la autorización del usuario; herramienta del conector `preguntas_sin_respuesta` (`server/mcp.mjs`, permiso `knowledge`, sólo lee) con `periodo`, `definicion`, `aviso`, y por grupo `ejemplo` (pasado por `redactPersonal`, `server/lib/redact.mjs`: correos, teléfonos, números largos y enlaces sustituidos), `veces`, `conversaciones`, `ultimaVez` y `yaCubierta` (la entrada parecida, `bestMatch` 0.5); etiqueta en «Actividad del asistente»; la rutina semanal en las instrucciones del conector y el texto para pedirla en [GUIA_CONTEXTO_CONSULTORA.md](GUIA_CONTEXTO_CONSULTORA.md). El conector sigue sin poder aprobar nada.
+- **Verificado:** `test/mcp.test.mjs` (conversación real con dos preguntas de beca con correo y teléfono → un grupo sin esos datos; sin permiso; otra marca; `yaCubierta` tras proponer; rango) y `test/lib-redact.test.mjs`; `npm run check`, 816 pruebas de servidor y 95 de navegador.
+- **Falta:** usarlo con la app real de Claude en producción y, si el dueño quiere, dejarlo como tarea programada semanal en su app de Claude.
+
 ## Motor: objeciones con argumentos reales (publicado en `main`, 22 nov 2026)
 
 - **Por qué:** segunda pieza del plan de contexto aceptado por el dueño. «Está caro», «lo pienso» y «no tengo tiempo» recibían un texto fijo que no decía nada del curso.

@@ -164,7 +164,7 @@ Segunda pieza del plan de contexto. Las tres objeciones más comunes recibían u
 
 Verificado con las frases exactas en `test/sales-replies.test.mjs`: «está muy caro» con y sin respuesta aprobada de partes (sin ella no se inventa), con promoción vigente y sin ella; «déjame pensarlo» y «lo voy a pensar» frente a «espera un momento»; «no tengo tiempo en esas fechas» con el calendario; la lectura de `THINKING` e `installments` con sus vecinos. Las sondas sólo cambian en estas tres respuestas.
 
-Siguen del mismo plan: aprendizaje semanal desde las preguntas sin respuesta (revisión por el conector → borradores) y medir con IA real.
+Tercera pieza del plan, el **aprendizaje semanal** desde las preguntas sin respuesta (herramienta `preguntas_sin_respuesta` del conector y la rutina de revisión), está en [PLAN_MCP_CLAUDE.md](PLAN_MCP_CLAUDE.md), «Aprendizaje semanal». Queda del plan: medir con IA real.
 
 ## Fuera de este bloque
 

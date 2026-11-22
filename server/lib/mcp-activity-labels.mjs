@@ -13,6 +13,7 @@ export const TOOL_LABELS = Object.freeze({
   ver_conversacion: 'Leyó los mensajes de una conversación',
   listar_conocimiento: 'Consultó el conocimiento del asistente',
   proponer_conocimiento: 'Propuso una respuesta al conocimiento (borrador)',
+  preguntas_sin_respuesta: 'Consultó las preguntas sin respuesta',
   actualizar_apertura: 'Modificó una apertura',
   actualizar_curso: 'Modificó un curso',
   guia_recorridos: 'Consultó la guía para armar recorridos',
