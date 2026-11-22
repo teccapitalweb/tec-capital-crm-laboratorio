@@ -22,7 +22,7 @@ El usuario quiere conectar la API de Claude (con un crédito mensual limitado) y
 
 Ver [OPERACION_Y_PRUEBAS.md](OPERACION_Y_PRUEBAS.md) y [PLAN_FASE_2.md](PLAN_FASE_2.md): clave sólo en `.env` local (o variables de Railway), nunca en el chat ni en el repositorio; primero local con datos de práctica y tope bajo.
 
-## Aprobar varios borradores de una vez (21 nov 2026; integrado en local, pendiente de publicar)
+## Aprobar varios borradores de una vez (publicado en `main` el 21 nov 2026)
 
 Tras una importación o una carga por el conector quedan muchos borradores. En Catálogo → Conocimiento, cuando la lista muestra dos o más, administración ve la franja «N borradores por aprobar» y «Revisar y aprobar varios» (`public/knowledge.js`).
 

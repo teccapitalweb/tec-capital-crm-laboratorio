@@ -34,7 +34,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Conocimiento: aprobar varios borradores de una vez (integrado en local, pendiente de publicar, 21 nov 2026)
+## Conocimiento: aprobar varios borradores de una vez (publicado en `main`, 21 nov 2026)
 
 - **Por qué:** el dueño pidió cargar por el conector las respuestas del negocio de GlobalVet. Entraron 30 como borrador y la pantalla sólo dejaba aprobar una por una.
 - **Qué se hizo (sólo interfaz; sin esquema, rutas ni permisos nuevos):** en `public/knowledge.js`, la lista de Conocimiento muestra a administración la franja «N borradores por aprobar» cuando hay dos o más borradores a la vista (respeta la búsqueda, el estado y la marca), con el botón «Revisar y aprobar varios». La ventana lista cada borrador con su pregunta, marca, curso, tema, si lo redactó la IA y la **respuesta completa**, con casilla (todas marcadas), «Marcar todas» y «Desmarcar todas». «Aprobar las seleccionadas» llama a `POST /api/replies/knowledge/:id/approve` una por una con la revisión que se vio: la aprobada sale de la lista; la que cambió queda desmarcada, sin poder reenviarse desde esa ventana, y el mensaje dice cuál fue.
@@ -43,6 +43,7 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Conector:** el mismo día el dueño reconectó el conector con todos los permisos (pedidos, contactos, conversaciones y conocimiento, además de los que tenía). Al proponer conocimiento el tema va con su nombre interno en inglés: la herramienta lo guarda tal cual y el motor busca por ese nombre.
 - **Datos de prueba:** 21 de las 30 respuestas llevan datos inventados (factura, meses sin intereses, plazos); la lista está en `data/cursos-globalvet/conocimiento-globalvet-prueba-INVENTADO.md`, fuera de Git. Hay además una respuesta aprobada antigua que dice «certificado IPCI» y los flyers dicen IPCIL: la corrige el equipo.
 - **Verificado:** `test/ui/conocimiento.spec.mjs` (uno desmarcado y otro que cambia con la ventana abierta; computadora y celular, con la auditoría de diseño), capturas revisadas a la vista, `npm run check`, 815 pruebas de servidor y 95 de navegador.
+- **Publicado:** commit `4f85a45`.
 - **Hallazgo aparte, sin cambiar:** «¿cómo sé que no es fraude?» de un prospecto se trata como queja y pasa a una persona con «lamento la molestia».
 
 ## Respuestas de venta y orden de los mensajes (publicado en `main`, 21 nov 2026)
