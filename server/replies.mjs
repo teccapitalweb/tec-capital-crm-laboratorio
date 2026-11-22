@@ -916,7 +916,9 @@ export function createReplies({
         return false;
       }
       if (!sales.RECOMMEND.test(said)) return false;
-      if (fromKnowledge(0.5)) return true;
+      // Sólo una respuesta aprobada que de verdad se parezca: «soy estudiante de la UTT, ¿cuál me recomiendas?» no es la
+      // del descuento de estudiante (coincidía por una sola palabra); sin tema, mejor preguntar con qué trabaja.
+      if (fromKnowledge(0.75)) return true;
       // Nombró un tema y ningún curso de la marca lo tiene: se dice claro y se ofrece lo que sí hay.
       if (sales.ASKS_TOPIC.test(said) && sales.topicWords(trigger.text).length) {
         out.reply = copy.noTopicMatch(ctx, otherCourses(c));

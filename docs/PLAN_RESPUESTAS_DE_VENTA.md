@@ -136,6 +136,11 @@ Con 30 respuestas de GlobalVet aprobadas, en WhatsApp real salieron dos cosas, c
 
 - **La ficha de cada curso cuenta para recomendar.** El conocimiento aprobado ligado a un curso (`course_id`) es su ficha: sus variantes son palabras parecidas («vacas», «reses», «rancho», «cachorros», «iguanas») y valen como el título, así que una sola basta para recomendarlo; su pregunta y respuesta cuentan como parte del temario (`courseNotes` en `server/replies.mjs`, `aliases` en `recommend` y `notCovered`). Lo que muchas fichas comparten («¿para quién es el curso?», «¿qué voy a aprender?») no distingue nada y no cuenta. Así «¿tienen algo para vacas?» encuentra los cursos de bovinos sin vocabulario escrito en el código, y «¿sirve para vacas?» en un curso de bovinos no se toma por un tema que no cubre. Para GlobalVet se cargaron por el conector 17 fichas de prueba (una por curso, en borrador; a quién va dirigido y nivel inventados, lista en `data/cursos-globalvet/`, fuera de Git).
 
+Segunda prueba en WhatsApp real, ya con las fichas aprobadas, dejó dos más:
+
+- **«Soy estudiante de la UTT, ¿cuál me recomiendas?»** recibía la respuesta del descuento de estudiante: en el camino de recomendar, una respuesta aprobada ganaba con que se pareciera a medias (una sola palabra, «estudiante»). Ahora ahí sólo cuenta una que se parezca mucho (0.75); sin tema, se pregunta con qué trabaja.
+- **«¿Y hay para vacas?»** no se tomaba como pedir cursos (faltaba el sustantivo: «hay cursos para…»). `HAS_FOR`: el verbo seguido de la preposición y un tema («hay para vacas», «tienen de gatos») pide cursos; no «hay para cuándo» ni «hay de pago».
+
 Las 58 frases de las sondas de la segunda revisión dan las mismas respuestas que antes de estos ajustes.
 
 ## Fuera de este bloque

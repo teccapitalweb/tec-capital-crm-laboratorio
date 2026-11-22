@@ -155,6 +155,11 @@ test('lectura fina: pago, datos para la constancia, accesos, validez y recomenda
     'un alias de la ficha cuenta como tema cubierto',
   );
   assert.ok(wantsCourses(plain('¿cuál me recomiendas?')));
+  // «¿y hay para vacas?» (visto en WhatsApp real) pide cursos; «¿hay para cuándo…?» no
+  assert.ok(wantsCourses(plain('Y hay para vacas')));
+  assert.ok(wantsCourses(plain('¿tienen de gatos?')));
+  assert.ok(!wantsCourses(plain('¿hay para cuándo el certificado?')));
+  assert.ok(!wantsCourses(plain('¿hay de pago en partes?')));
   assert.ok(
     !wantsCourses(plain('¿Sirve si trabajo en otro estado de la república y viajo mucho?')),
     'decir dónde trabaja no es pedir una recomendación',
@@ -474,8 +479,24 @@ test('respuestas de venta de punta a punta', async t => {
     body: { expectedRevision: ficha.revision },
   });
   assert.match((await sim('tengo pollitos, ¿cuál me recomiendas?', 'nutricion')).reply, /Plan sanitario para aves/);
+  assert.match(
+    (await sim('Y hay para pollitos', 'nutricion')).reply,
+    /Plan sanitario para aves/,
+    'visto en WhatsApp real',
+  );
+  // Una recomendación sin tema no se contesta con la respuesta del descuento de estudiante (visto en WhatsApp real):
+  // se pregunta con qué trabaja.
+  const studentDiscount = await addEntry(
+    'general',
+    '¿Hay descuento para estudiantes?',
+    'Por ahora no manejamos precio especial de estudiante. Cuando hay una promoción vigente aparece en la ficha del curso.',
+    ['soy estudiante hay descuento', 'precio de estudiante', 'descuento con credencial'],
+  );
+  const student = await sim('Soy estudiante de la utt cuál me recomiendas');
+  assert.doesNotMatch(student.reply, /precio especial de estudiante/);
+  assert.match(student.reply, /¿Qué tema te interesa\?/);
   // se retiran: el resto de la prueba cuenta con las 6 respuestas de ejemplo de la marca
-  for (const e of [perClass, payA, payB, ficha]) {
+  for (const e of [perClass, payA, payB, ficha, studentDiscount]) {
     const now = (await call(origin, '/api/replies/knowledge?brand=globalvet', { cookie: admin })).entries.find(
       x => x.id === e.id,
     );
