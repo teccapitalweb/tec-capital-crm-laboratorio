@@ -34,11 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Motor: recomendar sin tema y «¿hay para vacas?» (integrado en local, pendiente de publicar, 21 nov 2026)
+## Motor: recomendar sin tema y «¿hay para vacas?» (publicado en `main`, 21 nov 2026)
 
 - **Por qué:** segunda prueba en WhatsApp real, ya con las 17 fichas aprobadas: «soy estudiante de la UTT, ¿cuál me recomiendas?» recibió la respuesta del descuento de estudiante, y «¿y hay para vacas?» recibió «esa pregunta todavía no la tengo a la mano».
 - **Qué se hizo (sin esquema nuevo):** en el camino de recomendar (`server/replies.mjs`) una respuesta aprobada sólo gana si se parece mucho (0.75; antes 0.5, y «estudiante» bastaba); sin tema se pregunta con qué trabaja. En `server/lib/sales-replies.mjs`, `HAS_FOR`: el verbo seguido de la preposición y un tema («hay para vacas», «tienen de gatos») pide cursos, en `ASKS_COURSE` y `ASKS_TOPIC`; no «hay para cuándo», «hay de pago», «hay de descuento».
 - **Verificado:** `test/sales-replies.test.mjs` con las dos frases exactas y sus casos negativos; `npm run check`, la suite del servidor y las de navegador; las 58 frases de las sondas sin cambios.
+- **Publicado:** commit `9771abb`, con `npm run check` limpio, 815 pruebas de servidor y 95 de navegador. Falta probarlo en WhatsApp real.
 
 ## Motor: duración, formas de pago y la ficha de cada curso (publicado en `main`, 21 nov 2026)
 
