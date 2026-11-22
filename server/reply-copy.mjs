@@ -293,13 +293,56 @@ export const switchBlocked = (ctx, other) =>
   '. Para cambiarte a ' +
   other +
   ', escribe «asesor» y una persona te ayuda.';
-export const objection = ctx =>
+// Lo que incluye ese precio, sólo con lo que el catálogo sabe: sesiones, modalidad y fechas. Nada que no esté ahí.
+function included(ctx, sessions = 0) {
+  const e = ctx.edition,
+    zone = e.timezone,
+    parts = [];
+  if (sessions) parts.push(sessions + (sessions === 1 ? ' sesión' : ' sesiones'));
+  if (MODALITY[e.modality]) parts.push('modalidad ' + MODALITY[e.modality].toLowerCase());
+  if (e.starts_at !== null && e.starts_at !== undefined)
+    parts.push(
+      e.ends_at
+        ? 'del ' + shortDay(e.starts_at, zone) + ' al ' + shortDay(e.ends_at, zone)
+        : 'inicio el ' + shortDay(e.starts_at, zone),
+    );
+  return parts.length ? ' Lo que incluye ese precio: ' + parts.join(', ') + '.' : '';
+}
+// «Está caro»: el precio vigente, lo que incluye y, si la marca la tiene, su respuesta aprobada de pago en partes (`installments`),
+// tal cual. Nunca un descuento ni otro precio: eso lo ve una persona.
+export const objection = (ctx, { sessions = 0, installments = '' } = {}) =>
   'Te entiendo. El precio vigente de ' +
   title(ctx) +
   ' es de ' +
   priceText(ctx) +
-  '. Por este chat no puedo ofrecerte otro precio, pero una persona del equipo puede revisar las opciones contigo: escribe «asesor» y le aviso.\n' +
+  '.' +
+  included(ctx, sessions) +
+  (installments ? '\n\n' + installments : '') +
+  '\n\nPor este chat no puedo ofrecerte otro precio, pero una persona del equipo puede revisar las opciones contigo: escribe «asesor» y le aviso.\n' +
   PRICE_NOTE;
+// «Lo pienso», «lo consulto», «te aviso»: sin presionar, con lo que sí es cierto hoy según el catálogo (promoción vigente y
+// hasta cuándo, pocos lugares, o el inicio con las inscripciones abiertas) y una invitación a resolver la duda por aquí.
+export function thinking(ctx, name, { seats = null } = {}) {
+  const e = ctx.edition,
+    p = ctx.promotion,
+    facts = [];
+  if (p?.ends_at) facts.push('la promoción «' + p.name + '» está vigente hasta el ' + shortDay(p.ends_at, e.timezone));
+  if (typeof seats === 'number' && seats > 0 && seats <= 10)
+    facts.push(
+      seats === 1
+        ? 'queda 1 lugar al momento de responderte'
+        : 'quedan ' + seats + ' lugares al momento de responderte',
+    );
+  else if (startText(e))
+    facts.push('el curso inicia el ' + shortDay(e.starts_at, e.timezone) + ' y las inscripciones siguen abiertas');
+  return (
+    '¡Claro' +
+    hi(name) +
+    ', tómate tu tiempo! ' +
+    (facts.length ? 'Sólo para que lo tengas en cuenta: ' + facts.join(', y ') + '. ' : '') +
+    'Si te queda alguna duda del precio, las fechas o el temario, dime y te la resuelvo por aquí. Cuando quieras seguir, escribe «Quiero inscribirme».'
+  );
+}
 
 // ---- Cuando no hay respuesta: primero opciones, después se PREGUNTA si quiere una persona, y sólo al final se pasa.
 export const fallback = ctx =>
@@ -596,9 +639,12 @@ export const notifyNext = (ctx, name) =>
   ctx.course.title +
   '; una persona te escribe por aquí.';
 // «No tengo tiempo», «estoy de guardia»: la respuesta aprobada de la grabación si existe y la puerta a otra fecha.
-export const timeObjection = (ctx, recording = '') =>
+// «No tengo tiempo»: lo que el conocimiento aprobado dice de la grabación, el calendario real (inicio, fin y sesiones) para que
+// lo mida, y cómo preguntar por otra fecha.
+export const timeObjection = (ctx, recording = '', sessions = 0) =>
   'Te entiendo.' +
   (recording ? '\n\n' + recording : '') +
+  (startText(ctx.edition) ? '\n\nPara que lo midas, así va el calendario:\n' + durationBody(ctx, sessions) : '') +
   '\n\nSi estas fechas no te acomodan, escribe «asesor» y una persona del equipo te dice cuándo es la siguiente apertura de ' +
   ctx.course.title +
   '.';

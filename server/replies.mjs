@@ -1434,11 +1434,11 @@ export function createReplies({
         : 'Duración con el calendario de la apertura de esta conversación (inicio, fin y sesiones del catálogo).';
     } else if (intent === 'objection' && sales.TIME_OBJECTION.test(said)) {
       const rec = kb.find(k => k.topic === 'recording');
-      out.reply = copy.timeObjection(ctx, rec?.answer || '');
+      out.reply = copy.timeObjection(ctx, rec?.answer || '', sessions);
       out.sources.push(catalogueSource);
       if (rec) out.sources.push({ type: 'knowledge', id: rec.id, revision: rec.revision, question: rec.question });
       out.reason =
-        'No le acomoda el horario: se le dice lo que el conocimiento aprobado dice de la grabación y cómo preguntar por otra fecha.';
+        'No le acomoda el horario: se le dice lo que el conocimiento aprobado dice de la grabación, el calendario real de la apertura (inicio, fin y sesiones del catálogo) y cómo preguntar por otra fecha.';
     } else if (intent === 'greeting' || (fresh && !asks && !DIRECT_INTENTS.includes(intent))) welcome();
     else if (intent === 'thanks') {
       const done = c.id !== 'simulacion' && (enrolledHere(c) || lastOrder(c)?.status === 'review');
@@ -1454,6 +1454,13 @@ export function createReplies({
     } else if (intent === 'decline') {
       out.reply = copy.decline(user?.name);
       out.reason = 'Dijo que no o que ya no le interesa: se despide sin insistir.';
+    } else if (intent === 'later' && sales.THINKING.test(said)) {
+      // «Lo pienso», «lo consulto», «te aviso»: sin presionar, con lo que sí es cierto hoy en el catálogo (promoción vigente,
+      // pocos lugares o el inicio con las inscripciones abiertas). Nada que no salga del estado real.
+      out.reply = copy.thinking(ctx, user?.name, { seats: ctx.edition.available_seats });
+      out.sources.push(catalogueSource);
+      out.reason =
+        'Quiere pensarlo: se le deja la puerta abierta con lo que el catálogo dice hoy (promoción vigente y hasta cuándo, lugares o inicio), sin descuentos ni presión.';
     } else if (intent === 'later') {
       out.reply = copy.later(user?.name);
       out.reason = 'Pidió tiempo o avisará después: se le deja la puerta abierta.';
@@ -1497,10 +1504,17 @@ export function createReplies({
       out.reason = 'Otros cursos activos de la marca, consultados en el catálogo.';
     } else if (intent === 'objection') {
       if (!fromKnowledge(0.6)) {
-        out.reply = copy.objection(ctx);
+        // Con argumentos reales: lo que incluye ese precio (sesiones, modalidad y fechas del catálogo) y, si la marca la tiene,
+        // su respuesta aprobada de pago en partes, tal cual. Nunca otro precio.
+        const inst = sales.installments(kb);
+        out.reply = copy.objection(ctx, { sessions, installments: inst?.answer || '' });
         out.sources.push(catalogueSource);
+        if (inst)
+          out.sources.push({ type: 'knowledge', id: inst.id, revision: inst.revision, question: inst.question });
         out.reason =
-          'Le parece caro: precio vigente del catálogo y opción de hablar con una persona; no se ofrecen descuentos.';
+          'Le parece caro: precio vigente del catálogo y lo que incluye (sesiones, modalidad y fechas)' +
+          (inst ? ', con la respuesta aprobada de pago en partes «' + inst.question + '»' : '') +
+          ' y la opción de hablar con una persona; no se ofrecen descuentos.';
       }
     } else if (fromKnowledge(0.5)) {
       /* respondido con conocimiento */

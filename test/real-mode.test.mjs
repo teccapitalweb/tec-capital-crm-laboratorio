@@ -83,7 +83,14 @@ const TEXTS = {
   courseMenu: () => copy.courseMenu(ctx, ['A', 'B']),
   whichCourse: () => copy.whichCourse(['A', 'B']),
   switchBlocked: () => copy.switchBlocked(ctx, 'Otro'),
-  objection: () => copy.objection(ctx),
+  objection: () =>
+    copy.objection(ctx) + '\n' + copy.objection(ctx, { sessions: 8, installments: 'Puedes apartar con la mitad.' }),
+  thinking: () =>
+    copy.thinking(ctx, 'Ana') +
+    '\n' +
+    copy.thinking(ctx, 'Ana', { seats: 3 }) +
+    '\n' +
+    copy.thinking({ ...ctx, promotion: null, edition: { ...ctx.edition, starts_at: null } }, 'Ana'),
   fallback: () => copy.fallback(ctx),
   offerHuman: () => copy.offerHuman,
   escalate: () => copy.escalate,

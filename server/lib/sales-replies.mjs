@@ -287,6 +287,22 @@ export const NEXT =
   /\b(otra fecha|otras fechas|siguiente (fecha|apertura|edicion|generacion|grupo)|proxima (fecha|apertura|edicion|generacion)|vuelv\w* a (abrir|dar|impartir)|lo (vuelven|van) a (abrir|dar)|habra otr[oa]|otra generacion|otro grupo|de la siguiente)\b/;
 export const NOTIFY = /\b(avisame|avisenme|me avisan|me avisas|me pueden avisar|aviseme|me avisen)\b/;
 
+// ---- Objeciones con argumentos reales (docs/PLAN_RESPUESTAS_DE_VENTA.md, «Objeciones»). Nada se inventa: lo que se añade sale
+// del catálogo (sesiones, modalidad, fechas, promoción vigente, lugares) o de una respuesta aprobada.
+// «Lo pienso», «lo consulto», «te aviso»: quiere pensarlo (se le deja la puerta abierta con lo que sí es cierto hoy). «Espera»,
+// «un momento», «dame chance» NO: sólo pide un momento.
+export const THINKING =
+  /\b(pensar|pensarlo|pienso|consultar|consultarlo|consulto|platicar|platicarlo|platico|checarlo|checo|revisarlo|reviso|te aviso|les aviso|le aviso|te confirmo|les confirmo|mas adelante|en otra ocasion|para la proxima|cuando (cobre|me paguen))\b/;
+// La respuesta aprobada de pago que habla de pagar en partes (si la marca la tiene): se añade a «está caro» tal cual. Se
+// reconoce con las mismas palabras con que la persona lo pregunta (INSTALLMENTS) y las que usa quien redacta la respuesta.
+const PARTS_ANSWER = /\b(partes|plazos?|dos pagos|apartar con|apartas con|enganche|liquidar|liquidas)\b/;
+export const installments = entries =>
+  (entries || []).find(k => {
+    if (k.topic !== 'payment') return false;
+    const t = plain([k.question, ...(Array.isArray(k.variants) ? k.variants : []), k.answer].join(' '));
+    return INSTALLMENTS.test(t) || PARTS_ANSWER.test(t);
+  }) || null;
+
 // ---- Objeción de tiempo («no tengo tiempo», «salgo a las 8», «estoy de guardia»): no es una pregunta de fechas.
 export const TIME_OBJECTION =
   /\b(no tengo tiempo|no me da tiempo|no llego|no alcanzo a (llegar|conectarme)|salgo (de \w+ )?(a las|tarde)|estoy de guardia|tengo guardia|trabajo (en )?ese horario|se me (cruza|empalma)|no puedo en ese horario|esas fechas no)\b/;

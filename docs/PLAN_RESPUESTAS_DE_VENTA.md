@@ -154,7 +154,17 @@ El motor no recordaba nada de lo que la persona había dicho dos mensajes antes:
 
 Verificado con las frases exactas en `test/sales-replies.test.mjs` (tres conversaciones reales: recordar el rancho de bovinos, contestar «reptiles» a la pregunta y volver a pedir, «astronomía» sin curso y «sí» que no inventa una lista) y `test/memory-context.test.mjs` (perfil en la ficha de la IA; una frase hostil no pasa). Las 58 frases de las sondas dan las mismas respuestas.
 
-Siguen del mismo plan: objeciones con argumentos reales («está caro», «lo pienso», «no tengo tiempo»), aprendizaje semanal desde las preguntas sin respuesta y medir con IA real.
+## Objeciones con argumentos reales (22 nov 2026)
+
+Segunda pieza del plan de contexto. Las tres objeciones más comunes recibían un texto fijo y amable que no decía nada del curso. Ahora llevan argumentos, pero **sólo con lo que ya es cierto en el catálogo o en una respuesta aprobada**: nada se inventa, no se ofrecen descuentos ni otro precio, y no se presiona con cupos o plazos que el CRM no conoce (sin esquema nuevo, sin IA):
+
+- **«Está caro», «no me alcanza»** (`copy.objection` con `sessions` e `installments`): el precio vigente (con la promoción y hasta cuándo, si la hay), **lo que incluye ese precio** según el catálogo (número de sesiones si la apertura las tiene, modalidad, del día de inicio al de fin) y, si la marca tiene una **respuesta aprobada de pago que hable de pagar en partes** (`installments` en `server/lib/sales-replies.mjs`: las mismas palabras con que se pregunta más las de quien redacta: «partes», «plazos», «apartas con», «liquidas»), esa respuesta tal cual, como fuente de conocimiento. Cierra como antes: por este chat no hay otro precio; una persona revisa opciones. Una respuesta aprobada que se parezca mucho a la objeción (0.6) sigue ganando.
+- **«Lo pienso», «lo consulto», «te aviso»** (`THINKING`, dentro de la intención `later`; `copy.thinking`): «tómate tu tiempo» y, **sólo para que lo tenga en cuenta**, lo que el catálogo dice hoy: la promoción vigente y hasta cuándo; los lugares que quedan si son 10 o menos (la misma regla que la respuesta de cupo); o, si no, que el curso inicia tal día y las inscripciones siguen abiertas. Invita a resolver la duda por aquí. «Espera», «un momento», «dame chance» no son pensarlo: siguen con «sin prisa».
+- **«No tengo tiempo», «salgo tarde»** (`copy.timeObjection` con `sessions`): además de lo que el conocimiento aprobado dice de la grabación, el **calendario real** de la apertura (inicio, fin y sesiones) para que lo mida, y cómo preguntar por otra fecha.
+
+Verificado con las frases exactas en `test/sales-replies.test.mjs`: «está muy caro» con y sin respuesta aprobada de partes (sin ella no se inventa), con promoción vigente y sin ella; «déjame pensarlo» y «lo voy a pensar» frente a «espera un momento»; «no tengo tiempo en esas fechas» con el calendario; la lectura de `THINKING` e `installments` con sus vecinos. Las sondas sólo cambian en estas tres respuestas.
+
+Siguen del mismo plan: aprendizaje semanal desde las preguntas sin respuesta (revisión por el conector → borradores) y medir con IA real.
 
 ## Fuera de este bloque
 

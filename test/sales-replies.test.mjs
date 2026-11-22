@@ -18,6 +18,7 @@ import {
   certDataSignal,
   claimsPaid,
   durationFacts,
+  installments,
   isAccess,
   isValidity,
   notCovered,
@@ -25,6 +26,7 @@ import {
   recommend,
   remembered,
   roleOf,
+  THINKING,
   weakCertData,
   wantsCourses,
 } from '../server/lib/sales-replies.mjs';
@@ -183,6 +185,30 @@ test('lectura fina: pago, datos para la constancia, accesos, validez y recomenda
   );
   assert.deepEqual(remembered(['Hola', '¿cuánto cuesta?'], list), [], 'sin tema en lo anterior no se recuerda nada');
   assert.deepEqual(remembered([], list), []);
+  // objeciones: pensarlo no es pedir un momento; la respuesta de pago en partes se reconoce por lo que dice
+  for (const t of ['lo pienso y te aviso', 'déjame pensarlo', 'lo consulto con mi esposa', 'más adelante te confirmo'])
+    assert.ok(THINKING.test(plain(t)), t);
+  for (const t of ['espera un momento', 'dame chance', 'un segundo']) assert.ok(!THINKING.test(plain(t)), t);
+  const pay = [
+    { id: 'p1', topic: 'payment', question: '¿Dónde deposito?', variants: ['cuenta'], answer: 'Te paso la cuenta.' },
+    {
+      id: 'p2',
+      topic: 'payment',
+      question: '¿Puedo pagar en partes?',
+      variants: ['mensualidades'],
+      answer: 'Sí: apartas con la mitad y liquidas antes del inicio.',
+    },
+    {
+      id: 'c1',
+      topic: 'certificate',
+      question: '¿Dan certificado?',
+      variants: [],
+      answer: 'En dos pagos no, pero sí.',
+    },
+  ];
+  assert.equal(installments(pay)?.id, 'p2');
+  assert.equal(installments([pay[0], pay[2]]), null, 'sólo una respuesta de PAGO que hable de partes');
+  assert.equal(installments([]), null);
 });
 
 test('migración replies/0001: sobre una base sin el área «replies» (como la de main) crea la propuesta y su historial', async t => {
@@ -509,8 +535,26 @@ test('respuestas de venta de punta a punta', async t => {
   const student = await sim('Soy estudiante de la utt cuál me recomiendas');
   assert.doesNotMatch(student.reply, /precio especial de estudiante/);
   assert.match(student.reply, /¿Qué tema te interesa\?/);
+  // ---- objeciones con argumentos reales (PLAN_RESPUESTAS_DE_VENTA.md, «Objeciones»)
+  // «está caro»: lo que incluye el precio sale del catálogo; con una respuesta aprobada de pago en partes, va tal cual
+  const payParts = await addEntry(
+    'payment',
+    '¿Puedo pagar en partes?',
+    'Sí: apartas con la mitad y liquidas antes del inicio.',
+    ['mensualidades', 'dos pagos'],
+  );
+  const pricey = await sim('está muy caro');
+  assert.equal(pricey.intent, 'objection');
+  assert.match(
+    pricey.reply,
+    /^Te entiendo\. El precio vigente de .* es de \$379\.00 MXN\. Lo que incluye ese precio: modalidad en línea, del \d+ de \w+ al \d+ de \w+\./,
+  );
+  assert.match(pricey.reply, /apartas con la mitad y liquidas antes del inicio/);
+  assert.match(pricey.reply, /no puedo ofrecerte otro precio/);
+  assert.doesNotMatch(pricey.reply, /descuento|rebaja/);
+  assert.ok(pricey.sources.some(s => s.type === 'knowledge' && s.id === payParts.id));
   // se retiran: el resto de la prueba cuenta con las 6 respuestas de ejemplo de la marca
-  for (const e of [perClass, payA, payB, ficha, studentDiscount]) {
+  for (const e of [perClass, payA, payB, ficha, studentDiscount, payParts]) {
     const now = (await call(origin, '/api/replies/knowledge?brand=globalvet', { cookie: admin })).entries.find(
       x => x.id === e.id,
     );
@@ -519,6 +563,24 @@ test('respuestas de venta de punta a punta', async t => {
       body: { expectedRevision: now.revision },
     });
   }
+  const plainPricey = await sim('está caro');
+  assert.doesNotMatch(plainPricey.reply, /apartas con la mitad/, 'sin respuesta aprobada de partes, no se inventa');
+  assert.match(plainPricey.reply, /Lo que incluye ese precio/);
+  // «lo pienso»: sin presionar, con lo que es cierto hoy (sin promoción: el inicio y las inscripciones abiertas); «espera» no cambia
+  const think = await sim('déjame pensarlo');
+  assert.equal(think.intent, 'later');
+  assert.match(think.reply, /tómate tu tiempo/);
+  assert.match(think.reply, /el curso inicia el \d+ de \w+ y las inscripciones siguen abiertas/);
+  assert.doesNotMatch(think.reply, /promoción|descuento/);
+  const wait = await sim('espera un momento');
+  assert.equal(wait.intent, 'later');
+  assert.match(wait.reply, /sin prisa/);
+  assert.doesNotMatch(wait.reply, /tómate tu tiempo|inicia el/);
+  // «no tengo tiempo»: el calendario real para que lo mida
+  const busy = await sim('no tengo tiempo en esas fechas');
+  assert.equal(busy.intent, 'objection');
+  assert.match(busy.reply, /así va el calendario:\n.*\n• Inicio: /);
+  assert.match(busy.reply, /• Termina: /);
   const promo = await sim('¿tienen descuento?');
   assert.match(promo.reply, /no hay una promoción vigente/);
   assert.doesNotMatch(promo.reply, /estudiante/, 'punto 12: no sugiere un precio especial por ser estudiante');
@@ -528,6 +590,12 @@ test('respuestas de venta de punta a punta', async t => {
     "INSERT INTO promotions(id,brand_id,edition_id,name,price_cents,starts_at,ends_at,status,created_at,updated_at) VALUES('promo-ficticia','globalvet',?,'Preventa ficticia',1000,?,?,'published',?,?)",
   ).run(edition, Date.now() - day, Date.now() + 3 * day, Date.now(), Date.now());
   assert.match((await sim('¿hasta cuándo es la promoción?')).reply, /Preventa ficticia», vigente hasta el /);
+  // con promoción vigente, «lo pienso» la recuerda con su fecha real, y «está caro» la lleva en el precio
+  assert.match(
+    (await sim('lo voy a pensar')).reply,
+    /Sólo para que lo tengas en cuenta: la promoción «Preventa ficticia» está vigente hasta el \d+ de \w+, y el curso inicia el/,
+  );
+  assert.match((await sim('está caro')).reply, /con la promoción «Preventa ficticia», vigente hasta el/);
   db.prepare("DELETE FROM promotions WHERE id='promo-ficticia'").run();
   assert.match((await sim('¿cuál es el último día para pagar?')).reply, /fecha de vencimiento/);
 
