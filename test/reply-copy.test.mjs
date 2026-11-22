@@ -43,6 +43,8 @@ const promo = {
   promotion: { name: 'Pronto pago', ends_at: Date.UTC(2026, 10, 21, 5, 59) },
   priceCents: 39900,
 };
+// Texto plano (Operación → Seguimientos → «Mensajes con emojis» apagado): viñetas, sin negritas ni emojis.
+const plain = ctx => ({ ...ctx, style: { emojis: false } });
 const all = ctx => [
   copy.card(ctx),
   copy.welcome(ctx, 'Ana Pérez'),
@@ -56,7 +58,7 @@ const all = ctx => [
 
 test('textos del asistente: datos del catálogo, lo desconocido se dice claro y cada mensaje lleva al siguiente paso', () => {
   // ficha completa: fecha legible con su zona, docente, modalidad y precio
-  const card = copy.card(full);
+  const card = copy.card(plain(full));
   assert.match(card, /^Nutrición en perros y gatos · Edición general\n/);
   assert.match(card, /• Inicio: martes, 1 de diciembre de 2026, 7:00 p\.m\. \(hora del centro de México\)/);
   assert.match(card, /• Docente: MVZ Laura Ríos/);
@@ -65,7 +67,7 @@ test('textos del asistente: datos del catálogo, lo desconocido se dice claro y 
   assert.match(card, /Chat de prueba/);
   assert.doesNotMatch(card, /America\/Mexico_City/, 'la zona se dice en palabras');
   // sin datos: nada de «Por confirmar» sueltos ni renglones vacíos
-  const empty = copy.card(bare);
+  const empty = copy.card(plain(bare));
   assert.match(empty, /• Inicio: fecha por confirmar/);
   assert.doesNotMatch(empty, /Docente|Fecha de práctica|undefined|null|· $/m);
   assert.match(empty, /• Modalidad: En línea\n/);
@@ -76,31 +78,35 @@ test('textos del asistente: datos del catálogo, lo desconocido se dice claro y 
   assert.ok(w.endsWith(copy.LAB_NOTE));
   assert.match(copy.welcome(full, 'miguel.admin2'), /^Hola, qué tal\./, 'un alias no se usa como nombre');
   // precio: cifra del catálogo, promoción sólo si existe y siguiente paso
-  const p = copy.price(full);
+  const p = copy.price(plain(full));
   assert.match(p, /^El precio de Nutrición en perros y gatos · Edición general es de \$449\.00 MXN\./);
   assert.match(p, /«Quiero inscribirme»/);
   assert.match(p, /precio de ejemplo/i);
   assert.doesNotMatch(p, /promoci/i);
   assert.match(copy.price(promo), /\$399\.00 MXN con la promoción «Pronto pago», vigente hasta el 20 de noviembre\./);
   // temario en viñetas, respetando las que ya traía
-  const s = copy.syllabus(full);
+  const s = copy.syllabus(plain(full));
   assert.match(
     s,
     /^Esto es lo que verás en Nutrición en perros y gatos:\n\n• Etapas de vida\n• Evaluación nutricional\n- Casos de estudio\n\n/,
   );
   assert.match(s, /¿Te cuento el precio o las fechas\?$/);
   // fechas: con fecha invita a inscribirse; sin fecha lo dice y ofrece otra cosa
-  const sch = copy.schedule(full);
+  const sch = copy.schedule(plain(full));
   assert.match(sch, /• Inicio: martes, 1 de diciembre/);
   assert.match(sch, /• Docente: MVZ Laura Ríos/);
   assert.doesNotMatch(sch, /Precio/);
   assert.match(sch, /«Quiero inscribirme»\.$/);
-  const sch0 = copy.schedule(bare);
+  const sch0 = copy.schedule(plain(bare));
   assert.match(sch0, /• Inicio: fecha por confirmar\n• Docente: por confirmar\n/);
   assert.match(sch0, /En cuanto se confirme la fecha te avisamos/);
   assert.doesNotMatch(sch0, /Quiero inscribirme/);
   // inscripción, pedido y pago
-  assert.equal(copy.enrollWithOrder(full, 'Ana Pérez'), '¡Qué gusto, Ana! Ya tengo listo tu pedido:\n\n{{pedido}}');
+  assert.equal(
+    copy.enrollWithOrder(plain(full), 'Ana Pérez'),
+    '¡Qué gusto, Ana! Ya tengo listo tu pedido:\n\n{{pedido}}',
+  );
+  assert.equal(copy.enrollWithOrder(full, 'Ana Pérez'), '¡Qué gusto, Ana! 🎉 Ya tengo listo tu pedido:\n\n{{pedido}}');
   assert.match(copy.enrollWithAdvisor(full, ''), /^¡Qué gusto! Anoté tu interés en .+ Un asesor te escribe por aquí/);
   const link = copy.orderLink({
     reference: 'TC-AB12CD',
@@ -141,7 +147,7 @@ test('textos del asistente: datos del catálogo, lo desconocido se dice claro y 
   );
   // lo demás
   assert.equal(
-    copy.thanks('Ana'),
+    copy.thanks('Ana', plain(full)),
     '¡Con gusto, Ana! Aquí sigo por si quieres ver el precio, las fechas o inscribirte.',
   );
   assert.match(copy.fallback(full), /precio, el temario o las fechas de Nutrición en perros y gatos\. .*«asesor»/);
@@ -155,4 +161,53 @@ test('textos del asistente: datos del catálogo, lo desconocido se dice claro y 
       assert.doesNotMatch(t, /aparté tu lugar|lugar asegurado|pago recibido|garantiz/i, t);
       assert.ok(t.length < 900, t);
     }
+});
+
+// Estilo con emojis (docs/PLAN_MENSAJES_AMABLES.md, «Estilo»): por omisión, cada dato en su renglón con un emoji y su
+// etiqueta, negritas de WhatsApp en el nombre del curso y en lo que hay que escribir, un solo siguiente paso; nunca más
+// de un emoji por renglón, y ninguno en los mensajes serios.
+test('estilo de los mensajes: con emojis por omisión, texto plano al apagarlo, y nunca en los mensajes serios', () => {
+  const emoji = /\p{Extended_Pictographic}/u;
+  const card = copy.card(full);
+  assert.match(card, /^\*Nutrición en perros y gatos · Edición general\*\n📅 Inicio: martes, 1 de diciembre/);
+  assert.match(card, /\n🧑 Docente: MVZ Laura Ríos\n💻 Modalidad: En línea · Google Meet\n💳 Precio: \$449\.00 MXN\n/);
+  for (const line of card.split('\n'))
+    assert.ok((line.match(/\p{Extended_Pictographic}/gu) || []).length <= 1, 'un emoji por renglón: ' + line);
+  const p = copy.price(full);
+  assert.match(
+    p,
+    /^💳 El precio de \*Nutrición en perros y gatos · Edición general\* es de \$449\.00 MXN\.\n\n👉 Si quieres apartar tu lugar, escribe \*Quiero inscribirme\* y te mando tu enlace de pago\./,
+  );
+  assert.match(
+    copy.syllabus(full),
+    /^📚 Esto es lo que verás en \*Nutrición en perros y gatos\*:\n\n• Etapas de vida\n/,
+  );
+  assert.match(copy.schedule(full), /\n\n👉 ¿Quieres apartar tu lugar\? Escribe \*Quiero inscribirme\*\.$/);
+  assert.match(copy.affirm(full), /^¡Perfecto! 👍 ¿Qué te cuento de \*Nutrición en perros y gatos\*\?$/);
+  assert.match(copy.thanks('Ana', full), /^¡Con gusto, Ana! 😊 /);
+  // apagado: viñetas, comillas y ningún emoji; el mismo contenido
+  for (const t of [
+    copy.card(plain(full)),
+    copy.price(plain(full)),
+    copy.syllabus(plain(full)),
+    copy.schedule(plain(full)),
+    copy.affirm(plain(full)),
+    copy.thanks('Ana', plain(full)),
+  ]) {
+    assert.doesNotMatch(t, emoji, t);
+    assert.doesNotMatch(t, /\*/, t);
+  }
+  assert.match(copy.price(plain(full)), /«Quiero inscribirme»/);
+  // los mensajes serios no llevan emojis en ningún estilo
+  for (const t of [
+    copy.paidAck({ reference: 'TC-1', status: 'review' }),
+    copy.payStatus('pending', { reference: 'TC-1' }),
+    copy.refund('Ana'),
+    copy.human('Ana'),
+    copy.escalate,
+    copy.offerHuman,
+    copy.unavailable('Sin cupo'),
+    copy.payLinkProblem('Ana'),
+  ])
+    assert.doesNotMatch(t, emoji, t);
 });

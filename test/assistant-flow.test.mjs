@@ -230,7 +230,7 @@ test('mensajes de trato: «ok», «sí», «no», «espera», «¿eres un bot?»
   assert.doesNotMatch(caro.reply, /te hago|descuento/i);
   assert.equal(caro.handoff, false);
   const otros = await sim('¿qué otros cursos tienen?');
-  assert.match(otros.reply, /En GlobalVet también tenemos:\n• Plan sanitario para aves/);
+  assert.match(otros.reply, /En GlobalVet también tenemos:\n(• |🎓 )Plan sanitario para aves/);
   for (const k of db.prepare("SELECT title FROM courses WHERE brand_id!='globalvet'").all())
     assert.ok(!otros.reply.includes(k.title), 'no se ofrecen cursos de otra marca: ' + k.title);
   const cupo = await sim('¿todavía hay lugar?');
@@ -331,7 +331,7 @@ test('sin respuesta: primero opciones, luego se PREGUNTA si quiere una persona y
   assert.equal(both.log.intent, 'price');
   assert.match(both.log.reason, /^Respondió que sí a lo que ofrecía el mensaje anterior \(price, schedule\)/);
   assert.match(both.text, /El precio de /);
-  assert.match(both.text, /• Inicio: /);
+  assert.match(both.text, /(• |📅 )Inicio: /);
   const ack = await luis.say('ok');
   assert.equal(ack.log.intent, 'thanks');
   assert.equal(ack.log.action, 'replied');
@@ -393,7 +393,7 @@ test('sin respuesta: primero opciones, luego se PREGUNTA si quiere una persona y
   const lia = await person('Lía Ros'),
     hi = await lia.say('Disculpa');
   assert.equal(hi.log.intent, 'help');
-  assert.match(hi.text, /• Inicio: /, 'bienvenida con la ficha');
+  assert.match(hi.text, /(• |📅 )Inicio: /, 'bienvenida con la ficha');
 });
 
 test('modo autónomo: las preguntas que la IA sí contesta no cuentan para pasar a una persona; las que no, siguen los tres escalones', async t => {

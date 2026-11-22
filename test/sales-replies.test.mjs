@@ -219,14 +219,22 @@ test('migración replies/0001: sobre una base sin el área «replies» (como la 
     await rm(dir, { recursive: true, force: true });
   });
   // main no tiene ninguna migración del área «replies» (ninguna se publicó): la base de partida es el registro sin ella
-  const name = 'replies/0001-certificate-name-requests';
+  const names = ['replies/0001-certificate-name-requests', 'replies/0002-message-style'];
   assert.deepEqual(
     NAMED.filter(m => m.name.startsWith('replies/')).map(m => m.name),
-    [name],
-    'una sola migración del área',
+    names,
+    'las dos migraciones del área, en orden',
   );
   migrate(db, { backup: false, registry: defineRegistry(NAMED.filter(m => !m.name.startsWith('replies/'))) });
-  assert.deepEqual(migrate(db, { backup: false }).applied, [name]);
+  assert.deepEqual(migrate(db, { backup: false }).applied, names);
+  const emojis = db
+    .prepare('PRAGMA table_info(reply_settings)')
+    .all()
+    .find(c => c.name === 'emojis');
+  assert.ok(
+    emojis && emojis.notnull === 1 && String(emojis.dflt_value) === '1',
+    'reply_settings.emojis, encendida por omisión',
+  );
   assertSchemaCurrent(db);
   const tables = db
     .prepare("SELECT name FROM sqlite_master WHERE type='table'")
@@ -436,7 +444,7 @@ test('respuestas de venta de punta a punta', async t => {
   assert.ok((await sim('¿Entregan certificado?')).sources.some(s => s.type === 'knowledge'));
   assert.match((await sim('quedan espacios?')).reply, /el grupo es de 30 lugares/);
   const length = await sim('cuanto dura el curso');
-  assert.match(length.reply, /• Termina: /);
+  assert.match(length.reply, /(• |🏁 )Termina: /);
   assert.doesNotMatch(length.reply, /qué edición te interesa/);
   // Duración con conocimiento propio: «¿cuánto dura cada clase?» (visto en WhatsApp real: recibía sólo las fechas) pone
   // primero lo que la respuesta aprobada añade y debajo el calendario; la frase que remite a la ficha sobra.
@@ -462,13 +470,13 @@ test('respuestas de venta de punta a punta', async t => {
   );
   const perClassReply = await sim('Cuánto dura cada clase');
   assert.match(perClassReply.reply, /^Cada sesión en vivo dura alrededor de dos horas\.\n\n/);
-  assert.match(perClassReply.reply, /• Termina: /);
+  assert.match(perClassReply.reply, /(• |🏁 )Termina: /);
   assert.doesNotMatch(perClassReply.reply, /vienen en su ficha/, 'la frase que remite a la ficha sobra');
   assert.ok(perClassReply.sources.some(s => s.type === 'knowledge' && s.id === perClass.id));
   // «¿cuánto dura el curso?» sigue igual: la respuesta de ejemplo («dime qué edición») no añade nada y la de cada clase no se parece lo bastante
   const lengthAgain = await sim('cuanto dura el curso');
   assert.doesNotMatch(lengthAgain.reply, /dos horas|qué edición/);
-  assert.match(lengthAgain.reply, /• Termina: /);
+  assert.match(lengthAgain.reply, /(• |🏁 )Termina: /);
   assert.equal(
     durationFacts({
       answer:
@@ -579,8 +587,8 @@ test('respuestas de venta de punta a punta', async t => {
   // «no tengo tiempo»: el calendario real para que lo mida
   const busy = await sim('no tengo tiempo en esas fechas');
   assert.equal(busy.intent, 'objection');
-  assert.match(busy.reply, /así va el calendario:\n.*\n• Inicio: /);
-  assert.match(busy.reply, /• Termina: /);
+  assert.match(busy.reply, /así va el calendario:\n.*\n(• |📅 )Inicio: /);
+  assert.match(busy.reply, /(• |🏁 )Termina: /);
   const promo = await sim('¿tienen descuento?');
   assert.match(promo.reply, /no hay una promoción vigente/);
   assert.doesNotMatch(promo.reply, /estudiante/, 'punto 12: no sugiere un precio especial por ser estudiante');
@@ -599,6 +607,31 @@ test('respuestas de venta de punta a punta', async t => {
   db.prepare("DELETE FROM promotions WHERE id='promo-ficticia'").run();
   assert.match((await sim('¿cuál es el último día para pagar?')).reply, /fecha de vencimiento/);
 
+  // ---- estilo de los mensajes por marca (PLAN_MENSAJES_AMABLES.md, «Estilo»): emojis y negritas por omisión; apagado, texto plano
+  const emoji = /\p{Extended_Pictographic}/u;
+  const styled = await sim('¿cuánto cuesta?');
+  assert.match(styled.reply, /^💳 El precio de \*.+\* es de \$379\.00 MXN\./);
+  assert.match(styled.reply, /👉 Si quieres apartar tu lugar, escribe \*Quiero inscribirme\*/);
+  assert.doesNotMatch((await sim('ya hice la transferencia')).reply, emoji, 'un mensaje serio nunca lleva emojis');
+  await setMode({ emojis: false });
+  const flat = await sim('¿cuánto cuesta?');
+  assert.doesNotMatch(flat.reply, emoji);
+  assert.doesNotMatch(flat.reply, /\*/);
+  assert.match(flat.reply, /«Quiero inscribirme»/);
+  assert.match((await sim('¿qué fechas?')).reply, /\n• Inicio: /);
+  const rsNow = (await call(origin, '/api/replies/settings', { cookie: admin })).settings.find(
+    x => x.brand_id === 'globalvet',
+  );
+  assert.equal(rsNow.emojis, 0);
+  await call(origin, '/api/replies/brands/globalvet', {
+    cookie: admin,
+    method: 'PATCH',
+    body: { emojis: 'sí', expectedRevision: rsNow.revision },
+    expected: 400,
+  });
+  await setMode({ emojis: true });
+  assert.match((await sim('¿qué fechas?')).reply, /\n📅 Inicio: /);
+
   // ---- recomendar sin IA con el catálogo de la marca (punto 10)
   const now = Date.now();
   for (const [id, title, syllabus, price] of [
@@ -614,7 +647,7 @@ test('respuestas de venta de punta a punta', async t => {
   }
   const cows = await sim('tengo un rancho de bovinos, ¿cuál me conviene?');
   assert.equal(cows.intent, 'courses');
-  assert.match(cows.reply, /Bovinos de leche: manejo sanitario — inicia .+ · \$480\.00 MXN/);
+  assert.match(cows.reply, /Bovinos de leche: manejo sanitario\*? — inicia .+ · \$480\.00 MXN/);
   assert.doesNotMatch(cows.reply, /Reptiles en cautiverio/);
   assert.match((await sim('¿tienen algo de reptiles?')).reply, /Reptiles en cautiverio/);
   const open = await sim('¿cuál me recomiendas?');
@@ -687,7 +720,7 @@ test('respuestas de venta de punta a punta', async t => {
   const recalled = await memo.say('¿cuál me recomiendas?');
   assert.equal(recalled.log.intent, 'courses');
   assert.match(recalled.text, /Por lo que me contaste antes/);
-  assert.match(recalled.text, /Bovinos de leche: manejo sanitario — inicia /);
+  assert.match(recalled.text, /Bovinos de leche: manejo sanitario\*? — inicia /);
   assert.doesNotMatch(recalled.text, /Reptiles en cautiverio|¿Qué tema te interesa\?/);
   assert.match(recalled.log.reason, /lo que contó antes en esta conversación/);
   // Después de «¿Qué tema te interesa?», la respuesta con el tema recomienda (en WhatsApp real caía en «no la tengo a la mano»)
@@ -698,7 +731,7 @@ test('respuestas de venta de punta a punta', async t => {
   const topic = await lucia.say('reptiles');
   assert.equal(topic.log.intent, 'courses');
   assert.match(topic.text, /Por lo que me cuentas, te pueden servir/);
-  assert.match(topic.text, /Reptiles en cautiverio — inicia /);
+  assert.match(topic.text, /Reptiles en cautiverio\*? — inicia /);
   assert.doesNotMatch(topic.text, /Bovinos de leche/);
   assert.match(topic.log.reason, /^Contesta a «¿Qué tema te interesa\?» del mensaje anterior\./);
   const recalledTopic = await lucia.say('¿y cuál me recomiendas?');

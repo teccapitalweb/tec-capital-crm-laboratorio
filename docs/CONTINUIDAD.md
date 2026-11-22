@@ -34,6 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Asistente: estilo de los mensajes (integrado en local, pendiente de publicar, 22 nov 2026)
+
+- **Por qué:** el dueño quiere que los mensajes del asistente se vean ordenados y bonitos, con negritas y algún emoji, para seguir probando flujos.
+- **Qué se hizo:** en `server/reply-copy.mjs`, ayudantes de estilo (`on`, `b`, `key`, `li`, `item`, `step`) y todos los textos con datos en renglones con emoji y etiqueta, negritas de WhatsApp en el nombre del curso y en lo que hay que escribir, y un solo siguiente paso con 👉; los mensajes serios no llevan emojis. Interruptor por marca `reply_settings.emojis` (migración con nombre `replies/0002-message-style`, encendido por omisión), `PATCH /api/replies/brands/:id` con `emojis`, casilla «Mensajes con emojis» en Operación → Seguimientos (`public/recipes.js`) y el estilo en `ctx.style` desde `planOrThrow`. El chat del laboratorio pinta `*negritas*` (`rich` en `public/app.js`) y la lista de chats muestra la vista previa sin asteriscos (`unbold`). Detalle en [PLAN_MENSAJES_AMABLES.md](PLAN_MENSAJES_AMABLES.md), «Estilo».
+- **Verificado:** `test/reply-copy.test.mjs` (los dos estilos, un emoji por renglón, mensajes serios sin emojis), `test/sales-replies.test.mjs` (interruptor de punta a punta, la migración 0002 junto con la 0001), `test/ui/bandeja.spec.mjs` (negritas en el chat); las pruebas que citaban las viñetas quedaron independientes del estilo; `npm run check`, la suite del servidor y las de navegador; capturas en computadora y celular.
+
 ## Conector: aprendizaje semanal desde las preguntas sin respuesta (publicado en `main`, 22 nov 2026)
 
 - **Por qué:** tercera pieza del plan de contexto. La pantalla ya mostraba lo que el asistente no supo contestar; faltaba que alguien lo revisara cada semana y dejara borradores sin trabajo manual.

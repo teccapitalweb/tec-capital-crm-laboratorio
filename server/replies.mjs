@@ -324,6 +324,7 @@ export function createReplies({
     mode: 'templates',
     provider_enabled: 0,
     max_unknown: 2,
+    emojis: 1,
     revision: 0,
     updated_by: null,
     updated_at: null,
@@ -595,7 +596,7 @@ export function createReplies({
     const bought = c.id !== 'simulacion' && (enrolledHere(c) || ['paid', 'review'].includes(lastOrder(c)?.status));
     // Con un pedido pendiente, «¿cómo entro a la clase?» recibe que los accesos llegan al confirmarse el pago (sin pase).
     const pendingOrder = c.id !== 'simulacion' && lastOrder(c)?.status === 'pending';
-    const ctx = catalogue.info(c.course_id, c.edition_id),
+    const ctx = { ...catalogue.info(c.course_id, c.edition_id), style: { emojis: Boolean(s.emojis) } },
       course = ctx.course,
       cls = forced
         ? { intent: forced, confidence: 1 }
@@ -898,7 +899,7 @@ export function createReplies({
       }
       out.sources.push(...sources);
       if (asked.includes('price')) out.stage = 'interesado';
-      out.reply = copy.several(parts, { price: asked.includes('price') });
+      out.reply = copy.several(parts, { price: asked.includes('price'), ctx });
       out.reason =
         'Varias preguntas en un mensaje (' +
         asked.join(', ') +
@@ -1446,7 +1447,7 @@ export function createReplies({
         ? copy.thanksEnrolled(user?.name)
         : prev?.intent === 'thanks'
           ? copy.thanksAgain
-          : copy.thanks(user?.name);
+          : copy.thanks(user?.name, ctx);
       out.reason = 'Agradecimiento o cierre.' + (done ? ' Ya pagó: no se le ofrece inscribirse otra vez.' : '');
     } else if (intent === 'affirm') {
       options(copy.affirm(ctx));
@@ -2370,6 +2371,7 @@ export function createReplies({
     const maxUnknown = input.maxUnknown === undefined ? null : input.maxUnknown;
     if (maxUnknown !== null && (!Number.isInteger(maxUnknown) || maxUnknown < 1 || maxUnknown > 5))
       throw fail(400, 'El máximo de respuestas sin reconocer va de 1 a 5.');
+    if (input.emojis !== undefined && typeof input.emojis !== 'boolean') throw fail(400, '«emojis» es sí o no.');
     return transaction(db, () => {
       const cur = settings(brandId);
       if (!Number.isInteger(input.expectedRevision) || input.expectedRevision !== cur.revision)
@@ -2378,12 +2380,13 @@ export function createReplies({
         mode: mode ?? cur.mode,
         provider_enabled: input.providerEnabled === undefined ? cur.provider_enabled : input.providerEnabled ? 1 : 0,
         max_unknown: maxUnknown ?? cur.max_unknown,
+        emojis: input.emojis === undefined ? cur.emojis : input.emojis ? 1 : 0,
       };
       if (next.provider_enabled && !provider.configured)
         throw fail(400, 'El proveedor de IA no está configurado en el servidor.');
       db.prepare(
-        'INSERT INTO reply_settings(brand_id,mode,provider_enabled,max_unknown,revision,updated_by,updated_at) VALUES(?,?,?,?,1,?,?) ON CONFLICT(brand_id) DO UPDATE SET mode=excluded.mode,provider_enabled=excluded.provider_enabled,max_unknown=excluded.max_unknown,revision=reply_settings.revision+1,updated_by=excluded.updated_by,updated_at=excluded.updated_at',
-      ).run(brandId, next.mode, next.provider_enabled, next.max_unknown, user.id, now());
+        'INSERT INTO reply_settings(brand_id,mode,provider_enabled,max_unknown,emojis,revision,updated_by,updated_at) VALUES(?,?,?,?,?,1,?,?) ON CONFLICT(brand_id) DO UPDATE SET mode=excluded.mode,provider_enabled=excluded.provider_enabled,max_unknown=excluded.max_unknown,emojis=excluded.emojis,revision=reply_settings.revision+1,updated_by=excluded.updated_by,updated_at=excluded.updated_at',
+      ).run(brandId, next.mode, next.provider_enabled, next.max_unknown, next.emojis, user.id, now());
       return settings(brandId);
     });
   }

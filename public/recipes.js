@@ -133,7 +133,7 @@ window.createRecipesUI = function ({ state, api, esc, icon, showModal, toast }) 
               .map(([k, v]) => `<option value="${k}" ${s.mode === k ? 'selected' : ''}>${v}</option>`)
               .join(
                 '',
-              )}</select></label><small class="rcp-reply-help">${esc(REPLY_HELP[s.mode] || '')}</small>${aiToggle(s)}<small>Sin respuesta antes de proponer un asesor: ${s.max_unknown}</small></div>`,
+              )}</select></label><small class="rcp-reply-help">${esc(REPLY_HELP[s.mode] || '')}</small>${aiToggle(s)}<label class="rcp-ai"><input type="checkbox" class="rcp-reply-emojis" data-brand="${esc(s.brand_id)}" data-revision="${s.revision}" ${s.emojis ? 'checked' : ''}> Mensajes con emojis<small>Datos en renglones con emoji y negritas en el nombre del curso. Apagado: viñetas y texto plano. Los mensajes serios (pagos, quejas, pasar con una persona) nunca llevan emojis.</small></label><small>Sin respuesta antes de proponer un asesor: ${s.max_unknown}</small></div>`,
         )
         .join('')}</div>
       <h3 class="rcp-subtitle">Canal simulado</h3>${note('Por marca y apagado por omisión. Al activarlo, los mensajes salientes pasan por enviado → entregado → leído (o fallido, con reintento), la ventana de servicio de 24 h exige plantillas aprobadas fuera de ella (72 h si el cliente llegó por anuncio) y la bienvenida automática lleva botones de respuesta rápida. Nada se conecta a Meta; sirve para ensayar el flujo real.')}<div class="rcp-brands">${channelSettings
@@ -301,6 +301,21 @@ window.createRecipesUI = function ({ state, api, esc, icon, showModal, toast }) 
     return `<label class="rcp-ai"><input type="checkbox" class="rcp-reply-ai" data-brand="${esc(s.brand_id)}" data-revision="${s.revision}" ${s.provider_enabled ? 'checked' : ''} ${real && usable ? '' : 'disabled'}> Usar la IA para redactar<small>${!real ? 'Requiere Claude configurado (Operación → Sistema → Inteligencia artificial).' : !usable ? 'Elige «Sugerir al asesor» o «Autónomo con IA».' : s.mode === 'suggest' ? 'La IA propone un borrador; una persona decide.' : 'La IA responde sola con conocimiento aprobado.'}</small></label>`;
   }
   async function change(el) {
+    if (el.classList?.contains('rcp-reply-emojis')) {
+      try {
+        await api('/api/replies/brands/' + el.dataset.brand, {
+          method: 'PATCH',
+          body: { emojis: el.checked, expectedRevision: Number(el.dataset.revision) },
+        });
+        toast(
+          el.checked ? 'Los mensajes de esta marca llevan emojis.' : 'Los mensajes de esta marca van en texto plano.',
+        );
+      } catch (e) {
+        toast(e.message);
+      }
+      await load();
+      return true;
+    }
     if (el.classList?.contains('rcp-reply-ai')) {
       try {
         await api('/api/replies/brands/' + el.dataset.brand, {

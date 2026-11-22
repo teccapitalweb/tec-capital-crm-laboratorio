@@ -57,6 +57,20 @@ Tras una prueba real, `{{fecha}}` en un recorrido salía como «23 nov 2026, 7:0
 - **Pedido con enlace de pago y pago confirmado** (y otros eventos): Catálogo → **Contenido** → plantilla por evento, aprobada. Si hay plantilla aprobada, gana sobre el texto de `reply-copy.mjs`.
 - **Respuestas a preguntas frecuentes:** Catálogo → Conocimiento.
 
+## Estilo: renglones con emoji y negritas (22 nov 2026)
+
+El dueño pidió que los mensajes se vean ordenados y bonitos. Todos los textos fijos siguen un mismo orden y un mismo estilo, **sin cambiar lo que dicen**:
+
+1. Una línea de saludo o la respuesta corta.
+2. Los datos en renglones, cada uno con su emoji y su etiqueta: 📅 Inicio, 🧑 Docente, 💻 Modalidad (📍 presencial, 🏫 híbrida), 💳 Precio, 🏁 Termina, 🗓️ Sesiones; 📚 abre el temario; 🎓 marca cada curso de una lista.
+3. Un renglón en blanco y **un solo siguiente paso**, con 👉 y lo que hay que escribir en negritas: «👉 Si quieres apartar tu lugar, escribe *Quiero inscribirme* y te mando tu enlace de pago.»
+
+Reglas: un emoji por renglón y pocos por mensaje (la prueba lo comprueba); negritas de WhatsApp (`*así*`) sólo en el nombre del curso y en lo que la persona debe escribir; **ningún emoji en los mensajes serios** (pago en revisión, estado del pago, queja o reembolso, baja, pasar con una persona, enlace que falla); las notas de prueba y el intercambio de modo real no cambian. Toques pequeños: 👋 no se añade a la bienvenida porque ese saludo lo escribe la marca; 🎉 en «Ya tengo listo tu pedido», 😊 en «gracias», 👍 en «sí», 🤖 en «¿eres un bot?», 🙂 en «lo pienso», ✅ en «ya está activa» y «todavía hay lugar».
+
+- **Interruptor por marca:** Operación → Seguimientos → «Mensajes con emojis», encendido por omisión (`reply_settings.emojis`, migración con nombre `replies/0002-message-style`; `PATCH /api/replies/brands/:id` con `emojis`). Apagado, los mismos textos salen con viñetas, comillas y sin negritas ni emojis, como antes. El estilo viaja en el contexto del catálogo (`ctx.style.emojis`) a todas las funciones de `server/reply-copy.mjs`; una función llamada sin estilo se comporta como «con emojis».
+- **El chat del laboratorio pinta las negritas** igual que el teléfono (`rich` en `public/app.js`: sólo pares de asteriscos en una misma línea, sobre el texto ya escapado). WhatsApp real las entiende de origen.
+- **Verificado:** `test/reply-copy.test.mjs` (los dos estilos, un emoji por renglón, los mensajes serios sin emojis), `test/sales-replies.test.mjs` (el interruptor por marca de punta a punta y un valor inválido), `test/ui/bandeja.spec.mjs` (la ficha llega con negritas), y las pruebas que citaban las viñetas se hicieron independientes del estilo. Revisado a la vista en el servidor local de demostración, en computadora y celular (375 px): ficha de bienvenida con flyer, precio y fechas con negritas y un emoji por renglón, la casilla por marca en Seguimientos, y la lista de chats con la vista previa del último mensaje sin los asteriscos (`unbold` en `public/app.js`).
+
 ## Verificación
 
 - `test/reply-copy.test.mjs`: cada texto con datos completos, sin datos y con promoción; sin huecos (`undefined`, `{{…}}`), sin promesas falsas y sin género.

@@ -121,23 +121,44 @@ export function priceText(ctx) {
       : '')
   );
 }
+// ---- Estilo de los mensajes (docs/PLAN_MENSAJES_AMABLES.md, «Estilo»). Por marca, `ctx.style.emojis` (encendido por
+// omisión; Operación → Seguimientos → «Mensajes con emojis»). Con emojis: cada dato en su renglón con un emoji y su etiqueta,
+// negritas de WhatsApp (*así*) en el nombre del curso y en lo que la persona debe escribir, y un solo siguiente paso; un
+// emoji por renglón y pocos por mensaje. Sin emojis: viñetas y texto plano. Los mensajes serios (pago en revisión, queja,
+// baja, pasar con una persona) no llevan emojis en ningún caso. Un `ctx` sin estilo se trata como «con emojis».
+const on = ctx => !ctx?.style || ctx.style.emojis !== false;
+const b = (ctx, t) => (on(ctx) ? '*' + t + '*' : t);
+// Lo que la persona debe escribir: en negritas, o entre comillas en texto plano.
+const key = (ctx, t) => (on(ctx) ? '*' + t + '*' : '«' + t + '»');
+const li = (ctx, emoji, label, value) => (on(ctx) ? emoji + ' ' : '• ') + label + ': ' + value;
+const item = (ctx, emoji, text) => (on(ctx) ? emoji + ' ' : '• ') + text;
+const step = (ctx, text) => (on(ctx) ? '👉 ' : '') + text;
+const MODALITY_EMOJI = { online: '💻', in_person: '📍', hybrid: '🏫' };
 // Datos de la edición en renglones; lo que no se sabe se omite o se dice claro, sin «Por confirmar» sueltos.
 export function facts(ctx, { price = true } = {}) {
   const e = ctx.edition,
     start = startText(e),
     legacy = ctx.dateLabel && !/por confirmar/i.test(ctx.dateLabel) ? ctx.dateLabel : null,
     lines = [];
-  lines.push('• Inicio: ' + (start || legacy || 'fecha por confirmar'));
-  if (e.instructor) lines.push('• Docente: ' + e.instructor);
-  if (MODALITY[e.modality]) lines.push('• Modalidad: ' + MODALITY[e.modality] + (e.location ? ' · ' + e.location : ''));
-  if (price) lines.push('• Precio: ' + priceText(ctx));
+  lines.push(li(ctx, '📅', 'Inicio', start || legacy || 'fecha por confirmar'));
+  if (e.instructor) lines.push(li(ctx, '🧑', 'Docente', e.instructor));
+  if (MODALITY[e.modality])
+    lines.push(
+      li(
+        ctx,
+        MODALITY_EMOJI[e.modality] || '📍',
+        'Modalidad',
+        MODALITY[e.modality] + (e.location ? ' · ' + e.location : ''),
+      ),
+    );
+  if (price) lines.push(li(ctx, '💳', 'Precio', priceText(ctx)));
   return lines;
 }
 const title = ctx => ctx.course.title + ' · ' + ctx.edition.name;
 export const LAB_NOTE = 'Chat de prueba: los precios y las fechas son de ejemplo.';
 
 // Ficha del curso que acompaña a la bienvenida.
-export const card = ctx => title(ctx) + '\n' + facts(ctx).join('\n') + '\n\n' + LAB_NOTE;
+export const card = ctx => b(ctx, title(ctx)) + '\n' + facts(ctx).join('\n') + '\n\n' + LAB_NOTE;
 export const welcome = (ctx, name) =>
   ctx.course.welcome.replaceAll('{{nombre}}', firstName(name) || 'qué tal').replaceAll('{{curso}}', ctx.course.title) +
   '\n\n' +
@@ -145,9 +166,16 @@ export const welcome = (ctx, name) =>
 
 // Cada respuesta tiene un CUERPO (el dato) y un CIERRE (el siguiente paso). Por separado sirven para contestar varias preguntas en un mensaje.
 const ENROLL_CTA = 'Si quieres apartar tu lugar, escribe «Quiero inscribirme» y te mando tu enlace de pago.';
+const enrollCta = ctx =>
+  step(
+    ctx,
+    'Si quieres apartar tu lugar, escribe ' + key(ctx, 'Quiero inscribirme') + ' y te mando tu enlace de pago.',
+  );
+const seatCta = ctx => step(ctx, '¿Quieres apartar tu lugar? Escribe ' + key(ctx, 'Quiero inscribirme') + '.');
 const PRICE_NOTE = '(Precio de ejemplo: este es un chat de prueba.)';
-export const priceBody = ctx => 'El precio de ' + title(ctx) + ' es de ' + priceText(ctx) + '.';
-export const price = ctx => priceBody(ctx) + '\n\n' + ENROLL_CTA + '\n' + PRICE_NOTE;
+export const priceBody = ctx =>
+  (on(ctx) ? '💳 ' : '') + 'El precio de ' + b(ctx, title(ctx)) + ' es de ' + priceText(ctx) + '.';
+export const price = ctx => priceBody(ctx) + '\n\n' + enrollCta(ctx) + '\n' + PRICE_NOTE;
 
 export function syllabusBody(ctx) {
   const items = String(ctx.course.syllabus || '')
@@ -155,34 +183,38 @@ export function syllabusBody(ctx) {
     .map(l => l.trim())
     .filter(Boolean)
     .map(l => (/^([•\-–*]|\d+[.)])\s/.test(l) ? l : '• ' + l));
-  return 'Esto es lo que verás en ' + ctx.course.title + ':\n\n' + items.join('\n');
+  return (on(ctx) ? '📚 ' : '') + 'Esto es lo que verás en ' + b(ctx, ctx.course.title) + ':\n\n' + items.join('\n');
 }
 export const syllabus = ctx => syllabusBody(ctx) + '\n\n¿Te cuento el precio o las fechas?';
 export function scheduleBody(ctx) {
   const lines = facts(ctx, { price: false });
-  if (!ctx.edition.instructor) lines.splice(1, 0, '• Docente: por confirmar');
-  return title(ctx) + '\n' + lines.join('\n');
+  if (!ctx.edition.instructor) lines.splice(1, 0, li(ctx, '🧑', 'Docente', 'por confirmar'));
+  return b(ctx, title(ctx)) + '\n' + lines.join('\n');
 }
 export const schedule = ctx =>
   scheduleBody(ctx) +
   '\n\n' +
   (startText(ctx.edition) !== null
-    ? '¿Quieres apartar tu lugar? Escribe «Quiero inscribirme».'
+    ? seatCta(ctx)
     : 'En cuanto se confirme la fecha te avisamos por aquí. Mientras tanto, ¿te cuento el precio o el temario?');
 
 // Varias preguntas en un mismo mensaje («¿qué temas incluye y tiene certificado?»): se contestan todas, en el orden en que se reconocen,
 // con un solo cierre. `parts` son cuerpos ya armados (del catálogo o respuestas aprobadas del conocimiento).
-export function several(parts, { price = false } = {}) {
+export function several(parts, { price = false, ctx = null } = {}) {
   return (
     parts.join('\n\n') +
     '\n\n' +
     (price
-      ? ENROLL_CTA + '\n' + PRICE_NOTE
-      : 'Si quieres apartar tu lugar, escribe «Quiero inscribirme». ¿Te ayudo con algo más?')
+      ? enrollCta(ctx) + '\n' + PRICE_NOTE
+      : step(
+          ctx,
+          'Si quieres apartar tu lugar, escribe ' + key(ctx, 'Quiero inscribirme') + '. ¿Te ayudo con algo más?',
+        ))
   );
 }
 
-export const enrollWithOrder = (ctx, name) => '¡Qué gusto' + hi(name) + '! Ya tengo listo tu pedido:\n\n{{pedido}}';
+export const enrollWithOrder = (ctx, name) =>
+  '¡Qué gusto' + hi(name) + '!' + (on(ctx) ? ' 🎉' : '') + ' Ya tengo listo tu pedido:\n\n{{pedido}}';
 export const orderReminder = () => 'Tu pedido sigue vigente. Aquí lo tienes de nuevo:\n\n';
 export const enrollWithAdvisor = (ctx, name) =>
   '¡Qué gusto' +
@@ -196,14 +228,19 @@ export const paymentMethods =
 export const paymentWithAdvisor =
   'Con gusto te paso las formas de pago: ya le avisé a un asesor para que te escriba por aquí.';
 
-export const thanks = name =>
-  '¡Con gusto' + hi(name) + '! Aquí sigo por si quieres ver el precio, las fechas o inscribirte.';
+export const thanks = (name, ctx = null) =>
+  '¡Con gusto' +
+  hi(name) +
+  '!' +
+  (on(ctx) ? ' 😊' : '') +
+  ' Aquí sigo por si quieres ver el precio, las fechas o inscribirte.';
 // Segundo «gracias» u «ok» seguido: no se repite el mismo texto.
 export const thanksAgain = '¡Perfecto! Cualquier cosa, aquí estoy.';
 
 // ---- Mensajes de trato (docs/PLAN_ASISTENTE_SIN_CALLEJONES.md): contestan «sí», «no», «espera», «¿sigues ahí?», «¿eres un bot?»… sin tratarlos
 // como una pregunta sin respuesta. Ninguno promete nada: no apartan lugares, no ofrecen descuentos y no dicen que ya viene una persona.
-export const affirm = ctx => '¡Perfecto! ¿Qué te cuento de ' + ctx.course.title + '?';
+export const affirm = ctx =>
+  '¡Perfecto!' + (on(ctx) ? ' 👍' : '') + ' ¿Qué te cuento de ' + b(ctx, ctx.course.title) + '?';
 export const decline = name =>
   'Sin problema' + hi(name) + '. Si más adelante quieres retomarlo, escríbeme por aquí y lo vemos con gusto.';
 export const later = name =>
@@ -211,10 +248,11 @@ export const later = name =>
 export const bye = name => '¡Hasta pronto' + hi(name) + '! Aquí estaré si necesitas algo más.';
 export const help = ctx =>
   'Aquí estoy para ayudarte. Puedo contarte el precio, el temario o las fechas de ' +
-  ctx.course.title +
+  b(ctx, ctx.course.title) +
   ', o ayudarte a inscribirte. ¿Qué necesitas saber?';
-export const menu = ctx => 'Esto es lo que te puedo contar de ' + ctx.course.title + ':';
+export const menu = ctx => 'Esto es lo que te puedo contar de ' + b(ctx, ctx.course.title) + ':';
 export const identity = ctx =>
+  (on(ctx) ? '🤖 ' : '') +
   'Soy el asistente automático de ' +
   ctx.brand.name +
   ': respondo al momento sobre el precio, el temario y las fechas, y te ayudo a inscribirte. Si prefieres que te atienda una persona del equipo, escribe «asesor».';
@@ -234,11 +272,12 @@ export function seats(ctx) {
       '. Si quieres que una persona te proponga otra fecha, escribe «asesor».'
     );
   return (
+    (on(ctx) ? '✅ ' : '') +
     'Todavía hay lugar en ' +
-    title(ctx) +
+    b(ctx, title(ctx)) +
     (n <= 10 ? ': ' + (n === 1 ? 'queda 1 lugar' : 'quedan ' + n + ' lugares') + ' al momento de responderte' : '') +
-    '. ' +
-    ENROLL_CTA
+    '.\n\n' +
+    enrollCta(ctx)
   );
 }
 export const courses = (ctx, titles) =>
@@ -246,12 +285,14 @@ export const courses = (ctx, titles) =>
     ? 'En ' +
       ctx.brand.name +
       ' también tenemos:\n' +
-      titles.map(t => '• ' + t).join('\n') +
+      titles.map(t => item(ctx, '🎓', t)).join('\n') +
       '\n\nEste chat es sobre ' +
-      ctx.course.title +
-      '. Si te interesa otro, escribe «asesor» y una persona te da los detalles.'
+      b(ctx, ctx.course.title) +
+      '. Si te interesa otro, escribe ' +
+      key(ctx, 'asesor') +
+      ' y una persona te da los detalles.'
     : 'Por ahora ' +
-      ctx.course.title +
+      b(ctx, ctx.course.title) +
       ' es el curso que tenemos abierto en ' +
       ctx.brand.name +
       '. ¿Te cuento el precio o las fechas?';
@@ -338,9 +379,13 @@ export function thinking(ctx, name, { seats = null } = {}) {
   return (
     '¡Claro' +
     hi(name) +
-    ', tómate tu tiempo! ' +
+    ', tómate tu tiempo!' +
+    (on(ctx) ? ' 🙂' : '') +
+    ' ' +
     (facts.length ? 'Sólo para que lo tengas en cuenta: ' + facts.join(', y ') + '. ' : '') +
-    'Si te queda alguna duda del precio, las fechas o el temario, dime y te la resuelvo por aquí. Cuando quieras seguir, escribe «Quiero inscribirme».'
+    'Si te queda alguna duda del precio, las fechas o el temario, dime y te la resuelvo por aquí. Cuando quieras seguir, escribe ' +
+    key(ctx, 'Quiero inscribirme') +
+    '.'
   );
 }
 
@@ -515,8 +560,10 @@ export const noPromotion = (ctx, { enrolled = false, coupons = false } = {}) =>
     ? ' Si tienes un cupón de descuento, puedes escribirlo en tu página de pago.'
     : ' Por ahora no hay una promoción vigente para esta apertura.') +
   '\n\n' +
-  (enrolled ? '' : ENROLL_CTA + ' ') +
-  'Si quieres que una persona del equipo revise tu caso, escribe «asesor».\n' +
+  (enrolled ? '' : enrollCta(ctx) + ' ') +
+  'Si quieres que una persona del equipo revise tu caso, escribe ' +
+  key(ctx, 'asesor') +
+  '.\n' +
   PRICE_NOTE;
 // Pide inscribirse con la oportunidad ganada sin inscripción viva, o con una inscripción dada de baja: lo ve una persona.
 export const enrollmentCheck = ctx =>
@@ -530,13 +577,13 @@ export const notArrived = name =>
 // «¿Hasta cuándo es la promoción?»: la vigencia de la promoción del catálogo, o que no hay.
 export const promoUntil = ctx =>
   ctx.promotion
-    ? priceBody(ctx) + '\n\n' + ENROLL_CTA + '\n' + PRICE_NOTE
+    ? priceBody(ctx) + '\n\n' + enrollCta(ctx) + '\n' + PRICE_NOTE
     : 'Por ahora no hay una promoción vigente para ' +
-      title(ctx) +
+      b(ctx, title(ctx)) +
       '. ' +
       priceBody(ctx) +
       '\n\n' +
-      ENROLL_CTA +
+      enrollCta(ctx) +
       '\n' +
       PRICE_NOTE;
 // «¿Cuál es el último día para pagar?»: la vigencia de su pedido, si lo hay.
@@ -549,8 +596,9 @@ export const payUntil = ({ reference = null, until = null } = {}) =>
     : 'Cuando escribas «Quiero inscribirme» te mando tu enlace de pago con su fecha de vencimiento.';
 // Ya está inscrita (o la oportunidad está ganada) y pide inscribirse: no se crea otro pedido.
 export const alreadyEnrolled = (ctx, { advisor = false } = {}) =>
+  (on(ctx) ? '✅ ' : '') +
   'Tu inscripción a ' +
-  title(ctx) +
+  b(ctx, title(ctx)) +
   ' ya está activa: no hace falta otro pedido.' +
   (advisor ? ' Si necesitas tus accesos o algo más, escribe «asesor» y una persona del equipo te ayuda.' : '');
 // El pedido no se pudo crear (p. ej. la oportunidad ya estaba cerrada): una persona lo ve.
@@ -624,9 +672,7 @@ export const waitingAck = (name, { reference = null, review = false } = {}) =>
 export const thanksEnrolled = name => '¡Con gusto' + hi(name) + '! Aquí estoy si necesitas algo más.';
 // Fechas que no son «¿cuándo empieza?».
 export const deadline = ctx =>
-  scheduleBody(ctx) +
-  '\n\n' +
-  'Por ahora las inscripciones están abiertas. ¿Quieres apartar tu lugar? Escribe «Quiero inscribirme».';
+  scheduleBody(ctx) + '\n\n' + 'Por ahora las inscripciones están abiertas. ' + seatCta(ctx);
 export const nextEdition = ctx =>
   scheduleBody(ctx) +
   '\n\nPor ahora ésta es la fecha que tengo abierta de ' +
@@ -653,20 +699,24 @@ export const timeObjection = (ctx, recording = '', sessions = 0) =>
 export function durationExtra(ctx, sessions = 0) {
   const e = ctx.edition,
     end = e.ends_at ? startText({ ...e, starts_at: e.ends_at }) : null;
-  return (end ? '\n• Termina: ' + end : '') + (sessions ? '\n• Sesiones: ' + sessions : '');
+  return (
+    (end ? '\n' + li(ctx, '🏁', 'Termina', end) : '') + (sessions ? '\n' + li(ctx, '🗓️', 'Sesiones', sessions) : '')
+  );
 }
 export const durationBody = (ctx, sessions = 0) =>
-  title(ctx) + '\n• Inicio: ' + (startText(ctx.edition) || 'fecha por confirmar') + durationExtra(ctx, sessions);
-export const duration = (ctx, sessions = 0) =>
-  durationBody(ctx, sessions) + '\n\n¿Quieres apartar tu lugar? Escribe «Quiero inscribirme».';
+  b(ctx, title(ctx)) +
+  '\n' +
+  li(ctx, '📅', 'Inicio', startText(ctx.edition) || 'fecha por confirmar') +
+  durationExtra(ctx, sessions);
+export const duration = (ctx, sessions = 0) => durationBody(ctx, sessions) + '\n\n' + seatCta(ctx);
 // Cupo cuando el catálogo sabe el tamaño del grupo pero no los lugares que quedan.
 export const seatsCapacity = ctx =>
   'Las inscripciones de ' +
-  title(ctx) +
+  b(ctx, title(ctx)) +
   ' están abiertas y el grupo es de ' +
   ctx.edition.capacity +
-  ' lugares, así que el cupo es limitado. ' +
-  ENROLL_CTA;
+  ' lugares, así que el cupo es limitado.\n\n' +
+  enrollCta(ctx);
 // Recomendar cursos de la marca con lo que la persona dice (especie o tema), con inicio y precio vigentes.
 // `remembered`: no lo dijo ahora, lo contó antes en esta conversación («tengo un rancho con vacas») y se le recuerda.
 export function recommend(ctx, items, { multi = false, remembered = false } = {}) {
@@ -676,13 +726,19 @@ export function recommend(ctx, items, { multi = false, remembered = false } = {}
       : 'Por lo que me cuentas, te pueden servir estos cursos de ') +
     ctx.brand.name +
     ':\n\n' +
-    items.map(i => '• ' + i.title + ' — inicia ' + (i.start || 'en fecha por confirmar') + ' · ' + i.price).join('\n') +
+    items
+      .map(i =>
+        item(ctx, '🎓', b(ctx, i.title) + ' — inicia ' + (i.start || 'en fecha por confirmar') + ' · ' + i.price),
+      )
+      .join('\n') +
     '\n\n' +
     (multi
       ? 'Responde con el nombre del que te interesa y te paso su información.'
       : 'Este chat es sobre ' +
-        ctx.course.title +
-        '. Si te interesa otro, escribe «asesor» y una persona te da los detalles.') +
+        b(ctx, ctx.course.title) +
+        '. Si te interesa otro, escribe ' +
+        key(ctx, 'asesor') +
+        ' y una persona te da los detalles.') +
     '\n' +
     PRICE_NOTE
   );
@@ -694,9 +750,9 @@ export const noTopicMatch = (ctx, titles) =>
   '. ' +
   (titles.length
     ? 'Estos son los que sí tenemos, además de ' +
-      ctx.course.title +
+      b(ctx, ctx.course.title) +
       ':\n' +
-      titles.map(t => '• ' + t).join('\n') +
+      titles.map(t => item(ctx, '🎓', t)).join('\n') +
       '\n\nSi te interesa alguno, escribe «asesor» y una persona te da los detalles.'
     : 'Por ahora ' + ctx.course.title + ' es el curso que tenemos abierto. ¿Te cuento el precio o las fechas?');
 export const askTopic = ctx =>

@@ -192,7 +192,7 @@ test('reglas de intención: cada frase del banco va a la ruta correcta y las res
   const pd = await sim('¿Cuánto cuesta y cuándo empieza?');
   assert.equal(pd.intent, 'price');
   assert.match(pd.reply, /El precio de .+ es de \$/);
-  assert.match(pd.reply, /• Inicio: /);
+  assert.match(pd.reply, /(• |📅 )Inicio: /);
   assert.match(pd.reply, /precio de ejemplo/i);
   assert.equal(pd.stage, 'interesado');
   const three = await sim('¿Se graba la clase? ¿Y entregan certificado? ¿Cuánto dura?');

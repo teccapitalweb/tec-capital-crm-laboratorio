@@ -55,7 +55,7 @@ test('simulador: «Venta de curso» con dos cursos distintos da la ficha y el ma
   );
   const card = aves.transcript.find(e => e.nodeId === 'f');
   assert.equal(card.flyer, true);
-  assert.match(card.text, /Medicina de aves de compañía · Enero 2027\n• Inicio: martes, 12 de enero/);
+  assert.match(card.text, /Medicina de aves de compañía · Enero 2027\*?\n(• |📅 )Inicio: martes, 12 de enero/);
   assert.match(
     card.text,
     /Precio: \$1,200\.00 MXN con la promoción «Inscripción anticipada», vigente hasta el 20 de diciembre/,

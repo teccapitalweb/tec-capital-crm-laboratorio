@@ -348,7 +348,7 @@ test('un número para toda la marca: pregunta el curso, lo reconoce por anuncio 
   assert.equal(a3.conv.course_pending, 0);
   assert.match(a3.log.reason, /^Eligió el curso «/);
   assert.ok(a3.text.includes(otro.title));
-  assert.match(a3.text, /• Inicio: /);
+  assert.match(a3.text, /(• |📅 )Inicio: /);
   assert.deepEqual(interests(a3.conv.id), [otro.id]);
   const a4 = await say('5215511110001', '¿cuánto cuesta?');
   assert.equal(a4.log.intent, 'price');
@@ -376,7 +376,7 @@ test('un número para toda la marca: pregunta el curso, lo reconoce por anuncio 
   assert.match(a7.text, /Ahora estamos viendo Plan sanitario para aves/);
   const a8 = await say('5215511110001', String(pos(otro)));
   assert.equal(a8.conv.course_id, otro.id);
-  assert.match(a8.text, /• Inicio: /);
+  assert.match(a8.text, /(• |📅 )Inicio: /);
   // un número fuera de contexto no cambia nada
   await say('5215511110001', 'temario');
   const a9 = await say('5215511110001', String(pos(aves)));
@@ -487,7 +487,7 @@ test('un número para toda la marca: pregunta el curso, lo reconoce por anuncio 
   const g = await say('5215511110007', 'Hola, me interesa el curso de aves');
   assert.equal(g.conv.course_id, 'aves');
   assert.equal(g.conv.course_pending, 0);
-  assert.match(g.text, /• Inicio: /);
+  assert.match(g.text, /(• |📅 )Inicio: /);
   // un interés anterior y real en el curso de relleno no se toca: la persona del paso 0 (su chat de aves, ya cerrado) vuelve, queda por elegir y elige otro curso
   const earlier = classic.conv.id;
   db.prepare("UPDATE conversations SET status='resolved' WHERE id=?").run(earlier);
@@ -571,7 +571,7 @@ test('un número para toda la marca: pregunta el curso, lo reconoce por anuncio 
   const w1 = await say('5215511110011', 'Hola, quiero el curso de aves');
   assert.equal(w1.conv.course_id, 'aves');
   assert.equal(w1.log.intent, 'greeting');
-  assert.match(w1.text, /• Inicio: /);
+  assert.match(w1.text, /(• |📅 )Inicio: /);
   assert.doesNotMatch(w1.text, /Pedido TC-/);
   const w2 = await say('5215511110012', 'Hola, quiero inscribirme al curso de aves');
   assert.equal(w2.conv.course_id, 'aves');

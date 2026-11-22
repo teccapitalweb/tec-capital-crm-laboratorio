@@ -31,6 +31,8 @@ test('un mensaje del cliente llega en vivo al equipo y la respuesta vuelve al cl
   await customer.locator('#message-input').fill(question);
   await customer.locator('#send-button').click();
   await expect(customer.locator('#history')).toContainText(question);
+  // La ficha de bienvenida del asistente llega con el nombre del curso en negritas, como en WhatsApp.
+  await expect(customer.locator('#history .bubble strong').first()).toBeVisible();
 
   // El hilo aparece en la bandeja del equipo, se abre y se contesta.
   const thread = team.locator('.thread', { hasText: `Cliente ${tag}` });

@@ -8,6 +8,11 @@
       /[&<>"']/g,
       c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
     );
+  // Negritas como en WhatsApp (*así*): el asistente las usa en el nombre del curso y en lo que hay que escribir, y el
+  // chat del laboratorio las pinta igual que el teléfono. Se aplica sobre el texto ya escapado; sólo pares en una línea.
+  const rich = v => esc(v).replace(/(^|[\s(«])\*([^*\n]+?)\*(?=$|[\s.,;:!?)»])/gm, '$1<strong>$2</strong>');
+  // El mismo texto sin las marcas, para la vista previa de la lista de conversaciones.
+  const unbold = v => String(v ?? '').replace(/(^|[\s(«])\*([^*\n]+?)\*(?=$|[\s.,;:!?)»])/gm, '$1$2');
   const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
   // La marca del CRM del equipo: la gota de Tinta (nombre y logo provisionales del producto). La experiencia del
   // cliente conserva la suya.
@@ -552,7 +557,7 @@
       ? list
           .map(
             c =>
-              `<button class="thread ${c.id === state.selected ? 'active' : ''}" data-conversation="${c.id}" data-channel="${c.channel}" aria-pressed="${c.id === state.selected}">${avatar(agentMode() ? c.customer_name : c.brand_name, c.channel)}<div class="thread-copy"><div class="thread-name"><strong>${esc(agentMode() ? c.customer_name : c.brand_name)}</strong><time>${time(c.updated_at)}</time></div><div class="thread-brand">${esc(agentMode() ? c.brand_name + ' · ' + (c.wa_display || (c.wa_peer ? '+' + c.wa_peer : '#' + c.test_number)) : c.course_title)}</div>${agentMode() ? tagsUI.chips(c) : ''}<p class="thread-preview">${esc(c.match_text || c.last_text || 'Conversación lista para empezar')}</p><div class="thread-meta"><span>${c.match_text ? 'Coincide en mensaje · ' : ''}${channels[c.channel].name}${c.customer_online && agentMode() ? ' · En línea' : ''}</span>${agentMode() && lcListed.has(c.state) ? lcChip(c) : ''}${unread(c) ? `<span class="unread">${unread(c)}</span>` : threadState(c)}</div></div></button>`,
+              `<button class="thread ${c.id === state.selected ? 'active' : ''}" data-conversation="${c.id}" data-channel="${c.channel}" aria-pressed="${c.id === state.selected}">${avatar(agentMode() ? c.customer_name : c.brand_name, c.channel)}<div class="thread-copy"><div class="thread-name"><strong>${esc(agentMode() ? c.customer_name : c.brand_name)}</strong><time>${time(c.updated_at)}</time></div><div class="thread-brand">${esc(agentMode() ? c.brand_name + ' · ' + (c.wa_display || (c.wa_peer ? '+' + c.wa_peer : '#' + c.test_number)) : c.course_title)}</div>${agentMode() ? tagsUI.chips(c) : ''}<p class="thread-preview">${esc(unbold(c.match_text || c.last_text || 'Conversación lista para empezar'))}</p><div class="thread-meta"><span>${c.match_text ? 'Coincide en mensaje · ' : ''}${channels[c.channel].name}${c.customer_online && agentMode() ? ' · En línea' : ''}</span>${agentMode() && lcListed.has(c.state) ? lcChip(c) : ''}${unread(c) ? `<span class="unread">${unread(c)}</span>` : threadState(c)}</div></div></button>`,
           )
           .join('')
       : `<div class="empty-list">${state.query ? 'No encontramos conversaciones con esa búsqueda.' : agentMode() ? 'Las conversaciones aparecerán aquí cuando los participantes escriban.' : 'Explora un curso para empezar tu primera conversación.'}</div>`;
@@ -750,7 +755,7 @@
           else
             attachment = `<a class="file-link" href="${esc(m.attachmentUrl)}" target="_blank" rel="noopener">${icon('file-text')}<span>${esc(m.filename)}</span>${icon('download')}</a>`;
         }
-        return `<article class="message ${outgoing ? 'outgoing' : ''}" data-sender="${esc(m.sender_kind)}"><div class="bubble">${attachment}${esc(m.text)}${renderButtons(m, outgoing)}${payLink(m, outgoing)}${surveyLink(m, outgoing)}</div><div class="message-meta">${m.sender_kind === 'automation' ? icon(m.ai_drafted ? 'sparkles' : 'workflow') : ''}<span>${esc(name)} · ${time(m.created_at)}</span>${outgoing ? deliveryMark(m, c) : ''}${agentMode() && String(m.client_ref || '').startsWith('campaign:') ? `<span class="msg-tag">${esc('Difusión')}</span>` : ''}${m.receipt_status ? `<span class="msg-tag">${{ pending: 'Comprobante en revisión', accepted: 'Comprobante aceptado', rejected: 'Comprobante rechazado' }[m.receipt_status]}</span>` : ''}</div></article>`;
+        return `<article class="message ${outgoing ? 'outgoing' : ''}" data-sender="${esc(m.sender_kind)}"><div class="bubble">${attachment}${rich(m.text)}${renderButtons(m, outgoing)}${payLink(m, outgoing)}${surveyLink(m, outgoing)}</div><div class="message-meta">${m.sender_kind === 'automation' ? icon(m.ai_drafted ? 'sparkles' : 'workflow') : ''}<span>${esc(name)} · ${time(m.created_at)}</span>${outgoing ? deliveryMark(m, c) : ''}${agentMode() && String(m.client_ref || '').startsWith('campaign:') ? `<span class="msg-tag">${esc('Difusión')}</span>` : ''}${m.receipt_status ? `<span class="msg-tag">${{ pending: 'Comprobante en revisión', accepted: 'Comprobante aceptado', rejected: 'Comprobante rechazado' }[m.receipt_status]}</span>` : ''}</div></article>`;
       })
       .join(
         '',

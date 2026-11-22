@@ -99,9 +99,11 @@ npm start
 
 `npm run check` comprueba codificación (UTF-8, LF), sintaxis y formato (Prettier); antes de entregar, `npx prettier --write` sobre lo que tocaste.
 
-La referencia vigente es **816 pruebas aprobadas** más 95 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
+La referencia vigente es **817 pruebas aprobadas** más 95 de navegador con `npm run test:ui` (la de v0.5 fue 57; el número al día está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)), más la revisión visual en computadora y celular de cada bloque. Es evidencia del commit, no garantía de cambios posteriores: tras un cambio hay que volver a comprobarlo.
 
 ## Lo siguiente
+
+**22 nov 2026 (asistente: estilo de los mensajes):** **integrado en local, pendiente de publicar** (migración con nombre `replies/0002-message-style`; [PLAN_MENSAJES_AMABLES.md](docs/PLAN_MENSAJES_AMABLES.md), «Estilo»). Todos los textos fijos del asistente siguen un mismo orden: datos en renglones con emoji y etiqueta (📅 💻 💳…), negritas de WhatsApp en el nombre del curso y en lo que hay que escribir, y un solo siguiente paso con 👉; ningún emoji en los mensajes serios. Interruptor por marca «Mensajes con emojis» en Operación → Seguimientos (encendido por omisión; apagado, viñetas y texto plano). El chat del laboratorio pinta las negritas como el teléfono.
 
 **22 nov 2026 (conector: aprendizaje semanal desde las preguntas sin respuesta):** **publicado** en `main` (commit `b190df6`; sin esquema nuevo; falta usarlo con la app real de Claude en producción; [PLAN_MCP_CLAUDE.md](docs/PLAN_MCP_CLAUDE.md), «Aprendizaje semanal»). Herramienta `preguntas_sin_respuesta` (permisos `knowledge` y `conversations`, sólo lee): los grupos de preguntas que el asistente no supo contestar, con la misma agrupación de la pantalla, los ejemplos sin correos ni teléfonos (`server/lib/redact.mjs`) y «yaCubierta» para no proponer dos veces; las instrucciones del conector describen la rutina (un borrador por grupo, respuesta sólo con el catálogo o el conocimiento aprobado, o «Por completar por el equipo»); el texto para pedirla cada semana está en [GUIA_CONTEXTO_CONSULTORA.md](docs/GUIA_CONTEXTO_CONSULTORA.md). Aprobar sigue siendo de una persona.
 
