@@ -369,7 +369,7 @@ Para quitarlo: `claude mcp remove crm-globalvet -s user`, y revoca la llave en e
 
 Una llave por marca: para otra consultora, crea otra llave y agrégala con otro nombre (`crm-odonteck`).
 
-## Aprendizaje semanal desde las preguntas sin respuesta (22 nov 2026)
+## Aprendizaje semanal desde las preguntas sin respuesta (publicado en `main`, 22 nov 2026)
 
 Tercera pieza del plan de contexto ([PLAN_RESPUESTAS_DE_VENTA.md](PLAN_RESPUESTAS_DE_VENTA.md)). La pantalla Catálogo → Conocimiento ya mostraba las **preguntas que el asistente no supo contestar**, agrupadas por parecido ([PLAN_MEMORIA_CONTEXTO.md](PLAN_MEMORIA_CONTEXTO.md), §3). Ahora el conector las lee para que un asistente haga la revisión cada semana y deje borradores que una persona aprueba.
 
