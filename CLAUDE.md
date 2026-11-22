@@ -103,7 +103,7 @@ La referencia vigente es **817 pruebas aprobadas** más 95 de navegador con `npm
 
 ## Lo siguiente
 
-**22 nov 2026 (asistente: emojis en los mensajes que faltaban):** **integrado en local, pendiente de publicar** (sin esquema nuevo; [PLAN_MENSAJES_AMABLES.md](docs/PLAN_MENSAJES_AMABLES.md), «Estilo»). Tras la prueba del dueño en WhatsApp real: la lista de cursos, elegir curso, «sin prisa», «lo pienso», «pago después», formas de pago, último día para pagar, datos para la constancia, accesos, despedida e inscripción con asesor llevan su emoji y su siguiente paso con 👉, con el interruptor por marca; los mensajes serios siguen sin emoji.
+**22 nov 2026 (asistente: emojis en los mensajes que faltaban):** **publicado** en `main` (commit `b027df6`; sin esquema nuevo; falta probarlo en WhatsApp real; [PLAN_MENSAJES_AMABLES.md](docs/PLAN_MENSAJES_AMABLES.md), «Estilo»). Tras la prueba del dueño en WhatsApp real: la lista de cursos, elegir curso, «sin prisa», «lo pienso», «pago después», formas de pago, último día para pagar, datos para la constancia, accesos, despedida e inscripción con asesor llevan su emoji y su siguiente paso con 👉, con el interruptor por marca; los mensajes serios siguen sin emoji.
 
 **22 nov 2026 (asistente: cada parte en su párrafo):** **publicado** en `main` (commit `cf71623`; sin esquema nuevo; falta probarlo en WhatsApp real; [PLAN_MENSAJES_AMABLES.md](docs/PLAN_MENSAJES_AMABLES.md), «Estilo»). El dueño pidió más aire: saludo, datos, siguiente paso y nota van separados por un renglón en blanco en todos los textos fijos (bienvenida, precio, promoción, objeciones, «lo pienso», sin respuesta, listas de cursos, pedido con enlace, identidad y ayuda); lo que dicen y los emojis no cambian.
 
