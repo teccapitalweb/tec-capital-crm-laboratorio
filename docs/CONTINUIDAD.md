@@ -34,11 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Motor: objeciones con argumentos reales (integrado en local, pendiente de publicar, 22 nov 2026)
+## Motor: objeciones con argumentos reales (publicado en `main`, 22 nov 2026)
 
 - **Por qué:** segunda pieza del plan de contexto aceptado por el dueño. «Está caro», «lo pienso» y «no tengo tiempo» recibían un texto fijo que no decía nada del curso.
 - **Qué se hizo (sin esquema nuevo, sin IA):** `copy.objection` añade lo que incluye el precio según el catálogo (sesiones, modalidad, fechas) y la respuesta aprobada de pago en partes si la marca la tiene (`installments` en `server/lib/sales-replies.mjs`, como fuente de conocimiento), tal cual; `copy.thinking` (para `later` cuando `THINKING` reconoce que quiere pensarlo, no «espera un momento») recuerda sólo lo cierto hoy: promoción vigente y hasta cuándo, lugares si son 10 o menos, o el inicio con las inscripciones abiertas; `copy.timeObjection` añade el calendario real (inicio, fin y sesiones). Nunca otro precio, descuento ni plazo que el CRM no conozca. Detalle en [PLAN_RESPUESTAS_DE_VENTA.md](PLAN_RESPUESTAS_DE_VENTA.md).
 - **Verificado:** `test/sales-replies.test.mjs` con las frases exactas y sus vecinos (sin respuesta de partes no se inventa; con promoción se dice su fecha real; «espera» sigue igual); `npm run check`, la suite del servidor y las de navegador; las sondas sólo cambian en esas tres respuestas.
+- **Publicado:** commit `d5dfb2e`, con `npm run check` limpio, 815 pruebas de servidor y 95 de navegador. Falta probarlo en WhatsApp real.
 - **Siguen:** aprendizaje semanal desde las preguntas sin respuesta y medir con IA real.
 
 ## Motor: memoria de la conversación (publicado en `main`, 21 nov 2026)
