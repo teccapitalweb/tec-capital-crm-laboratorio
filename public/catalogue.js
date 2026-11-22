@@ -678,7 +678,7 @@ window.createCatalogueUI = function ({ state, api, esc, icon, icons, showModal, 
   }
   async function submit(form, input) {
     if (form.getAttribute('id') === 'cat-wiz-form') return wizardUI.submit(form, input);
-    if (form.getAttribute('id') === 'kn-form') return knowledgeUI.submit(form, input);
+    if (['kn-form', 'kn-bulk-form'].includes(form.getAttribute('id'))) return knowledgeUI.submit(form, input);
     if (form.getAttribute('id') === 'ev-form') return evaluationUI.submit(form, input);
     if (form.getAttribute('id')?.startsWith('ct-')) return contentUI.submit(form, input);
     if (!form.getAttribute('id').startsWith('cat-')) return false;

@@ -27,12 +27,77 @@ window.createKnowledgeUI = function ({ state, api, esc, icon, showModal, toast, 
         (!q || norm(e.question + ' ' + e.answer + ' ' + e.variants.join(' ') + ' ' + e.topic).includes(q)),
     );
   }
+  const courseName = e =>
+    e.course_id ? esc(state.courses.find(c => c.id === e.course_id)?.title || 'Curso') : 'Todos los cursos de la marca';
+  // Aprobar varios borradores de una vez: sólo administración, y sólo los que la lista muestra en ese momento (con su
+  // búsqueda y su marca). Con uno solo basta el botón de su tarjeta.
+  function bulkBar(rows) {
+    const drafts = admin() ? rows.filter(e => e.status === 'draft') : [];
+    if (drafts.length < 2) return '';
+    return `<section class="kn-bulk"><div><strong>${drafts.length} borradores por aprobar</strong><small>Revísalos juntos y aprueba los que elijas con una sola confirmación.</small></div><button type="button" class="btn primary" data-action="kn-bulk" data-ids="${esc(drafts.map(e => e.id).join(','))}">Revisar y aprobar varios</button></section>`;
+  }
+  function bulkModal(entries, ids) {
+    const want = new Set(ids),
+      rows = (entries || []).filter(e => want.has(e.id) && e.status === 'draft');
+    showModal(
+      'Aprobar varios borradores',
+      `<form id="kn-bulk-form" class="form-grid"><p class="crm-hint">Lee cada respuesta: las que apruebes las usará el asistente con los clientes desde ese momento. Desmarca las que prefieras dejar en borrador.</p><div class="actions"><button type="button" class="btn" data-action="kn-bulk-all">Marcar todas</button><button type="button" class="btn" data-action="kn-bulk-none">Desmarcar todas</button></div><div class="kn-bulk-list">${rows
+        .map(
+          e =>
+            `<label class="kn-bulk-item"><input type="checkbox" name="ids" value="${esc(e.id)}" data-revision="${e.revision}" checked><span class="kn-bulk-text"><strong>${esc(e.question)}</strong><small>${esc(brandName(e.brand_id))} · ${courseName(e)} · ${esc(TOPICS[e.topic] || e.topic)}${e.created_by === null ? ' · Borrador de la IA' : ''}</small><span class="kn-bulk-answer">${esc(e.answer)}</span></span></label>`,
+        )
+        .join(
+          '',
+        )}</div><div class="actions"><button class="btn primary" type="submit">Aprobar las seleccionadas</button></div><div class="ops-feedback" role="status"></div></form>`,
+    );
+  }
+  // Una llamada por respuesta, en orden, con la revisión que la persona vio: la que cambió mientras tanto no se aprueba
+  // y se dice cuál fue. Las aprobadas salen de la lista; si alguna falla, la ventana se queda abierta con el motivo.
+  async function bulkSubmit(form) {
+    const picked = [...form.querySelectorAll('input[name="ids"]:checked')],
+      feedback = form.querySelector('.ops-feedback'),
+      button = form.querySelector('button[type="submit"]');
+    if (!picked.length) {
+      feedback.textContent = 'Marca al menos una respuesta.';
+      return true;
+    }
+    button.disabled = true;
+    let done = 0;
+    const failed = [];
+    for (const box of picked) {
+      const item = box.closest('.kn-bulk-item');
+      try {
+        await api('/api/replies/knowledge/' + box.value + '/approve', {
+          method: 'POST',
+          body: { expectedRevision: Number(box.dataset.revision) },
+        });
+        done++;
+        item.remove();
+      } catch (e) {
+        failed.push(`«${item.querySelector('strong').textContent}»: ${e.message}`);
+        box.checked = false;
+        box.disabled = true;
+      }
+      feedback.textContent = `Aprobando… ${done + failed.length} de ${picked.length}`;
+    }
+    const approved = done === 1 ? 'Se aprobó 1 respuesta' : `Se aprobaron ${done} respuestas`;
+    if (failed.length) {
+      feedback.textContent = `${approved}. No se ${failed.length === 1 ? 'pudo aprobar 1' : 'pudieron aprobar ' + failed.length}: ${failed.join(' · ')}`;
+      button.disabled = false;
+      toast(`${approved}; ${failed.length} ${failed.length === 1 ? 'quedó' : 'quedaron'} en borrador.`);
+    } else {
+      $('#modal').close();
+      toast(`${approved}: el asistente ya ${done === 1 ? 'la' : 'las'} usa para responder.`);
+    }
+    await reload();
+    return true;
+  }
   function render(rows) {
     if (!rows.length) return '';
-    return `<div class="cat-template-grid">${rows
+    return `${bulkBar(rows)}<div class="cat-template-grid">${rows
       .map(
         e =>
-          `<article class="cat-template kn-card"><div class="cat-card-heading"><span>${icon('message-circle-question')} ${esc(TOPICS[e.topic] || e.topic)}</span>${e.status === 'approved' ? '<span class="cat-badge ok">Aprobada</span>' : e.status === 'draft' ? (e.created_by === null ? '<span class="cat-badge kn-ai">Borrador de la IA</span>' : '<span class="cat-badge">Borrador</span>') : '<span class="cat-badge">Archivada</span>'}</div><h2>${esc(e.question)}</h2><small>${esc(brandName(e.brand_id))} · ${e.course_id ? esc(state.courses.find(c => c.id === e.course_id)?.title || 'Curso') : 'Todos los cursos de la marca'} · v${e.revision}</small><p class="kn-answer">${esc(e.answer)}</p>${e.status === 'draft' && e.created_by === null ? '<p class="crm-hint kn-ai-hint">La IA redactó esta respuesta para un cliente. Revísala, comprueba que no mencione a ninguna persona, corrígela si hace falta y apruébala: desde entonces esta pregunta se contesta sola, sin gastar llamadas. Si no sirve, archívala.</p>' : ''}${
+          `<article class="cat-template kn-card"><div class="cat-card-heading"><span>${icon('message-circle-question')} ${esc(TOPICS[e.topic] || e.topic)}</span>${e.status === 'approved' ? '<span class="cat-badge ok">Aprobada</span>' : e.status === 'draft' ? (e.created_by === null ? '<span class="cat-badge kn-ai">Borrador de la IA</span>' : '<span class="cat-badge">Borrador</span>') : '<span class="cat-badge">Archivada</span>'}</div><h2>${esc(e.question)}</h2><small>${esc(brandName(e.brand_id))} · ${courseName(e)} · v${e.revision}</small><p class="kn-answer">${esc(e.answer)}</p>${e.status === 'draft' && e.created_by === null ? '<p class="crm-hint kn-ai-hint">La IA redactó esta respuesta para un cliente. Revísala, comprueba que no mencione a ninguna persona, corrígela si hace falta y apruébala: desde entonces esta pregunta se contesta sola, sin gastar llamadas. Si no sirve, archívala.</p>' : ''}${
             e.variants.length
               ? `<p class="kn-variants">${e.variants
                   .slice(0, 6)
@@ -97,6 +162,15 @@ window.createKnowledgeUI = function ({ state, api, esc, icon, showModal, toast, 
         editor(null);
         return true;
       }
+      if (name === 'kn-bulk') {
+        bulkModal(entries, String(el.dataset.ids || '').split(','));
+        return true;
+      }
+      if (name === 'kn-bulk-all' || name === 'kn-bulk-none') {
+        for (const box of el.closest('form').querySelectorAll('input[name="ids"]:not(:disabled)'))
+          box.checked = name === 'kn-bulk-all';
+        return true;
+      }
       if (name === 'kn-edit') {
         editor(entries.find(x => x.id === el.dataset.id));
         return true;
@@ -130,6 +204,7 @@ window.createKnowledgeUI = function ({ state, api, esc, icon, showModal, toast, 
     return false;
   }
   async function submit(form, input) {
+    if (form.getAttribute('id') === 'kn-bulk-form') return bulkSubmit(form);
     try {
       const body = {
         topic: input.topic,

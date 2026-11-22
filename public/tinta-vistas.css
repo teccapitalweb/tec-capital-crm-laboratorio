@@ -1625,6 +1625,28 @@
 .workspace:not(.customer-skin) .catalogue-page .kn-gap .btn {
   background: var(--surface);
 }
+/* Conocimiento: «borradores por aprobar» es algo pendiente (mantequilla); en la ventana, cada respuesta en su pieza gris */
+.workspace:not(.customer-skin) .catalogue-page .kn-bulk {
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--butter);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .catalogue-page .kn-bulk :is(strong, small) {
+  color: var(--ink);
+}
+#modal:not(.pay-page) .kn-bulk-item {
+  border: 0;
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
+}
+#modal:not(.pay-page) .kn-bulk-item :is(strong, small, .kn-bulk-answer) {
+  color: var(--ink);
+}
+#modal:not(.pay-page) .kn-bulk-item input {
+  accent-color: var(--ink);
+}
 .workspace:not(.customer-skin) .catalogue-page .kn-variants .ctc-tag {
   border: 0;
   background: var(--soft);

@@ -1008,3 +1008,86 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+/* Conocimiento: aprobar varios borradores de una vez (franja sobre la lista y ventana con casillas) */
+.kn-bulk {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.kn-bulk div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.kn-bulk strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.kn-bulk small {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.kn-bulk .btn {
+  flex: none;
+  min-height: 40px;
+}
+.kn-bulk-list {
+  display: grid;
+  /* cada fila mide lo que su respuesta: con la altura tope de la lista, una fila «auto» se encogería hasta cortar el texto */
+  grid-auto-rows: max-content;
+  gap: 8px;
+  /* la lista se desplaza por dentro y deja a la vista el botón de aprobar, también en celular */
+  max-height: min(38vh, 480px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.kn-bulk-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-height: 40px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.kn-bulk-item input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+}
+.kn-bulk-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.kn-bulk-text strong {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.kn-bulk-text small {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.kn-bulk-answer {
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 560px) {
+  .kn-bulk {
+    flex-wrap: wrap;
+  }
+  .kn-bulk .btn {
+    width: 100%;
+  }
+}
