@@ -34,12 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Reportes: resumen de la semana (integrado en local, pendiente de publicar, 23 nov 2026)
+## Reportes: resumen de la semana (publicado en `main`, 23 nov 2026)
 
 - **Por qué:** el CRM ya tenía analítica (embudo, conversión, canales, tiempos, equipo) pero no había forma de llevarse o presentar un resumen. El dueño presenta el avance a las consultoras.
 - **Qué se hizo (sin esquema nuevo):** `weeklySummary(ids, tz)` en `server/analytics.mjs` calcula las cifras de los últimos 7 días contra los 7 anteriores (conversaciones, interesado, inscripción, inscripciones, el asistente respondió solo, respuesta mediana) con las mismas definiciones y alcance por marca; va en la respuesta de `/api/analytics` como `weekly` (sin ruta nueva). En `public/analytics.js`, una tarjeta arriba del panel (`weekCard`/`weekRows`/`weekText`) con ↑/↓ y botones Copiar/Descargar (.txt); estilos en `public/analytics.css`. No añade dinero ($) para no dar por confirmada una venta de práctica. Detalle en [PLAN_REPORTE_SEMANAL.md](PLAN_REPORTE_SEMANAL.md).
 - **Verificado:** `test/analytics.test.mjs` («resumen de la semana, 7 días contra los 7 anteriores»: 2 vs 1 conversaciones, 80 % vs 50 % del asistente, mediana, ventana de 7 días); `npm run check`, `node --check` del JS de navegador y la suite de servidor. La tarjeta en vivo no se vio con sesión (la base de pruebas no tiene actividad reciente); se verá en producción tras publicar.
-- **Pendiente:** publicar (con «Sí, publicar»).
+- **Publicado:** commit `1c47ed5`; comprobado sin sesión (`/crm` 200, `/api/analytics` 401, el `analytics.js` de producción trae la tarjeta). Sin esquema nuevo.
 
 ## Asistente: flyer del curso al informar (publicado en `main`, 22 nov 2026)
 
