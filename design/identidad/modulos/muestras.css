@@ -1,0 +1,270 @@
+html,
+body {
+  height: 100%;
+}
+body.identidad-tinta {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#app {
+  flex: 1;
+  min-height: 0;
+}
+#app .workspace {
+  height: 100%;
+  min-height: 0;
+}
+.lector {
+  flex: none;
+  background: #faf9f3;
+  color: var(--ink);
+  border-bottom: 1px solid #a0a4aa;
+  padding: 4px clamp(12px, 2vw, 30px);
+  font:
+    700 13px/1.4 Manrope,
+    Arial,
+    sans-serif;
+}
+.lector .barra-lector,
+.lector nav,
+.lector label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lector .barra-lector {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+.lector a,
+.lector summary,
+.lector label {
+  min-height: 40px;
+  min-width: 40px;
+  align-content: center;
+}
+.lector a {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink);
+  text-underline-offset: 4px;
+}
+.lector a[aria-current] {
+  font-weight: 800;
+  text-decoration-thickness: 3px;
+}
+.lector details {
+  display: block;
+}
+.lector summary {
+  cursor: pointer;
+}
+.lector p {
+  margin: 0 0 10px;
+  max-width: 90ch;
+  font-weight: 500;
+}
+.lector input {
+  height: 18px;
+  width: 18px;
+  accent-color: var(--ink);
+}
+.cv-page .k-head {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  padding: clamp(20px, 2.4vw, 34px);
+  background: var(--surface);
+  margin-bottom: var(--gap-page);
+}
+.cv-page .k-head > div {
+  z-index: 1;
+  max-width: 74%;
+}
+.cv-page .k-head::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 25%;
+  background: url('../ilustraciones/muescas.svg') center/cover no-repeat;
+  pointer-events: none;
+}
+.cv-page .k-head .k-lead {
+  max-width: 65ch;
+}
+.cv-card h2 {
+  padding-bottom: 10px;
+  border-bottom: 4px solid var(--area-settings);
+}
+.cv-page .cv-days {
+  background: var(--soft);
+}
+.cv-page .cv-days input {
+  border: 2px solid var(--control-line);
+}
+.cv-page input[type='checkbox'] {
+  appearance: none;
+  border: 2px solid var(--control-line);
+  border-radius: 4px;
+  background: white;
+  position: relative;
+}
+.cv-page input[type='checkbox']:checked {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+.cv-page input[type='checkbox']:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.cv-page .cv-row:has(input:checked) {
+  background: var(--lime);
+}
+.cv-page .cv-row:has(input:checked) span,
+.cv-page .cv-row:has(input:checked) small {
+  color: var(--ink);
+}
+.cv-page input:focus-visible,
+.cv-page button:focus-visible,
+.lector :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.equilibrado .cv-page .k-head {
+  background: var(--area-settings);
+}
+.equilibrado .cv-card h2 {
+  margin: -6px -6px 6px;
+  border: 0;
+  border-radius: var(--radius-item);
+  padding: 12px 14px;
+  background: var(--area-settings);
+}
+.vivo .cv-page .k-head {
+  background: var(--ink);
+}
+.vivo .cv-page .k-head::after {
+  filter: invert(1);
+}
+.vivo .cv-page .k-head h1 {
+  color: var(--on-ink);
+}
+.vivo .cv-page .k-head .k-lead {
+  color: var(--on-ink-soft);
+}
+.vivo .cv-page .k-head .k-eyebrow {
+  color: var(--lime);
+}
+.vivo .cv-card {
+  background: var(--area-settings);
+}
+.vivo .cv-card h2 {
+  border: 0;
+}
+.vivo .cv-page .cv-row:not(:has(input:checked)),
+.vivo .cv-days {
+  background: var(--surface);
+}
+.cv-page .cv-row {
+  transition: none;
+}
+@media (max-width: 680px) {
+  .cv-page .k-head > div {
+    max-width: 100%;
+  }
+  .cv-page .k-head::after {
+    display: none;
+  }
+  .lector .barra-lector {
+    gap: 0 8px;
+  }
+  .lector nav {
+    gap: 8px;
+  }
+  .lector label {
+    gap: 4px;
+  }
+  .lector details summary {
+    min-height: 40px;
+  }
+  .cv-page .cv-days input {
+    font-size: 16px;
+  }
+}
+
+/* La casilla del visor reproduce los selectores del tema claro de public/tinta.css. */
+body:has(#tema-claro:checked) .workspace:not(.customer-skin) > .sidebar {
+  --m-bg: var(--surface);
+  --m-text: var(--ink);
+  --m-strong: var(--ink);
+  --m-muted: var(--text-2);
+  --m-surface: var(--soft);
+  --m-hover: var(--soft);
+  --m-line: var(--line);
+  --m-active-bg: var(--ink);
+  --m-active-fg: var(--on-ink);
+  --m-mode-bg: var(--soft);
+  --m-mode-fg: var(--text-2);
+  --m-mode-active-bg: var(--ink);
+  --m-mode-active-fg: var(--on-ink);
+  --m-mark-bg: var(--ink);
+  --m-mark-fg: var(--lime);
+  --ring: var(--ink);
+  color-scheme: light;
+}
+body:has(#tema-claro:checked) .workspace:not(.customer-skin) .nav-group + .nav-group {
+  border-top-color: transparent;
+}
+body:has(#tema-claro:checked) .workspace:not(.customer-skin) .sidebar .nav button.nav-group-title::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot-settings);
+}
+body:has(#tema-claro:checked)
+  .workspace:not(.customer-skin)
+  .sidebar
+  .nav
+  button.nav-group-title[data-nav-group='Atención']::before {
+  background: var(--dot-attention);
+}
+body:has(#tema-claro:checked)
+  .workspace:not(.customer-skin)
+  .sidebar
+  .nav
+  button.nav-group-title[data-nav-group='Contactos']::before {
+  background: var(--dot-contacts);
+}
+body:has(#tema-claro:checked)
+  .workspace:not(.customer-skin)
+  .sidebar
+  .nav
+  button.nav-group-title[data-nav-group='Ventas']::before {
+  background: var(--dot-sales);
+}
+body:has(#tema-claro:checked)
+  .workspace:not(.customer-skin)
+  .sidebar
+  .nav
+  button.nav-group-title[data-nav-group='WhatsApp']::before {
+  background: var(--dot-whatsapp);
+}
+body:has(#tema-claro:checked)
+  .workspace:not(.customer-skin)
+  .sidebar
+  .nav
+  button.nav-group-title[data-nav-group='Resultados']::before {
+  background: var(--dot-results);
+}

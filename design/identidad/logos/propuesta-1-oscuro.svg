@@ -1,0 +1,21 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 231 64"
+  role="img"
+  aria-label="Tinta · Gota de corte · firma horizontal"
+>
+  <title>Tinta · Gota de corte · firma horizontal</title>
+  <g fill="#d9f24f" color="#d9f24f">
+    <path d="M49 5c3-1 5 1 5 4v25H34l-8 8h27c-3 10-12 17-24 17C15 59 6 49 6 37c0-9 5-16 13-20L49 5Z" />
+  </g>
+  <g transform="translate(75 0)" fill="#f7f5ee">
+    <path
+      d="M0 6h37v8H23v36h-9V14H0z M42 20h9v30h-9z M57 20h8v4c2-3 6-5 11-5 9 0 13 6 13 15v16h-9V35c0-6-2-8-6-8-5 0-8 4-8 9v14h-9z M97 11l9-4v13h10v8h-10v10c0 4 2 5 6 5h4v7h-7c-8 0-12-4-12-12V28h-5v-8h5z"
+    />
+    <circle cx="46.5" cy="11" r="5" />
+    <path
+      fill-rule="evenodd"
+      d="M120 35c0-10 6-16 15-16 4 0 8 2 10 5v-4h8v30h-8v-4c-2 3-6 5-11 5-8 0-14-6-14-16Zm9 0c0 5 3 8 8 8 4 0 8-3 8-8s-4-8-8-8c-5 0-8 3-8 8Z"
+    />
+  </g>
+</svg>

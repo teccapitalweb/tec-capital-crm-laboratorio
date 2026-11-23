@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Tinta · Trazo continuo · signo">
+  <title>Tinta · Trazo continuo · signo</title>
+  <g fill="#d9f24f" color="#d9f24f">
+    <path
+      d="M6 42c10 0 13-26 23-26 12 0-1 32 9 32 7 0 12-18 20-21"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="10"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+</svg>

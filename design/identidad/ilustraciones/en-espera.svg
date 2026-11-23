@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 140" role="img" aria-label="en espera">
+  <title>en espera</title>
+  <g fill="none" stroke="#16181d" stroke-width="4">
+    <path d="M65 48h77l24 24h55M65 63h70l25 25h61M65 78h64l26 26h66" />
+  </g>
+  <circle cx="65" cy="48" r="10" fill="#16181d" />
+  <circle cx="221" cy="104" r="10" fill="#d9f24f" stroke="#16181d" stroke-width="3" />
+</svg>

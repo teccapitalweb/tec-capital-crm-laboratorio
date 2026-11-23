@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 140" role="img" aria-label="primer trazo">
+  <title>primer trazo</title>
+  <g fill="none" stroke="#16181d" stroke-width="3">
+    <path d="M20 104h71l36-36h78" />
+    <path d="M20 118h76l36-36h55" />
+  </g>
+  <g fill="#16181d" transform="translate(188 13) scale(1.5)">
+    <path d="M49 5c3-1 5 1 5 4v25H34l-8 8h27c-3 10-12 17-24 17C15 59 6 49 6 37c0-9 5-16 13-20L49 5Z" />
+  </g>
+</svg>
