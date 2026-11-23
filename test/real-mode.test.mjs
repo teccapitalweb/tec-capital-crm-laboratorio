@@ -471,6 +471,25 @@ test('modo real de punta a punta: interruptor, respuestas, página de pago, pago
     assert.equal(last.flyer_course_id, 'aves');
     for (const m of auto()) clean(m, 'respuesta de pago con imagen en modo real');
   }
+  // Una respuesta aprobada del tema pagos también la lleva aunque la pregunta no se reconozca como «cómo pago»
+  // («¿aceptan PayPal?» salía sólo con el texto que anuncia la imagen).
+  db.prepare(
+    "INSERT INTO knowledge_entries(id,brand_id,topic,question,variants,answer,status,created_at,updated_at) VALUES(?,?,?,?,?,?,'approved',?,?)",
+  ).run(
+    randomUUID(),
+    'globalvet',
+    'payment',
+    '¿Aceptan PayPal?',
+    '["¿Acepta pagos por paypal?"]',
+    'Sí, aceptamos PayPal: te mando la imagen con los datos de pago.',
+    Date.now(),
+    Date.now(),
+  );
+  const simPaypal = (
+    await call(origin, '/api/replies/test', { cookie: admin, body: { brandId: 'globalvet', text: 'Aceptan Paypal??' } })
+  ).result;
+  assert.match(simPaypal.reply, /aceptamos PayPal/, 'contesta con la respuesta aprobada de pagos');
+  assert.equal(simPaypal.paymentImageFileId, img.id, 'y la acompaña con la imagen «Datos de pago»');
   assert.equal((await patch(admin, { paymentImageFileId: null, expectedRevision: 3 })).brand.paymentImageFileId, null);
   assert.equal(
     (

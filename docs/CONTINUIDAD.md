@@ -34,13 +34,20 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Cobros: la imagen «Datos de pago» con cualquier respuesta aprobada de pagos (23 nov 2026)
+
+- **Por qué:** en la primera prueba con WhatsApp real, «¿Aceptan PayPal?» recibió la respuesta aprobada **sin** la imagen, y «¿Aceptan tarjeta, OXXO, transferencia o PayPal?» sí la recibió: la imagen sólo se adjuntaba en el camino de la pregunta general «cómo pago» (`paymentKind` «methods»), y una pregunta de pagos que llega por el conocimiento aprobado sin pasar por ahí salía sólo con el texto que la anuncia.
+- **Qué se hizo (sin esquema nuevo):** en `server/replies.mjs`, `fromKnowledge` adjunta la imagen (`out.paymentImageFileId`) cuando la respuesta aprobada elegida es del tema `payment` y no pasa a una persona; el camino de siempre no cambia.
+- **Fuera del código, por el conector:** 4 borradores corregidos de conocimiento (formas de pago, dónde depositar, proceso de inscripción y «soy de otro país»: depósito, transferencia, OXXO o PayPal, sin «enlace de pago» ni «tarjeta», sin ningún dato de cuenta), aprobados por el dueño; y la primera apertura de GlobalVet con **entrega automática de accesos encendida** (enlace del grupo pegado en Coordinación, estado `ready`), comprobado con `listar_accesos`.
+- **Verificado:** `test/real-mode.test.mjs` (una respuesta aprobada de pagos que no es «cómo pago» anuncia y lleva la imagen); `npm run check`; suite de servidor.
+
 ## Cobros: la página de pago muestra la imagen «Datos de pago» (publicado en `main`, 23 nov 2026)
 
 - **Por qué:** con la imagen ya en el chat, el enlace de pago que genera «Quiero inscribirme» llevaba a una página que sólo mostraba las instrucciones en texto; para que el flujo sea coherente, la página debe enseñar las mismas cuentas.
 - **Qué se hizo (sin esquema nuevo):** `server/payments.mjs` (vista del pedido para el cliente) añade `paymentImageUrl` en modo real, y `public/checkout.js` la pinta debajo de las instrucciones (`.pg-howto-image` en `public/checkout.css`). Los archivos de biblioteca ya se servían por id sin sesión, como los flyers.
 - **Verificado:** `test/real-mode.test.mjs` (la vista del pedido trae la URL de la imagen cuando la marca la tiene); `npm run check`; suite de servidor.
 - **Mismo día, por el conector (fuera del código):** para dejar GlobalVet lista para clientes reales se dejaron borradores sin aviso de prueba de «¿Entregan certificado?» y «¿Cómo puedo pagar?» y de las 3 plantillas de demostración (información, precio, inscripción). Aprobarlos y archivar los viejos lo hace una persona; luego escribir las instrucciones de pago, decidir el flyer del curso de demostración y encender «Atiende clientes reales».
-- **Publicado:** commit `d73220a`, sin esquema nuevo; comprobado sin sesión (el `checkout.js` servido trae la imagen, `/crm` 200, `/mcp` 401). Falta que el dueño apruebe los borradores, escriba las instrucciones de pago y encienda el modo real de GlobalVet.
+- **Publicado:** commit `d73220a`, sin esquema nuevo; comprobado sin sesión (el `checkout.js` servido trae la imagen, `/crm` 200, `/mcp` 401). **El mismo día el dueño aprobó los 5 borradores, archivó los viejos y el curso de demostración, escribió las instrucciones de pago y encendió el modo real de GlobalVet** (comprobado por el conector: «Encendido: sin avisos de prueba ni pagos simulados»; 18 cursos activos). Siguiente: Ventas → Accesos para las 17 aperturas sin mensaje de accesos.
 
 ## Cobros: imagen «Datos de pago» por marca (publicado en `main`, 23 nov 2026)
 

@@ -862,6 +862,9 @@ export function createReplies({
         '»' +
         (hit.score < 1 ? ' (parecido ' + Math.round(hit.score * 100) + '%)' : '') +
         '.';
+      // Una respuesta aprobada del tema pagos lleva la imagen «Datos de pago» de la marca por cualquier camino: «¿aceptan
+      // PayPal?» no se reconoce como «cómo pago» (el camino que ya la adjuntaba) y salía sólo el texto que la anuncia.
+      if (hit.entry.topic === 'payment' && !out.handoff) out.paymentImageFileId = paymentImageOf(c.brand_id);
       return true;
     };
     // Varias preguntas en un mensaje («¿qué temas incluye, y tiene certificado?»): antes sólo se contestaba la primera intención reconocida.
