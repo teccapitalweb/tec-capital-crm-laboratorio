@@ -93,7 +93,7 @@ window.createEvaluationUI = function ({ state, api, esc, icon, showModal, toast,
       ${c ? `<p class="crm-hint">${esc(brandName(b))}</p>` : `<label class="field">Marca<select name="brandId" id="ev-brand">${state.brands.map(x => `<option value="${x.id}" ${x.id === b ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>`}
       <label class="field">Título<input name="title" maxlength="120" value="${esc(c?.title || '')}" placeholder="Pregunta el precio"></label>
       <label class="field">Mensaje del cliente<textarea name="inputText" required minlength="3" maxlength="500" rows="2" placeholder="¿Cuánto cuesta el curso?">${esc(c?.input_text || '')}</textarea></label>
-      <label class="field">Curso (opcional)<select name="courseId" id="ev-course"><option value="">Primer curso activo de la marca</option>${courses.map(k => `<option value="${k.id}" ${c?.course_id === k.id ? 'selected' : ''}>${esc(k.title)}</option>`).join('')}</select></label>
+      <label class="field">Curso (opcional)<select name="courseId" id="ev-course"><option value="">Primer curso activo (o el que nombre el mensaje)</option>${courses.map(k => `<option value="${k.id}" ${c?.course_id === k.id ? 'selected' : ''}>${esc(k.title)}</option>`).join('')}</select></label>
       <div class="cat-form-columns"><label class="field">Intención esperada<select name="expectIntent">${opts(meta.intents, c?.expect_intent, INTENT)}</select></label><label class="field">Acción esperada<select name="expectAction">${opts(meta.actions, c?.expect_action, ACTION)}</select></label><label class="field">Fuente esperada<select name="expectSource">${opts(meta.sources, c?.expect_source, SOURCE)}</select></label></div>
       <div class="cat-form-columns"><label class="field">Debe incluir (texto)<input name="mustInclude" maxlength="200" value="${esc(c?.must_include || '')}"></label><label class="field">No debe incluir<input name="mustExclude" maxlength="200" value="${esc(c?.must_exclude || '')}"></label></div>
       <label class="field">Etiquetas (coma)<input name="tags" maxlength="200" value="${esc(c?.tags || '')}"></label>
@@ -183,7 +183,7 @@ window.createEvaluationUI = function ({ state, api, esc, icon, showModal, toast,
     if (el.id !== 'ev-brand') return false;
     const courses = state.courses.filter(k => k.brand_id === el.value);
     $('#ev-course').innerHTML =
-      '<option value="">Primer curso activo de la marca</option>' +
+      '<option value="">Primer curso activo (o el que nombre el mensaje)</option>' +
       courses.map(k => `<option value="${k.id}">${esc(k.title)}</option>`).join('');
     return true;
   }

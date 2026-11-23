@@ -184,6 +184,7 @@ test('banco de evaluación por API: siembra, casos, ejecución con el nivel vige
     'escalated',
     'sin venta activa la inscripción pasa a persona',
   );
+  assert.equal(price.courseId, null, 'sin curso nombrado, la simulación corre contra el primero activo');
   const listed = (await call('/api/evaluation/cases?brand=globalvet', admin.cookie)).cases;
   assert.ok(listed.every(c => c.last?.pass === true));
 
@@ -319,5 +320,28 @@ test('banco de evaluación por API: siembra, casos, ejecución con el nivel vige
   } finally {
     d.close();
   }
+  // un caso sin curso corre contra el curso que NOMBRA su mensaje («el curso de aves»), como el asistente real (course-match);
+  // así una respuesta ligada a un curso sí cuenta en su caso. El curso explícito del caso manda sobre el nombrado.
+  const aves = (
+    await call(
+      '/api/evaluation/cases',
+      admin.cookie,
+      {
+        brandId: 'globalvet',
+        title: 'Nombra un curso',
+        inputText: '¿Cuánto cuesta el curso de aves?',
+        expectIntent: 'price',
+      },
+      'POST',
+      201,
+    )
+  ).case;
+  const routed = (await call('/api/evaluation/brands/globalvet/run', admin.cookie, {})).run.results;
+  assert.equal(routed.find(r => r.caseId === aves.id).courseId, 'aves', 'corre contra el curso que nombra');
+  assert.equal(
+    routed.find(r => r.title === 'Pregunta el precio').courseId,
+    null,
+    'sin curso nombrado, el primero activo',
+  );
   assert.equal(logs.includes('failed'), false, logs);
 });

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { INTENTS } from './replies.mjs';
+import { matchCourse } from './course-match.mjs';
 
 // Banco de evaluación (Fase 1 · bloque 7). Cada caso describe lo que un cliente escribe y lo que el motor de respuestas
 // debería hacer (intención, acción, fuente, texto que debe o no incluir). Ejecutarlo corre la simulación del motor
@@ -209,13 +210,17 @@ export function createEvaluation({ db, crm, replies, provider, body, json, audit
       .all(brandId);
     if (!cases.length) throw fail(409, 'La marca no tiene casos activos.');
     const started = now(),
-      results = [];
+      results = [],
+      // Un caso sin curso corre contra el curso que NOMBRA su mensaje («el curso de aves»), como hace el asistente real
+      // (course-match); si no nombra ninguno, contra el primero activo de la marca. El curso explícito del caso manda.
+      courses = db.prepare('SELECT id,title FROM courses WHERE brand_id=? AND active=1 ORDER BY title').all(brandId);
     let mode = 'templates',
       providerName = provider?.name || 'simulated';
     for (const c of cases) {
       let got, failures;
+      const ranCourse = c.course_id || matchCourse(courses, c.input_text)?.id || null;
       try {
-        const r = await replies.test(user, { brandId, courseId: c.course_id || undefined, text: c.input_text });
+        const r = await replies.test(user, { brandId, courseId: ranCourse || undefined, text: c.input_text });
         mode = r.mode;
         if (r.provider?.name) providerName = r.provider.name;
         got = {
@@ -242,6 +247,7 @@ export function createEvaluation({ db, crm, replies, provider, body, json, audit
       }
       results.push({
         caseId: c.id,
+        courseId: ranCourse,
         title: c.title,
         input: c.input_text,
         expected: {

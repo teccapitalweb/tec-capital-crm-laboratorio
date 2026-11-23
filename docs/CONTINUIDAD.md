@@ -34,6 +34,14 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Banco de evaluación: el caso corre contra el curso que nombra (integrado en local, pendiente de publicar, 23 nov 2026)
+
+- **Por qué:** al revisar en producción la evaluación de GlobalVet (16/18), «Granja de pollos» («¿me serviría el curso de aves?») seguía fallando aunque el dueño ya había aprobado la respuesta ligada al curso de aves: el caso no tenía curso y la simulación corría contra «el primer curso activo de la marca», donde esa respuesta no entra. Falso fallo.
+- **Qué se hizo (sin esquema nuevo):** en `server/evaluation.mjs`, `run()` carga los cursos activos de la marca y, para un caso sin curso explícito, usa `matchCourse` (`server/course-match.mjs`, el mismo reconocimiento del asistente: una palabra propia de un solo título, sin empates) para correr contra el curso que nombra el mensaje; si no nombra ninguno, el primero activo como antes; el curso explícito manda. Cada resultado guarda `courseId`. En `public/evaluation.js` la opción vacía del formulario dice «Primer curso activo (o el que nombre el mensaje)».
+- **Verificado:** `test/evaluation.test.mjs`: un caso nuevo «¿Cuánto cuesta el curso de aves?» corre con `courseId: 'aves'` y «Pregunta el precio» con `null`; la siembra sigue pasando 18/18; `npm run check` y la suite de servidor.
+- **Mismo día, fuera del repositorio:** GlobalVet quedó en 18/18 · 100 % (autónomo, Claude) tras aprobar 3 respuestas y ajustar 2 casos; la tarea programada de los lunes en la app de Claude del dueño ahora también entrega `resumen_semana` y `resultados_evaluacion`.
+- **Pendiente:** publicar (con «Sí, publicar»).
+
 ## Conector: reportes de evaluación y resumen de la semana (publicado en `main`, 23 nov 2026)
 
 - **Por qué:** al verificar la IA real en producción (sonnet-5-5, evaluación 16/18 · 88,9 % en autónomo), el dueño pidió que estos reportes lleguen por el conector/MCP, no sólo por la pantalla. El conector ya daba ventas, atención, recorridos, etc., pero no la evaluación ni el resumen semanal.
