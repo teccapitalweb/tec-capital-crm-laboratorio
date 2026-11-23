@@ -443,7 +443,10 @@ const RUN = {
     const d = node.data;
     if (d.templateId) sendMaterial(env, s, node, findRef(env.catalogue, 'materials', d.templateId));
     else {
-      say(s, node, { text: `El precio de ${course.title} · ${shown(e.name, 'edición')} es de ${priceText(e)}.` });
+      say(s, node, {
+        flyer: d.flyer,
+        text: `El precio de ${course.title} · ${shown(e.name, 'edición')} es de ${priceText(e)}.`,
+      });
       if (d.body === 'full') note(s, node, 'Además enviaría la invitación a inscribirse del asistente.');
     }
     return go(env, s, node, 'next');
@@ -457,6 +460,7 @@ const RUN = {
       .filter(Boolean)
       .map(line => (/^([•\-–*]|\d+[.)])\s/.test(line) ? line : '• ' + line));
     say(s, node, {
+      flyer: node.data.flyer,
       text: `Esto es lo que verás en ${shown(course?.title, 'curso')}:\n\n${items.length ? items.join('\n') : '[temario]'}`,
     });
     if (node.data.body === 'full') note(s, node, 'Además enviaría la invitación a ver el precio o las fechas.');
@@ -481,7 +485,7 @@ const RUN = {
         'Sesiones:',
         ...(Array.isArray(e.sessions) && e.sessions.length ? e.sessions.map(x => '• ' + x) : ['[sesiones]']),
       );
-    say(s, node, { text: lines.join('\n') });
+    say(s, node, { flyer: d.flyer, text: lines.join('\n') });
     return go(env, s, node, 'next');
   },
 

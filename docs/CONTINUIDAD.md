@@ -34,6 +34,13 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Recorridos: flyer del curso en precio, temario y fechas (integrado en local, pendiente de publicar, 23 nov 2026)
+
+- **Por qué:** el flyer del curso ya acompaña a la ficha (`course_card`) y a las respuestas del asistente; en un recorrido, los pasos de Precio, Temario y Fechas salían sólo en texto. Es el frente «más automatización en los flujos».
+- **Qué se hizo (sin esquema nuevo):** los defs de `price`, `syllabus` y `schedule` en `public/kit/shared/flow-model.js` ganan el campo `flyer` (casilla «Enviar también la imagen (flyer) del curso», apagada por omisión, para no cambiar recorridos ya publicados). El motor (`server/modules/chatflows/engine.mjs`) le pasa `{ flyer }` a `env.io.catalogue(kind, opts)` (`runtime.mjs`), que llama a `catalogue.prepare(c, { kind, flyer })`: conserva el *snapshot*, cae a texto si no hay flyer y en modo real nunca manda uno de demostración. El simulador y la vista previa (`lienzo/sim.js`) muestran la imagen. En el paso de Precio la casilla se oculta si se eligió un material propio. Detalle en [PLAN_MENSAJES_AMABLES.md](PLAN_MENSAJES_AMABLES.md), «Flyer del curso».
+- **Verificado:** `test/chatflows-engine.test.mjs` (el motor pide el flyer al catálogo sólo cuando el paso lo enciende y lo adjunta; apagado, sólo texto) y `test/flow-model.test.mjs` (la casilla, apagada por omisión, round-trip canónico); `npm run check`, `node --check` del JS de navegador y la suite de servidor.
+- **Pendiente:** publicar (con «Sí, publicar») y probarlo en WhatsApp real.
+
 ## Reportes: resumen de la semana (publicado en `main`, 23 nov 2026)
 
 - **Por qué:** el CRM ya tenía analítica (embudo, conversión, canales, tiempos, equipo) pero no había forma de llevarse o presentar un resumen. El dueño presenta el avance a las consultoras.

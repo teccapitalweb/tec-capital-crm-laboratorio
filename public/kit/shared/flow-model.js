@@ -2171,15 +2171,19 @@ const TYPES = {
     icon: 'price',
     hint: 'El precio vigente del curso, con su promoción si la hay.',
     speaks: () => true,
-    defaults: () => ({ body: 'data', templateId: '' }),
-    clean: d => ({ body: pick(d.body, ['data', 'full'], 'data'), templateId: text(d.templateId) }),
+    defaults: () => ({ body: 'data', templateId: '', flyer: false }),
+    clean: d => ({
+      body: pick(d.body, ['data', 'full'], 'data'),
+      templateId: text(d.templateId),
+      flyer: flag(d.flyer),
+    }),
     ports: () => [NEXT, UNAVAILABLE_PORT],
     refs: d => [['materials', d.templateId, 'templateId']],
     validate: (d, env) => refProblems(d.templateId, 'materials', { field: 'templateId' }, env),
     summary: (d, ctx) =>
       d.templateId
         ? 'Material: ' + (refName(ctx, 'materials', d.templateId) || 'elegido')
-        : 'Precio vigente del catálogo',
+        : 'Precio vigente del catálogo' + (d.flyer ? ' · con flyer' : ''),
     fields: [
       {
         key: 'templateId',
@@ -2196,6 +2200,12 @@ const TYPES = {
         options: BODY_OPTIONS,
         unless: { key: 'templateId', filled: true },
       },
+      {
+        key: 'flyer',
+        kind: 'check',
+        label: 'Enviar también la imagen (flyer) del curso',
+        unless: { key: 'templateId', filled: true },
+      },
     ],
   },
 
@@ -2205,11 +2215,14 @@ const TYPES = {
     icon: 'book',
     hint: 'El temario del curso de la conversación.',
     speaks: () => true,
-    defaults: () => ({ body: 'data' }),
-    clean: d => ({ body: pick(d.body, ['data', 'full'], 'data') }),
+    defaults: () => ({ body: 'data', flyer: false }),
+    clean: d => ({ body: pick(d.body, ['data', 'full'], 'data'), flyer: flag(d.flyer) }),
     ports: () => [NEXT],
-    summary: () => 'Temario del curso',
-    fields: [{ key: 'body', kind: 'choice', label: 'Qué envía', options: BODY_OPTIONS }],
+    summary: d => 'Temario del curso' + (d.flyer ? ' · con flyer' : ''),
+    fields: [
+      { key: 'body', kind: 'choice', label: 'Qué envía', options: BODY_OPTIONS },
+      { key: 'flyer', kind: 'check', label: 'Enviar también la imagen (flyer) del curso' },
+    ],
   },
 
   schedule: {
@@ -2218,13 +2231,17 @@ const TYPES = {
     icon: 'calendar',
     hint: 'Inicio, horario, docente y lugares disponibles.',
     speaks: () => true,
-    defaults: () => ({ seats: true, sessions: false }),
-    clean: d => ({ seats: flag(d.seats, true), sessions: flag(d.sessions) }),
+    defaults: () => ({ seats: true, sessions: false, flyer: false }),
+    clean: d => ({ seats: flag(d.seats, true), sessions: flag(d.sessions), flyer: flag(d.flyer) }),
     ports: () => [NEXT, UNAVAILABLE_PORT],
-    summary: d => ['Fechas', d.seats ? 'cupo' : '', d.sessions ? 'sesiones' : ''].filter(Boolean).join(' · '),
+    summary: d =>
+      ['Fechas', d.seats ? 'cupo' : '', d.sessions ? 'sesiones' : '', d.flyer ? 'flyer' : '']
+        .filter(Boolean)
+        .join(' · '),
     fields: [
       { key: 'seats', kind: 'check', label: 'Decir cuántos lugares quedan' },
       { key: 'sessions', kind: 'check', label: 'Listar las sesiones de la apertura' },
+      { key: 'flyer', kind: 'check', label: 'Enviar también la imagen (flyer) del curso' },
     ],
   },
 

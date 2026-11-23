@@ -837,3 +837,49 @@ test('el motor se detiene solo: ventana cerrada antes de hablar y una persona qu
   assert.equal(s.outcome, 'human_takeover');
   assert.equal(f.sent.length, 0);
 });
+
+// Flyer del curso en los pasos de catálogo (docs/PLAN_MENSAJES_AMABLES.md, «Flyer del curso»): precio, temario y fechas
+// pueden adjuntar la imagen del curso; el motor se la pide al catálogo sólo cuando el paso lo tiene encendido.
+test('catálogo: precio, temario y fechas adjuntan el flyer cuando el paso lo pide', () => {
+  const stubCopy = {
+    ...copy,
+    invalidAnswer: '.',
+    price: () => 'precio',
+    priceBody: () => 'precio',
+    syllabus: () => 'temario',
+    syllabusBody: () => 'temario',
+    scheduleBody: () => 'fechas',
+    seats: () => '',
+  };
+  const run = (type, data) => {
+    const calls = [];
+    const f = fakeIo({
+      copy: stubCopy,
+      catalogue: (kind, opts = {}) => {
+        calls.push([kind, Boolean(opts.flyer)]);
+        return { ctx: {}, prepared: { text: 'x', flyerSnapshot: opts.flyer ? { img: true } : null } };
+      },
+    });
+    const env = makeEnv({
+      graph: graphOf([['c', type, data]], [['n1', 'next', 'c']]),
+      settings: {},
+      io: f.io,
+      now: NOW,
+    });
+    advance(session(env), env);
+    return { calls, last: f.sent.at(-1) };
+  };
+  for (const [type, data] of [
+    ['price', { body: 'data', templateId: '', flyer: true }],
+    ['syllabus', { body: 'data', flyer: true }],
+    ['schedule', { seats: false, sessions: false, flyer: true }],
+  ]) {
+    const { calls, last } = run(type, data);
+    assert.deepEqual(calls, [[type, true]], `${type}: le pide el flyer al catálogo`);
+    assert.ok(last?.prepared?.flyerSnapshot, `${type}: el mensaje lleva el flyer`);
+  }
+  // Apagado (por omisión): no pide el flyer y el mensaje sale sin imagen.
+  const off = run('syllabus', { body: 'data', flyer: false });
+  assert.deepEqual(off.calls, [['syllabus', false]]);
+  assert.equal(off.last.prepared.flyerSnapshot, null, 'sin flyer: sólo texto');
+});

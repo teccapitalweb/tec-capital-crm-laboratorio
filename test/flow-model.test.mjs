@@ -2200,3 +2200,16 @@ test('Inscribir en secuencia: elegida, de esta marca y no archivada; apagada só
   assert.deepEqual(def.refs(def.clean({ sequenceId: 'sq1' })), [['sequences', 'sq1', 'sequenceId']]);
   assert.equal(def.group, 'contacto');
 });
+
+test('catálogo: precio, temario y fechas pueden adjuntar el flyer del curso (apagado por omisión)', () => {
+  for (const type of ['price', 'syllabus', 'schedule']) {
+    const def = typeOf(type);
+    assert.equal(def.defaults().flyer, false, `${type}: por omisión no envía el flyer`);
+    assert.ok(
+      def.fields.some(f => f.key === 'flyer' && f.kind === 'check'),
+      `${type}: tiene la casilla del flyer en el panel`,
+    );
+    assert.equal(def.clean({ ...def.defaults(), flyer: true }).flyer, true, `${type}: conserva el flyer encendido`);
+    assert.equal(def.clean({ ...def.defaults(), flyer: 'x' }).flyer, false, `${type}: normaliza a sí/no`);
+  }
+});

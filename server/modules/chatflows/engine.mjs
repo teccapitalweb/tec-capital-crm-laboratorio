@@ -568,7 +568,7 @@ const EXEC = {
       if (material.reason) return unavailable(node, env, s, material.reason);
       say(env, s, { text: material.text, prepared: material.prepared });
     } else {
-      const card = env.io.catalogue('price');
+      const card = env.io.catalogue('price', { flyer: d.flyer });
       if (card.reason) return unavailable(node, env, s, card.reason);
       const text = d.body === 'full' ? env.io.copy.price(card.ctx) : env.io.copy.priceBody(card.ctx);
       say(env, s, { text, prepared: card.prepared });
@@ -577,14 +577,14 @@ const EXEC = {
     return { next: 'next' };
   },
   syllabus(node, d, env, s) {
-    const card = env.io.catalogue('syllabus');
+    const card = env.io.catalogue('syllabus', { flyer: d.flyer });
     if (card.reason) return unavailable(node, env, s, card.reason);
     const text = d.body === 'full' ? env.io.copy.syllabus(card.ctx) : env.io.copy.syllabusBody(card.ctx);
     say(env, s, { text, prepared: card.prepared });
     return { next: 'next' };
   },
   schedule(node, d, env, s) {
-    const card = env.io.catalogue('schedule');
+    const card = env.io.catalogue('schedule', { flyer: d.flyer });
     if (card.reason) return unavailable(node, env, s, card.reason);
     let text = env.io.copy.scheduleBody(card.ctx);
     if (d.seats) {

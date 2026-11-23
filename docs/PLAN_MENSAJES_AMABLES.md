@@ -93,6 +93,8 @@ Como haría una persona del equipo, la **primera** respuesta concreta sobre un c
 
 Verificado en `test/sales-replies.test.mjs`: la primera respuesta de precio lleva el flyer del curso, la segunda ya no lo repite, y con el interruptor apagado sale sólo texto; más la columna `reply_settings.flyer` encendida por omisión. A la vista en el chat de prueba.
 
+**En los recorridos (23 nov 2026).** La ficha del curso (`course_card`) ya ofrecía la imagen; ahora también los pasos de catálogo **Precio**, **Temario** y **Fechas** tienen la casilla «Enviar también la imagen (flyer) del curso», **apagada por omisión** para no cambiar recorridos ya publicados. El motor (`server/modules/chatflows/engine.mjs` → `env.io.catalogue(kind, { flyer })` en `runtime.mjs`) usa el mismo `catalogue.prepare(c, { kind, flyer })`: conserva el *snapshot*, cae a texto si el curso no tiene flyer y en modo real nunca manda uno de demostración. En Precio la casilla se oculta si se eligió un material propio. El simulador y «Así lo ve la persona» la muestran. Definición del paso en `public/kit/shared/flow-model.js`; verificado en `test/chatflows-engine.test.mjs` y `test/flow-model.test.mjs`. A diferencia de las respuestas del asistente, aquí no hay regla de «una sola vez»: el flyer sale cada vez que el recorrido pasa por un paso que lo tiene encendido, así que conviene encenderlo en un solo paso.
+
 ## Verificación
 
 - `test/reply-copy.test.mjs`: cada texto con datos completos, sin datos y con promoción; sin huecos (`undefined`, `{{…}}`), sin promesas falsas y sin género.

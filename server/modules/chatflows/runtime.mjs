@@ -106,13 +106,14 @@ export function createRuntime({ host, repo, now = () => Date.now(), emit = () =>
     let values = null;
     let contactId;
     const contact = () => (contactId === undefined ? (contactId = repo.contactId(brandId, ctx.c.id)) : contactId);
-    const catalogueCard = kind => {
+    const catalogueCard = (kind, opts = {}) => {
       const c = conv();
       if (c.course_pending) return { reason: 'Todavía no sabemos qué curso le interesa' };
       const info = svc.catalogue.info(c.course_id, c.edition_id);
       if (info.reason) return { reason: info.reason };
       try {
-        return { ctx: info, prepared: svc.catalogue.prepare(c, { kind }) };
+        // `opts.flyer` adjunta el flyer del curso al precio/temario/fechas (docs/PLAN_MENSAJES_AMABLES.md, «Flyer del curso»).
+        return { ctx: info, prepared: svc.catalogue.prepare(c, { kind, flyer: opts.flyer }) };
       } catch (error) {
         if (error?.status === 409) return { reason: String(error.message).replace(/\.$/, '') };
         throw error;
