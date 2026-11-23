@@ -78,6 +78,27 @@ test('reconocer el curso: sólo deciden las palabras propias de un curso; a medi
   assert.equal(matchCourse(gv, 'el de ganado')?.id, 'g');
   assert.equal(matchCourse(gv, 'parvovirus canina')?.id, 'p');
   assert.deepEqual(candidates(gv, 'el de bovinos', { max: 2 }), [], 'demasiados para una lista corta');
+  // sin palabra propia, gana el curso que junta más palabras del mensaje (dos o más, sin empate); una sola compartida no decide
+  const rep = [
+    { id: 'e', title: 'Estrés en reptiles en cautiverio' },
+    { id: 'm', title: 'Manejo clínico y bienestar de reptiles en cautiverio' },
+    { id: 'g', title: 'Manejo clínico en ganado bovino' },
+    { id: 'l', title: 'Laboratorio clínico veterinario' },
+  ];
+  assert.equal(matchCourse(rep, 'Quiero inscribirme al curso de manejo clínico de reptiles')?.id, 'm');
+  assert.equal(matchCourse(rep, 'bienestar de reptiles')?.id, 'm');
+  assert.equal(matchCourse(rep, 'el de reptiles'), null, '«reptiles» está en dos cursos y nada más decide');
+  assert.deepEqual(
+    candidates(rep, 'el de reptiles').map(k => k.id),
+    ['e', 'm'],
+  );
+  assert.equal(matchCourse(rep, 'el clínico'), null, 'una sola palabra compartida por varios no decide');
+  assert.equal(
+    matchCourse(rep, 'tengo reptiles en cautiverio', { strict: true }),
+    null,
+    'a media conversación hace falta la señal',
+  );
+  assert.equal(matchCourse(rep, 'el de manejo clínico de reptiles', { strict: true })?.id, 'm');
   // una edición con día pero sin hora no dice «12:00 a.m.»
   const midnight = new Date('2026-11-17T06:00:00Z').getTime(); // 00:00 en el centro de México
   assert.equal(startText({ starts_at: midnight, timezone: 'America/Mexico_City' }), 'martes, 17 de noviembre de 2026');

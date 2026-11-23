@@ -34,6 +34,13 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Reconocer el curso sin palabras propias (23 nov 2026)
+
+- **Por qué:** en la prueba del cierre de venta en WhatsApp real, «Quiero inscribirme al curso de manejo clínico de reptiles» recibió la lista completa de 18 cursos: «clínico» y «reptiles» aparecen en varios títulos de GlobalVet y `matchCourse` sólo decidía por palabras propias de un solo curso; `candidates` tampoco ayudaba porque un solo curso iba arriba.
+- **Qué se hizo (sin esquema nuevo):** `server/course-match.mjs`: si ninguna palabra es propia, gana el curso que junta más palabras del mensaje cuando son dos o más y ningún otro llega a tantas (a media conversación, con la misma señal de curso de siempre); una sola palabra compartida sigue sin decidir y se pregunta con la lista corta.
+- **Fuera del código, por el conector:** la frase «Te comparto la información del curso» que salía antes de preguntar el curso estaba en el paso «Saludo» del recorrido «Entrada por anuncio» de GlobalVet; el borrador quedó sin ella y hay una propuesta `publicar_recorrido` pendiente del dueño.
+- **Verificado:** `test/whatsapp-multi.test.mjs` (casos nuevos con los títulos reales de reptiles y bovinos); `npm run check`; suite de servidor.
+
 ## Cobros: la imagen «Datos de pago» con cualquier respuesta aprobada de pagos (23 nov 2026)
 
 - **Por qué:** en la primera prueba con WhatsApp real, «¿Aceptan PayPal?» recibió la respuesta aprobada **sin** la imagen, y «¿Aceptan tarjeta, OXXO, transferencia o PayPal?» sí la recibió: la imagen sólo se adjuntaba en el camino de la pregunta general «cómo pago» (`paymentKind` «methods»), y una pregunta de pagos que llega por el conocimiento aprobado sin pasar por ahí salía sólo con el texto que la anuncia.

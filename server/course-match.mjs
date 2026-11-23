@@ -104,7 +104,16 @@ export function matchCourse(list, text, { strict = false } = {}) {
       tie = false;
     } else if (score === best.score) tie = true;
   });
-  return best && !tie ? best.course : null;
+  if (best && !tie) return best.course;
+  if (best) return null;
+  // Sin ninguna palabra propia («manejo clínico de reptiles»: «clínico» y «reptiles» están en varios cursos) gana el curso que
+  // junta MÁS palabras del mensaje, si son dos o más y ningún otro llega a tantas; con una sola palabra compartida sigue sin decidir.
+  // A media conversación hace falta además la señal de curso, como siempre.
+  if (strict && !(strict === 'course' ? COURSE_CUE : CUE).test(plain)) return null;
+  const overlap = bags.map(b => b.filter(w => said.has(w)).length),
+    top = Math.max(0, ...overlap);
+  if (top < 2 || overlap.filter(n => n === top).length !== 1) return null;
+  return list[overlap.indexOf(top)];
 }
 
 // Cuando el texto nombra algo que comparten varios cursos («el de reptiles», «el de perros y gatos») y ninguno gana: esos cursos, para preguntar
