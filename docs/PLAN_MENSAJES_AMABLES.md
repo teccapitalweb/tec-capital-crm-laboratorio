@@ -81,6 +81,18 @@ Hasta ahora sólo la bienvenida ofrecía botones para tocar (Precio · Temario �
 
 A quien ya compró, el tercer botón es «Hablar con asesor» en vez de «Quiero inscribirme». Son como mucho tres (el canal los limita a tres y, fuera de la ventana de 24 h, el conector de Meta cae a texto); los mensajes que pasan a una persona (pago en revisión, queja, descuento de grupo) no llevan botones. Al tocar un botón, su texto llega como un mensaje de la persona y el motor lo lee con las reglas de siempre (`withSteps` en `server/replies.mjs`; el canal simulado los pinta como chips y la bandeja del equipo los muestra en gris). Verificado en `test/sales-replies.test.mjs` (precio, temario y fechas con sus botones; un mensaje que pasa a una persona sin botones) y a la vista en el chat de prueba.
 
+## Flyer del curso al informar (22 nov 2026)
+
+Como haría una persona del equipo, la **primera** respuesta concreta sobre un curso en la conversación acompaña el texto con **el flyer de ese curso**: precio, temario, fechas y duración, y cuando el asistente recomienda **un solo** curso que es el de la conversación. La bienvenida ya lo hacía; ahora también las respuestas informativas, y siempre una sola vez por conversación (si ya salió un flyer, no se repite). La imagen es siempre del curso que la persona consulta, nunca de otro.
+
+- **Reutiliza la cañería que ya existe:** `catalogue.prepare(c, { kind, flyer: true })` elige el flyer aprobado y vigente de esa edición y canal, guarda su *snapshot* (un cambio de precio o de arte no altera lo ya enviado) y en **modo real** nunca manda un flyer de demostración (si la marca no ha subido el suyo, la respuesta sale sólo en texto).
+- **Cae a texto** si el curso no tiene flyer aprobado: la respuesta nunca se rompe.
+- **Una sola imagen:** con varios cursos recomendados no se adjunta un flyer (sería confuso); cada curso lleva su inicio y precio en el texto.
+- **Interruptor por marca** «Flyer del curso al informar» en Operación → Seguimientos (encendido por omisión; `reply_settings.flyer`, migración con nombre `replies/0003-course-flyer`). Apagado: sólo texto, incluida la bienvenida.
+- La «primera vez» se mide por `messages.flyer_course_id` (sólo se llena cuando de verdad salió un flyer). En un recorrido manda la opción del recorrido (`withFlyer` del editor), no este interruptor.
+
+Verificado en `test/sales-replies.test.mjs`: la primera respuesta de precio lleva el flyer del curso, la segunda ya no lo repite, y con el interruptor apagado sale sólo texto; más la columna `reply_settings.flyer` encendida por omisión. A la vista en el chat de prueba.
+
 ## Verificación
 
 - `test/reply-copy.test.mjs`: cada texto con datos completos, sin datos y con promoción; sin huecos (`undefined`, `{{…}}`), sin promesas falsas y sin género.

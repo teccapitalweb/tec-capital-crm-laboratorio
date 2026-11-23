@@ -325,6 +325,7 @@ export function createReplies({
     provider_enabled: 0,
     max_unknown: 2,
     emojis: 1,
+    flyer: 1,
     revision: 0,
     updated_by: null,
     updated_at: null,
@@ -770,6 +771,24 @@ export function createReplies({
       out.buttons = [...opts, bought ? 'Hablar con asesor' : 'Quiero inscribirme'];
       out.keepButtons = true;
     };
+    // Flyer del curso al informar (docs/PLAN_MENSAJES_AMABLES.md, «Flyer del curso»): la primera respuesta concreta sobre
+    // ESTE curso en la conversación acompaña el texto con su flyer aprobado, como haría una persona. Una sola vez por
+    // conversación (si ya salió uno, no se repite), apagable por marca, y cae a texto si el curso no tiene flyer vigente.
+    let flyerShown = null;
+    const withFlyer = () => {
+      if (!s.flyer) return false;
+      if (flyerShown === null)
+        // `flyer_course_id` sólo se llena cuando de verdad salió un flyer (el snapshot se guarda como la cadena «null»
+        // en los mensajes sin flyer, así que no sirve de señal).
+        flyerShown =
+          c.id !== 'simulacion' &&
+          Boolean(
+            db
+              .prepare('SELECT 1 FROM messages WHERE conversation_id=? AND flyer_course_id IS NOT NULL LIMIT 1')
+              .get(c.id),
+          );
+      return !flyerShown;
+    };
     const catalogueSource = {
       type: 'catalogue',
       courseId: course.id,
@@ -797,10 +816,10 @@ export function createReplies({
       if (flow) {
         const st = flow.steps[0];
         if (!ad) out.reply = flows.render(st.text, flowValues());
-        if (!flow.withFlyer) out.prepared = null;
+        if (!flow.withFlyer) out.prepared = null; // dentro de un recorrido manda la opción del recorrido
         menu(st);
         out.sources.push({ type: 'flow', step: st.id });
-      }
+      } else if (!withFlyer()) out.prepared = null; // fuera de un recorrido: respeta el interruptor y una sola vez por conversación
       out.reason =
         count === 1
           ? 'Primer mensaje: bienvenida con la ficha vigente del curso.'
@@ -941,10 +960,15 @@ export function createReplies({
       };
       // «soy técnico, ¿puedo tomarlo?» pregunta por ESTE curso: no se le recomienda una lista
       const forThis = sales.FITS.test(said) && !sales.ASKS_TOPIC.test(said) && !/recomiend/.test(said);
-      const items = (forThis ? [] : sales.recommend(trigger.text, list)).map(toItem).filter(Boolean);
+      const matched = forThis ? [] : sales.recommend(trigger.text, list);
+      const items = matched.map(toItem).filter(Boolean);
       if (items.length) {
         out.reply = copy.recommend(ctx, items, { multi });
         out.sources.push(catalogueSource);
+        // Un solo curso recomendado y es el de esta conversación: lo acompaña su flyer. Con varios no se adjunta una sola
+        // imagen porque sería confuso; cada curso lleva su inicio y precio en el texto.
+        if (matched.length === 1 && matched[0].id === c.course_id && withFlyer())
+          out.prepared = catalogue.prepare(c, { kind: 'flyer' });
         out.reason =
           'Recomendación con el catálogo de la marca: ' +
           items.length +
@@ -992,10 +1016,13 @@ export function createReplies({
       }
       // Memoria de la conversación: pide una recomendación sin tema, pero ANTES contó con qué trabaja («tengo un rancho con
       // vacas», o el tema con el que contestó la vez pasada). Se recomienda con eso en lugar de volver a preguntar.
-      const past = sales.remembered(saidBefore(c, trigger), list).map(toItem).filter(Boolean);
+      const pastMatched = sales.remembered(saidBefore(c, trigger), list);
+      const past = pastMatched.map(toItem).filter(Boolean);
       if (past.length) {
         out.reply = copy.recommend(ctx, past, { multi, remembered: true });
         out.sources.push(catalogueSource);
+        if (pastMatched.length === 1 && pastMatched[0].id === c.course_id && withFlyer())
+          out.prepared = catalogue.prepare(c, { kind: 'flyer' });
         out.reason =
           'Recomendación con lo que contó antes en esta conversación: ' +
           past.length +
@@ -1346,14 +1373,14 @@ export function createReplies({
           'Pregunta por descuentos: el catálogo no tiene promoción vigente para esta apertura y se dice claro.';
       }
     } else if (intent === 'price') {
-      out.prepared = catalogue.prepare(c, { kind: 'price' });
+      out.prepared = catalogue.prepare(c, { kind: 'price', flyer: withFlyer() });
       out.reply = copy.price(ctx);
       out.stage = 'interesado';
       out.sources.push(catalogueSource);
       withSteps('Temario', 'Fechas');
       out.reason = 'Precio y promoción vigentes consultados en el catálogo al responder.';
     } else if (intent === 'syllabus') {
-      out.prepared = catalogue.prepare(c, { kind: 'syllabus' });
+      out.prepared = catalogue.prepare(c, { kind: 'syllabus', flyer: withFlyer() });
       out.reply = copy.syllabus(ctx);
       out.sources.push(catalogueSource);
       withSteps('Precio', 'Fechas');
@@ -1403,7 +1430,7 @@ export function createReplies({
         ? 'Pregunta por otra fecha: la apertura vigente del catálogo y la opción de preguntar a una persona.'
         : 'Pregunta hasta cuándo puede inscribirse: fecha de inicio del catálogo; no se crea un pedido sin que lo pida.';
     } else if (intent === 'schedule') {
-      out.prepared = catalogue.prepare(c, { kind: 'schedule' });
+      out.prepared = catalogue.prepare(c, { kind: 'schedule', flyer: withFlyer() });
       out.reply = copy.schedule(ctx);
       out.sources.push(catalogueSource);
       withSteps('Precio', 'Temario');
@@ -1434,7 +1461,7 @@ export function createReplies({
           kb.filter(k => k.topic === 'duration'),
         ),
         facts = sales.durationFacts(own?.entry);
-      out.prepared = catalogue.prepare(c, { kind: 'schedule' });
+      out.prepared = catalogue.prepare(c, { kind: 'schedule', flyer: withFlyer() });
       out.reply = (facts ? facts + '\n\n' : '') + copy.duration(ctx, sessions);
       out.sources.push(catalogueSource);
       withSteps('Precio', 'Temario');
@@ -2389,6 +2416,7 @@ export function createReplies({
     if (maxUnknown !== null && (!Number.isInteger(maxUnknown) || maxUnknown < 1 || maxUnknown > 5))
       throw fail(400, 'El máximo de respuestas sin reconocer va de 1 a 5.');
     if (input.emojis !== undefined && typeof input.emojis !== 'boolean') throw fail(400, '«emojis» es sí o no.');
+    if (input.flyer !== undefined && typeof input.flyer !== 'boolean') throw fail(400, '«flyer» es sí o no.');
     return transaction(db, () => {
       const cur = settings(brandId);
       if (!Number.isInteger(input.expectedRevision) || input.expectedRevision !== cur.revision)
@@ -2398,12 +2426,13 @@ export function createReplies({
         provider_enabled: input.providerEnabled === undefined ? cur.provider_enabled : input.providerEnabled ? 1 : 0,
         max_unknown: maxUnknown ?? cur.max_unknown,
         emojis: input.emojis === undefined ? cur.emojis : input.emojis ? 1 : 0,
+        flyer: input.flyer === undefined ? cur.flyer : input.flyer ? 1 : 0,
       };
       if (next.provider_enabled && !provider.configured)
         throw fail(400, 'El proveedor de IA no está configurado en el servidor.');
       db.prepare(
-        'INSERT INTO reply_settings(brand_id,mode,provider_enabled,max_unknown,emojis,revision,updated_by,updated_at) VALUES(?,?,?,?,?,1,?,?) ON CONFLICT(brand_id) DO UPDATE SET mode=excluded.mode,provider_enabled=excluded.provider_enabled,max_unknown=excluded.max_unknown,emojis=excluded.emojis,revision=reply_settings.revision+1,updated_by=excluded.updated_by,updated_at=excluded.updated_at',
-      ).run(brandId, next.mode, next.provider_enabled, next.max_unknown, next.emojis, user.id, now());
+        'INSERT INTO reply_settings(brand_id,mode,provider_enabled,max_unknown,emojis,flyer,revision,updated_by,updated_at) VALUES(?,?,?,?,?,?,1,?,?) ON CONFLICT(brand_id) DO UPDATE SET mode=excluded.mode,provider_enabled=excluded.provider_enabled,max_unknown=excluded.max_unknown,emojis=excluded.emojis,flyer=excluded.flyer,revision=reply_settings.revision+1,updated_by=excluded.updated_by,updated_at=excluded.updated_at',
+      ).run(brandId, next.mode, next.provider_enabled, next.max_unknown, next.emojis, next.flyer, user.id, now());
       return settings(brandId);
     });
   }

@@ -602,8 +602,10 @@ test('WhatsApp real de punta a punta con un Meta de mentira: entra un mensaje, s
   assert.equal(sent[before].text.body, 'Hola María, te atiende Administración.');
   assert.equal(sent[before + 1].type, 'image');
   assert.equal(sent[before + 1].image.caption, 'Aquí tienes el temario.');
-  assert.equal(uploads.length, 1);
-  assert.match(uploads[0].type, /^multipart\/form-data/);
+  // Dos subidas a Meta: el flyer del curso que el asistente mandó con la primera respuesta de precio (la marca tiene número
+  // real pero no está en «modo real», así que el flyer de laboratorio sí sale) y ahora el temario del equipo.
+  assert.equal(uploads.length, 2);
+  assert.ok(uploads.every(u => /^multipart\/form-data/.test(u.type)));
   const failing = await call(
     '/api/conversations/' + conv.id + '/messages',
     admin.cookie,

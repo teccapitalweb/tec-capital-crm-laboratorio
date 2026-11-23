@@ -339,7 +339,9 @@ export function createCatalogue({
           ),
           { code: 'demo_flyer' },
         );
-    } else if (!template && kind === 'flyer')
+    } else if (!template && (kind === 'flyer' || input.flyer))
+      // `input.flyer` adjunta el flyer aprobado del curso a una respuesta de otro tipo (precio, temario, fechas): se elige
+      // igual que con kind «flyer», respetando el modo real (los flyers de demostración no salen a clientes reales).
       flyer =
         db
           .prepare(
@@ -369,7 +371,7 @@ export function createCatalogue({
       flyerId: flyer?.id || null,
       flyerRevision: flyer?.revision || null,
     };
-    const hasFlyer = Boolean(flyer) || (!template && kind === 'flyer' && !real);
+    const hasFlyer = Boolean(flyer) || (!template && (kind === 'flyer' || input.flyer) && !real);
     const flyerSnapshot = hasFlyer
       ? {
           course: {

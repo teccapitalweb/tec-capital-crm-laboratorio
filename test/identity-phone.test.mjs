@@ -541,7 +541,11 @@ test('alta, edición, fusión e históricos mantienen la clave; quien se captur�
       };
       if (req.headers.authorization !== 'Bearer ' + TOKEN)
         return send(401, { error: { code: 190, message: 'Invalid OAuth access token' } });
-      const found = new URL(req.url, 'http://x').pathname.match(/^\/v25\.0\/(\d+)\/messages$/);
+      const path = new URL(req.url, 'http://x').pathname;
+      // El flyer del curso (docs/PLAN_MENSAJES_AMABLES.md, «Flyer del curso») se sube como media antes de enviarse.
+      if (/^\/v25\.0\/\d+\/media$/.test(path) && req.method === 'POST')
+        return send(200, { id: 'media-up-' + (sent.length + 1) });
+      const found = path.match(/^\/v25\.0\/(\d+)\/messages$/);
       if (!found || req.method !== 'POST') return send(404, { error: { code: 100, message: 'ruta desconocida' } });
       const message = JSON.parse(Buffer.concat(chunks).toString());
       sent.push({ from: found[1], ...message });

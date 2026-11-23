@@ -34,6 +34,13 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Asistente: flyer del curso al informar (integrado en local, pendiente de publicar, 22 nov 2026)
+
+- **Por qué:** como haría una persona del equipo, la respuesta sobre un curso debería acompañarse de su flyer. La bienvenida ya lo hacía; las respuestas informativas (precio, temario, fechas, duración) y recomendar un curso salían sólo en texto.
+- **Qué se hizo (migración con nombre `replies/0003-course-flyer`):** en `server/replies.mjs`, un ayudante `withFlyer()` adjunta el flyer del curso (`out.prepared = catalogue.prepare(c, { kind, flyer: true })`) a esas respuestas, una sola vez por conversación (medida por `messages.flyer_course_id`); la bienvenida pasa a respetar el mismo interruptor y la misma regla. En `catalogue.prepare` se separó la elección del flyer del `kind`, para llevar la imagen junto al texto de precio/temario/fechas conservando el snapshot y el respeto al modo real (nunca un flyer de demostración a un cliente real). Interruptor por marca «Flyer del curso al informar» en Operación → Seguimientos (`reply_settings.flyer`, encendido por omisión). Al recomendar sólo se adjunta cuando hay un único curso y es el de la conversación. En un recorrido manda la opción del recorrido, no este interruptor. Detalle en [PLAN_MENSAJES_AMABLES.md](PLAN_MENSAJES_AMABLES.md).
+- **Verificado:** `test/sales-replies.test.mjs` (la primera respuesta de precio lleva el flyer, la segunda no lo repite, con el interruptor apagado sólo texto; columna `reply_settings.flyer` encendida por omisión); `npm run check` y 817 pruebas de servidor; captura en el chat de prueba.
+- **Pendiente:** publicar (con «Sí, publicar») y probarlo en WhatsApp real.
+
 ## Asistente: botones de siguiente paso (publicado en `main`, 22 nov 2026)
 
 - **Por qué:** primer bloque de «experiencia del cliente» (el dueño pidió seguir con varios frentes). Sólo la bienvenida ofrecía botones; las respuestas informativas quedaban sin un siguiente paso para tocar.

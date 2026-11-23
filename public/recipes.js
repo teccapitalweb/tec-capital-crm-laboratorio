@@ -133,7 +133,7 @@ window.createRecipesUI = function ({ state, api, esc, icon, showModal, toast }) 
               .map(([k, v]) => `<option value="${k}" ${s.mode === k ? 'selected' : ''}>${v}</option>`)
               .join(
                 '',
-              )}</select></label><small class="rcp-reply-help">${esc(REPLY_HELP[s.mode] || '')}</small>${aiToggle(s)}<label class="rcp-ai"><input type="checkbox" class="rcp-reply-emojis" data-brand="${esc(s.brand_id)}" data-revision="${s.revision}" ${s.emojis ? 'checked' : ''}> Mensajes con emojis<small>Datos en renglones con emoji y negritas en el nombre del curso. Apagado: viñetas y texto plano. Los mensajes serios (pagos, quejas, pasar con una persona) nunca llevan emojis.</small></label><small>Sin respuesta antes de proponer un asesor: ${s.max_unknown}</small></div>`,
+              )}</select></label><small class="rcp-reply-help">${esc(REPLY_HELP[s.mode] || '')}</small>${aiToggle(s)}<label class="rcp-ai"><input type="checkbox" class="rcp-reply-emojis" data-brand="${esc(s.brand_id)}" data-revision="${s.revision}" ${s.emojis ? 'checked' : ''}> Mensajes con emojis<small>Datos en renglones con emoji y negritas en el nombre del curso. Apagado: viñetas y texto plano. Los mensajes serios (pagos, quejas, pasar con una persona) nunca llevan emojis.</small></label><label class="rcp-ai"><input type="checkbox" class="rcp-reply-flyer" data-brand="${esc(s.brand_id)}" data-revision="${s.revision}" ${s.flyer ? 'checked' : ''}> Flyer del curso al informar<small>La primera respuesta sobre un curso (precio, temario, fechas o recomendación) acompaña el texto con su flyer, una vez por conversación. Apagado: sólo texto. Cae a texto si el curso no tiene flyer; en modo real nunca sale un flyer de demostración.</small></label><small>Sin respuesta antes de proponer un asesor: ${s.max_unknown}</small></div>`,
         )
         .join('')}</div>
       <h3 class="rcp-subtitle">Canal simulado</h3>${note('Por marca y apagado por omisión. Al activarlo, los mensajes salientes pasan por enviado → entregado → leído (o fallido, con reintento), la ventana de servicio de 24 h exige plantillas aprobadas fuera de ella (72 h si el cliente llegó por anuncio) y la bienvenida automática lleva botones de respuesta rápida. Nada se conecta a Meta; sirve para ensayar el flujo real.')}<div class="rcp-brands">${channelSettings
@@ -309,6 +309,23 @@ window.createRecipesUI = function ({ state, api, esc, icon, showModal, toast }) 
         });
         toast(
           el.checked ? 'Los mensajes de esta marca llevan emojis.' : 'Los mensajes de esta marca van en texto plano.',
+        );
+      } catch (e) {
+        toast(e.message);
+      }
+      await load();
+      return true;
+    }
+    if (el.classList?.contains('rcp-reply-flyer')) {
+      try {
+        await api('/api/replies/brands/' + el.dataset.brand, {
+          method: 'PATCH',
+          body: { flyer: el.checked, expectedRevision: Number(el.dataset.revision) },
+        });
+        toast(
+          el.checked
+            ? 'Esta marca acompaña la información del curso con su flyer.'
+            : 'Esta marca responde sólo con texto, sin flyer.',
         );
       } catch (e) {
         toast(e.message);

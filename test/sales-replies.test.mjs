@@ -219,11 +219,11 @@ test('migración replies/0001: sobre una base sin el área «replies» (como la 
     await rm(dir, { recursive: true, force: true });
   });
   // main no tiene ninguna migración del área «replies» (ninguna se publicó): la base de partida es el registro sin ella
-  const names = ['replies/0001-certificate-name-requests', 'replies/0002-message-style'];
+  const names = ['replies/0001-certificate-name-requests', 'replies/0002-message-style', 'replies/0003-course-flyer'];
   assert.deepEqual(
     NAMED.filter(m => m.name.startsWith('replies/')).map(m => m.name),
     names,
-    'las dos migraciones del área, en orden',
+    'las migraciones del área, en orden',
   );
   migrate(db, { backup: false, registry: defineRegistry(NAMED.filter(m => !m.name.startsWith('replies/'))) });
   assert.deepEqual(migrate(db, { backup: false }).applied, names);
@@ -234,6 +234,14 @@ test('migración replies/0001: sobre una base sin el área «replies» (como la 
   assert.ok(
     emojis && emojis.notnull === 1 && String(emojis.dflt_value) === '1',
     'reply_settings.emojis, encendida por omisión',
+  );
+  const flyer = db
+    .prepare('PRAGMA table_info(reply_settings)')
+    .all()
+    .find(c => c.name === 'flyer');
+  assert.ok(
+    flyer && flyer.notnull === 1 && String(flyer.dflt_value) === '1',
+    'reply_settings.flyer, encendida por omisión',
   );
   assertSchemaCurrent(db);
   const tables = db
@@ -1060,6 +1068,26 @@ test('respuestas de venta de punta a punta', async t => {
   const before = texts(dani.id).length;
   await dani.post('gracias, aquí espero');
   assert.equal(texts(dani.id).length, before, 'con una persona a cargo, el asistente no dice nada');
+  // ---- flyer del curso al informar (PLAN_MENSAJES_AMABLES.md, «Flyer del curso»): la primera respuesta concreta sobre el
+  // curso lo acompaña con su flyer, una sola vez por conversación; apagable por marca. `flyer_course_id` sólo se llena
+  // cuando de verdad salió un flyer.
+  const flyerOut = id =>
+    db
+      .prepare(
+        "SELECT flyer_course_id FROM messages WHERE conversation_id=? AND sender_kind='automation' ORDER BY seq DESC LIMIT 1",
+      )
+      .get(id)?.flyer_course_id || null;
+  const fly = await chat(await register('fly', 'Fly Ejemplo'));
+  await fly.say('¿cuánto cuesta?');
+  assert.equal(flyerOut(fly.id), 'aves', 'la primera respuesta de precio acompaña el flyer del curso');
+  await fly.say('¿y el temario?');
+  assert.equal(flyerOut(fly.id), null, 'la segunda respuesta ya no repite el flyer');
+  await setMode({ flyer: false });
+  const flr = await chat(await register('flr', 'Flor Ejemplo'));
+  await flr.say('¿cuánto cuesta?');
+  assert.equal(flyerOut(flr.id), null, 'con el flyer apagado por la marca, sólo texto');
+  await setMode({ flyer: true });
+
   // vecino: en «Sugerir» el asistente nunca escribe, tampoco el acuse
   await setMode({ mode: 'suggest' });
   const tom = await chat(await register('tom', 'Tom Ejemplo'));
