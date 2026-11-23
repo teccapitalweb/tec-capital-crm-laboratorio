@@ -432,6 +432,8 @@ test('modo real de punta a punta: interruptor, respuestas, página de pago, pago
   );
   assert.ok(!withImg.paymentImages.some(f => f.id === other.id), 'y no las de otra marca');
   assert.equal(withImg.revision, 3);
+  view = (await call(origin, '/api/payments/orders/' + order.id + '/customer', { cookie: ana })).order;
+  assert.equal(view.paymentImageUrl, '/api/library/files/' + img.id, 'la página de pago muestra la imagen');
   assert.equal(
     db.prepare("SELECT count(*) n FROM audit WHERE action='real_mode.payment_image' AND entity_id='globalvet'").get().n,
     1,

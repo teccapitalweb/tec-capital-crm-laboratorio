@@ -1236,6 +1236,12 @@ export function createPayments({
       realMode: real,
       methods: real ? [] : Object.entries(METHODS).map(([id, label]) => ({ id, label })),
       paymentInstructions: real ? realModeOf(db, o.brand_id).payment_instructions || null : null,
+      // La imagen «Datos de pago» de la marca (Modo real): la página la muestra junto a las instrucciones. Sólo un id de
+      // archivo de su biblioteca; nunca datos de cuenta en el código.
+      paymentImageUrl:
+        real && realModeOf(db, o.brand_id).payment_image_file_id
+          ? '/api/library/files/' + realModeOf(db, o.brand_id).payment_image_file_id
+          : null,
     };
   }
   function setSettings(brandId, input, user) {

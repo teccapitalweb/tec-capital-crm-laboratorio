@@ -34,6 +34,14 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Cobros: la página de pago muestra la imagen «Datos de pago» (integrado en local, pendiente de publicar, 23 nov 2026)
+
+- **Por qué:** con la imagen ya en el chat, el enlace de pago que genera «Quiero inscribirme» llevaba a una página que sólo mostraba las instrucciones en texto; para que el flujo sea coherente, la página debe enseñar las mismas cuentas.
+- **Qué se hizo (sin esquema nuevo):** `server/payments.mjs` (vista del pedido para el cliente) añade `paymentImageUrl` en modo real, y `public/checkout.js` la pinta debajo de las instrucciones (`.pg-howto-image` en `public/checkout.css`). Los archivos de biblioteca ya se servían por id sin sesión, como los flyers.
+- **Verificado:** `test/real-mode.test.mjs` (la vista del pedido trae la URL de la imagen cuando la marca la tiene); `npm run check`; suite de servidor.
+- **Mismo día, por el conector (fuera del código):** para dejar GlobalVet lista para clientes reales se dejaron borradores sin aviso de prueba de «¿Entregan certificado?» y «¿Cómo puedo pagar?» y de las 3 plantillas de demostración (información, precio, inscripción). Aprobarlos y archivar los viejos lo hace una persona; luego escribir las instrucciones de pago, decidir el flyer del curso de demostración y encender «Atiende clientes reales».
+- **Pendiente:** publicar (con «Sí, publicar»).
+
 ## Cobros: imagen «Datos de pago» por marca (publicado en `main`, 23 nov 2026)
 
 - **Por qué:** el dueño compartió, como referencia, la imagen «Datos de pago» que las consultoras mandan al cliente (cuentas para depositar o transferir, depósito en tienda, concepto, PayPal). Así cobran de verdad: el cliente deposita y manda comprobante; una persona valida. El CRM tenía la validación del comprobante y, en Modo real, las instrucciones de pago en texto; faltaba la imagen y que el asistente la mande.

@@ -452,3 +452,13 @@ dialog.pay-page .pg {
   border-radius: 12px;
   border: 1px solid var(--line);
 }
+
+/* Página de pago en modo real: la imagen «Datos de pago» de la marca junto a las instrucciones */
+.pg-howto-image {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin: 10px auto 0;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+}

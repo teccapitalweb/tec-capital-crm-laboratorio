@@ -34,9 +34,14 @@ window.simCheckout = (() => {
   // escribió la marca; si no escribió nada, que un asesor dará los datos. Nunca hay botón de pagar ni pantalla de «aprobado»: el pago
   // lo confirma una persona del equipo y el aviso llega por el chat.
   function real(o, { esc, icon, preview = false, line, until }) {
-    const how = o.paymentInstructions
-      ? `<p class="pg-howto-text">${esc(o.paymentInstructions)}</p>`
-      : `<p class="pg-howto-text">Un asesor de ${esc(o.brand || 'la marca')} te dará por el chat los datos para pagar.</p>`;
+    const how =
+      (o.paymentInstructions
+        ? `<p class="pg-howto-text">${esc(o.paymentInstructions)}</p>`
+        : `<p class="pg-howto-text">Un asesor de ${esc(o.brand || 'la marca')} te dará por el chat los datos para pagar.</p>`) +
+      // La imagen «Datos de pago» de la marca, si la subió: las cuentas tal como se las manda al cliente.
+      (o.paymentImageUrl
+        ? `<img class="pg-howto-image" src="${esc(o.paymentImageUrl)}" alt="Datos de pago de ${esc(o.brand || 'la marca')}" loading="lazy">`
+        : '');
     return `<div class="pg pg-real">
       ${preview ? '<div class="info-box"><strong>Vista previa para el equipo.</strong> Así verá el cliente su pantalla de pago en modo real.</div>' : ''}
       <section class="pg-summary" aria-label="Resumen del pedido">
