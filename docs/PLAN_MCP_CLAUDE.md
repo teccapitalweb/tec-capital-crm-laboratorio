@@ -115,6 +115,10 @@ El dueño quiere preguntarle a Claude «¿cómo vamos este mes?» y recibir cifr
 | `resultados_difusiones` | Difusiones creadas en el periodo con destinatarios por estado, respuestas y clics | `desde`/`hasta` |
 | `salud_whatsapp` | Números (estado, calidad, límite), plantillas por estado y las que tienen problemas, medidor de costos del mes (entregados por categoría y costo) | `mes` (AAAA-MM) |
 | `que_le_falta_a_la_marca` | La lista «Preparar marca» completa, con los pasos que registran los módulos (modo real, accesos del curso) | Al momento |
+| `resultados_evaluacion` | La última corrida del banco de pruebas (pestaña «Evaluación» del Catálogo): puntaje, pasaron/total, nivel, proveedor, cuándo, si alcanza el umbral de 85 % para «Autónomo», y los casos que FALLARON con su `esperado`, `obtenido` y `motivos`. Los casos son mensajes de prueba del equipo, no de clientes | La última |
+| `resumen_semana` | Los últimos 7 días contra los 7 anteriores con las definiciones del panel: conversaciones nuevas, pidieron informes/inscribirse, inscripciones de práctica, cuánto respondió el asistente solo y la mediana de la primera respuesta del equipo | 7 días vs 7 |
+
+Las dos últimas (23 nov 2026) nacieron al verificar la IA real en producción: el dueño quiso poder pedir «¿cómo salió la evaluación?» o «dame el resumen de la semana» por Claude, sin entrar a la pantalla. Reúsan `eval_runs` y `weeklySummary` (movida a nivel de módulo en `server/analytics.mjs`); correr la evaluación o pasar a «Autónomo» lo sigue haciendo una persona.
 
 **Periodo.** `desde` y `hasta` son días `AAAA-MM-DD`, ambos incluidos, en la **zona horaria de la marca** (la de su horario en Operación; si no tiene, `America/Mexico_City`). Por omisión, los últimos 30 días hasta hoy. Se rechaza una fecha mal escrita o inexistente (`2026-02-30`), `hasta` anterior a `desde`, `hasta` en el futuro, `desde` antes de 2020 y más de **366 días**. Cada respuesta trae `periodo` (con la zona) y `definiciones`; las instrucciones del conector piden a Claude decir siempre el periodo y la definición y no completar cifras que no vengan.
 

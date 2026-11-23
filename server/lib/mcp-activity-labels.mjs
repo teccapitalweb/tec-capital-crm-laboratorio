@@ -37,6 +37,8 @@ export const TOOL_LABELS = Object.freeze({
   resultados_difusiones: 'Consultó los resultados de las difusiones',
   salud_whatsapp: 'Consultó la salud de WhatsApp',
   que_le_falta_a_la_marca: 'Consultó qué le falta a la marca',
+  resultados_evaluacion: 'Consultó los resultados de la evaluación',
+  resumen_semana: 'Consultó el resumen de la semana',
   listar_borradores_catalogo: 'Consultó los borradores del catálogo',
   crear_apertura_borrador: 'Creó una apertura en borrador',
   actualizar_apertura_borrador: 'Guardó una apertura en borrador',

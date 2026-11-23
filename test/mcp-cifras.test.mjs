@@ -28,7 +28,9 @@ test('cifras: permiso propio, sólo lecturas y regla «menos de 3»', () => {
     'que_le_falta_a_la_marca',
     'rendimiento_recorridos',
     'resultados_difusiones',
+    'resultados_evaluacion',
     'resultados_secuencias',
+    'resumen_semana',
     'salud_whatsapp',
   ]);
   for (const t of INSIGHT_TOOLS) {
@@ -404,6 +406,64 @@ test('cifras de la marca de punta a punta: ventas, atención, recorridos, secuen
     'la misma lista que la pantalla, con los pasos de los módulos',
   );
   assert.ok(ready.pasos.some(s => s.paso === 'real-mode') && ready.pasos.some(s => s.paso === 'course-access'));
+
+  // ---- resumen de la semana: las 5 conversaciones y 3 ganadas sembradas caen en los últimos 7 días
+  const week = await seen(insights, 'resumen_semana');
+  assert.equal(week.marca.id, 'globalvet');
+  assert.equal(week.estaSemana.conversacionesNuevas, 5, 'las 5 conversaciones de esta semana');
+  assert.equal(week.estaSemana.pidieronInscribirse, 3, 'las 3 ganadas llegaron a inscripción');
+  assert.equal(week.estaSemana.inscripcionesDePractica, 3);
+  assert.equal(week.semanaPasada.conversacionesNuevas, 0, 'nada la semana anterior');
+  assert.ok('respuestaMedianaMinutos' in week.estaSemana);
+
+  // ---- resultados de la evaluación: sin corridas, y con una corrida que incluye un caso fallido
+  const noEval = await seen(insights, 'resultados_evaluacion');
+  assert.equal(noEval.hayEvaluacion, false);
+  db.prepare(
+    'INSERT INTO eval_runs(id,brand_id,mode,provider,total,passed,score,results,duration_ms,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+  ).run(
+    'run-1',
+    'globalvet',
+    'autonomous',
+    'claude',
+    2,
+    1,
+    50,
+    JSON.stringify([
+      {
+        caseId: 'c1',
+        title: 'Precio',
+        input: '¿Cuánto cuesta?',
+        expected: { intent: 'price' },
+        got: { intent: 'price', action: 'responde', sources: ['catalogue'] },
+        pass: true,
+        failures: [],
+      },
+      {
+        caseId: 'c2',
+        title: 'Duración',
+        input: '¿Cuánto dura?',
+        expected: { intent: 'duration', source: 'catalogue' },
+        got: { intent: 'duration', action: 'responde', sources: ['knowledge', 'catalogue'] },
+        pass: false,
+        failures: ['fuente: esperaba «catalogue», obtuvo «knowledge, catalogue»'],
+      },
+    ]),
+    1500,
+    null,
+    Date.now(),
+  );
+  const ev = await seen(insights, 'resultados_evaluacion');
+  assert.equal(ev.puntaje, 50);
+  assert.equal(ev.pasaron, 1);
+  assert.equal(ev.total, 2);
+  assert.equal(ev.nivel, 'autonomous');
+  assert.equal(ev.proveedor, 'claude');
+  assert.equal(ev.alcanzaUmbral, false, '50 % no alcanza el 85 %');
+  assert.equal(ev.fallaron, 1);
+  assert.equal(ev.fallos[0].caso, 'Duración');
+  assert.deepEqual(ev.fallos[0].obtenido.fuentes, ['knowledge', 'catalogue']);
+  assert.match(ev.fallos[0].motivos[0], /fuente: esperaba/);
 
   // ---- ninguna salida trae datos personales ni referencias de pedidos
   const everything = JSON.stringify(outputs);

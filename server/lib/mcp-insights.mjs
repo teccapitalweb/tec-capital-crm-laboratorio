@@ -20,6 +20,7 @@
 import { fail } from '../app/http.mjs';
 import { zonedToUtc } from '../catalogue-import.mjs';
 import { periodKey } from '../finance.mjs';
+import { weeklySummary } from '../analytics.mjs';
 import { createRouteCaller, few, people } from './mcp-call.mjs';
 
 export const INSIGHTS_SCOPE = 'insights';
@@ -152,6 +153,22 @@ export const INSIGHT_TOOLS = [
     annotations: read('Qué le falta a la marca'),
     description:
       'La lista «Preparar marca» de la marca, igual que en Operación: cada paso esencial y extra, si está listo, qué falta y dónde se arregla; incluye el modo real y los accesos del curso. Al momento de la consulta.',
+    inputSchema: obj({}),
+  },
+  {
+    name: 'resultados_evaluacion',
+    scope: INSIGHTS_SCOPE,
+    annotations: read('Resultados de la evaluación'),
+    description:
+      'La última evaluación con IA del banco de pruebas de la marca (pestaña «Evaluación» del Catálogo): puntaje, cuántos casos pasaron de cuántos, el nivel de respuesta y el proveedor con que corrió, cuándo, y el detalle de los casos que FALLARON con el motivo de cada uno. Sirve para ver si la marca está lista para pasar a «Autónomo» (el umbral es 85 %). Los casos son mensajes de prueba escritos por el equipo, no de clientes reales. Sólo lee; correr la evaluación lo hace una persona en el CRM.',
+    inputSchema: obj({}),
+  },
+  {
+    name: 'resumen_semana',
+    scope: INSIGHTS_SCOPE,
+    annotations: read('Resumen de la semana'),
+    description:
+      'El resumen de la semana de la marca: los últimos 7 días comparados con los 7 anteriores, con las mismas definiciones del panel de Analítica: conversaciones nuevas, pidieron informes, pidieron inscribirse, inscripciones de práctica, qué parte atendió el asistente solo y la mediana de la primera respuesta del equipo. Trae los números de las dos semanas para comparar. Las ventas son de práctica. Sólo cifras.',
     inputSchema: obj({}),
   },
 ];
@@ -871,6 +888,85 @@ export function createInsightTools({ db, module, actorOf }) {
           detalle: s.detail,
           dondeSeArregla: s.label,
         })),
+      };
+    },
+
+    // ---- evaluación: la última corrida del banco de pruebas (server/evaluation.mjs). Sólo lee la tabla eval_runs.
+    resultados_evaluacion(key) {
+      actorOf(key);
+      const brand = brandOf(key);
+      const row = one('SELECT * FROM eval_runs WHERE brand_id=? ORDER BY created_at DESC LIMIT 1', brand.id);
+      if (!row)
+        return {
+          marca: brand,
+          hayEvaluacion: false,
+          nota: 'Todavía no se ha corrido la evaluación de esta marca. La corre una persona en Catálogo → Evaluación.',
+        };
+      let results = [];
+      try {
+        results = JSON.parse(row.results || '[]');
+      } catch {
+        results = [];
+      }
+      const UMBRAL = 85;
+      const fallos = results
+        .filter(r => !r.pass)
+        .map(r => ({
+          caso: r.title,
+          mensaje: r.input,
+          esperado: r.expected || null,
+          obtenido: { intencion: r.got?.intent ?? null, accion: r.got?.action ?? null, fuentes: r.got?.sources || [] },
+          motivos: r.failures || [],
+        }));
+      return {
+        marca: brand,
+        hayEvaluacion: true,
+        puntaje: row.score,
+        pasaron: row.passed,
+        total: row.total,
+        nivel: row.mode,
+        proveedor: row.provider,
+        cuando: new Date(row.created_at).toISOString(),
+        umbralAutonomo: UMBRAL,
+        alcanzaUmbral: row.score >= UMBRAL,
+        fallaron: fallos.length,
+        fallos,
+        nota:
+          'Los casos son mensajes de prueba del equipo, no de clientes. Un puntaje de ' +
+          UMBRAL +
+          ' % o más con el proveedor «claude» indica que la marca está lista para «Autónomo»; aprobar ese cambio lo hace una persona en el CRM.',
+      };
+    },
+
+    // ---- resumen de la semana (server/analytics.mjs weeklySummary): los últimos 7 días contra los 7 anteriores.
+    resumen_semana(key) {
+      actorOf(key);
+      const brand = brandOf(key);
+      const tz = zoneOf(brand.id);
+      const w = weeklySummary(db, [brand.id], tz, Date.now());
+      const view = s => ({
+        conversacionesNuevas: s.conversations,
+        pidieronInformes: s.interesado,
+        pidieronInscribirse: s.inscripcion,
+        inscripcionesDePractica: s.inscripciones,
+        asistenteRespondioSolo: s.handled
+          ? { porcentaje: s.autoShare, automaticas: s.autoReplies, atendidas: s.handled }
+          : null,
+        respuestaMedianaMinutos: s.medianMs === null ? null : Math.round(s.medianMs / 60000),
+      });
+      return {
+        marca: brand,
+        zonaHoraria: tz,
+        periodo: {
+          estaSemana: { desde: new Date(w.period.from).toISOString(), hasta: new Date(w.period.to).toISOString() },
+          semanaPasada: {
+            desde: new Date(w.period.from - 7 * DAY).toISOString(),
+            hasta: new Date(w.period.from).toISOString(),
+          },
+        },
+        estaSemana: view(w.now),
+        semanaPasada: view(w.prev),
+        nota: 'Los últimos 7 días contra los 7 anteriores. Las ventas son de práctica; no confirman dinero ni matrícula. Tiempos de reloj, no descuentan el horario laboral.',
       };
     },
   };
