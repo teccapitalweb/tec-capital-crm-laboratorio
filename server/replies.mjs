@@ -332,6 +332,15 @@ export function createReplies({
   });
   const settings = brandId =>
     db.prepare('SELECT * FROM reply_settings WHERE brand_id=?').get(brandId) || defaults(brandId);
+  // La imagen «Datos de pago» que la marca subió en Modo real (brand_real_mode.payment_image_file_id), o null. Es un
+  // archivo de su biblioteca: aquí sólo viaja el id; ningún dato de cuenta pasa por el texto del asistente.
+  const paymentImageOf = brandId => {
+    try {
+      return db.prepare('SELECT payment_image_file_id f FROM brand_real_mode WHERE brand_id=?').get(brandId)?.f || null;
+    } catch {
+      return null;
+    }
+  };
   const entry = id =>
     typeof id === 'string' ? db.prepare('SELECT * FROM knowledge_entries WHERE id=?').get(id) : null;
   const view = e => e && { ...e, variants: JSON.parse(e.variants) };
@@ -1339,6 +1348,9 @@ export function createReplies({
             out.handoff = true;
           }
         }
+        // «¿Cómo pago?» / «¿dónde deposito?»: si la marca subió su imagen «Datos de pago» (Modo real), acompaña la respuesta
+        // (venga del conocimiento aprobado o del texto fijo). No cuando pasa a una persona: ahí el texto dice que ella los da.
+        if (!out.handoff) out.paymentImageFileId = paymentImageOf(c.brand_id);
         out.reason =
           (out.reason ? out.reason + ' ' : '') +
           (out.handoff
@@ -2053,10 +2065,18 @@ export function createReplies({
       'automation',
       ref,
       null,
-      p.prepared?.flyerSnapshot ? c.course_id : null,
+      p.prepared?.flyerSnapshot || p.paymentImageFileId ? c.course_id : null,
       p.prepared,
       { buttons, keepButtons, category: 'service' },
     ); // responde a un mensaje entrante: siempre dentro de la ventana de servicio
+    // La imagen «Datos de pago» viaja como archivo de la biblioteca de la marca (igual que un archivo en un recorrido): el
+    // chat y WhatsApp real la mandan por su libraryFileId. Nunca se copia un dato de cuenta al texto. Un flyer del curso,
+    // si lo hubiera en la misma respuesta, tiene prioridad.
+    if (p.paymentImageFileId && !p.prepared?.flyerSnapshot)
+      db.prepare('UPDATE messages SET flyer_snapshot=? WHERE id=?').run(
+        JSON.stringify({ libraryFileId: p.paymentImageFileId, file: true }),
+        messageId,
+      );
     log(handoff ? 'escalated' : 'replied', messageId);
     if (p.certData) saveCertData(c, trigger.id, p.certData);
     if (p.accessResend) accessApi?.record?.(p.accessResend.enrollmentId, messageId);
@@ -2207,6 +2227,7 @@ export function createReplies({
       providerSkipped: wantsProvider && useProvider === false,
       handoff: answered ? false : p.handoff,
       buttons: (answered ? p.ifAnswered.buttons : p.buttons) || null,
+      paymentImageFileId: p.paymentImageFileId || null, // la imagen «Datos de pago» que acompañaría la respuesta
       stage: p.stage,
       sources: [
         ...p.sources.filter(s => !answered || s.kind !== 'offer_human'),

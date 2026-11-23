@@ -79,6 +79,9 @@ export default {
         brandName: repo.brandName(brandId),
         enabled: s.enabled === 1,
         paymentInstructions: s.payment_instructions || '',
+        paymentImageFileId: s.payment_image_file_id || null,
+        paymentImageUrl: s.payment_image_file_id ? '/api/library/files/' + s.payment_image_file_id : null,
+        paymentImages: repo.libraryImages(brandId),
         revision: s.revision,
         updatedAt: s.updated_at || null,
         updatedByName: s.updated_by ? repo.userName(s.updated_by) : null,
@@ -112,6 +115,26 @@ export default {
               field: 'paymentInstructions',
             });
         }
+        // Imagen «Datos de pago»: un archivo de imagen de la biblioteca de ESTA marca, o null para quitarla. El CRM sólo
+        // guarda el id; los datos de cuenta viven en la imagen que subió la marca, nunca en el código ni en el texto.
+        let imageFileId = current.payment_image_file_id || null;
+        if (input.paymentImageFileId !== undefined) {
+          if (input.paymentImageFileId !== null && typeof input.paymentImageFileId !== 'string')
+            throw fail(
+              400,
+              'La imagen de datos de pago es el id de un archivo de la biblioteca, o null para quitarla.',
+              {
+                field: 'paymentImageFileId',
+              },
+            );
+          imageFileId = input.paymentImageFileId ? input.paymentImageFileId.trim() : null;
+          if (imageFileId && !repo.libraryImage(brandId, imageFileId))
+            throw fail(
+              400,
+              'La imagen de datos de pago debe ser una imagen (JPG, PNG o WebP) de la biblioteca de esta marca.',
+              { field: 'paymentImageFileId' },
+            );
+        }
         if (enabled !== current.enabled && input.confirm !== true)
           throw fail(
             400,
@@ -120,14 +143,26 @@ export default {
               : 'Confirma que la marca vuelve al laboratorio: sus mensajes volverán a decir que es una prueba.',
             { code: 'confirm_required' },
           );
-        if (enabled === current.enabled && instructions === current.payment_instructions) return card(brandId);
+        const sameImage = imageFileId === (current.payment_image_file_id || null);
+        if (enabled === current.enabled && instructions === current.payment_instructions && sameImage)
+          return card(brandId);
         const t = now();
         transaction(db, () => {
-          if (!repo.save(brandId, { enabled, instructions, revision: current.revision, userId: user.id, at: t }))
+          if (
+            !repo.save(brandId, {
+              enabled,
+              instructions,
+              imageFileId,
+              revision: current.revision,
+              userId: user.id,
+              at: t,
+            })
+          )
             throw fail(409, 'El modo real de esta marca cambió. Recarga la pantalla.', { code: 'stale_record' });
         });
         if (enabled !== current.enabled) audit(user, enabled ? 'real_mode.on' : 'real_mode.off', brandId);
         if (instructions !== current.payment_instructions) audit(user, 'real_mode.instructions', brandId);
+        if (!sameImage) audit(user, 'real_mode.payment_image', brandId);
         broadcast('crm', null, { brandId });
         emit(brandId);
         return card(brandId);

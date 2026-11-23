@@ -69,7 +69,7 @@ window.createPaymentsUI = function ({ state, api, esc, icon, showModal, toast })
     return `<section class="crm-panel real-mode-panel"><div class="ops-card-top"><h2>Modo real (clientes de verdad)</h2>${chip('Sólo administración')}</div>${note('Apagado por omisión. Encendido, los mensajes de la marca dejan de decir que es una prueba y su página de pago ya no ofrece tarjeta ni OXXO simulados: muestra las instrucciones de abajo y el pedido lo marca pagado una persona del equipo con la referencia del pago. El asistente nunca confirma un pago.')}<div class="rcp-brands">${rows
       .map(
         r =>
-          `<form class="rcp-brand real-mode-brand" id="pay-realmode-${esc(r.brandId)}" data-brand="${esc(r.brandId)}" data-enabled="${r.enabled ? '1' : '0'}">${hidden('expectedRevision', r.revision)}<div><strong>${esc(r.brandName)}</strong> ${chip(r.enabled ? 'Modo real' : 'Laboratorio', r.enabled ? 'ok' : '')}<small>${r.missing.length ? (r.enabled ? 'Falta: ' : 'Antes de encenderlo falta: ') + esc(r.missing.join('; ')) + '.' : r.enabled ? 'Listo para clientes reales.' : 'Ya tiene lo necesario para encenderlo.'}${r.updatedByName ? ' · último cambio: ' + esc(r.updatedByName) + ', ' + stamp(r.updatedAt) : ''}</small>${r.labTexts.length ? `<small>Textos propios con aviso de prueba (se recortan al enviar; conviene reescribirlos): ${esc(r.labTexts.map(t => t.kind + ' «' + t.label + '»').join(', '))}</small>` : ''}</div><div class="real-mode-fields"><label class="checkbox-field"><input type="checkbox" name="enabled" ${r.enabled ? 'checked' : ''} ${admin() ? '' : 'disabled'}> Atiende clientes reales</label><label class="field">Instrucciones de pago para el cliente<textarea name="paymentInstructions" rows="3" maxlength="1500" placeholder="Banco, titular y cuenta o CLABE de la marca, y qué poner como concepto. Si lo dejas vacío, la página dice que un asesor le dará los datos." ${admin() ? '' : 'disabled'}>${esc(r.paymentInstructions)}</textarea></label>${admin() ? '<button type="submit" class="btn">Guardar</button>' : ''}</div></form>`,
+          `<form class="rcp-brand real-mode-brand" id="pay-realmode-${esc(r.brandId)}" data-brand="${esc(r.brandId)}" data-enabled="${r.enabled ? '1' : '0'}">${hidden('expectedRevision', r.revision)}<div><strong>${esc(r.brandName)}</strong> ${chip(r.enabled ? 'Modo real' : 'Laboratorio', r.enabled ? 'ok' : '')}<small>${r.missing.length ? (r.enabled ? 'Falta: ' : 'Antes de encenderlo falta: ') + esc(r.missing.join('; ')) + '.' : r.enabled ? 'Listo para clientes reales.' : 'Ya tiene lo necesario para encenderlo.'}${r.updatedByName ? ' · último cambio: ' + esc(r.updatedByName) + ', ' + stamp(r.updatedAt) : ''}</small>${r.labTexts.length ? `<small>Textos propios con aviso de prueba (se recortan al enviar; conviene reescribirlos): ${esc(r.labTexts.map(t => t.kind + ' «' + t.label + '»').join(', '))}</small>` : ''}</div><div class="real-mode-fields"><label class="checkbox-field"><input type="checkbox" name="enabled" ${r.enabled ? 'checked' : ''} ${admin() ? '' : 'disabled'}> Atiende clientes reales</label><label class="field">Instrucciones de pago para el cliente<textarea name="paymentInstructions" rows="3" maxlength="1500" placeholder="Banco, titular y cuenta o CLABE de la marca, y qué poner como concepto. Si lo dejas vacío, la página dice que un asesor le dará los datos." ${admin() ? '' : 'disabled'}>${esc(r.paymentInstructions)}</textarea></label><label class="field">Imagen «Datos de pago» (opcional)<select name="paymentImageFileId" ${admin() ? '' : 'disabled'}><option value="">Sin imagen</option>${(r.paymentImages || []).map(f => `<option value="${esc(f.id)}" ${f.id === r.paymentImageFileId ? 'selected' : ''}>${esc(f.filename)}</option>`).join('')}</select><small>La imagen con las cuentas para depositar que hoy le mandan al cliente. El asistente la adjunta cuando preguntan cómo o dónde pagar. Es un archivo de la biblioteca de la marca: nunca se escribe ningún dato en el sistema.</small></label>${r.paymentImageUrl ? `<img class="real-mode-pay-image" src="${esc(r.paymentImageUrl)}" alt="Imagen de datos de pago de ${esc(r.brandName)}" loading="lazy">` : ''}${admin() ? `<label class="field">Subir imagen nueva (JPG, PNG o WebP)<input type="file" name="paymentImageUpload" accept="image/png,image/jpeg,image/webp"></label>` : ''}${admin() ? '<button type="submit" class="btn">Guardar</button>' : ''}</div></form>`,
       )
       .join('')}</div></section>`;
   }
@@ -258,11 +258,29 @@ window.createPaymentsUI = function ({ state, api, esc, icon, showModal, toast })
         )
       )
         return true;
+      // Imagen «Datos de pago»: si eligieron un archivo nuevo, primero sube a la biblioteca de la marca y usa ese id; si
+      // no, la opción elegida en la lista (vacía = sin imagen). Sólo viaja el id: ningún dato de cuenta pasa por aquí.
+      let paymentImageFileId = input.paymentImageFileId === undefined ? undefined : input.paymentImageFileId || null;
+      const upload = form.querySelector('input[name="paymentImageUpload"]')?.files?.[0];
+      if (upload) {
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+          reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+          reader.readAsDataURL(upload);
+        });
+        const saved = await api('/api/catalogue/files', {
+          method: 'POST',
+          body: { brandId: form.dataset.brand, file: { name: upload.name, type: upload.type, base64 } },
+        });
+        paymentImageFileId = saved.id;
+      }
       await api('/api/real-mode/brands/' + form.dataset.brand, {
         method: 'PATCH',
         body: {
           enabled: on,
           paymentInstructions: input.paymentInstructions || '',
+          ...(paymentImageFileId !== undefined ? { paymentImageFileId } : {}),
           expectedRevision: Number(input.expectedRevision),
           confirm: changed,
         },

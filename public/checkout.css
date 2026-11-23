@@ -443,3 +443,12 @@ dialog.pay-page .pg {
     min-height: 0;
   }
 }
+
+/* Imagen «Datos de pago» por marca (Modo real; docs/PLAN_MODO_REAL.md) */
+.real-mode-pay-image {
+  display: block;
+  max-width: 240px;
+  margin: 6px 0 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}

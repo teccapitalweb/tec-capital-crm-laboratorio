@@ -249,12 +249,19 @@ test('migración real-mode/0001: sobre una base ya publicada, todas las marcas q
     db.close();
     await rm(dir, { recursive: true, force: true });
   });
-  migrate(db, { backup: false, registry: defineRegistry(NAMED.filter(m => m.name !== MIGRATION)) });
+  migrate(db, { backup: false, registry: defineRegistry(NAMED.filter(m => !m.name.startsWith('real-mode/'))) });
   const brands = db.prepare('SELECT id FROM brands ORDER BY id').all();
   assert.ok(brands.length >= 2);
   assert.equal(isRealBrand(db, 'globalvet'), false, 'sin la tabla, la marca sigue en laboratorio');
-  assert.deepEqual(migrate(db, { backup: false }).applied, [MIGRATION]);
+  assert.deepEqual(migrate(db, { backup: false }).applied, [MIGRATION, 'real-mode/0002-payment-image']);
   assertSchemaCurrent(db);
+  assert.ok(
+    db
+      .prepare('PRAGMA table_info(brand_real_mode)')
+      .all()
+      .some(c => c.name === 'payment_image_file_id'),
+    'la imagen «Datos de pago» por marca (NULL = sin imagen)',
+  );
   assert.equal(db.prepare('SELECT count(*) n FROM brand_real_mode').get().n, 0);
   for (const { id } of brands) assert.equal(isRealBrand(db, id), false);
   assert.equal(forBrand(db, 'globalvet', copy.price(ctx)), copy.price(ctx), 'apagado: el texto no cambia');
@@ -402,6 +409,78 @@ test('modo real de punta a punta: interruptor, respuestas, página de pago, pago
   view = (await call(origin, '/api/payments/orders/' + order.id + '/customer', { cookie: ana })).order;
   assert.equal(view.paymentInstructions, 'Transferencia a la cuenta 0000 de la marca.');
 
+  // ---- imagen «Datos de pago» (docs/PLAN_MODO_REAL.md): un archivo de imagen de la biblioteca de ESTA marca; el
+  // asistente la adjunta cuando preguntan cómo pagar. Sólo viaja el id: ningún dato de cuenta pasa por el sistema.
+  const png = await readFile('public/flyers/globalvet-aves-v1.png');
+  const upload = brandId =>
+    call(origin, '/api/catalogue/files', {
+      cookie: admin,
+      body: { brandId, file: { name: 'datos-de-pago.png', type: 'image/png', base64: png.toString('base64') } },
+      expected: 201,
+    });
+  const img = await upload('globalvet'),
+    other = await upload('odonteck');
+  await patch(admin, { paymentImageFileId: other.id, expectedRevision: 2 }, 400); // de otra marca
+  await patch(admin, { paymentImageFileId: 'no-existe', expectedRevision: 2 }, 400);
+  await patch(admin, { paymentImageFileId: 123, expectedRevision: 2 }, 400);
+  const withImg = (await patch(admin, { paymentImageFileId: img.id, expectedRevision: 2 })).brand;
+  assert.equal(withImg.paymentImageFileId, img.id);
+  assert.equal(withImg.paymentImageUrl, '/api/library/files/' + img.id);
+  assert.ok(
+    withImg.paymentImages.some(f => f.id === img.id),
+    'la lista para elegir trae la imagen de la marca',
+  );
+  assert.ok(!withImg.paymentImages.some(f => f.id === other.id), 'y no las de otra marca');
+  assert.equal(withImg.revision, 3);
+  assert.equal(
+    db.prepare("SELECT count(*) n FROM audit WHERE action='real_mode.payment_image' AND entity_id='globalvet'").get().n,
+    1,
+  );
+  assert.equal(
+    (await patch(admin, { paymentImageFileId: img.id, expectedRevision: 3 })).brand.revision,
+    3,
+    'la misma imagen no cuenta como cambio',
+  );
+  const simPay = (
+    await call(origin, '/api/replies/test', {
+      cookie: admin,
+      body: { brandId: 'globalvet', text: '¿Cuáles son las formas de pago?' },
+    })
+  ).result;
+  assert.equal(simPay.paymentImageFileId, img.id, 'la simulación anuncia la imagen que acompañará la respuesta');
+  {
+    const n = auto().length;
+    await call(origin, '/api/conversations/' + conv.id + '/messages', {
+      cookie: ana,
+      body: { text: '¿Cuáles son las formas de pago?', clientRef: randomUUID() },
+      expected: 201,
+    });
+    await until(() => auto().length > n, 'respuesta de formas de pago con imagen', { logs: server.logs });
+    const last = db
+      .prepare(
+        "SELECT flyer_course_id,flyer_snapshot FROM messages WHERE conversation_id=? AND sender_kind='automation' ORDER BY seq DESC LIMIT 1",
+      )
+      .get(conv.id);
+    assert.deepEqual(
+      JSON.parse(last.flyer_snapshot),
+      { libraryFileId: img.id, file: true },
+      'la respuesta lleva la imagen',
+    );
+    assert.equal(last.flyer_course_id, 'aves');
+    for (const m of auto()) clean(m, 'respuesta de pago con imagen en modo real');
+  }
+  assert.equal((await patch(admin, { paymentImageFileId: null, expectedRevision: 3 })).brand.paymentImageFileId, null);
+  assert.equal(
+    (
+      await call(origin, '/api/replies/test', {
+        cookie: admin,
+        body: { brandId: 'globalvet', text: '¿Cuáles son las formas de pago?' },
+      })
+    ).result.paymentImageFileId,
+    null,
+    'sin imagen, la respuesta va sólo en texto',
+  );
+
   // ---- forzar un método simulado: error claro y el pedido sigue pendiente (también por el webhook de ensayo)
   for (const body of [{ method: 'card' }, { method: 'oxxo' }, { method: 'card', outcome: 'approved' }]) {
     const r = await call(origin, '/api/payments/orders/' + order.id + '/pay', { cookie: ana, body, expected: 409 });
@@ -538,9 +617,12 @@ test('modo real de punta a punta: interruptor, respuestas, página de pago, pago
   assert.doesNotMatch(gvStep.detail, /instrucciones de pago/);
   assert.match((await steps('odonteck')).find(s => s.id === 'real-mode').detail, /^Apagado \(laboratorio\)/);
 
-  // ---- apagar exige confirmación y devuelve la marca al laboratorio
-  await patch(admin, { enabled: false, expectedRevision: 2 }, 400);
-  assert.equal((await patch(admin, { enabled: false, expectedRevision: 2, confirm: true })).brand.enabled, false);
+  // ---- apagar exige confirmación y devuelve la marca al laboratorio (con la revisión vigente, no un número fijo)
+  const rev = (await call(origin, '/api/real-mode', { cookie: admin })).brands.find(
+    b => b.brandId === 'globalvet',
+  ).revision;
+  await patch(admin, { enabled: false, expectedRevision: rev }, 400);
+  assert.equal((await patch(admin, { enabled: false, expectedRevision: rev, confirm: true })).brand.enabled, false);
   assert.match(await sim('globalvet', '¿Cuánto cuesta?'), /Precio de ejemplo: este es un chat de prueba/);
   assertSchemaCurrent(db);
 });

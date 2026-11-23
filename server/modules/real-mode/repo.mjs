@@ -6,24 +6,40 @@ export function createRepo(db) {
     userName: userId => one('SELECT name FROM users WHERE id=?', userId)?.name || null,
     order: id => one('SELECT * FROM orders WHERE id=?', id),
 
-    // Guarda el interruptor y las instrucciones con su revisión. Devuelve false si otra persona cambió la fila.
-    save(brandId, { enabled, instructions, revision, userId, at }) {
+    // Guarda el interruptor, las instrucciones y la imagen «Datos de pago» con su revisión. Devuelve false si otra
+    // persona cambió la fila.
+    save(brandId, { enabled, instructions, imageFileId = null, revision, userId, at }) {
       if (revision === 0)
         return (
           db
             .prepare(
-              'INSERT INTO brand_real_mode(brand_id,enabled,payment_instructions,revision,updated_by,updated_at) VALUES(?,?,?,1,?,?) ON CONFLICT(brand_id) DO NOTHING',
+              'INSERT INTO brand_real_mode(brand_id,enabled,payment_instructions,payment_image_file_id,revision,updated_by,updated_at) VALUES(?,?,?,?,1,?,?) ON CONFLICT(brand_id) DO NOTHING',
             )
-            .run(brandId, enabled, instructions, userId, at).changes === 1
+            .run(brandId, enabled, instructions, imageFileId, userId, at).changes === 1
         );
       return (
         db
           .prepare(
-            'UPDATE brand_real_mode SET enabled=?,payment_instructions=?,revision=revision+1,updated_by=?,updated_at=? WHERE brand_id=? AND revision=?',
+            'UPDATE brand_real_mode SET enabled=?,payment_instructions=?,payment_image_file_id=?,revision=revision+1,updated_by=?,updated_at=? WHERE brand_id=? AND revision=?',
           )
-          .run(enabled, instructions, userId, at, brandId, revision).changes === 1
+          .run(enabled, instructions, imageFileId, userId, at, brandId, revision).changes === 1
       );
     },
+    // Una imagen de la biblioteca de ESTA marca (JPG, PNG, WebP…), o null: la imagen «Datos de pago» nunca es de otra marca.
+    libraryImage: (brandId, fileId) =>
+      one(
+        "SELECT id,mime,filename FROM library_files WHERE id=? AND brand_id=? AND mime LIKE 'image/%'",
+        fileId,
+        brandId,
+      ) || null,
+    // Las imágenes propias de la marca (sin el arte de demostración), de la más reciente a la más antigua, para elegir la
+    // de «Datos de pago» en la pantalla.
+    libraryImages: brandId =>
+      db
+        .prepare(
+          "SELECT id,filename,mime FROM library_files WHERE brand_id=? AND mime LIKE 'image/%' AND builtin_id IS NULL ORDER BY created_at DESC LIMIT 60",
+        )
+        .all(brandId),
 
     // ---- lo que «Preparar marca» revisa antes de encender
     hasWhatsAppNumber: brandId => Boolean(one('SELECT 1 FROM wa_numbers WHERE brand_id=? LIMIT 1', brandId)),
