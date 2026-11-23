@@ -34,12 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Conector: reportes de evaluación y resumen de la semana (integrado en local, pendiente de publicar, 23 nov 2026)
+## Conector: reportes de evaluación y resumen de la semana (publicado en `main`, 23 nov 2026)
 
 - **Por qué:** al verificar la IA real en producción (sonnet-5-5, evaluación 16/18 · 88,9 % en autónomo), el dueño pidió que estos reportes lleguen por el conector/MCP, no sólo por la pantalla. El conector ya daba ventas, atención, recorridos, etc., pero no la evaluación ni el resumen semanal.
 - **Qué se hizo (sin esquema nuevo):** dos herramientas de sólo lectura con permiso `insights` en `server/lib/mcp-insights.mjs`: `resultados_evaluacion` (lee la última fila de `eval_runs`: puntaje, pasaron/total, nivel, proveedor, cuándo, si alcanza el umbral de 85 %, y los casos que fallaron con su `esperado`/`obtenido`/`motivos`) y `resumen_semana` (los últimos 7 días contra los 7 anteriores con las definiciones del panel). Para reusar sin duplicar, `funnel` y `weeklySummary` pasaron a nivel de módulo en `server/analytics.mjs` (exportadas), y `weeklySummary(db, ids, tz, now)` es pura; `build()` la sigue usando. Las instrucciones del conector (`server/mcp.mjs`) nombran las dos herramientas. Los casos de evaluación son mensajes de prueba del equipo, no de clientes. Detalle en [PLAN_MCP_CLAUDE.md](PLAN_MCP_CLAUDE.md).
 - **Verificado:** `test/mcp-cifras.test.mjs` (la lista de herramientas; `resumen_semana` con las 5 conversaciones y 3 ganadas sembradas; `resultados_evaluacion` sin corridas y con una de 50 % y un caso fallido con su motivo; y la verificación de que ninguna salida trae datos personales); `test/analytics.test.mjs` tras mover `weeklySummary`; `npm run check` y la suite de servidor.
-- **Pendiente:** publicar (con «Sí, publicar») y probarlo con la app real de Claude conectada a GlobalVet.
+- **Publicado:** commit `ee9da64`, sin esquema nuevo; comprobado sin sesión (`/crm` 200, `/mcp` 401). Falta usarlo con la app real de Claude conectada a GlobalVet: el conector recoge las herramientas nuevas al reconectar.
 
 ## Recorridos: flyer del curso en precio, temario y fechas (publicado en `main`, 23 nov 2026)
 
