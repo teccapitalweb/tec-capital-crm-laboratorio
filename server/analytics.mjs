@@ -57,6 +57,65 @@ export function createAnalytics({ db, crm, json, now = Date.now }) {
     };
   }
 
+  // Resumen de la semana (docs/PLAN_REPORTE_SEMANAL.md): las mismas cifras que la analítica, pero de los últimos 7 días
+  // contra los 7 anteriores, para presentarlas o llevárselas. Mismo alcance por marca que el resto del panel.
+  function weeklySummary(ids, tz) {
+    const q = ph(ids),
+      to = now(),
+      WEEK = 7 * DAY,
+      isAi = r => /^Proveedor de IA:/.test(r.reason || '');
+    const win = (from, upto) => {
+      const opps = db
+        .prepare(`SELECT id,stage FROM opportunities WHERE brand_id IN (${q}) AND created_at>=? AND created_at<?`)
+        .all(...ids, from, upto);
+      const events = db
+        .prepare(
+          `SELECT e.opportunity_id,json_extract(e.details,'$.to') "to" FROM crm_events e JOIN opportunities o ON o.id=e.opportunity_id WHERE e.kind='stage' AND o.brand_id IN (${q}) AND o.created_at>=? AND o.created_at<?`,
+        )
+        .all(...ids, from, upto);
+      const f = funnel(opps, events);
+      const conversations = db
+        .prepare(`SELECT count(*) n FROM conversations WHERE brand_id IN (${q}) AND created_at>=? AND created_at<?`)
+        .get(...ids, from, upto).n;
+      const logs = db
+        .prepare(`SELECT action,reason FROM reply_log WHERE brand_id IN (${q}) AND created_at>=? AND created_at<?`)
+        .all(...ids, from, upto);
+      const rules = logs.filter(r => r.action === 'replied' && !isAi(r)).length,
+        ai = logs.filter(r => r.action === 'replied' && isAi(r)).length,
+        person = logs.filter(r => r.action === 'escalated').length,
+        handled = rules + ai + person;
+      const responses = db
+        .prepare(
+          `SELECT details FROM operation_events WHERE kind='response' AND brand_id IN (${q}) AND created_at>=? AND created_at<?`,
+        )
+        .all(...ids, from, upto)
+        .map(r => {
+          try {
+            return JSON.parse(r.details);
+          } catch {
+            return null;
+          }
+        })
+        .filter(r => r && r.kind === 'first' && Number.isFinite(r.respondedAt) && Number.isFinite(r.waitingSince));
+      return {
+        conversations,
+        interesado: f.interesado,
+        inscripcion: f.inscripcion,
+        inscripciones: f.ganada,
+        autoReplies: rules + ai,
+        handled,
+        autoShare: rate(rules + ai, handled),
+        responses: responses.length,
+        medianMs: dist(responses.map(r => Math.max(0, r.respondedAt - r.waitingSince))).medianMs,
+      };
+    };
+    return {
+      period: { from: to - WEEK, to, tz },
+      now: win(to - WEEK, to),
+      prev: win(to - 2 * WEEK, to - WEEK),
+    };
+  }
+
   function build(user, params) {
     const p = period(params),
       brand = params.get('brand') || null,
@@ -227,6 +286,7 @@ export function createAnalytics({ db, crm, json, now = Date.now }) {
         lost: outcome('perdida'),
       },
       funnel: funnel(opps, events),
+      weekly: weeklySummary(ids, p.tz),
       byBrand,
       byCourse,
       lossReasons: [...lost].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),

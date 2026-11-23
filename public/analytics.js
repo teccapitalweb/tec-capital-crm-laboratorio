@@ -83,12 +83,116 @@ window.createAnalyticsUI = function ({ state, api, esc, icon, icons, toast }) {
       pct(x.conversion),
     ]);
 
+  // Resumen de la semana (docs/PLAN_REPORTE_SEMANAL.md): las cifras de los últimos 7 días contra los 7 anteriores, en
+  // lenguaje sencillo, con botones para copiar o descargar y presentarlas.
+  const weekName = () => (data.scope.brand ? data.scope.brands[0].name : 'Todas tus marcas');
+  function weekRange() {
+    const tz = data.weekly.period.tz,
+      fmt = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', timeZone: tz });
+    return fmt.format(data.weekly.period.from) + ' – ' + fmt.format(data.weekly.period.to - 86400000);
+  }
+  function weekRows() {
+    const a = data.weekly.now,
+      b = data.weekly.prev,
+      arrow = dir => (dir === 'up' ? '↑' : dir === 'down' ? '↓' : '→');
+    const count = (n, p) => {
+      const diff = n - p,
+        dir = diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat';
+      return {
+        dir,
+        good: diff >= 0,
+        text:
+          diff === 0 ? 'igual que la semana pasada' : arrow(dir) + ' ' + num(Math.abs(diff)) + ' vs la semana pasada',
+      };
+    };
+    const rows = [
+      ['Conversaciones nuevas', num(a.conversations), count(a.conversations, b.conversations)],
+      ['Pidieron informes', num(a.interesado), count(a.interesado, b.interesado)],
+      ['Pidieron inscribirse', num(a.inscripcion), count(a.inscripcion, b.inscripcion)],
+      ['Inscripciones de práctica', num(a.inscripciones), count(a.inscripciones, b.inscripciones)],
+    ];
+    if (a.handled) {
+      const diff = b.autoShare === null ? null : Math.round(a.autoShare - b.autoShare),
+        dir = diff === null || diff === 0 ? 'flat' : diff > 0 ? 'up' : 'down';
+      rows.push([
+        'El asistente respondió solo',
+        pct(a.autoShare) + ' (' + num(a.autoReplies) + ' de ' + num(a.handled) + ')',
+        {
+          dir,
+          good: diff === null || diff >= 0,
+          text:
+            diff === null
+              ? 'sin comparación'
+              : diff === 0
+                ? 'igual que la semana pasada'
+                : arrow(dir) + ' ' + Math.abs(diff) + ' pts vs la semana pasada',
+        },
+      ]);
+    }
+    if (a.medianMs !== null) {
+      const diff = b.medianMs === null ? null : a.medianMs - b.medianMs,
+        dir = diff === null || diff === 0 ? 'flat' : diff < 0 ? 'down' : 'up';
+      rows.push([
+        'Respuesta del equipo (mediana)',
+        dur(a.medianMs),
+        {
+          dir,
+          good: diff === null || diff <= 0,
+          text:
+            diff === null
+              ? 'sin comparación'
+              : diff === 0
+                ? 'igual que la semana pasada'
+                : diff < 0
+                  ? '↓ ' + dur(-diff) + ' más rápido'
+                  : '↑ ' + dur(diff) + ' más lento',
+        },
+      ]);
+    }
+    return rows;
+  }
+  function weekText() {
+    const lines = weekRows().map(([label, value, dlt]) => '• ' + label + ': ' + value + ' (' + dlt.text + ')');
+    return (
+      'Resumen de la semana — ' +
+      weekName() +
+      '\n' +
+      weekRange() +
+      '\n\n' +
+      lines.join('\n') +
+      '\n\nComparado con los 7 días anteriores. Las ventas del laboratorio son de práctica; no confirman dinero ni matrícula.'
+    );
+  }
+  function weekCard() {
+    return `<section class="crm-panel an-week"><div class="an-week-head"><div><h2>Resumen de la semana</h2><small>${esc(
+      weekName(),
+    )} · ${esc(
+      weekRange(),
+    )}</small></div><div class="an-week-actions"><button type="button" class="btn" data-action="an-week-copy">${icon(
+      'copy',
+    )} Copiar</button><button type="button" class="btn" data-action="an-week-download">${icon(
+      'download',
+    )} Descargar</button></div></div><ul class="an-week-list">${weekRows()
+      .map(
+        ([label, value, dlt]) =>
+          `<li><span class="an-week-label">${esc(label)}</span><strong class="an-week-value">${esc(
+            value,
+          )}</strong><small class="an-week-delta an-delta-${dlt.dir} ${dlt.good ? 'an-good' : 'an-bad'}">${esc(
+            dlt.text,
+          )}</small></li>`,
+      )
+      .join(
+        '',
+      )}</ul><p class="crm-hint">Comparado con los 7 días anteriores. Las ventas del laboratorio son de práctica; no confirman dinero ni matrícula.</p></section>`;
+  }
+
   function view() {
     const d = data,
       f = d.funnel,
       r = d.response;
     return `<div class="content-page an-page"><div class="page-heading"><div><span class="eyebrow">Resultados · por marca</span><h1>Analítica comercial</h1><p>${esc(d.scope.brand ? d.scope.brands[0].name : 'Todas tus marcas')} · últimos ${d.period.days} días. Las ventas son de práctica.</p></div></div>
       <div class="an-controls"><label>Periodo<select id="an-days">${[7, 30, 90, 365].map(n => `<option value="${n}" ${n === days ? 'selected' : ''}>${n === 365 ? 'Último año' : 'Últimos ' + n + ' días'}</option>`).join('')}</select></label><button type="button" class="btn" data-action="an-reload">${icon('refresh-cw')} Actualizar</button></div>
+      ${weekCard()}
       <div class="an-kpis">${kpi('Conversaciones nuevas', num(d.totals.conversations))}${kpi('Oportunidades nuevas', num(d.totals.opportunities))}${kpi('Ventas de práctica', num(d.totals.won), 'cerradas en el periodo')}${kpi('Conversión', pct(f.conversion), 'de las creadas en el periodo')}</div>
       <div class="an-grid">
         <section class="crm-panel"><h2>Embudo</h2>${funnel(f)}</section>
@@ -172,6 +276,28 @@ window.createAnalyticsUI = function ({ state, api, esc, icon, icons, toast }) {
   async function action(name) {
     if (name === 'an-reload') {
       await render();
+      return true;
+    }
+    if (name === 'an-week-copy') {
+      try {
+        await navigator.clipboard.writeText(weekText());
+        toast('Resumen de la semana copiado.');
+      } catch {
+        toast('No se pudo copiar; descárgalo.');
+      }
+      return true;
+    }
+    if (name === 'an-week-download') {
+      const blob = new Blob([weekText()], { type: 'text/plain;charset=utf-8' }),
+        url = URL.createObjectURL(blob),
+        link = document.createElement('a');
+      link.href = url;
+      link.download = 'resumen-semana.txt';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast('Resumen de la semana descargado.');
       return true;
     }
     return false;

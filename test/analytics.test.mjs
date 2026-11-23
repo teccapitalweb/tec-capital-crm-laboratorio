@@ -11,6 +11,7 @@ import { migrateFollowup } from '../server/followup.mjs';
 import { migrateCatalogue } from '../server/catalogue-schema.mjs';
 import { migrateOperations } from '../server/operations-schema.mjs';
 import { migrateAutomation, migrateRecipes } from '../server/automation-schema.mjs';
+import { migrateReplies } from '../server/replies-schema.mjs';
 import { createAnalytics } from '../server/analytics.mjs';
 
 const DAY = 86400000,
@@ -20,7 +21,15 @@ const q = (o = {}) => new URLSearchParams(o);
 async function fixture(t) {
   const dir = await mkdtemp(join(tmpdir(), 'crm-analytics-')),
     db = openDatabase(dir);
-  for (const m of [migrateCRM, migrateFollowup, migrateCatalogue, migrateOperations, migrateAutomation, migrateRecipes])
+  for (const m of [
+    migrateCRM,
+    migrateFollowup,
+    migrateCatalogue,
+    migrateOperations,
+    migrateAutomation,
+    migrateRecipes,
+    migrateReplies,
+  ])
     m(db);
   t.after(async () => {
     try {
@@ -306,4 +315,57 @@ test('analítica por API: sesión, rol y alcance', async t => {
   assert.equal(s.agentsScope, 'propio');
   await call('/api/analytics?brand=odonteck', agent.cookie, undefined, 'GET', 404);
   await call('/api/analytics?days=0', admin.cookie, undefined, 'GET', 400);
+});
+
+test('analítica: resumen de la semana, 7 días contra los 7 anteriores', async t => {
+  const { db, analytics, opp, conv, response, admin, brandOf } = await fixture(t);
+  const brand = brandOf('aves');
+  // esta semana (hace 2 días): 2 conversaciones, un interesado y una venta, y respuestas del asistente
+  conv('c1', 'aves', 'whatsapp', null, 2 * DAY);
+  conv('c2', 'aves', 'whatsapp', null, 2 * DAY);
+  opp('o1', 'aves', 'interesado', { age: 2 * DAY });
+  opp('o2', 'aves', 'ganada', { age: 2 * DAY });
+  response(brand, 'ag1', 'first', 60000, true, 2 * DAY);
+  response(brand, 'ag1', 'first', 180000, true, 2 * DAY);
+  // la semana anterior (hace 9 días): 1 conversación y menos automatización
+  conv('c3', 'aves', 'whatsapp', null, 9 * DAY);
+  let k = 0;
+  const log = (action, ai, ago) =>
+    db
+      .prepare(
+        'INSERT INTO reply_log(id,conversation_id,brand_id,intent,confidence,mode,action,reply_text,sources,model,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+      )
+      .run(
+        'rl-' + ++k,
+        'c1',
+        brand,
+        'price',
+        0.9,
+        'autonomous',
+        action,
+        'x',
+        '[]',
+        null,
+        ai ? 'Proveedor de IA: x' : 'regla',
+        T - ago,
+      );
+  for (let i = 0; i < 3; i++) log('replied', false, 2 * DAY);
+  log('replied', true, 2 * DAY);
+  log('escalated', false, 2 * DAY);
+  log('replied', false, 9 * DAY);
+  log('escalated', false, 9 * DAY);
+
+  const w = analytics.build(admin, q({ brand })).weekly;
+  assert.equal(w.now.conversations, 2, 'conversaciones de esta semana');
+  assert.equal(w.prev.conversations, 1, 'conversaciones de la semana anterior');
+  assert.equal(w.now.interesado, 2, 'ambas oportunidades llegaron a interesado');
+  assert.equal(w.now.inscripcion, 1, 'sólo la ganada llegó a inscripción');
+  assert.equal(w.now.inscripciones, 1, 'una venta de práctica');
+  assert.equal(w.now.autoReplies, 4, 'reglas + IA');
+  assert.equal(w.now.handled, 5, 'reglas + IA + pasadas a una persona');
+  assert.equal(w.now.autoShare, 80, 'el asistente respondió solo el 80 %');
+  assert.equal(w.prev.autoShare, 50, 'la semana anterior, 50 %');
+  assert.equal(w.now.medianMs, 60000, 'mediana de la primera respuesta');
+  assert.equal(w.period.tz, 'America/Mexico_City');
+  assert.equal(w.period.to - w.period.from, 7 * DAY, 'la ventana es de 7 días');
 });
