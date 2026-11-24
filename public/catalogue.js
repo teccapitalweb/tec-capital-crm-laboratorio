@@ -93,6 +93,10 @@ window.createCatalogueUI = function ({
   const select = (label, name, options, extra = '') =>
     `<label class="field">${label}<select name="${name}" ${extra}>${options}</select></label>`;
   const hidden = (name, value) => `<input type="hidden" name="${name}" value="${esc(value ?? '')}">`;
+  // Agrupa parte de un formulario largo en una sección plegable (docs/PLAN_COMODIDAD.md): los campos siguen todos ahí,
+  // sólo se ven menos a la vez. Un campo obligatorio dentro de una sección cerrada la abre sola al guardar (app.js).
+  const section = (title, inner, open = true) =>
+    `<details class="form-section"${open ? ' open' : ''}><summary>${esc(title)}</summary><div class="form-section-body">${inner}</div></details>`;
   const statusOptions = (current, content = false) =>
     opts(
       (content ? ['draft', 'approved', 'archived'] : ['draft', 'published', 'archived']).map(id => ({
@@ -293,7 +297,9 @@ window.createCatalogueUI = function ({
   }
   function editionFields(item = {}) {
     const zone = item.timezone || 'America/Mexico_City';
-    return `${field('Nombre de la edición', 'name', item.name || '', 'text', 'required maxlength="120"')}<div class="cat-form-columns">${field('Inicio · hora de la edición', 'startsAt', zonedInput(item.starts_at, zone), 'datetime-local')}${field('Finalización (opcional)', 'endsAt', zonedInput(item.ends_at, zone), 'datetime-local')}</div>${field('Zona horaria', 'timezone', zone, 'text', 'required placeholder="America/Mexico_City"')}<p class="crm-hint">Las horas se interpretan en esta zona, aunque tu dispositivo esté en otra. Usa una zona IANA como America/Mexico_City.</p>${field('Docente', 'instructor', item.instructor || '', 'text', 'maxlength="120"')}<div class="cat-form-columns">${select(
+    // Lo que se llena en toda edición (fecha, docente, modalidad, precio, estado) arriba; lugar, cupo y enlace, en una
+    // sección plegable. Todos los campos siguen; sólo se agrupan. Las parejas en columna no se separan.
+    const esencial = `${field('Nombre de la edición', 'name', item.name || '', 'text', 'required maxlength="120"')}<div class="cat-form-columns">${field('Inicio · hora de la edición', 'startsAt', zonedInput(item.starts_at, zone), 'datetime-local')}${field('Finalización (opcional)', 'endsAt', zonedInput(item.ends_at, zone), 'datetime-local')}</div>${field('Zona horaria', 'timezone', zone, 'text', 'required placeholder="America/Mexico_City"')}<p class="crm-hint">Las horas se interpretan en esta zona, aunque tu dispositivo esté en otra. Usa una zona IANA como America/Mexico_City.</p>${field('Docente', 'instructor', item.instructor || '', 'text', 'maxlength="120"')}<div class="cat-form-columns">${select(
       'Modalidad',
       'modality',
       opts(
@@ -315,7 +321,9 @@ window.createCatalogueUI = function ({
         'id',
         item.currency || 'MXN',
       ),
-    )}</div>${field('Lugar / plataforma', 'location', item.location || '', 'text', 'maxlength="250"')}<div class="cat-form-columns">${field('Cupo total (opcional)', 'capacity', item.capacity, 'number', 'min="1" step="1"')}${field('Lugares disponibles (opcional)', 'availableSeats', item.available_seats, 'number', 'min="0" step="1"')}</div><p class="crm-hint">El cupo es informativo. Esta fase no descuenta lugares ni confirma reservas.</p>${field('Enlace público de información', 'infoUrl', item.info_url || '', 'url', 'maxlength="1000" placeholder="https://…"')}<div class="cat-form-columns">${field('Precio regular', 'price', item.price_cents === undefined ? '' : item.price_cents / 100, 'number', 'required min="0" max="1000000" step="0.01"')}${field('Precio por sesión (opcional)', 'sessionPrice', item.session_price_cents === undefined || item.session_price_cents === null ? '' : item.session_price_cents / 100, 'number', 'min="0" max="1000000" step="0.01"')}</div><p class="crm-hint">Con precio por sesión, el equipo puede cobrar la inscripción «por sesión»: el primer pago cubre la primera sesión y cada sesión siguiente se cobra antes de la clase desde Coordinación.</p>${select('Estado', 'status', statusOptions(item.status || 'draft'))}`;
+    )}</div><div class="cat-form-columns">${field('Precio regular', 'price', item.price_cents === undefined ? '' : item.price_cents / 100, 'number', 'required min="0" max="1000000" step="0.01"')}${field('Precio por sesión (opcional)', 'sessionPrice', item.session_price_cents === undefined || item.session_price_cents === null ? '' : item.session_price_cents / 100, 'number', 'min="0" max="1000000" step="0.01"')}</div><p class="crm-hint">Con precio por sesión, el equipo puede cobrar la inscripción «por sesión»: el primer pago cubre la primera sesión y cada sesión siguiente se cobra antes de la clase desde Coordinación.</p>${select('Estado', 'status', statusOptions(item.status || 'draft'))}`;
+    const detalles = `${field('Lugar / plataforma', 'location', item.location || '', 'text', 'maxlength="250"')}<div class="cat-form-columns">${field('Cupo total (opcional)', 'capacity', item.capacity, 'number', 'min="1" step="1"')}${field('Lugares disponibles (opcional)', 'availableSeats', item.available_seats, 'number', 'min="0" step="1"')}</div><p class="crm-hint">El cupo es informativo. Esta fase no descuenta lugares ni confirma reservas.</p>${field('Enlace público de información', 'infoUrl', item.info_url || '', 'url', 'maxlength="1000" placeholder="https://…"')}`;
+    return `${section('Datos de la edición', esencial, true)}${section('Lugar, cupo y enlace', detalles, false)}`;
   }
   // Imagen del curso: la imagen siempre es un flyer aprobado de una edición (precio y fecha vigentes); este bloque sólo lo hace fácil de encontrar.
   function courseImageBlock(c) {
@@ -409,7 +417,10 @@ window.createCatalogueUI = function ({
       const brandId = item?.brand_id || (state.brand !== 'all' ? state.brand : state.brands[0]?.id),
         courseId = item?.course_id || '',
         editionId = item?.edition_id || '';
-      fields = `${select('Marca', 'brandId', opts(state.brands, 'id', 'name', brandId), item ? 'disabled' : 'id="cat-template-brand"')}${item ? hidden('brandId', brandId) : ''}${field('Nombre', 'title', item?.title || '', 'text', 'required maxlength="180"')}<div class="cat-form-columns">${select(
+      // Lo que más se edita (nombre y mensaje) arriba; a dónde y cuándo se usa, en una sección plegable (cerrada en una
+      // plantilla que ya existe: casi siempre sólo se ajusta el texto). Ningún campo se pierde ni se inventa.
+      const mensaje = `${field('Nombre', 'title', item?.title || '', 'text', 'required maxlength="180"')}<label class="field">Mensaje<textarea name="text" id="cat-template-text" rows="9" maxlength="3000" required>${esc(item?.body || 'Hola, {{nombre}}. Te comparto la información de {{curso}}.\nEdición: {{edicion}} · {{fecha}}\nPrecio: {{precio}}')}</textarea></label><div class="cat-variable-list">${data.variables.map(v => `<button type="button" data-action="cat-variable" data-id="${v}">{{${v}}}</button>`).join('')}</div><p class="crm-hint">Inserta variables para consultar los datos vigentes al enviar. Cada cambio de la plantilla vuelve a borrador y requiere aprobación interna del equipo.</p>`;
+      const destino = `${select('Marca', 'brandId', opts(state.brands, 'id', 'name', brandId), item ? 'disabled' : 'id="cat-template-brand"')}${item ? hidden('brandId', brandId) : ''}<div class="cat-form-columns">${select(
         'Escenario',
         'scenario',
         opts(
@@ -451,7 +462,8 @@ window.createCatalogueUI = function ({
             item?.flyer_id,
           ),
         'id="cat-template-flyer"',
-      )}<label class="field">Mensaje<textarea name="text" id="cat-template-text" rows="9" maxlength="3000" required>${esc(item?.body || 'Hola, {{nombre}}. Te comparto la información de {{curso}}.\nEdición: {{edicion}} · {{fecha}}\nPrecio: {{precio}}')}</textarea></label><div class="cat-variable-list">${data.variables.map(v => `<button type="button" data-action="cat-variable" data-id="${v}">{{${v}}}</button>`).join('')}</div><p class="crm-hint">Inserta variables para consultar los datos vigentes al enviar. Cada cambio de la plantilla vuelve a borrador y requiere aprobación interna del equipo.</p>`;
+      )}`;
+      fields = `${section('Mensaje', mensaje, true)}${section('Dónde y cuándo se usa', destino, !item)}`;
     }
     const formId = 'cat-edit-form';
     showModal(

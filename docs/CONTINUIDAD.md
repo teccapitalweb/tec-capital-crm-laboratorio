@@ -34,6 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Comodidad: formularios largos por secciones (rama `feat/comodidad-formularios`, 24 nov 2026)
+
+- **Por qué:** el dueño eligió seguir el bloque de comodidad con los formularios largos, que muestran muchos campos a la vez. Plan y detalle en [PLAN_COMODIDAD.md](PLAN_COMODIDAD.md), pieza 5.
+- **Qué se hizo (sólo interfaz; sin esquema, rutas ni permisos nuevos):** ayudante `section()` en `public/catalogue.js` y estilos (sección 13 de `public/tinta-vistas.css`). El editor de plantillas se agrupa en «Mensaje» (abierto) y «Dónde y cuándo se usa» (plegado si ya existe); el editor de edición en «Datos de la edición» (abierto) y «Lugar, cupo y enlace» (plegado). Ningún campo se pierde ni se inventa; las parejas en columna no se separan. Manejador global del evento `invalid` en `public/app.js` que abre la sección que contiene un campo obligatorio vacío, para que el navegador pueda enfocarlo.
+- **Verificado:** demo local (dos secciones, variables, guardar, prueba sintética del manejador `invalid`); `npm run check`; suite de servidor; pruebas de navegador.
+
 ## Comodidad: no perder el lugar, ventanas iguales y saber dónde se está (publicado en `main`, 23 nov 2026)
 
 - **Por qué:** el dueño pidió ventanas más cómodas y que al guardar o cerrar una «no me mande hasta arriba»; 102 lugares devolvían `'reload'` y cada pantalla repintaba `#page` desde cero. Plan y detalle en [PLAN_COMODIDAD.md](PLAN_COMODIDAD.md).

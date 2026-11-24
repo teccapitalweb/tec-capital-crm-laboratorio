@@ -1773,6 +1773,20 @@
       toast(error.message || 'No se pudo leer el archivo.');
     }
   });
+  // Un formulario con secciones plegables (docs/PLAN_COMODIDAD.md): si un campo obligatorio vacío queda dentro de una
+  // sección cerrada, el navegador no puede mostrar su aviso. Se abre la sección que lo contiene antes de que el navegador
+  // intente enfocarlo. El evento «invalid» no burbujea: se escucha en captura.
+  document.addEventListener(
+    'invalid',
+    e => {
+      let el = e.target?.closest?.('details:not([open])');
+      while (el) {
+        el.open = true;
+        el = el.parentElement?.closest('details:not([open])');
+      }
+    },
+    true,
+  );
   document.addEventListener('submit', async e => {
     e.preventDefault();
     const form = e.target;

@@ -42,8 +42,19 @@ El dueño, al pegar enlaces de grupo, dijo que le costaba encontrar cada apertur
 - Buscador: en la demo local, «GERIATRIA» encuentra «Geriatría en mascotas» (1 de 10), «clinico veterinario» encuentra «Laboratorio clínico veterinario», «zzzz» muestra el aviso de sin coincidencias, el campo conserva el foco al escribir y la búsqueda sigue tras abrir una apertura y guardarla.
 - `npm run check` (0 errores; los avisos no suben), suite de servidor (820) y pruebas de navegador (`npm run test:ui`, 95). De paso se corrigió un fallo de contraste que ya existía en `main`: los ↑/↓ del «Resumen de la semana» usaban los tonos de borde (`--ok-line`, `--warn-line`, 1,4:1 sobre blanco); ahora usan los de texto (`--ok`, `--warn`) en `public/analytics.css`.
 
+## Pieza 5: formularios largos por secciones (24 nov 2026)
+
+El dueño eligió seguir con esto: los formularios largos cansan porque muestran muchos campos a la vez. Ahora se agrupan en **secciones plegables**, con lo que más se edita arriba y lo secundario a un clic. **Ningún campo se pierde ni se inventa**: sólo se ven menos a la vez.
+
+- Ayudante `section(title, inner, open)` en `public/catalogue.js` (un `<details class="form-section">` con su `<summary>`); estilos en la sección 13 de `public/tinta-vistas.css` (cabecera de sección con flecha, cuerpo en rejilla), sólo para las ventanas del equipo.
+- **Editor de plantillas** (Catálogo → Plantillas): «Mensaje» (nombre y texto, con las variables) abierto; «Dónde y cuándo se usa» (marca, escenario, canal, curso, edición, flyer) plegado en una plantilla que ya existe y abierto al crear una nueva.
+- **Editor de edición** (Catálogo → Ediciones): «Datos de la edición» (nombre, fechas, zona, docente, modalidad, moneda, precios, estado) abierto; «Lugar, cupo y enlace» plegado. Las parejas de campos en columna no se separan.
+- **Seguridad:** si un campo obligatorio vacío queda dentro de una sección cerrada, el navegador no puede mostrar su aviso; un manejador global del evento `invalid` (en captura, en `public/app.js`) abre la sección que lo contiene antes de que el navegador intente enfocarlo. En estos dos formularios los campos obligatorios están en la sección abierta, pero el manejador vale para cualquier formulario.
+
+Verificado en la demo local: las dos secciones aparecen, el texto y las variables funcionan, abrir la sección plegada muestra sus campos, guardar sigue igual, y la prueba sintética confirma que una sección cerrada con un campo obligatorio vacío se abre sola al validar. Pruebas de navegador y de servidor: ver [CONTINUIDAD.md](CONTINUIDAD.md).
+
 ## Lo que sigue (no incluido)
 
+- Extender las secciones a los formularios de conocimiento, casos de evaluación y la ficha de apertura en Coordinación (el ayudante y los estilos ya son generales).
 - Repintar sólo la tarjeta afectada en lugar de toda la vista (hoy se conserva el lugar, pero se repinta todo).
-- Agrupar por secciones plegables los formularios largos (plantillas, conocimiento, casos de evaluación): requiere inventariar cada formulario y decidir con el dueño qué va plegado.
 - Recordar también filtro y búsqueda de Operación entre recargas (dentro de la sesión ya se conservan).

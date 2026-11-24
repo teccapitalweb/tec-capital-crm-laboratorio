@@ -3171,3 +3171,51 @@
     padding-top: 0;
   }
 }
+
+/* ============ 13. Formularios por secciones (24 nov 2026, docs/PLAN_COMODIDAD.md) ============ */
+/* Un formulario largo se agrupa en secciones plegables: todos los campos siguen ahí, se ven menos a la vez. */
+#modal:not(.pay-page) .form-section {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-field, 16px);
+  background: var(--soft, #f4f5f8);
+  margin: 0;
+}
+#modal:not(.pay-page) .form-section + .form-section {
+  margin-top: var(--space-5);
+}
+#modal:not(.pay-page) .form-section > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-7);
+  font-weight: var(--weight-black);
+  color: var(--ink);
+  border-radius: inherit;
+}
+#modal:not(.pay-page) .form-section > summary::-webkit-details-marker {
+  display: none;
+}
+#modal:not(.pay-page) .form-section > summary::after {
+  content: '';
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--text-3);
+  border-bottom: 2px solid var(--text-3);
+  transform: rotate(45deg);
+  transition: transform 0.18s var(--ease, ease);
+}
+#modal:not(.pay-page) .form-section[open] > summary::after {
+  transform: rotate(-135deg);
+}
+#modal:not(.pay-page) .form-section > summary:hover {
+  background: var(--line);
+}
+#modal:not(.pay-page) .form-section-body {
+  display: grid;
+  gap: var(--space-5);
+  padding: 0 var(--space-7) var(--space-7);
+}
