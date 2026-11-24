@@ -2,6 +2,9 @@
 window.createKnowledgeUI = function ({ state, api, esc, icon, showModal, toast, reload }) {
   const $ = s => document.querySelector(s),
     admin = () => state.user?.role === 'admin';
+  // Agrupa parte de un formulario largo en una sección plegable (docs/PLAN_COMODIDAD.md): todos los campos siguen ahí.
+  const section = (title, inner, open = true) =>
+    `<details class="form-section"${open ? ' open' : ''}><summary>${esc(title)}</summary><div class="form-section-body">${inner}</div></details>`;
   const STATES = { draft: 'Borrador', approved: 'Aprobada', archived: 'Archivada' };
   const TOPICS = {
     certificate: 'Certificado',
@@ -115,17 +118,23 @@ window.createKnowledgeUI = function ({ state, api, esc, icon, showModal, toast, 
       courses = state.courses.filter(c => c.brand_id === b);
     showModal(
       e ? 'Editar pregunta y respuesta' : 'Nueva pregunta y respuesta',
-      `<form id="kn-form" class="form-grid"><input type="hidden" name="id" value="${esc(e?.id || '')}"><input type="hidden" name="expectedRevision" value="${e?.revision || ''}">
-      ${e ? `<p class="crm-hint">${esc(brandName(b))}. Guardar la deja en borrador hasta que administración la apruebe otra vez.</p>` : `<label class="field">Marca<select name="brandId" id="kn-brand">${state.brands.map(x => `<option value="${x.id}" ${x.id === b ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>`}
-      <label class="field">Tema<select name="topic">${Object.entries(TOPICS)
-        .map(([k, v]) => `<option value="${k}" ${(e?.topic || 'general') === k ? 'selected' : ''}>${v}</option>`)
-        .join('')}</select></label>
-      <label class="field">Curso (opcional)<select name="courseId" id="kn-course"><option value="">Todos los cursos de la marca</option>${courses.map(c => `<option value="${c.id}" ${e?.course_id === c.id ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}</select></label>
-      <label class="field">Pregunta, como la haría un cliente<input name="question" required minlength="8" maxlength="200" value="${esc(e?.question || preset?.question || '')}" placeholder="¿Entregan certificado al terminar?"></label>
+      (() => {
+        // Lo que se escribe (pregunta, variantes, respuesta) arriba; la clasificación (marca, tema, curso), plegada.
+        const contenido = `<label class="field">Pregunta, como la haría un cliente<input name="question" required minlength="8" maxlength="200" value="${esc(e?.question || preset?.question || '')}" placeholder="¿Entregan certificado al terminar?"></label>
       <label class="field">Otras formas de preguntarlo (una por línea)<textarea name="variants" rows="3" placeholder="constancia&#10;diploma&#10;tiene validez">${esc((e?.variants || []).join('\n'))}</textarea></label>
-      <label class="field">Respuesta aprobada<textarea name="answer" required minlength="10" maxlength="1500" rows="5" placeholder="Respuesta clara y completa. No escribas precios ni fechas: salen del catálogo.">${esc(e?.answer || '')}</textarea></label>
+      <label class="field">Respuesta aprobada<textarea name="answer" required minlength="10" maxlength="1500" rows="5" placeholder="Respuesta clara y completa. No escribas precios ni fechas: salen del catálogo.">${esc(e?.answer || '')}</textarea></label>`;
+        const clasificacion = `${e ? '' : `<label class="field">Marca<select name="brandId" id="kn-brand">${state.brands.map(x => `<option value="${x.id}" ${x.id === b ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>`}<label class="field">Tema<select name="topic">${Object.entries(
+          TOPICS,
+        )
+          .map(([k, v]) => `<option value="${k}" ${(e?.topic || 'general') === k ? 'selected' : ''}>${v}</option>`)
+          .join('')}</select></label>
+      <label class="field">Curso (opcional)<select name="courseId" id="kn-course"><option value="">Todos los cursos de la marca</option>${courses.map(c => `<option value="${c.id}" ${e?.course_id === c.id ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}</select></label>`;
+        return `<form id="kn-form" class="form-grid"><input type="hidden" name="id" value="${esc(e?.id || '')}"><input type="hidden" name="expectedRevision" value="${e?.revision || ''}">
+      ${e ? `<p class="crm-hint">${esc(brandName(b))}. Guardar la deja en borrador hasta que administración la apruebe otra vez.</p>` : ''}
+      ${section('Pregunta y respuesta', contenido, true)}${section('Clasificación', clasificacion, !e)}
       ${e ? '' : '<p class="crm-hint">Se guarda como borrador. Sólo las entradas aprobadas por administración se usan para responder.</p>'}
-      <div class="actions"><button class="btn primary" type="submit">Guardar borrador</button></div><div class="ops-feedback" role="status"></div></form>`,
+      <div class="actions"><button class="btn primary" type="submit">Guardar borrador</button></div><div class="ops-feedback" role="status"></div></form>`;
+      })(),
     );
   }
   // Preguntas que los clientes hicieron y el motor no supo responder con conocimiento aprobado (GET /api/replies/gaps).

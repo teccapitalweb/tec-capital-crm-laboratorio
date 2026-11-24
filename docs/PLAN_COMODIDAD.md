@@ -53,8 +53,18 @@ El dueño eligió seguir con esto: los formularios largos cansan porque muestran
 
 Verificado en la demo local: las dos secciones aparecen, el texto y las variables funcionan, abrir la sección plegada muestra sus campos, guardar sigue igual, y la prueba sintética confirma que una sección cerrada con un campo obligatorio vacío se abre sola al validar. Pruebas de navegador y de servidor: ver [CONTINUIDAD.md](CONTINUIDAD.md).
 
+## Pieza 6: secciones en conocimiento y casos de evaluación (24 nov 2026)
+
+Mismo patrón que la pieza 5, con un ayudante `section()` local en cada módulo (usan su propio `esc`; los estilos de la sección 13 ya son generales). Ningún campo se pierde ni se inventa.
+
+- **Conocimiento** (Catálogo → Conocimiento, editor de una entrada): «Pregunta y respuesta» (pregunta, otras formas, respuesta aprobada) abierto; «Clasificación» (marca al crear, tema, curso) plegado al editar una existente.
+- **Casos de evaluación** (Catálogo → Evaluación): «El caso» (marca al crear, título, mensaje del cliente, curso) abierto; «Qué se espera de la respuesta» (intención, acción, fuente, debe/no debe incluir, etiquetas) plegado. Las parejas en columna no se separan.
+- Los campos obligatorios (pregunta y respuesta; mensaje del cliente) quedan en la sección abierta, y el manejador global de `invalid` (pieza 5) sigue cubriendo cualquier caso.
+
+Verificado en la demo local: las secciones aparecen, guardar en Conocimiento («Borrador guardado») y en Evaluación («Caso guardado») funciona, y los campos obligatorios están en la sección abierta. Pruebas de navegador y de servidor: ver [CONTINUIDAD.md](CONTINUIDAD.md).
+
 ## Lo que sigue (no incluido)
 
-- Extender las secciones a los formularios de conocimiento, casos de evaluación y la ficha de apertura en Coordinación (el ayudante y los estilos ya son generales).
+- Extender las secciones a la ficha de apertura en Coordinación si hiciera falta (ya tiene sus propias `co-section`).
 - Repintar sólo la tarjeta afectada en lugar de toda la vista (hoy se conserva el lugar, pero se repinta todo).
 - Recordar también filtro y búsqueda de Operación entre recargas (dentro de la sesión ya se conservan).

@@ -34,6 +34,11 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
+## Comodidad: secciones en conocimiento y casos de evaluación (rama `feat/comodidad-secciones2`, 24 nov 2026)
+
+- **Qué se hizo (sólo interfaz; sin esquema, rutas ni permisos nuevos):** el mismo patrón de secciones plegables (ayudante `section()` local en `public/knowledge.js` y `public/evaluation.js`; estilos ya generales). Conocimiento se agrupa en «Pregunta y respuesta» (abierto) y «Clasificación» (plegado al editar); los casos de evaluación en «El caso» (abierto) y «Qué se espera de la respuesta» (plegado). Ningún campo se pierde ni se inventa; las parejas en columna no se separan. Detalle en [PLAN_COMODIDAD.md](PLAN_COMODIDAD.md), pieza 6.
+- **Verificado:** demo local (secciones, guardar en ambos, campos obligatorios en la sección abierta); `npm run check`; suite de servidor; pruebas de navegador.
+
 ## Comodidad: formularios largos por secciones (rama `feat/comodidad-formularios`, 24 nov 2026)
 
 - **Por qué:** el dueño eligió seguir el bloque de comodidad con los formularios largos, que muestran muchos campos a la vez. Plan y detalle en [PLAN_COMODIDAD.md](PLAN_COMODIDAD.md), pieza 5.

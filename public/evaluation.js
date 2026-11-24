@@ -2,6 +2,9 @@
 window.createEvaluationUI = function ({ state, api, esc, icon, showModal, toast, reload }) {
   const $ = s => document.querySelector(s),
     admin = () => state.user?.role === 'admin';
+  // Agrupa parte de un formulario largo en una sección plegable (docs/PLAN_COMODIDAD.md): todos los campos siguen ahí.
+  const section = (title, inner, open = true) =>
+    `<details class="form-section"${open ? ' open' : ''}><summary>${esc(title)}</summary><div class="form-section-body">${inner}</div></details>`;
   const INTENT = {
     opt_out: 'baja',
     human: 'persona',
@@ -89,15 +92,19 @@ window.createEvaluationUI = function ({ state, api, esc, icon, showModal, toast,
       list.map(v => `<option value="${v}" ${sel === v ? 'selected' : ''}>${esc(label[v] || v)}</option>`).join('');
     showModal(
       c ? 'Editar caso de evaluación' : 'Nuevo caso de evaluación',
-      `<form id="ev-form" class="form-grid"><input type="hidden" name="id" value="${esc(c?.id || '')}"><input type="hidden" name="expectedRevision" value="${c?.revision || ''}">
-      ${c ? `<p class="crm-hint">${esc(brandName(b))}</p>` : `<label class="field">Marca<select name="brandId" id="ev-brand">${state.brands.map(x => `<option value="${x.id}" ${x.id === b ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>`}
-      <label class="field">Título<input name="title" maxlength="120" value="${esc(c?.title || '')}" placeholder="Pregunta el precio"></label>
+      (() => {
+        // El caso (mensaje y curso) arriba; lo que se le exige a la respuesta, plegado.
+        const caso = `${c ? '' : `<label class="field">Marca<select name="brandId" id="ev-brand">${state.brands.map(x => `<option value="${x.id}" ${x.id === b ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>`}<label class="field">Título<input name="title" maxlength="120" value="${esc(c?.title || '')}" placeholder="Pregunta el precio"></label>
       <label class="field">Mensaje del cliente<textarea name="inputText" required minlength="3" maxlength="500" rows="2" placeholder="¿Cuánto cuesta el curso?">${esc(c?.input_text || '')}</textarea></label>
-      <label class="field">Curso (opcional)<select name="courseId" id="ev-course"><option value="">Primer curso activo (o el que nombre el mensaje)</option>${courses.map(k => `<option value="${k.id}" ${c?.course_id === k.id ? 'selected' : ''}>${esc(k.title)}</option>`).join('')}</select></label>
-      <div class="cat-form-columns"><label class="field">Intención esperada<select name="expectIntent">${opts(meta.intents, c?.expect_intent, INTENT)}</select></label><label class="field">Acción esperada<select name="expectAction">${opts(meta.actions, c?.expect_action, ACTION)}</select></label><label class="field">Fuente esperada<select name="expectSource">${opts(meta.sources, c?.expect_source, SOURCE)}</select></label></div>
+      <label class="field">Curso (opcional)<select name="courseId" id="ev-course"><option value="">Primer curso activo (o el que nombre el mensaje)</option>${courses.map(k => `<option value="${k.id}" ${c?.course_id === k.id ? 'selected' : ''}>${esc(k.title)}</option>`).join('')}</select></label>`;
+        const esperado = `<div class="cat-form-columns"><label class="field">Intención esperada<select name="expectIntent">${opts(meta.intents, c?.expect_intent, INTENT)}</select></label><label class="field">Acción esperada<select name="expectAction">${opts(meta.actions, c?.expect_action, ACTION)}</select></label><label class="field">Fuente esperada<select name="expectSource">${opts(meta.sources, c?.expect_source, SOURCE)}</select></label></div>
       <div class="cat-form-columns"><label class="field">Debe incluir (texto)<input name="mustInclude" maxlength="200" value="${esc(c?.must_include || '')}"></label><label class="field">No debe incluir<input name="mustExclude" maxlength="200" value="${esc(c?.must_exclude || '')}"></label></div>
-      <label class="field">Etiquetas (coma)<input name="tags" maxlength="200" value="${esc(c?.tags || '')}"></label>
-      <div class="actions"><button class="btn primary" type="submit">Guardar caso</button></div><div class="ops-feedback" role="status"></div></form>`,
+      <label class="field">Etiquetas (coma)<input name="tags" maxlength="200" value="${esc(c?.tags || '')}"></label>`;
+        return `<form id="ev-form" class="form-grid"><input type="hidden" name="id" value="${esc(c?.id || '')}"><input type="hidden" name="expectedRevision" value="${c?.revision || ''}">
+      ${c ? `<p class="crm-hint">${esc(brandName(b))}</p>` : ''}
+      ${section('El caso', caso, true)}${section('Qué se espera de la respuesta', esperado, false)}
+      <div class="actions"><button class="btn primary" type="submit">Guardar caso</button></div><div class="ops-feedback" role="status"></div></form>`;
+      })(),
     );
   }
   function runModal(r) {
