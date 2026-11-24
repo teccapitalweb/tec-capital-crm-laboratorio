@@ -31,7 +31,8 @@ const VIEWS = [
   ['day', 'Mi día'],
   ['inbox', 'Conversaciones'],
   ['contacts', 'Contactos'],
-  ['courses', 'Catálogo y biblioteca'],
+  // Catálogo escribe en la cabecera «Catálogo · Cursos» (la pestaña) en cuanto pinta: vale el título general o el rastro
+  ['courses', /^Catálogo( · .+| y biblioteca)$/],
 ];
 
 test('Niebla en las vistas principales: letra, contraste, áreas táctiles y sin desborde', async ({

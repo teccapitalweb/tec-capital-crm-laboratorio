@@ -32,9 +32,14 @@ Sección 12 de `public/tinta-vistas.css`, sólo para `#modal` del equipo (la pá
 - Última pestaña recordada en este navegador (`localStorage`: `tc-ops-tab`, `tc-cat-tab`): al volver a Operación o a Catálogo, o al recargar, la persona sigue en la pestaña que tenía. Si la pestaña guardada ya no está disponible para esa persona (una de administración para un asesor), Operación abre la cola de atención y Catálogo los cursos. Un enlace directo a una pestaña (`go(view, tab)`, `openTab`) sigue mandando.
 - Las fichas siguen abriéndose en ventana, con su «cerrar» arriba siempre visible (pieza 2); no se añadió un «Volver» aparte para no inventar un control.
 
+## Pieza 4: buscador de aperturas en Coordinación (23 nov 2026)
+
+El dueño, al pegar enlaces de grupo, dijo que le costaba encontrar cada apertura entre las tarjetas. Coordinación gana un cuadro de búsqueda encima de la lista: filtra lo ya cargado (sin otra llamada) por **curso, nombre de la apertura, docente, responsable o marca**, sin distinguir acentos ni mayúsculas y con varias palabras («clinico veterinario»). Al escribir se repinta sólo la lista (`#co-results`), así el campo conserva el foco y la página no se mueve; un contador dice «3 de 18 aperturas» y, sin coincidencias, «Nada coincide con «…»». La búsqueda se conserva mientras se abre y se guarda una ficha (`query` en `public/coordination.js`; estilos `.co-search` y `.co-count` en `public/operations.css`). Las tarjetas de estado (Todas, Planeadas…) siguen igual y se combinan con la búsqueda.
+
 ## Verificado
 
 - Navegador (demo local, administración): Catálogo → Plantillas desplazado hasta el final (2 494 px), abrir una plantilla, guardar borrador y cerrar: el desplazamiento se conserva (2 494 px) y la pestaña sigue activa. Operación → Coordinación desplazado a 400 px, abrir una apertura, guardar: 400 px. Ventana de plantilla: título fijo arriba y «Guardar borrador» fijo abajo con el contenido desplazado; en celular (375 × 812) la ventana ocupa la pantalla y nada desborda a lo ancho. Tras recargar, Operación vuelve a Coordinación y Catálogo a Plantillas, con su rastro en la cabecera.
+- Buscador: en la demo local, «GERIATRIA» encuentra «Geriatría en mascotas» (1 de 10), «clinico veterinario» encuentra «Laboratorio clínico veterinario», «zzzz» muestra el aviso de sin coincidencias, el campo conserva el foco al escribir y la búsqueda sigue tras abrir una apertura y guardarla.
 - `npm run check` (0 errores; los avisos no suben), suite de servidor (820) y pruebas de navegador (`npm run test:ui`, 95). De paso se corrigió un fallo de contraste que ya existía en `main`: los ↑/↓ del «Resumen de la semana» usaban los tonos de borde (`--ok-line`, `--warn-line`, 1,4:1 sobre blanco); ahora usan los de texto (`--ok`, `--warn`) en `public/analytics.css`.
 
 ## Lo que sigue (no incluido)

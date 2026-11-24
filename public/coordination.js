@@ -37,6 +37,7 @@ window.createCoordinationUI = function ({ state, api, esc, icon, showModal, toas
   };
   let data = null,
     statusFilter = 'all',
+    query = '', // buscador de aperturas (docs/PLAN_COMODIDAD.md): filtra en el navegador lo ya cargado, sin otra llamada
     detail = null,
     events = null,
     types = null,
@@ -80,6 +81,35 @@ window.createCoordinationUI = function ({ state, api, esc, icon, showModal, toas
       )
       .join('')}</details>`;
   }
+  // Buscar una apertura por curso, nombre de la apertura, docente, responsable o marca, sin acentos ni mayúsculas.
+  const plain = s =>
+    String(s || '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase();
+  const matches = e => {
+    const q = plain(query).trim();
+    if (!q) return true;
+    const hay = plain([e.courseTitle, e.name, e.instructor, e.coordinatorName, brandName(e.brand_id)].join(' '));
+    return q.split(/s+/).every(w => hay.includes(w));
+  };
+  function grid() {
+    const rows = data.editions.filter(matches);
+    const empty = query.trim()
+      ? `<div class="crm-empty">${icon('search')}<h3>Nada coincide con «${esc(query.trim())}»</h3><p>Prueba con otra palabra del curso, la apertura, el docente o la persona responsable.</p></div>`
+      : `<div class="crm-empty">${icon('inbox')}<h3>Sin aperturas</h3><p>Publica una edición en Catálogo para coordinarla aquí.</p></div>`;
+    return `<div class="co-count" aria-live="polite">${rows.length === data.editions.length ? data.editions.length + (data.editions.length === 1 ? ' apertura' : ' aperturas') : rows.length + ' de ' + data.editions.length + ' aperturas'}</div><div class="co-grid">${rows.map(card).join('') || empty}</div>`;
+  }
+  // Al escribir se repinta sólo la lista: el campo conserva el foco y la página no se mueve.
+  document.addEventListener('input', e => {
+    if (e.target.id !== 'co-search' || !data) return;
+    query = e.target.value;
+    const box = document.querySelector('#co-results');
+    if (box) {
+      box.innerHTML = grid();
+      window.TC?.host?.icons?.();
+    }
+  });
   function coordinationHtml() {
     if (!data) return '<div class="loading-message">Cargando…</div>';
     const st = data.stats,
@@ -90,7 +120,7 @@ window.createCoordinationUI = function ({ state, api, esc, icon, showModal, toas
         ['running', 'En curso', st.running],
         ['closed', 'Cerradas', st.closed],
       ];
-    return `<div class="crm-toolbar"><p>Cada edición del catálogo es una apertura: mínimo de alumnos, inscritos que llegan solos con el pago confirmado, sesiones con enlace de videollamada, recordatorios, asistencia y cierre. ${st.enrolled} inscripciones activas · ${st.upcoming} sesiones por venir${st.sessionDue ? ' · ' + st.sessionDue + ' pagos de sesión pendientes' : ''}${st.surveyAnswers ? ' · ' + st.surveyAnswers + ' respuestas de encuesta' : ''}.</p></div><div class="ops-stats co-stats">${filters.map(([id, title, n]) => `<button type="button" data-action="co-filter" data-id="${id}" class="ops-stat ${statusFilter === id ? 'active' : ''}"><strong>${n}</strong><span>${title}</span></button>`).join('')}</div>${settingsPanel()}<div class="co-grid">${data.editions.map(card).join('') || `<div class="crm-empty">${icon('inbox')}<h3>Sin aperturas</h3><p>Publica una edición en Catálogo para coordinarla aquí.</p></div>`}</div>${note('La API real de Google Calendar/Meet y el envío por WhatsApp oficial entran por el contrato de conectores cuando lleguen los accesos; en el laboratorio el enlace de videollamada es simulado y los recordatorios van por el canal simulado.')}`;
+    return `<div class="crm-toolbar"><p>Cada edición del catálogo es una apertura: mínimo de alumnos, inscritos que llegan solos con el pago confirmado, sesiones con enlace de videollamada, recordatorios, asistencia y cierre. ${st.enrolled} inscripciones activas · ${st.upcoming} sesiones por venir${st.sessionDue ? ' · ' + st.sessionDue + ' pagos de sesión pendientes' : ''}${st.surveyAnswers ? ' · ' + st.surveyAnswers + ' respuestas de encuesta' : ''}.</p></div><div class="ops-stats co-stats">${filters.map(([id, title, n]) => `<button type="button" data-action="co-filter" data-id="${id}" class="ops-stat ${statusFilter === id ? 'active' : ''}"><strong>${n}</strong><span>${title}</span></button>`).join('')}</div>${settingsPanel()}<form id="co-search-form" class="crm-toolbar co-search"><label class="search">${icon('search')}<input id="co-search" type="search" aria-label="Buscar apertura" placeholder="Curso, apertura, docente o responsable" value="${esc(query)}" autocomplete="off"></label></form><div id="co-results">${grid()}</div>${note('La API real de Google Calendar/Meet y el envío por WhatsApp oficial entran por el contrato de conectores cuando lleguen los accesos; en el laboratorio el enlace de videollamada es simulado y los recordatorios van por el canal simulado.')}`;
   }
   function enrollmentRow(r) {
     const d = detail;
