@@ -1,6 +1,6 @@
 // Portal por roles: «Mis resultados» (docs/PLAN_PORTAL_ROLES.md). Vista de sólo lectura: ventas y comisiones, cartera y aperturas
 // que coordina la persona, con avisos de atención. Administración puede elegir a otra persona del equipo.
-window.createPortalUI = function ({ state, api, esc, icon, icons, toast }) {
+window.createPortalUI = function ({ state, api, esc, icon, icons, toast, swapPage }) {
   const $ = s => document.querySelector(s);
   const num = n => new Intl.NumberFormat('es-MX').format(n);
   const stamp = t =>
@@ -119,11 +119,7 @@ window.createPortalUI = function ({ state, api, esc, icon, icons, toast }) {
       if (mine !== version || state.view !== 'results') return;
       data = result;
       team = teamResult;
-      const scrolled = $('#page .content-page')?.scrollTop || 0;
-      $('#page').innerHTML = view();
-      icons();
-      const box = $('#page .content-page');
-      if (box) box.scrollTop = scrolled;
+      swapPage(view());
     } catch (e) {
       if (state.view === 'results') {
         $('#page').innerHTML =

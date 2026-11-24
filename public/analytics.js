@@ -1,4 +1,4 @@
-window.createAnalyticsUI = function ({ state, api, esc, icon, icons, toast }) {
+window.createAnalyticsUI = function ({ state, api, esc, icon, icons, toast, swapPage }) {
   const $ = s => document.querySelector(s);
   let days = 30,
     data = null,
@@ -262,8 +262,7 @@ window.createAnalyticsUI = function ({ state, api, esc, icon, icons, toast }) {
       const result = await api('/api/analytics?' + params);
       if (mine !== version || state.view !== 'analytics') return;
       data = result;
-      $('#page').innerHTML = view();
-      icons();
+      swapPage(view());
     } catch (e) {
       if (state.view === 'analytics') {
         $('#page').innerHTML =

@@ -1,4 +1,16 @@
-window.createCatalogueUI = function ({ state, api, esc, icon, icons, showModal, toast, refresh, setView, newChat }) {
+window.createCatalogueUI = function ({
+  state,
+  api,
+  esc,
+  icon,
+  icons,
+  showModal,
+  swapPage,
+  toast,
+  refresh,
+  setView,
+  newChat,
+}) {
   const $ = s => document.querySelector(s),
     admin = () => state.user.role === 'admin';
   const knowledgeUI = window.createKnowledgeUI({ state, api, esc, icon, showModal, toast, reload: () => render() }),
@@ -38,8 +50,18 @@ window.createCatalogueUI = function ({ state, api, esc, icon, icons, showModal, 
     survey_request: 'Evento · invitación a encuesta',
   };
   const states = { draft: 'Borrador', published: 'Publicada', approved: 'Aprobado', archived: 'Archivado' };
+  // La última pestaña abierta se recuerda en este navegador (docs/PLAN_COMODIDAD.md).
+  const TAB_KEY = 'tc-cat-tab';
+  const savedTab = () => {
+    try {
+      const t = localStorage.getItem(TAB_KEY);
+      return t && tabs[t] ? t : '';
+    } catch {
+      return '';
+    }
+  };
   let data = { courses: [], editions: [], promotions: [], flyers: [], templates: [], variables: [] },
-    tab = 'courses',
+    tab = savedTab() || 'courses',
     query = '',
     status = '',
     version = 0,
@@ -248,7 +270,7 @@ window.createCatalogueUI = function ({ state, api, esc, icon, icons, showModal, 
     if (tab === 'knowledge') content = '<div id="kn-gaps"></div>' + knowledgeUI.render(rows);
     if (tab === 'evaluation') content = evaluationUI.render(rows);
     if (tab === 'content') content = contentUI.render();
-    $('#page').innerHTML =
+    swapPage(
       `<div class="content-page catalogue-page"><div class="page-heading"><div><span class="eyebrow">Ventas · por marca</span><h1>Catálogo</h1><p>Cursos, ediciones, promociones y materiales: la única fuente de lo que se ofrece en cada conversación.</p></div>${admin() ? btn('brand', 'Nueva marca') : ''}</div><div class="cat-topline"><label class="cat-filter">Marca<select id="cat-brand-filter"><option value="all">Todas mis marcas</option>${opts(state.brands, 'id', 'name', state.brand)}</select></label><span>${data.editions.filter(e => (state.brand === 'all' || e.brand_id === state.brand) && e.availability === 'Disponible').length} ediciones disponibles</span><span>${data.flyers.filter(f => (state.brand === 'all' || f.brand_id === state.brand) && f.availability === 'Requiere revisión').length} piezas por revisar</span></div><nav class="cat-tabs" aria-label="Secciones del catálogo">${Object.entries(
         tabs,
       )
@@ -258,8 +280,15 @@ window.createCatalogueUI = function ({ state, api, esc, icon, icons, showModal, 
         )
         .join(
           '',
-        )}</nav>${toolbar}<div class="cat-result-count">${rows.length} resultados</div>${rows.length || tab === 'content' ? content : `<div class="crm-empty">${icon('layers')}<h2>Aún no hay contenido en esta vista</h2><p>Ajusta los filtros${admin() ? ' o crea el primer registro para esta marca.' : '.'}</p></div>`}<p class="crm-hint">${icon('flask-conical')} Laboratorio: precios y cupos informativos. Publicar contenido aquí no crea pagos, reservas ni inscripciones.</p></div>`;
-    icons();
+        )}</nav>${toolbar}<div class="cat-result-count">${rows.length} resultados</div>${rows.length || tab === 'content' ? content : `<div class="crm-empty">${icon('layers')}<h2>Aún no hay contenido en esta vista</h2><p>Ajusta los filtros${admin() ? ' o crea el primer registro para esta marca.' : '.'}</p></div>`}<p class="crm-hint">${icon('flask-conical')} Laboratorio: precios y cupos informativos. Publicar contenido aquí no crea pagos, reservas ni inscripciones.</p></div>`,
+    );
+    try {
+      localStorage.setItem(TAB_KEY, tab);
+    } catch {
+      /* sin almacenamiento: no se recuerda */
+    }
+    const crumb = $('#breadcrumb-title');
+    if (crumb && tabs[tab]) crumb.textContent = 'Catálogo · ' + tabs[tab];
     if (tab === 'knowledge') knowledgeUI.mountGaps();
   }
   function editionFields(item = {}) {
@@ -853,7 +882,7 @@ window.createCatalogueUI = function ({ state, api, esc, icon, icons, showModal, 
   }
   function renderCustomer() {
     const courses = state.courses.filter(c => state.brand === 'all' || c.brand_id === state.brand);
-    $('#page').innerHTML =
+    swapPage(
       `<div class="content-page catalogue-page"><div class="page-heading"><div><span class="eyebrow">Catálogo del laboratorio</span><h1>Elige tu próxima conversación.</h1><p>Consulta las ediciones disponibles y prueba la atención del equipo.</p></div></div><div class="cat-course-grid">${courses
         .map(c => {
           const editions = (state.editions || []).filter(e => e.course_id === c.id),
@@ -862,8 +891,8 @@ window.createCatalogueUI = function ({ state, api, esc, icon, icons, showModal, 
         })
         .join(
           '',
-        )}</div><p class="crm-hint">Material de práctica. No se realizan cobros ni inscripciones comerciales.</p></div>`;
-    icons();
+        )}</div><p class="crm-hint">Material de práctica. No se realizan cobros ni inscripciones comerciales.</p></div>`,
+    );
   }
   function customerDetails(id) {
     const c = state.courses.find(c => c.id === id),

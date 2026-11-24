@@ -1,4 +1,4 @@
-window.createPresentationUI = function ({ state, api, esc, icon, icons, toast, setView, openOps }) {
+window.createPresentationUI = function ({ state, api, esc, icon, toast, setView, openOps, swapPage }) {
   const $ = s => document.querySelector(s);
   let days = 30,
     data = null,
@@ -79,7 +79,7 @@ window.createPresentationUI = function ({ state, api, esc, icon, icons, toast, s
       s = d.sales,
       m = d.messages,
       maxMs = Math.max(r.bot.medianMs || 0, r.human.medianMs || 0, 1);
-    $('#page').innerHTML =
+    swapPage(
       `<div class="content-page an-page pr-page ${presenting ? 'presenting' : ''}"><div class="page-heading"><div><span class="eyebrow">Modo presentación · ${d.scope.brand ? esc(d.scope.brands[0]?.name) : 'todas las marcas'} · ${d.period.days} días</span><h1>Lo que ya hace la plataforma.</h1><p>Cifras reales del laboratorio, en vivo, para contar el proyecto de principio a fin.</p></div><div class="an-controls"><label class="crm-brand-filter">Marca<select id="pr-brand"><option value="all">Todas</option>${state.brands.map(b => `<option value="${esc(b.id)}" ${state.brand === b.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select></label><label class="crm-brand-filter">Periodo<select id="pr-days">${[7, 30, 90, 366].map(n => `<option value="${n}" ${n === days ? 'selected' : ''}>${n === 366 ? 'Un año' : n + ' días'}</option>`).join('')}</select></label><button type="button" class="btn" data-action="pr-screen">${icon(presenting ? 'minimize-2' : 'maximize-2')} ${presenting ? 'Salir de pantalla' : 'Pantalla completa'}</button></div></div>
       <div class="an-kpis pr-kpis">${kpi('Conversaciones', num(t.conversations), t.fromAds + ' llegaron por anuncio')}${kpi('Resueltas sin intervención', pct(t.autoRate), num(t.autoHandled) + ' de ' + num(t.withOutbound) + ' con respuesta')}${kpi('Primera respuesta automática', sec(r.bot.medianMs), 'mediana · p90 ' + sec(r.bot.p90Ms))}${kpi('Primera respuesta humana', sec(r.human.medianMs), r.human.count ? 'mediana de ' + num(r.human.count) + ' esperas' : 'sin esperas medidas')}${kpi('Ventas de práctica', num(s.paid), s.amountLabel + ' · conversión ' + pct(s.conversion))}${kpi('Costo estimado de mensajes', m.costLabel, num(m.outbound) + ' salientes · tarifas orientativas')}</div>
       <div class="an-grid pr-grid">
@@ -87,8 +87,8 @@ window.createPresentationUI = function ({ state, api, esc, icon, icons, toast, s
         <section class="crm-panel"><h2>Ventas y cobrado por marca</h2>${d.byBrand.length ? `<table class="an-table"><thead><tr><th>Marca</th><th>Chats</th><th>Sin persona</th><th>Pagos</th><th>Cobrado</th></tr></thead><tbody>${d.byBrand.map(b => `<tr><td>${esc(b.name)}</td><td>${num(b.conversations)}</td><td>${pct(b.autoRate)}</td><td>${num(b.paid)}</td><td>${money(b.amountCents / 100)}</td></tr>`).join('')}</tbody></table>` : '<p class="crm-hint">Sin conversaciones ni ventas en el periodo.</p>'}<p class="crm-hint">Por método: tarjeta ${num(s.byMethod.card)} · OXXO ${num(s.byMethod.oxxo)} · transferencia ${num(s.byMethod.transfer)}. Origen: motor ${num(s.bySource.bot)} · equipo ${num(s.bySource.agent)}. Pendientes ${num(s.pending)} · comprobantes por revisar ${num(s.review)} · inscripciones ${num(s.enrollments)}.</p></section>
         <section class="crm-panel"><h2>Mensajes y costo estimado</h2><table class="an-table"><thead><tr><th>Categoría</th><th>Mensajes</th><th>Tarifa</th><th>Estimado</th></tr></thead><tbody>${m.byCategory.map(c => `<tr><td>${CATEGORY[c.category]}</td><td>${num(c.messages)}</td><td>${money(c.rate)}</td><td>${money(c.costEstimate)}</td></tr>`).join('')}<tr><td><strong>Total</strong></td><td>${num(m.outbound)}</td><td></td><td><strong>${esc(m.costLabel)}</strong></td></tr></tbody></table><p class="crm-hint">Entrantes: ${num(m.inbound)}. Estados: ${num(m.delivery.delivered)} entregados · ${num(m.delivery.read)} leídos · ${num(m.delivery.failed)} fallidos. Canales: ${t.byChannel.map(c => CHANNEL[c.channel] + ' ' + c.n).join(' · ')}. Tarifas orientativas por mensaje (MXN); el proveedor real cobra según su tarifario.</p></section>
         <section class="crm-panel pr-script"><div class="ops-card-top"><h2>Guion de presentación</h2><span class="ops-chip ${d.readySteps === d.script.length ? 'ok' : 'warn'}">${d.readySteps} de ${d.script.length} listos</span></div><ol class="pr-steps">${d.script.map((st, i) => `<li class="pr-step ${st.ready ? 'ready' : ''}"><div class="pr-step-head"><span class="pr-step-n">${i + 1}</span><strong>${esc(st.title)}</strong><span class="ops-chip ${st.ready ? 'ok' : 'warn'}">${st.ready ? 'Listo' : 'Preparar'}</span></div><p>${esc(st.say)}</p><small>${esc(st.detail)}</small><div class="actions"><button type="button" class="btn" data-action="pr-step" data-id="${st.id}">Ir a la pantalla</button></div></li>`).join('')}</ol></section>
-      </div><div class="an-notes">${d.notes.map(n => `<p class="crm-hint">${esc(n)}</p>`).join('')}</div></div>`;
-    icons();
+      </div><div class="an-notes">${d.notes.map(n => `<p class="crm-hint">${esc(n)}</p>`).join('')}</div></div>`,
+    );
   }
   async function action(name, el) {
     if (name === 'pr-screen') {

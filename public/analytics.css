@@ -388,9 +388,10 @@ body.presenting .pr-page {
   flex: 0 0 auto;
   color: var(--text-3);
 }
+/* ↑/↓: tonos de texto, no de borde (--ok-line y --warn-line son pasteles y daban 1,4:1 sobre blanco) */
 .an-week-delta.an-good {
-  color: var(--ok-line);
+  color: var(--ok);
 }
 .an-week-delta.an-bad {
-  color: var(--warn-line);
+  color: var(--warn);
 }

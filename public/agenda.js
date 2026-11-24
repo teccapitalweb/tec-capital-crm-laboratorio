@@ -1,7 +1,7 @@
 // Agenda semanal de citas (docs/PLAN_AGENDA_CITAS.md, vista semanal). Una semana de lunes a domingo con las citas de cada día, las propias o las de todo
 // el equipo (las marcas que la persona ve; el selector de marca del menú la filtra). Cada cita abre su chat. Sólo lectura: las citas se agendan y se
 // cambian desde el chat. Las acciones llevan el prefijo «agd-».
-window.createAgendaUI = function ({ state, api, esc, icon, icons, toast }) {
+window.createAgendaUI = function ({ state, api, esc, icon, toast, swapPage }) {
   const $ = s => document.querySelector(s);
   const KIND = {
     llamada: ['Llamada', 'phone'],
@@ -60,7 +60,7 @@ window.createAgendaUI = function ({ state, api, esc, icon, icons, toast }) {
       if (d !== undefined) by.get(d).push(i);
     }
     const count = items.length;
-    page.innerHTML = `<div class="content-page agenda-page"><div class="page-heading"><div><span class="eyebrow">Atención · ${state.brand === 'all' ? 'todas mis marcas' : esc(state.brands?.find(b => b.id === state.brand)?.name || 'una marca')}</span><h1>Agenda</h1><p>${scope === 'mine' ? 'Tu semana' : 'La semana del equipo'}: llamadas, videollamadas y citas presenciales. Se agendan desde el chat de cada persona.</p></div></div>
+    swapPage(`<div class="content-page agenda-page"><div class="page-heading"><div><span class="eyebrow">Atención · ${state.brand === 'all' ? 'todas mis marcas' : esc(state.brands?.find(b => b.id === state.brand)?.name || 'una marca')}</span><h1>Agenda</h1><p>${scope === 'mine' ? 'Tu semana' : 'La semana del equipo'}: llamadas, videollamadas y citas presenciales. Se agendan desde el chat de cada persona.</p></div></div>
       <div class="agd-bar"><div class="agd-nav" role="group" aria-label="Cambiar de semana"><button type="button" class="btn" data-action="agd-prev" aria-label="Semana anterior">${icon('chevron-left')}</button><button type="button" class="btn" data-action="agd-today">Hoy</button><button type="button" class="btn" data-action="agd-next" aria-label="Semana siguiente">${icon('chevron-right')}</button></div>
         <strong class="agd-range" aria-live="polite">${esc(rangeLabel())}</strong>
         <div class="agd-scope" role="group" aria-label="Qué citas ver"><button type="button" class="${scope === 'mine' ? 'active' : ''}" data-action="agd-scope" data-scope="mine" aria-pressed="${scope === 'mine'}">Mías</button><button type="button" class="${scope === 'team' ? 'active' : ''}" data-action="agd-scope" data-scope="team" aria-pressed="${scope === 'team'}">Del equipo</button></div>
@@ -75,8 +75,7 @@ window.createAgendaUI = function ({ state, api, esc, icon, icons, toast }) {
         ${list.map(i => card(i, now)).join('') || '<p class="agd-none">Sin citas</p>'}</section>`;
         })
         .join('')}</div>
-      ${loaded && !count && !failed ? `<p class="agd-hint">${scope === 'mine' ? 'No tienes citas esta semana.' : 'El equipo no tiene citas esta semana.'} Para agendar una, abre un chat y toca «Agendar cita».</p>` : ''}</div>`;
-    icons?.();
+      ${loaded && !count && !failed ? `<p class="agd-hint">${scope === 'mine' ? 'No tienes citas esta semana.' : 'El equipo no tiene citas esta semana.'} Para agendar una, abre un chat y toca «Agendar cita».</p>` : ''}</div>`);
   }
   async function load() {
     const my = ++version;

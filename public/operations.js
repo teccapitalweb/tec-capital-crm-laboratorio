@@ -5,6 +5,7 @@ window.createOperationsUI = function ({
   icon,
   icons,
   showModal,
+  swapPage,
   toast,
   refresh,
   setView,
@@ -72,7 +73,17 @@ window.createOperationsUI = function ({
     stamp = t =>
       t ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(t) : 'Sin objetivo',
     brand = id => state.brands.find(b => b.id === id)?.name || '';
-  let tab = 'queue',
+  // La última pestaña abierta se recuerda en este navegador (docs/PLAN_COMODIDAD.md): al volver a Operación, la persona
+  // sigue donde estaba. Si esa pestaña ya no está disponible para ella, se abre la cola de atención.
+  const TAB_KEY = 'tc-ops-tab';
+  const savedTab = () => {
+    try {
+      return localStorage.getItem(TAB_KEY) || '';
+    } catch {
+      return '';
+    }
+  };
+  let tab = savedTab() || 'queue',
     filter = 'all',
     query = '',
     offset = 0,
@@ -104,8 +115,8 @@ window.createOperationsUI = function ({
   const empty = copy => `<div class="crm-empty">${icon('inbox')}<h3>Todo en orden</h3><p>${copy}</p></div>`;
   const note = copy => `<p class="crm-hint">${copy}</p>`;
   // Las 17 pestañas, agrupadas por tarea: primero se elige el grupo y después la pestaña. Mismas pestañas, mismos permisos.
-  function opsTabs() {
-    const groups = [
+  function opsGroups() {
+    return [
       [
         'Atención',
         [
@@ -147,6 +158,9 @@ window.createOperationsUI = function ({
           : [],
       ],
     ].filter(([, items]) => items.length);
+  }
+  function opsTabs() {
+    const groups = opsGroups();
     const current = groups.find(([, items]) => items.some(([id]) => id === tab)) || groups[0];
     const pill = ([title, items]) =>
       `<button data-action="ops-tab" data-id="${items[0][0]}" class="${title === current[0] ? 'active' : ''}" aria-pressed="${title === current[0]}">${title}</button>`;
@@ -211,6 +225,12 @@ window.createOperationsUI = function ({
     }
   }
   function draw() {
+    if (!opsGroups().some(([, items]) => items.some(([id]) => id === tab))) tab = 'queue';
+    try {
+      localStorage.setItem(TAB_KEY, tab);
+    } catch {
+      /* sin almacenamiento: no se recuerda */
+    }
     let content = '';
     if (tab === 'queue') {
       content = `<div class="ops-stats">${[
@@ -255,11 +275,14 @@ window.createOperationsUI = function ({
           )
           .join('') || empty('Crea una macro para combinar plantilla, etapa, seguimiento y nota interna.')
       }</div>${note('Las macros se ejecutan por decisión del asesor desde el chat. Las recetas automáticas y la IA corresponden a la siguiente fase.')}`;
-    const scrolled = $('#page .content-page')?.scrollTop || 0; // las actualizaciones en vivo no deben devolver la vista al inicio
-    $('#page').innerHTML =
-      `<div class="content-page ops-page"><div class="page-heading"><div><span class="eyebrow">Atención · por marca</span><h1>Operación</h1><p>La cola de atención, los cobros, las campañas y el sistema: elige un área y después su pestaña.</p></div></div><label class="crm-brand-filter">Marca<select id="ops-brand"><option value="all">Todas mis marcas</option>${opts(state.brands, state.brand)}</select></label>${opsTabs()}${content}</div>`;
-    icons();
-    if (scrolled) $('#page .content-page').scrollTop = scrolled;
+    swapPage(
+      `<div class="content-page ops-page"><div class="page-heading"><div><span class="eyebrow">Atención · por marca</span><h1>Operación</h1><p>La cola de atención, los cobros, las campañas y el sistema: elige un área y después su pestaña.</p></div></div><label class="crm-brand-filter">Marca<select id="ops-brand"><option value="all">Todas mis marcas</option>${opts(state.brands, state.brand)}</select></label>${opsTabs()}${content}</div>`,
+    );
+    // Rastro en la cabecera: «Operación · Atención · Coordinación», para saber siempre dónde se está.
+    const here = opsGroups().find(([, items]) => items.some(([id]) => id === tab)),
+      label = here?.[1].find(([id]) => id === tab)?.[1],
+      crumb = $('#breadcrumb-title');
+    if (crumb && here) crumb.textContent = 'Operación · ' + here[0] + ' · ' + label;
   }
   function notificationRows(items) {
     return (

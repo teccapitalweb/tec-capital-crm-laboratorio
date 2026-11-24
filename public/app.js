@@ -92,6 +92,7 @@
     esc,
     icon,
     showModal,
+    swapPage,
     toast,
     icons,
     refresh,
@@ -112,6 +113,7 @@
     icon,
     icons,
     showModal,
+    swapPage,
     toast,
     refresh,
     setView,
@@ -135,12 +137,12 @@
       loadThreads(false, true);
     },
   });
-  const analyticsUI = window.createAnalyticsUI({ state, api, esc, icon, icons, toast });
-  const portalUI = window.createPortalUI({ state, api, esc, icon, icons, toast });
-  const agendaUI = window.createAgendaUI({ state, api, esc, icon, icons, toast });
+  const analyticsUI = window.createAnalyticsUI({ state, api, esc, icon, icons, toast, swapPage });
+  const portalUI = window.createPortalUI({ state, api, esc, icon, icons, toast, swapPage });
+  const agendaUI = window.createAgendaUI({ state, api, esc, icon, icons, toast, swapPage });
   // Pantallas nuevas (public/screens/, docs/GUIA_PANTALLAS.md): el kit usa esto para montar cada una dentro de #page.
   if (window.TC)
-    window.TC.host = { state, api, esc, icon, icons, toast, showModal, setView, refresh, openConversation };
+    window.TC.host = { state, api, esc, icon, icons, toast, showModal, swapPage, setView, refresh, openConversation };
   const operationsUI = window.createOperationsUI({
     state,
     api,
@@ -148,6 +150,7 @@
     icon,
     icons,
     showModal,
+    swapPage,
     toast,
     refresh,
     setView,
@@ -158,6 +161,7 @@
     api,
     esc,
     icon,
+    swapPage,
     icons,
     toast,
     setView,
@@ -250,6 +254,55 @@
       throw error;
     }
     return data;
+  }
+  // Repinta la página sin perder el lugar (docs/PLAN_COMODIDAD.md): conserva hasta dónde estaba desplazada la vista (y la
+  // ventana), qué campo tenía el foco y el cursor dentro de él. Al guardar en una ventana emergente, cambiar un filtro o
+  // recibir una actualización en vivo, la persona sigue viendo lo mismo que veía; antes todo volvía al inicio.
+  function swapPage(html) {
+    const page = $('#page');
+    if (!page) return;
+    const scrollers = ['#page .content-page', '#page', '.main']
+      .map(s => $(s))
+      .filter(Boolean)
+      .map(el => [el.scrollTop, el.scrollLeft]);
+    const active = document.activeElement,
+      focusKey =
+        active && page.contains(active) && (active.id || active.name)
+          ? {
+              id: active.id,
+              name: active.name,
+              form: active.form?.id || '',
+              start: active.selectionStart ?? null,
+              end: active.selectionEnd ?? null,
+              value: 'value' in active ? active.value : null,
+            }
+          : null;
+    page.innerHTML = html;
+    icons();
+    ['#page .content-page', '#page', '.main'].forEach((s, i) => {
+      const el = $(s),
+        was = scrollers[i];
+      if (el && was && (was[0] || was[1])) {
+        el.scrollTop = was[0];
+        el.scrollLeft = was[1];
+      }
+    });
+    if (focusKey) {
+      const next =
+        (focusKey.id && document.getElementById(focusKey.id)) ||
+        (focusKey.name &&
+          (focusKey.form ? document.getElementById(focusKey.form)?.elements.namedItem(focusKey.name) : null)) ||
+        (focusKey.name && page.querySelector(`[name="${CSS.escape(focusKey.name)}"]`));
+      if (next && typeof next.focus === 'function') {
+        next.focus({ preventScroll: true });
+        if (focusKey.start !== null && typeof next.setSelectionRange === 'function' && next.value === focusKey.value)
+          try {
+            next.setSelectionRange(focusKey.start, focusKey.end);
+          } catch {
+            /* tipo de campo sin selección */
+          }
+      }
+    }
   }
   function showModal(title, content) {
     $('#modal-content').innerHTML =
