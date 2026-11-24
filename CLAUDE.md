@@ -16,7 +16,7 @@ Este es el repositorio vigente del CRM de TEC Capital. Lee este archivo antes de
 ## Orden de lectura
 
 0. [Estado actual](docs/ESTADO_ACTUAL.md): una página con lo vigente. **Empieza aquí.**
-0z. [Relevo del 24 nov 2026](docs/RELEVO_24_NOV_2026.md): traspaso completo (publicaciones de los últimos dos días, estado de Meta/WhatsApp real con sus identificadores, qué hacer cuando Meta verifique la empresa, pendientes del dueño y de desarrollo, qué no tocar). **Léelo si retomas el trabajo sin la sesión anterior.**
+0z. [Relevo del 24 nov 2026](docs/RELEVO_24_NOV_2026.md): traspaso completo (publicaciones de los últimos dos días, estado de Meta/WhatsApp real con sus identificadores, qué hacer cuando Meta verifique la empresa, pendientes del dueño y de desarrollo, qué no tocar). **Léelo si retomas el trabajo sin la sesión anterior.** Prompt de arranque listo para copiar: [docs/PROMPT_CODEX.md](docs/PROMPT_CODEX.md).
 0a. [Guía de módulos, pantallas y cambios de esquema](docs/GUIA_MODULOS.md): cómo se añade lo nuevo sin tocar archivos compartidos (migraciones con nombre, `server/modules/`, `public/screens/`). **Léela antes de escribir código nuevo.**
 0b. [Guía de uso por rol](docs/GUIA_DE_USO.md) y [activación y verificación en producción](docs/ACTIVACION_Y_VERIFICACION.md): qué hace cada pantalla y el runbook para dejar una marca de pruebas funcionando y comprobada.
 1. [Estado y decisiones](docs/CONTINUIDAD.md): entregas, diseño, evidencia y pendientes.
