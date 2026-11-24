@@ -34,11 +34,12 @@ Este commit identifica el código funcional. Un commit posterior que añada úni
 - **Código:** `sideNav()` en `public/app.js` (reordena los botones que cada módulo ya entrega; no cambia sus `data-view`), `opsTabs()` en `public/operations.js` (el botón de un área usa la misma acción `ops-tab`), reglas al final de `public/polish.css`.
 - **Verificado:** 179 pruebas; escritorio 1366×800 (menú completo sin desplazar, fuente ≥11 px, área táctil de 40 px) y celular 375 px (barra de iconos, sin desbordar la página, áreas de 40 px de alto). **Sin publicar.**
 
-## Comodidad: no perder el lugar, ventanas iguales y saber dónde se está (rama `feat/comodidad`, 23 nov 2026)
+## Comodidad: no perder el lugar, ventanas iguales y saber dónde se está (publicado en `main`, 23 nov 2026)
 
 - **Por qué:** el dueño pidió ventanas más cómodas y que al guardar o cerrar una «no me mande hasta arriba»; 102 lugares devolvían `'reload'` y cada pantalla repintaba `#page` desde cero. Plan y detalle en [PLAN_COMODIDAD.md](PLAN_COMODIDAD.md).
 - **Qué se hizo (sólo interfaz; sin esquema, rutas ni permisos nuevos):** `swapPage` en `public/app.js` conserva desplazamiento, foco y cursor al repintar, y lo usan Catálogo, CRM, Operación, Analítica, Portal, Agenda y Presentación; sección 12 de `public/tinta-vistas.css`: título y «cerrar» fijos arriba, contenido desplazándose por dentro, la acción principal fija abajo (sólo el último bloque de botones), fichas con secciones más anchas y ventana a pantalla completa en celular; rastro «Operación · Atención · Coordinación» y «Catálogo · Plantillas» en la cabecera, y la última pestaña recordada en el navegador. Ninguna opción cambia de sitio ni desaparece.
-- **Verificado:** en el navegador con la demo local (desplazamiento conservado al guardar y cerrar en Plantillas y en Coordinación; ventana con título y botón fijos; celular 375 px; pestaña recordada tras recargar); `npm run check`; suite de servidor; pruebas de navegador.
+- **Verificado:** en el navegador con la demo local (desplazamiento conservado al guardar y cerrar en Plantillas y en Coordinación; ventana con título y botón fijos; celular 375 px; pestaña recordada tras recargar); `npm run check`; suite de servidor (820); pruebas de navegador (95, tras corregir el contraste de los ↑/↓ del resumen semanal, que ya fallaba en `main`).
+- **Publicado:** commit `e00e82e`; comprobado sin sesión (el `app.js` servido trae `swapPage`, el `tinta-vistas.css` la sección 12, `/crm` 200, `/mcp` 401).
 
 ## Reconocer el curso sin palabras propias (23 nov 2026)
 

@@ -1,6 +1,6 @@
 # Comodidad: no perder el lugar, ventanas iguales y saber dónde se está
 
-**Estado:** construido en la rama `feat/comodidad` (23 nov 2026); sólo interfaz, sin esquema, rutas ni permisos nuevos. Pendiente de «Sí, publicar».
+**Estado:** **publicado en `main` el 23 nov 2026** (commit `e00e82e`); sólo interfaz, sin esquema, rutas ni permisos nuevos.
 
 ## Por qué
 
