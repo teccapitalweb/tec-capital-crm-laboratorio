@@ -906,10 +906,26 @@ export default {
       if ((def.header.type === 'image' || def.header.type === 'document') && !def.header.fileId) return false;
       return !['video'].includes(def.header.type);
     };
+    // Por qué una plantilla de marketing no puede salir a esta persona (null si puede): pidió la baja, o nunca aceptó
+    // recibir promociones. Las de utilidad (avisos de su propia compra o clase) no necesitan consentimiento.
+    function consentBlock(c, t) {
+      if (t.category !== 'marketing') return null;
+      const consent = repo.consent(repo.contactId(c.id));
+      if (consent === 'opted_out')
+        return { code: 'opted_out', reason: 'Esta persona pidió la baja: no se le envían plantillas de marketing.' };
+      if (consent !== 'opted_in')
+        return {
+          code: 'no_consent',
+          reason:
+            'Una plantilla de marketing sólo se envía a quien aceptó recibir promociones. Regístralo en su ficha de contacto, o usa una plantilla de utilidad.',
+        };
+      return null;
+    }
     function chatTemplates(c, user) {
       crm.requireBrand(user, c.brand_id);
       if (!c.wa_number) return { templates: [] };
       return {
+        consent: repo.consent(repo.contactId(c.id)),
         templates: repo
           .sendable(c.brand_id, waba())
           .filter(chatUsable)
@@ -925,6 +941,7 @@ export default {
               header: def.header.type === 'none' ? null : def.header.type,
               buttons: def.buttons.map(b => b.text || 'Copiar código'),
               flagged: t.status === 'flagged',
+              blocked: consentBlock(c, t)?.reason || null,
             };
           }),
       };
@@ -979,6 +996,8 @@ export default {
       if (!REF.test(clientRef)) throw fail(400, 'Referencia no válida.');
       const t = usableFor(c, input.templateId);
       if (!t) throw fail(404, 'Esa plantilla no está aprobada para esta marca.');
+      const block = consentBlock(c, t);
+      if (block) throw fail(409, block.reason, { code: block.code });
       const ref = user.id + ':' + clientRef;
       const existing = repo.messageByRef(ref);
       if (existing) {

@@ -14,6 +14,7 @@ test('aviso de privacidad: texto base con empresa y contacto del entorno, sin in
     'Qué datos recibimos',
     'Para qué los usamos',
     'inteligencia artificial',
+    'se ocultan antes de enviárselo',
     'Con quién se comparten',
     'Tus derechos',
     'id="eliminar-datos"',

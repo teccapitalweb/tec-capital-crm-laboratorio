@@ -24,6 +24,7 @@ El correo va en el entorno y no en el código porque el repositorio es público.
 ## Importante
 
 - **Es un texto base.** Lo redactó el asistente a partir de cómo funciona el CRM; la empresa debe leerlo, ajustarlo y validarlo. No sustituye la asesoría legal ni un aviso de privacidad formal conforme a la ley mexicana.
+- **26 nov 2026:** la auditoría encontró que los últimos 6 mensajes de la persona viajaban tal cual a la IA, así que un teléfono o correo escrito dentro del chat podía llegar al proveedor. Ahora `redactContact` (`server/lib/redact.mjs`) oculta correos, teléfonos y números largos del texto del cliente antes de llamar a Claude (historial y pregunta; el resumen de chats largos ya venía enmascarado), y el aviso lo dice. Probado en `test/ai-redaction.test.mjs`.
 - Lo que afirma debe seguir siendo cierto. Si cambia qué recibe el proveedor de IA, con quién se comparten datos o cuánto se conservan, hay que actualizar la página y la fecha `PRIVACY_UPDATED`.
 - Hoy el CRM **no tiene una función para borrar los datos de una persona**; una solicitud de eliminación se atiende a mano. Es un pendiente real si se reciben solicitudes.
 

@@ -57,6 +57,7 @@ Un aviso de utilidad usa la plantilla de aviso de utilidad; uno de marketing (ca
 - **Sin duplicados**: el envío desde el chat lleva `clientRef`; el aviso automático tiene una referencia única por conversación y periodo cerrado.
 - **Costo**: Meta cobra cada plantilla enviada (las de marketing más que las de utilidad). Por eso el aviso automático sólo existe si administración marca una plantilla como «aviso».
 - **Alcance por marca**: el equipo sólo ve y envía las plantillas aprobadas de la marca de la conversación.
+- **Consentimiento (26 nov 2026)**: una plantilla de **marketing** sólo sale desde el chat a quien aceptó recibir promociones (`contact_consent` en `opted_in`), la misma regla que secuencias y campañas; a quien pidió la baja no se le envía. La ventana «Enviar plantilla» la muestra con el motivo y el botón apagado, y la ruta responde 409 `no_consent` u `opted_out`. Las de utilidad (avisos de su propia compra o clase) no lo necesitan. Probado en `test/wa-templates.test.mjs`.
 
 ## Límites
 

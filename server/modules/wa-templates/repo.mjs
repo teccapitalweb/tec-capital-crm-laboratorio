@@ -149,6 +149,16 @@ export function createRepo(db) {
     course: one('SELECT title FROM courses WHERE id=?'),
     edition: one('SELECT name FROM editions WHERE id=?'),
     conversation: one('SELECT * FROM conversations WHERE id=?'),
+    // El contacto detrás de la conversación (por su oportunidad) y su consentimiento para promociones: una plantilla
+    // de marketing sólo sale a quien aceptó recibirlas, igual que en secuencias y campañas.
+    contactId: conversationId =>
+      one(
+        'SELECT o.contact_id id FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id WHERE co.conversation_id=?',
+      )(conversationId)?.id ?? null,
+    consent: contactId =>
+      contactId
+        ? (one('SELECT status FROM contact_consent WHERE contact_id=?')(contactId)?.status ?? 'unknown')
+        : 'unknown',
     lastCustomerAt: one("SELECT MAX(created_at) t FROM messages WHERE conversation_id=? AND sender_kind='customer'"),
     messageByRef: one('SELECT id,conversation_id,delivery_state FROM messages WHERE client_ref=?'),
     retryNotice: run(

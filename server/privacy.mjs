@@ -3,7 +3,7 @@
 // tiene derecho a saber qué se guarda y cómo pedir que se borre. Es una página estática, sin sesión, sin datos de nadie y sin
 // secretos. El nombre de la empresa y el correo de contacto vienen del entorno: el repositorio es público y no lleva correos.
 // ES UN TEXTO BASE: la empresa debe revisarlo y ajustarlo; no sustituye la asesoría legal.
-export const PRIVACY_UPDATED = '12 de noviembre de 2026';
+export const PRIVACY_UPDATED = '26 de noviembre de 2026';
 const esc = v =>
   String(v ?? '').replace(
     /[&<>"']/g,
@@ -51,7 +51,7 @@ export function privacyPage({ company = 'TEC Capital', email = '' } = {}) {
 <p>De forma secundaria, podemos enviarte información de otros cursos o promociones. Puedes negarte en cualquier momento: escribe <strong>«BAJA»</strong> en el chat y dejaremos de enviarte ese tipo de mensajes.</p>
 
 <h2>Respuestas automáticas e inteligencia artificial</h2>
-<p>Parte de la atención la da un asistente automático. Para redactar algunas respuestas usamos un proveedor de inteligencia artificial, que recibe el texto de tus mensajes recientes y tu nombre; <strong>no le enviamos tu número de teléfono</strong>. Los precios, las fechas y los cupos salen siempre de nuestro catálogo, no de la inteligencia artificial. Puedes pedir en cualquier momento que te atienda una persona.</p>
+<p>Parte de la atención la da un asistente automático. Para redactar algunas respuestas usamos un proveedor de inteligencia artificial, que recibe el texto de tus mensajes recientes y tu nombre; <strong>no le enviamos tu número de teléfono</strong>, y los teléfonos, correos y números largos que escribas dentro del chat se ocultan antes de enviárselo. Los precios, las fechas y los cupos salen siempre de nuestro catálogo, no de la inteligencia artificial. Puedes pedir en cualquier momento que te atienda una persona.</p>
 
 <h2>Con quién se comparten</h2>
 <p>No vendemos tus datos. Sólo los compartimos con los proveedores que hacen posible el servicio y únicamente para ese fin:</p>

@@ -3,6 +3,7 @@
 // - `simulated` (por omisión): elige la entrada de conocimiento más parecida y la devuelve tal cual; sin red ni costo.
 // - `claude`: usa el SDK oficial sólo si AI_PROVIDER=claude y hay credenciales; se carga bajo demanda.
 // El motor de respuestas sólo llama a draft() FUERA de las transacciones de SQLite y con tiempo límite.
+import { redactContact } from './lib/redact.mjs';
 
 const STOP = new Set([
   'el',
@@ -333,7 +334,11 @@ export function createAiProvider({ env = process.env, log = console, timeoutMs =
       .filter(Boolean)
       .join('\n\n');
     const messages = [
-      ...history.slice(-6).map(h => ({ role: h.role === 'customer' ? 'user' : 'assistant', content: h.text })),
+      // lo que escribió la persona viaja sin correos ni teléfonos (aviso de privacidad); lo del equipo, tal cual
+      ...history.slice(-6).map(h => ({
+        role: h.role === 'customer' ? 'user' : 'assistant',
+        content: h.role === 'customer' ? redactContact(h.text) : h.text,
+      })),
       {
         role: 'user',
         content: [
@@ -341,7 +346,7 @@ export function createAiProvider({ env = process.env, log = console, timeoutMs =
             ? '<resumen_conversacion>\n' + String(summary).replace(/[<>]/g, ' ') + '\n</resumen_conversacion>'
             : null,
           memory ? '<datos_cliente>\n' + String(memory).replace(/[<>]/g, ' ') + '\n</datos_cliente>' : null,
-          question,
+          redactContact(question),
         ]
           .filter(Boolean)
           .join('\n\n'),

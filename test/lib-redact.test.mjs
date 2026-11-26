@@ -1,7 +1,7 @@
 // Redacción de datos personales en texto de clientes (server/lib/redact.mjs): correos, teléfonos, números largos y enlaces.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { redactPersonal } from '../server/lib/redact.mjs';
+import { redactContact, redactPersonal } from '../server/lib/redact.mjs';
 
 test('redactPersonal: sustituye correos, teléfonos, números largos y enlaces; deja el resto del texto', () => {
   assert.equal(redactPersonal('mi correo es ana.secreta@example.com gracias'), 'mi correo es [correo] gracias');
@@ -20,4 +20,14 @@ test('redactPersonal: sustituye correos, teléfonos, números largos y enlaces; 
   assert.equal(redactPersonal('  varios   espacios \n y saltos '), 'varios espacios y saltos');
   assert.equal(redactPersonal(null), '');
   assert.equal(redactPersonal('x'.repeat(300), 50).length, 50);
+});
+
+test('redactContact: para la IA oculta correos, teléfonos y números largos, y conserva enlaces, espacios y longitud', () => {
+  assert.equal(
+    redactContact('escríbeme al 55 1234 5678 o a ana@example.com\n\nvi https://ejemplo.test/promo'),
+    'escríbeme al [teléfono] o a [correo]\n\nvi https://ejemplo.test/promo',
+  );
+  assert.equal(redactContact('¿cuesta 599 y son 8 sesiones en 2026?'), '¿cuesta 599 y son 8 sesiones en 2026?');
+  assert.equal(redactContact('x'.repeat(300)).length, 300);
+  assert.equal(redactContact(undefined), '');
 });

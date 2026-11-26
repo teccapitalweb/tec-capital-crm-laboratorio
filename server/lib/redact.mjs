@@ -17,3 +17,12 @@ export function redactPersonal(raw, max = 200) {
     .trim()
     .slice(0, max);
 }
+
+// Lo mismo, pero para el texto que viaja al proveedor de IA: oculta correos, teléfonos y tiras largas de dígitos y
+// conserva el resto tal cual (enlaces, espacios y longitud), porque el modelo necesita el mensaje completo.
+export function redactContact(raw) {
+  return String(raw ?? '')
+    .replace(EMAIL, '[correo]')
+    .replace(PHONE, m => (m.replace(/D/g, '').length >= 7 ? '[teléfono]' : m))
+    .replace(LONG_DIGITS, '[número]');
+}

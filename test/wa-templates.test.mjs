@@ -418,6 +418,41 @@ test('plantillas completas de punta a punta con el Meta de mentira', async t => 
   assert.match(list[0].text, /^Hola María, ya abrimos inscripciones a Plan sanitario para aves\./);
   await call(origin(), '/api/conversations/' + conv.id + '/wa-templates', { cookie: agentOt, expected: 404 });
   const sendRef = randomUUID();
+  // una plantilla de marketing sólo sale a quien aceptó recibir promociones: la lista lo avisa y el envío se rechaza
+  assert.match(list[0].blocked, /aceptó recibir promociones/);
+  const noConsent = await call(origin(), '/api/conversations/' + conv.id + '/wa-templates', {
+    cookie: agentGv,
+    body: { templateId: draft.id, clientRef: sendRef },
+    expected: 409,
+  });
+  assert.equal(noConsent.code, 'no_consent');
+  assert.equal(
+    meta.sent.some(m => m.type === 'template'),
+    false,
+  );
+  const contactId = db
+    .prepare(
+      'SELECT o.contact_id id FROM conversation_opportunities co JOIN opportunities o ON o.id=co.opportunity_id WHERE co.conversation_id=?',
+    )
+    .get(conv.id).id;
+  db.prepare(
+    "INSERT INTO contact_consent(contact_id,brand_id,status,source,updated_at) VALUES(?,'globalvet','opted_out','customer',?)",
+  ).run(contactId, Date.now());
+  assert.equal(
+    (
+      await call(origin(), '/api/conversations/' + conv.id + '/wa-templates', {
+        cookie: agentGv,
+        body: { templateId: draft.id, clientRef: sendRef },
+        expected: 409,
+      })
+    ).code,
+    'opted_out',
+  );
+  db.prepare("UPDATE contact_consent SET status='opted_in' WHERE contact_id=?").run(contactId);
+  assert.equal(
+    (await call(origin(), '/api/conversations/' + conv.id + '/wa-templates', { cookie: agentGv })).templates[0].blocked,
+    null,
+  );
   const sentMsg = await call(origin(), '/api/conversations/' + conv.id + '/wa-templates', {
     cookie: agentGv,
     body: { templateId: draft.id, clientRef: sendRef },
