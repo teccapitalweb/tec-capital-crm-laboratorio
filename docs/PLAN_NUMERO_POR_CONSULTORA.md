@@ -22,7 +22,7 @@ Una marca con un solo curso disponible nunca pregunta.
 - **Con un recorrido activo también** (18 nov 2026): si el mensaje arranca un recorrido por palabra clave («info del curso de aves»), el motor de recorridos aplica estas mismas reglas antes de empezar, y el saludo, la ficha y el precio salen ya del curso nombrado.
 
 - «¿Y el de aves cuánto cuesta?» contesta de aves y la conversación **pasa a aves**. A media conversación hace falta una señal además de la palabra («el de…», «curso», «también», «mejor») o dos palabras propias del curso: «tengo 200 aves, ¿me sirve?» no cambia nada.
-- «¿Qué otros cursos tienen?» da la lista numerada; el número siguiente elige. Un número suelto sin lista antes no elige nada.
+- «¿Qué otros cursos tienen?» da la lista numerada; el número siguiente elige. Un número suelto sin lista antes no elige nada. **Desde el 26 nov 2026 también en palabras**, como contesta la gente por WhatsApp: «el segundo», «la primera», «opción 2», «el 2», «número 3 por favor», «la última», «2️⃣» (`chosenIndex` en `server/course-match.mjs`, dentro de `byNumber`; lo usan el asistente y el paso «¿Qué curso te interesa?»). Una frase con más palabras («el segundo piso») no elige. Nació de un chat real: «el segundo» tras la lista corta de dos cursos recibía «Esa pregunta todavía no la tengo a la mano».
 - Si la persona vuelve a entrar por el anuncio de otro curso, su conversación pasa a ese curso.
 - **Con un pedido vigente no se cambia solo**: el asistente le dice que escriba «asesor».
 

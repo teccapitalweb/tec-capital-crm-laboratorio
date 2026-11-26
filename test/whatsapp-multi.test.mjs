@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { hmacHex } from '../server/connectors.mjs';
-import { matchCourse, byNumber, candidates } from '../server/course-match.mjs';
+import { matchCourse, byNumber, candidates, chosenIndex } from '../server/course-match.mjs';
 import { startText } from '../server/reply-copy.mjs';
 import { assertSchemaCurrent } from './helpers/schema.mjs';
 
@@ -50,6 +50,23 @@ test('reconocer el curso: sólo deciden las palabras propias de un curso; a medi
   assert.equal(byNumber(list, '0', full), null);
   assert.equal(byNumber(list, '2', 'El precio es de $550.'), null);
   assert.equal(byNumber(list, '2'), null);
+  // en palabras, como contesta la gente por WhatsApp (el fallo real del 26 nov 2026: «el segundo» no cambiaba de curso)
+  assert.equal(byNumber(list, 'el segundo', short)?.id, 'c');
+  assert.equal(byNumber(list, 'La primera', short)?.id, 'n');
+  assert.equal(byNumber(list, 'el 2', full)?.id, 'n');
+  assert.equal(byNumber(list, 'opción 3', full)?.id, 'a');
+  assert.equal(byNumber(list, 'Número 1, por favor', full)?.id, 'c');
+  assert.equal(byNumber(list, 'la última', full)?.id, 'a');
+  assert.equal(byNumber(list, 'el último', short)?.id, 'c');
+  assert.equal(byNumber(list, '2️⃣', full)?.id, 'n');
+  assert.equal(byNumber(list, 'quiero el tercero', full)?.id, 'a');
+  assert.equal(byNumber(list, 'el tercero', short), null, 'la lista corta no tiene tercero');
+  assert.equal(byNumber(list, 'el segundo piso', short), null, 'una frase con más palabras no elige');
+  assert.equal(byNumber(list, 'segundo', 'El precio es de $550.'), null, 'sin lista, nada');
+  assert.equal(chosenIndex('el segundo'), 2);
+  assert.equal(chosenIndex('primero'), 1);
+  assert.equal(chosenIndex('la ultima', 4), 4);
+  assert.equal(chosenIndex('hola'), null);
   // palabra que comparten varios cursos: candidatos para preguntar «¿cuál de estos?»
   assert.deepEqual(
     candidates(list, 'el de nutrición').map(k => k.id),

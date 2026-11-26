@@ -131,9 +131,53 @@ export function candidates(list, text, { strict = false, max = 6 } = {}) {
 
 // «2» después de una lista numerada: el curso que ESA lista mostraba en el renglón 2 (se lee del propio mensaje, así vale para la lista completa
 // y para una corta, y no depende de que el catálogo siga en el mismo orden).
-export const byNumber = (list, text, shown = '') => {
-  const m = /^\s*(\d{1,2})\s*[.)]?\s*$/.exec(String(text || ''));
+// También en palabras, como contesta la gente por WhatsApp: «el segundo», «la primera», «opción 2», «el 2», «número 3»,
+// «la última», «2️⃣», «el segundo por favor». Nunca un número dentro de otra frase («2 personas», «el precio es 2 mil»).
+const ORDINALS = {
+  primer: 1,
+  primero: 1,
+  primera: 1,
+  segundo: 2,
+  segunda: 2,
+  tercer: 3,
+  tercero: 3,
+  tercera: 3,
+  cuarto: 4,
+  cuarta: 4,
+  quinto: 5,
+  quinta: 5,
+  sexto: 6,
+  sexta: 6,
+  septimo: 7,
+  septima: 7,
+  octavo: 8,
+  octava: 8,
+  noveno: 9,
+  novena: 9,
+  decimo: 10,
+  decima: 10,
+};
+const CHOICE =
+  /^(?:el|la|lo|los|las|opcion|la opcion|el numero|numero|num|no|el de|la de|quiero el|quiero la|quiero|me interesa el|me interesa la|me interesa|elijo|elijo el|elijo la|dame el|dame la|escojo|escojo el|escojo la)?\s*(\d{1,2}|[a-z]+)\s*(?:[.)]|opcion|por favor|porfa|pls|gracias)?\s*$/;
+export const chosenIndex = (text, count = 99) => {
+  const plain = normalize(String(text || ''))
+    .replace(/[\uFE0F\u20E3]/g, '')
+    .replace(/\p{Extended_Pictographic}/gu, ' ')
+    .replace(/[¡!¿?,;:*_~]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const m = CHOICE.exec(plain);
   if (!m) return null;
-  const line = new RegExp('^' + Number(m[1]) + '\\. (.+)$', 'm').exec(String(shown || ''));
-  return line ? list.find(k => k.title === line[1].trim()) || null : null;
+  const word = m[1];
+  if (/^\d{1,2}$/.test(word)) return Number(word);
+  if (word === 'ultimo' || word === 'ultima') return count;
+  return ORDINALS[word] ?? null;
+};
+export const byNumber = (list, text, shown = '') => {
+  const lines = [...String(shown || '').matchAll(/^(\d{1,2})\. (.+)$/gm)];
+  if (!lines.length) return null;
+  const n = chosenIndex(text, Math.max(...lines.map(l => Number(l[1]))));
+  if (!n) return null;
+  const line = lines.find(l => Number(l[1]) === n);
+  return line ? list.find(k => k.title === line[2].trim()) || null : null;
 };
