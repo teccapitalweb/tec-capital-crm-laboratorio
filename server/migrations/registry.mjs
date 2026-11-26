@@ -19,6 +19,7 @@ import contacts from './named/contacts/index.mjs';
 import courseAccess from './named/course-access/index.mjs';
 import identity from './named/identity/index.mjs';
 import inbox from './named/inbox/index.mjs';
+import jornada from './named/jornada/index.mjs';
 import jobs from './named/jobs/index.mjs';
 import lifecycle from './named/lifecycle/index.mjs';
 import mcpActivity from './named/mcp-activity/index.mjs';
@@ -78,4 +79,5 @@ export const NAMED = defineRegistry([
   ...mcpProposals,
   ...mcpUploads,
   ...replies,
+  ...jornada,
 ]);

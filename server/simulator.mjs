@@ -190,6 +190,90 @@ export function createSimulator({
     return view(getRun(id));
   }
 
+  // ---- Para la «Jornada simulada» (server/modules/jornada): una demo que empieza vacía y a la que se van sumando
+  // clientes uno por uno, a la hora que la jornada decida. Mismos usuarios «· demo», mismos guiones y el mismo reloj.
+  function createRun({ title, brandIds, personas, pace = 'lenta' }, user) {
+    if (!PACES[pace]) throw fail(400, 'Elige un ritmo válido.');
+    const list = Array.isArray(personas) && personas.length ? [...new Set(personas)] : Object.keys(PERSONAS);
+    if (list.some(x => !PERSONAS[x])) throw fail(400, 'Perfil de cliente no válido.');
+    const brands = (Array.isArray(brandIds) ? brandIds : [brandIds]).filter(b =>
+      db.prepare('SELECT 1 FROM brands WHERE id=?').get(b),
+    );
+    if (!brands.length) throw fail(404, 'Marca no encontrada.');
+    if (!eligibleCourses(brands).length)
+      throw fail(409, 'Esa marca no tiene cursos con una edición publicada y vigente.');
+    const t = now(),
+      id = randomUUID();
+    db.prepare(
+      'INSERT INTO simulator_runs(id,title,brand_ids,personas,pace,count,state,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
+    ).run(
+      id,
+      String(title || 'Jornada').slice(0, 80),
+      JSON.stringify(brands),
+      JSON.stringify(list),
+      pace,
+      0,
+      'running',
+      user.id,
+      t,
+    );
+    audit(user, 'simulator.start', id);
+    return id;
+  }
+  // Suma un cliente simulado a esa demo ahora mismo. Devuelve {actorId, userId, name}. Si la demo había terminado por
+  // quedarse sin clientes activos, vuelve a correr.
+  function enroll(runId, { persona, brandId, channel }, user) {
+    const r = getRun(runId);
+    if (!r || ['stopped', 'archived'].includes(r.state)) throw fail(409, 'Esa demo ya no admite clientes.');
+    if (!PERSONAS[persona]) throw fail(400, 'Perfil de cliente no válido.');
+    const targets = eligibleCourses([brandId]);
+    if (!targets.length) throw fail(409, 'Esa marca no tiene cursos con una edición publicada y vigente.');
+    const active = db
+      .prepare(
+        "SELECT count(*) n FROM simulator_actors a JOIN simulator_runs r ON r.id=a.run_id WHERE r.state='running' AND a.state IN ('active','waiting')",
+      )
+      .get().n;
+    if (active >= LIMITS.maxActive) throw fail(409, 'Hay demasiados clientes simulados en curso.');
+    const t = now(),
+      n = db.prepare('SELECT count(*) n FROM simulator_actors WHERE run_id=?').get(runId).n,
+      target = targets[(n * 7) % targets.length],
+      uid = randomUUID(),
+      actorId = randomUUID(),
+      name = pick(FIRST_NAMES) + ' ' + pick(LAST_NAMES) + ' · demo';
+    transaction(db, () => {
+      const number = db.prepare('SELECT COALESCE(MAX(test_number),100000)+1 n FROM users').get().n;
+      db.prepare(
+        'INSERT INTO users(id,username,name,password_hash,role,test_number,created_at,last_seen) VALUES(?,?,?,?,?,?,?,?)',
+      ).run(
+        uid,
+        'demo.' + runId.slice(0, 6) + '.' + String(n + 1).padStart(2, '0'),
+        name,
+        'demo:' + randomBytes(64).toString('hex'),
+        'customer',
+        number,
+        t,
+        t,
+      );
+      db.prepare(
+        'INSERT INTO simulator_actors(id,run_id,user_id,persona,brand_id,course_id,edition_id,channel,next_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+      ).run(
+        actorId,
+        runId,
+        uid,
+        persona,
+        target.brand_id,
+        target.id,
+        target.editionId,
+        CHANNELS.includes(channel) ? channel : pick(CHANNELS),
+        t,
+        t,
+        t,
+      );
+      db.prepare("UPDATE simulator_runs SET count=count+1,state='running',stopped_at=NULL WHERE id=?").run(runId);
+    });
+    audit(user, 'simulator.enroll', actorId);
+    return { actorId, userId: uid, name };
+  }
   // Llamada a la propia API con la sesión del cliente simulado: mismas validaciones, límites y efectos que un cliente real.
   async function call(a, method, path, payload) {
     let token = tokens.get(a.user_id);
@@ -666,5 +750,18 @@ export function createSimulator({
     }
     throw fail(405, 'Método no permitido.');
   }
-  return { handle, tick, start, stop, archive, view: id => view(getRun(id)), generateCatalogue, eligibleCourses };
+  return {
+    handle,
+    tick,
+    start,
+    stop,
+    archive,
+    view: id => view(getRun(id)),
+    generateCatalogue,
+    eligibleCourses,
+    createRun,
+    enroll,
+    getRun,
+    actorsOf,
+  };
 }
