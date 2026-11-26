@@ -37,8 +37,23 @@ test('jornada simulada: formulario, jornada en vivo, chat, pausa y terminar', as
   await dlg.locator('[data-do="ritmo"][data-id="rafagas"]').click();
   await expect(dlg.locator('[data-do="ritmo"][data-id="rafagas"]')).toHaveAttribute('aria-pressed', 'true');
   await expectNiebla(page, 'jornada-simulada', testInfo);
-  await dlg.getByRole('button', { name: 'Cancelar' }).click();
+  // empezar desde el formulario (cubre el envío real: el fallo de hoy fue un nombre mal escrito en ese envío)
+  await dlg.locator('[name="count"]').fill('1');
+  await dlg.locator('[name="minutes"]').selectOption('15');
+  await dlg.locator('[name="title"]').fill('Desde el formulario');
+  await dlg.getByRole('button', { name: 'Empezar ahora' }).click();
   await expect(page.locator('.k-dialog')).toHaveCount(0);
+  await expect(pagina.locator('.jr-estado')).toContainText('En curso', { timeout: 10_000 });
+  await expect(pagina.locator('.jr-config')).toContainText('1 en 15 min');
+  await pagina.getByRole('button', { name: 'Terminar jornada' }).click();
+  await page.locator('.k-dialog').getByRole('button', { name: 'Terminar' }).click();
+  await expect(pagina.locator('.jr-estado')).toContainText('Terminada');
+  const primera = pagina.locator('.jr-config');
+  await expect(primera).toContainText('Guiones por perfil');
+  const listaPrev = await page.request.get('/api/jornada');
+  for (const r of (await listaPrev.json()).runs)
+    await page.request.post(`/api/jornada/${r.id}/archive`, { headers: { Origin: baseURL }, data: {} });
+  await pagina.getByRole('button', { name: 'Todas las jornadas' }).click();
 
   // una jornada corta por la API (la pantalla la abre sola al avisar en vivo)
   const made = await page.request.post('/api/jornada', {

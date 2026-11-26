@@ -320,7 +320,7 @@ export default {
           personas: [...elegidos],
           assigneeId: v.assigneeId || null,
           alerts: { ...avisos, waitMinutes: Number(v.waitMinutes) || avisos.waitMinutes },
-          ai,
+          ai: ia,
           aiCapUsd: Number(v.aiCapUsd) || undefined,
         });
         if (!montado) return;
