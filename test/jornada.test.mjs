@@ -5,6 +5,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_ALERTS, blocks, detectAlerts, median, planArrivals } from '../server/modules/jornada/plan.mjs';
+import { buildPrompt, cleanLine, costCents, customerLine } from '../server/modules/jornada/ai.mjs';
+import { buildReport } from '../server/modules/jornada/report.mjs';
 import { openDatabase } from '../server/database.mjs';
 import { NAMED, migrate } from '../server/migrations/index.mjs';
 import { defineRegistry } from '../server/migrations/named.mjs';
@@ -110,6 +112,125 @@ test('detectar alertas: espera, persona que tarda, no supo, pasó sin motivo, mo
   assert.deepEqual(detectAlerts(null, DEFAULT_ALERTS, now), []);
 });
 
+test('Claude actúa cada cliente: el guion manda qué decir, Claude pone las palabras; costo estimado y limpieza', async () => {
+  const persona = { label: 'Sensible al precio', description: 'Pregunta el precio y regatea.' };
+  const transcript = [
+    { kind: 'customer', text: 'hola, info del curso' },
+    { kind: 'automation', text: '🎓 Precio: $1,200 MXN. ¿Quieres el temario?' },
+  ];
+  const { system, messages } = buildPrompt({
+    persona,
+    gist: '¿Hay descuento?',
+    transcript,
+    brandName: 'GlobalVet',
+    courseTitle: 'Aves',
+    human: false,
+  });
+  assert.match(system, /Sensible al precio/);
+  assert.match(system, /«¿Hay descuento\?»/);
+  assert.match(system, /No inventes nombres, teléfonos, correos/);
+  // el cliente es «assistant» y el negocio «user»; termina en user para que el modelo hable
+  assert.deepEqual(
+    messages.map(m => m.role),
+    ['user', 'assistant', 'user'],
+  );
+  assert.equal(messages.at(-1).content, '🎓 Precio: $1,200 MXN. ¿Quieres el temario?');
+  assert.equal(buildPrompt({ persona, gist: 'hola', transcript: [], brandName: 'X' }).messages.at(-1).role, 'user');
+  assert.equal(cleanLine('Cliente: "¿y hay descuento?"'), '¿y hay descuento?');
+  assert.equal(cleanLine('(no responde)'), '');
+  assert.equal(costCents('claude-sonnet-5-5', 1_000_000, 100_000), 450);
+  assert.equal(costCents('claude-haiku-5-5', 1_000_000, 0), 100);
+  // con un proveedor de mentira: usa act() y limpia; sin texto, dice por qué
+  const calls = [];
+  const fake = {
+    act: async x => (
+      calls.push(x),
+      { text: '«pues sí, pero ¿no hay algún descuento? 🙏»', usage: { input_tokens: 10, output_tokens: 5 }, model: 'm' }
+    ),
+  };
+  const out = await customerLine(fake, { persona, gist: '¿Hay descuento?', transcript, brandName: 'GlobalVet' });
+  assert.equal(out.text, 'pues sí, pero ¿no hay algún descuento? 🙏');
+  assert.equal(calls[0].kind, 'jornada');
+  const none = await customerLine(
+    { act: async () => ({ text: null, reason: 'tope' }) },
+    { persona, gist: 'x', transcript: [] },
+  );
+  assert.equal(none.text, null);
+  assert.equal(none.reason, 'tope');
+});
+
+test('informe: agrupa los fallos con ejemplo y qué hacer', () => {
+  const alerts = [
+    {
+      kind: 'no_supo',
+      text: 'El asistente no supo: «¿cuánto dura cada clase?»',
+      detail: 'Luis · demo',
+      conversationId: 'c1',
+    },
+    {
+      kind: 'no_supo',
+      text: 'El asistente no supo: «¿Cuánto dura cada clase?»',
+      detail: 'Ana · demo',
+      conversationId: 'c2',
+    },
+    {
+      kind: 'paso_sin_motivo',
+      text: 'Pasó a persona sin motivo claro',
+      detail: 'Sofía · demo · después de «ok gracias»',
+      conversationId: 'c3',
+    },
+    { kind: 'sin_respuesta', text: 'Mariana · demo lleva 6 min sin respuesta', detail: '', conversationId: 'c4' },
+    { kind: 'persona_tarda', text: 'Jorge · demo lleva 9 min sin respuesta de Ana', detail: '', conversationId: 'c5' },
+  ];
+  const conversations = [
+    { id: 'c1', name: 'Luis · demo', state: 'closed', last: { kind: 'automation', text: 'x' } },
+    { id: 'c6', name: 'Diego · demo', state: 'assistant', last: { kind: 'customer', text: '¿me contestan?' } },
+  ];
+  const r = buildReport({
+    alerts,
+    conversations,
+    byPersona: { curioso: { total: 3, done: 2, waiting: 1 } },
+    stats: { arrived: 6, assistantOnly: 4, handled: 1, paid: 1, agentMedianMs: 60_000 },
+    personaLabels: { curioso: 'Curioso' },
+  });
+  assert.deepEqual(
+    r.groups.map(g => [g.kind, g.count, g.action]),
+    [
+      ['no_supo', 2, 'knowledge'],
+      ['paso_sin_motivo', 1, 'evaluation'],
+      ['esperas', 2, 'review'],
+      ['sin_cerrar', 1, 'review'],
+    ],
+  );
+  assert.equal(r.groups[0].payload.question, '¿cuánto dura cada clase?');
+  assert.equal(r.groups[1].payload.cases[0].inputText, 'ok gracias');
+  assert.equal(r.groups[1].payload.cases[0].expectAction, 'replied');
+  assert.match(r.groups[2].detail, /9 min/);
+  assert.equal(r.summary.problems, 6);
+  assert.deepEqual(r.personas, [{ id: 'curioso', label: 'Curioso', total: 3, done: 2, waiting: 1 }]);
+  assert.deepEqual(buildReport({}).groups, []);
+});
+
+test('migración jornada/0002: columnas de IA aditivas sobre la 0001', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'crm-jornada-mig2-'));
+  const db = openDatabase(dir);
+  t.after(async () => {
+    db.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+  migrate(db, { backup: false, registry: defineRegistry(NAMED.filter(m => m.name !== 'jornada/0002-ai')) });
+  db.prepare(
+    'INSERT INTO users(id,username,name,password_hash,role,test_number,created_at,last_seen) VALUES(?,?,?,?,?,?,?,?)',
+  ).run('u-mig2', 'mig2', 'Persona', 'unused', 'admin', 800002, 1, 1);
+  db.prepare(
+    "INSERT INTO jornada_runs(id,brand_id,title,count,minutes,rhythm,personas,state,starts_at,ends_at,created_by,created_at,updated_at) VALUES('r1','globalvet','x',1,1,'goteo','[]','finished',1,2,'u-mig2',1,1)",
+  ).run();
+  assert.deepEqual(migrate(db, { backup: false }).applied, ['jornada/0002-ai']);
+  assertSchemaCurrent(db);
+  const r = db.prepare('SELECT ai,ai_cap_cents,ai_calls FROM jornada_runs WHERE id=?').get('r1');
+  assert.deepEqual({ ...r }, { ai: 'guiones', ai_cap_cents: 300, ai_calls: 0 });
+});
+
 test('migración jornada/0001: sobre una base ya publicada, aditiva y una sola vez', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'crm-jornada-mig-'));
   const db = openDatabase(dir);
@@ -119,7 +240,7 @@ test('migración jornada/0001: sobre una base ya publicada, aditiva y una sola v
   });
   migrate(db, { backup: false, registry: defineRegistry(NAMED.filter(m => !m.name.startsWith('jornada/'))) });
   const before = db.prepare('SELECT count(*) n FROM simulator_runs').get().n;
-  assert.deepEqual(migrate(db, { backup: false }).applied, ['jornada/0001-jornada']);
+  assert.deepEqual(migrate(db, { backup: false }).applied, ['jornada/0001-jornada', 'jornada/0002-ai']);
   assertSchemaCurrent(db);
   assert.equal(db.prepare('SELECT count(*) n FROM jornada_runs').get().n, 0);
   assert.equal(db.prepare('SELECT count(*) n FROM simulator_runs').get().n, before);
@@ -238,6 +359,43 @@ test('jornada de punta a punta: crear, llegadas a tiempo, vista en vivo, chat, p
     if (antes[i].state === 'planned' && despues[i].state === 'planned')
       assert.ok(despues[i].planned_at > antes[i].planned_at, 'la llegada planeada se corrió');
   assert.ok(db.prepare('SELECT paused_ms FROM jornada_runs WHERE id=?').get(run.id).paused_ms >= 600);
+
+  // IA: en este servidor el motor es el simulado, así que «Claude actúa cada cliente» no se puede elegir
+  assert.equal(opts.options.ai.available, false);
+  await api('/api/jornada', { body: { brandId: 'odonteck', count: 1, minutes: 5, ai: 'claude' }, expected: 409 });
+  assert.equal(v.ai.mode, 'guiones');
+  assert.equal(v.ai.capCents, 300);
+
+  // informe (vista previa en curso) y sus botones: un borrador de conocimiento y casos del banco
+  const rep = (await api(`/api/jornada/${run.id}/report`)).report;
+  assert.ok(Array.isArray(rep.groups) && rep.summary.arrived >= 1);
+  const k1 = await api(`/api/jornada/${run.id}/report/knowledge`, {
+    body: { question: '¿cuánto dura cada clase?' },
+    expected: 201,
+  });
+  assert.equal(k1.created, true);
+  assert.equal(db.prepare('SELECT status FROM knowledge_entries WHERE id=?').get(k1.entry.id).status, 'draft');
+  assert.equal(db.prepare('SELECT brand_id FROM knowledge_entries WHERE id=?').get(k1.entry.id).brand_id, 'globalvet');
+  const k2 = await api(`/api/jornada/${run.id}/report/knowledge`, {
+    body: { question: '¿Cuánto dura cada clase?' },
+    expected: 201,
+  });
+  assert.equal(k2.created, false, 'la misma pregunta no se repite');
+  await api(`/api/jornada/${run.id}/report/knowledge`, { body: { question: 'x' }, expected: 400 });
+  const ev = await api(`/api/jornada/${run.id}/report/evaluation`, {
+    body: {
+      cases: [
+        { inputText: 'ok gracias', expectAction: 'replied', title: 'No pasar a persona por un «ok»' },
+        { inputText: 'x' },
+      ],
+    },
+    expected: 201,
+  });
+  assert.equal(ev.cases.length, 1);
+  assert.equal(
+    db.prepare("SELECT count(*) n FROM eval_cases WHERE brand_id='globalvet' AND tags='jornada'").get().n,
+    1,
+  );
 
   // alertas: resolver una inexistente responde 409; la lista viene ordenada (activas primero)
   await api(`/api/jornada/${run.id}/alerts/${randomUUID()}/resolve`, { body: {}, expected: 409 });

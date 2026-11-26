@@ -20,6 +20,7 @@ const HORA = new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digi
 const FECHA = new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
 const hora = t => (t ? HORA.format(new Date(t)) : '—');
 const fecha = t => (t ? FECHA.format(new Date(t)) : '—');
+const usd = cents => '$' + ((Number(cents) || 0) / 100).toFixed(2) + ' USD';
 const minutos = ms =>
   ms === null || ms === undefined
     ? 'sin dato'
@@ -68,6 +69,7 @@ export default {
       seleccion: null, // id de conversación
       chat: null, // { estado, mensajes?, error? }
       proyectar: false,
+      informe: null, // { estado: 'cargando' | 'ok' | 'error', datos?, hechos: Set de claves ya aplicadas }
     };
     const marcaCtx = ctx.brand && ctx.brand !== 'all' ? ctx.brand : '';
     const qs = marcaCtx ? '?brand=' + encodeURIComponent(marcaCtx) : '';
@@ -212,10 +214,23 @@ export default {
                   <span class="k-label">Cómo conversan los clientes</span>
                   <div class="jr-opts" role="group" aria-label="Cómo conversan">
                     <button type="button" class="k-filter" data-do="ia" data-id="guiones" aria-pressed="${ia === 'guiones'}">Guiones por perfil, sin IA (gratis)</button>
-                    <button type="button" class="k-filter" data-do="ia" data-id="claude" aria-pressed="${ia === 'claude'}" disabled title="Llega en el siguiente bloque">
-                      Claude actúa cada cliente (pronto)
+                    <button
+                      type="button"
+                      class="k-filter"
+                      data-do="ia"
+                      data-id="claude"
+                      aria-pressed="${ia === 'claude'}"
+                      ${attrs({ disabled: !o.ai?.available })}
+                      title="${o.ai?.available ? 'Claude pone las palabras de cada cliente según su perfil y lo que le contestan' : 'La IA de Claude no está activa en este servidor'}"
+                    >
+                      Claude actúa cada cliente${o.ai?.available ? '' : ' (IA apagada)'}
                     </button>
                   </div>
+                  <label class="k-hint jr-espera" for="${uid('tope')}">
+                    Tope de gasto por jornada
+                    <input class="k-input jr-espera__n" id="${uid('tope')}" name="aiCapUsd" type="number" min="0.5" max="100" step="0.5" value="${o.ai?.defaultCapUsd ?? 3}" />
+                    USD · al llegar, los clientes siguen con guiones
+                  </label>
                 </div>
                 <div class="jr-form__fila">
                   <div class="k-field">
@@ -305,6 +320,8 @@ export default {
           personas: [...elegidos],
           assigneeId: v.assigneeId || null,
           alerts: { ...avisos, waitMinutes: Number(v.waitMinutes) || avisos.waitMinutes },
+          ai,
+          aiCapUsd: Number(v.aiCapUsd) || undefined,
         });
         if (!montado) return;
         ctx.toast('Jornada en marcha: el primer cliente ya está entrando.');
@@ -346,7 +363,10 @@ export default {
             <div><span class="k-eyebrow">Marca</span><b>${nombreMarca(r.brandId)}</b><small>Canales simulados · clientes «· demo»</small></div>
             <div><span class="k-eyebrow">Clientes</span><b>${r.count} en ${duracion(r.totalMs)}</b><small>${r.rhythmLabel} · empezó ${hora(r.startsAt)}</small></div>
             <div><span class="k-eyebrow">Perfiles</span><b>${r.personas.length}</b><small>${r.personas.map(p => p.label).join(', ')}</small></div>
-            <div><span class="k-eyebrow">Cómo conversan</span><b>Guiones por perfil</b><small>${r.paceLabel}</small></div>
+            <div>
+              <span class="k-eyebrow">Cómo conversan</span><b>${r.ai?.label || 'Guiones por perfil'}</b>
+              <small>${r.ai?.mode === 'claude' ? `${r.paceLabel} · gastados ${usd(r.ai.costCents)} de ${usd(r.ai.capCents)} · ${r.ai.calls} ${r.ai.calls === 1 ? 'llamada' : 'llamadas'}${r.ai.note ? ' · ' + r.ai.note : ''}` : r.paceLabel}</small>
+            </div>
             <div><span class="k-eyebrow">Quién atiende</span><b>${r.assigneeName ? 'Asistente + ' + r.assigneeName : 'Asistente + la cola'}</b><small>${r.assigneeName ? 'recibe lo que pasa a persona' : 'lo que pasa a persona espera en la cola'}</small></div>
             <div><span class="k-eyebrow">Avisos</span><b>${Object.entries(r.alertsConfig).filter(([k, v]) => v === true && k !== 'waitMinutes').length} encendidos</b><small>sin respuesta ${r.alertsConfig.waitMinutes} min</small></div>
           </section>
@@ -427,7 +447,7 @@ export default {
               </div>
             </section>
 
-            <div class="jr-lado">
+            <div class="jr-lado" data-slot="lado">
               ${when(
                 r.assignee,
                 () => html`<section class="k-card jr-vend" aria-label="Persona que atiende">
@@ -447,9 +467,106 @@ export default {
               </section>
             </div>
           </div>
+          <section class="k-card jr-informe" aria-label="Informe de la jornada" data-slot="informe"></section>
         </div>`,
       );
       pintarChat();
+      pintarInforme();
+    }
+    // ---- informe: al terminar se arma completo; en curso es una vista previa con lo que va
+    function pintarInforme() {
+      const caja = slot('informe');
+      if (!caja) return;
+      const r = st.run,
+        i = st.informe;
+      const viva = ['running', 'paused', 'planned'].includes(r.state);
+      if (!i) {
+        render(
+          caja,
+          html`<h2 class="k-card__title">📄 Informe de la jornada <span class="k-hint">${viva ? 'vista previa · se arma al terminar' : 'listo'}</span></h2>
+            <div class="k-actions"><button type="button" class="k-btn k-btn--primary" data-do="informe">${viva ? 'Ver lo que va' : 'Ver el informe'}</button></div>`,
+        );
+        return;
+      }
+      if (i.estado === 'cargando') return render(caja, loading('Armando el informe…'));
+      if (i.estado === 'error')
+        return render(caja, failure({ title: 'No se pudo armar el informe', error: i.error, retry: 'informe' }));
+      const d = i.datos;
+      render(
+        caja,
+        html`<h2 class="k-card__title">📄 Informe de la jornada <span class="k-hint">${viva ? 'vista previa · se completa al terminar' : 'listo'}</span></h2>
+          <p class="k-hint">
+            Llegaron ${d.summary.arrived} · atendió el asistente solo ${d.summary.assistantOnly} · atendió una persona ${d.summary.handled}
+            (respuesta mediana ${minutos(d.summary.agentMedianMs)}) · pagos de práctica ${d.summary.paid} · ${d.summary.problems}
+            ${d.summary.problems === 1 ? 'fallo' : 'fallos'} en ${d.groups.length} ${d.groups.length === 1 ? 'grupo' : 'grupos'}.
+          </p>
+          ${when(
+            !d.groups.length,
+            () =>
+              html`<p class="k-hint">Sin fallos que agrupar: el asistente supo contestar, nadie esperó de más y nadie se quedó sin respuesta.</p>`,
+          )}
+          ${when(
+            d.groups.length,
+            () => html`<div class="jr-informe__grupos">
+              ${d.groups.map(
+                g => html`<div class="jr-grupo" data-key="${g.kind}-${g.title}">
+                  <div class="jr-grupo__cab">
+                    <b>${g.title}</b>
+                    <span class="k-chip k-chip--warn">${g.count}</span>
+                  </div>
+                  ${when(g.detail, () => html`<p class="k-hint">${g.detail}</p>`)}
+                  <ul class="jr-grupo__ej">
+                    ${g.examples.map(
+                      e => html`<li>
+                        <span class="k-hint">${e.name || 'Cliente'}:</span> «${e.text}»
+                        ${when(e.conversationId, () => html`<button type="button" class="k-btn k-btn--ghost jr-mini" data-do="ver" data-id="${e.conversationId}">Ver chat</button>`)}
+                      </li>`,
+                    )}
+                  </ul>
+                  <div class="k-actions">
+                    ${when(
+                      g.action === 'knowledge',
+                      () =>
+                        html`<button type="button" class="k-btn k-btn--primary" data-do="informe-conocimiento" data-q="${g.payload?.question || ''}" ${attrs({ disabled: i.hechos.has('k:' + g.payload?.question) })}>
+                          ${i.hechos.has('k:' + g.payload?.question) ? 'Borrador creado' : 'Crear borrador de conocimiento'}
+                        </button>`,
+                    )}
+                    ${when(
+                      g.action === 'evaluation',
+                      () =>
+                        html`<button type="button" class="k-btn k-btn--primary" data-do="informe-evaluacion" data-kind="${g.kind}" ${attrs({ disabled: i.hechos.has('e:' + g.kind) })}>
+                          ${i.hechos.has('e:' + g.kind) ? 'Casos añadidos' : `Añadir al banco de evaluación (${g.payload?.cases?.length || 0})`}
+                        </button>`,
+                    )}
+                    ${when(g.action === 'review', () => html`<span class="k-hint">Revisar a mano: léelo en el chat y decide.</span>`)}
+                  </div>
+                </div>`,
+              )}
+            </div>`,
+          )}
+          ${when(
+            d.personas.length,
+            () => html`<p class="k-eyebrow jr-informe__sub">Cómo le fue a cada perfil</p>
+              <ul class="jr-perfiles">
+                ${d.personas.map(p => html`<li><b>${p.label}</b> <span class="k-hint">${p.total} ${p.total === 1 ? 'cliente' : 'clientes'} · ${p.done} terminaron · ${p.waiting} esperando a una persona</span></li>`)}
+              </ul>`,
+          )}
+          <div class="k-actions"><button type="button" class="k-btn" data-do="informe">Volver a armar</button></div>`,
+      );
+    }
+    async function cargarInforme() {
+      const hechos = st.informe?.hechos || new Set();
+      st.informe = { estado: 'cargando', hechos };
+      pintarInforme();
+      try {
+        const d = await api.get(`/api/jornada/${st.run.id}/report`);
+        if (!montado) return;
+        st.informe = { estado: 'ok', datos: d.report, hechos };
+      } catch (error) {
+        if (isAbort(error)) return;
+        st.informe = { estado: 'error', error, hechos };
+      }
+      pintarInforme();
     }
     const nombreMarca = id => st.lista?.options?.brands.find(b => b.id === id)?.name || id;
     function pintarChat() {
@@ -521,6 +638,7 @@ export default {
         st.run = d.run;
         st.seleccion = null;
         st.chat = null;
+        st.informe = null;
         pintarRun();
       } catch (error) {
         if (!isAbort(error)) ctx.toast(error.message);
@@ -625,6 +743,37 @@ export default {
                 boton: 'Archivar',
               }),
             proyectar: () => proyectar(!st.proyectar),
+            informe: () => cargarInforme(),
+            'informe-conocimiento': async (_e, b) => {
+              try {
+                const d = await api.post(`/api/jornada/${st.run.id}/report/knowledge`, { question: b.dataset.q });
+                if (!montado) return;
+                st.informe.hechos.add('k:' + b.dataset.q);
+                ctx.toast(
+                  d.created
+                    ? 'Borrador de conocimiento creado: apruébalo en Catálogo → Conocimiento.'
+                    : 'Ya había una respuesta con esa pregunta.',
+                );
+                pintarInforme();
+              } catch (error) {
+                if (!isAbort(error)) ctx.toast(error.message);
+              }
+            },
+            'informe-evaluacion': async (_e, b) => {
+              const g = st.informe?.datos?.groups.find(x => x.kind === b.dataset.kind);
+              if (!g?.payload?.cases?.length) return;
+              try {
+                const d = await api.post(`/api/jornada/${st.run.id}/report/evaluation`, { cases: g.payload.cases });
+                if (!montado) return;
+                st.informe.hechos.add('e:' + g.kind);
+                ctx.toast(
+                  `${d.cases.length} ${d.cases.length === 1 ? 'caso añadido' : 'casos añadidos'} al banco de evaluación.`,
+                );
+                pintarInforme();
+              } catch (error) {
+                if (!isAbort(error)) ctx.toast(error.message);
+              }
+            },
             'abrir-chat': () => ctx.go('inbox'),
           },
         },

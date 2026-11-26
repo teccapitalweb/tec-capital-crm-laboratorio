@@ -32,6 +32,8 @@ test('jornada simulada: formulario, jornada en vivo, chat, pausa y terminar', as
   await expect(dlg.locator('[name="brandId"]')).toBeVisible();
   await expect(dlg.locator('[data-do="perfil"]')).toHaveCount(9);
   await expect(dlg.locator('[data-do="aviso"]')).toHaveCount(5);
+  await expect(dlg.locator('[data-do="ia"][data-id="claude"]')).toBeDisabled();
+  await expect(dlg.locator('[name="aiCapUsd"]')).toHaveValue('3');
   await dlg.locator('[data-do="ritmo"][data-id="rafagas"]').click();
   await expect(dlg.locator('[data-do="ritmo"][data-id="rafagas"]')).toHaveAttribute('aria-pressed', 'true');
   await expectNiebla(page, 'jornada-simulada', testInfo);
@@ -77,6 +79,11 @@ test('jornada simulada: formulario, jornada en vivo, chat, pausa y terminar', as
   await page.locator('.k-dialog').getByRole('button', { name: 'Terminar' }).click();
   await expect(pagina.locator('.jr-estado')).toContainText('Terminada');
   await expect(pagina.getByRole('button', { name: /Archivar/ })).toBeVisible();
+  // el informe: se arma al pedirlo y trae el resumen y cómo le fue a cada perfil
+  await pagina.locator('.jr-informe').getByRole('button', { name: 'Ver el informe' }).click();
+  await expect(pagina.locator('.jr-informe')).toContainText('Llegaron', { timeout: 10_000 });
+  await expect(pagina.locator('.jr-informe')).toContainText('Cómo le fue a cada perfil');
+  await expectNiebla(page, 'jornada-simulada', testInfo);
   // dejarla archivada para no estorbar a la siguiente prueba
   const arch = await page.request.post(`/api/jornada/${run.id}/archive`, { headers: { Origin: baseURL }, data: {} });
   expect(arch.status(), await arch.text()).toBe(200);

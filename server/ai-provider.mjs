@@ -658,10 +658,43 @@ export function createAiProvider({ env = process.env, log = console, timeoutMs =
       return { text: null, usedIds: [], model, reason: explain(e), called: meta.called };
     }
   }
+  // Una conversación libre con instrucciones propias (la Jornada simulada la usa para que Claude ACTÚE como un cliente).
+  // Devuelve {text, usage, model} o {text: null, reason}. El simulado no llama a nadie: devuelve null y quien llama usa
+  // sus guiones. Cuenta contra el tope mensual como cualquier llamada.
+  async function act({ system, messages, maxTokens = 300, kind = 'act' }) {
+    if (name !== 'claude') return { text: null, model: 'simulado', reason: 'Motor simulado: sin IA.' };
+    if (!hasCredentials) return { text: null, model, reason: 'Proveedor sin credenciales.' };
+    const blocked = budget?.check();
+    if (blocked) return { text: null, model, reason: blocked, budget: true };
+    await getClient();
+    const response = await client.beta.messages.create({
+      model,
+      max_tokens: maxTokens,
+      system,
+      messages,
+      output_config: { effort: 'low' },
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+    });
+    budget?.record({
+      kind,
+      model: response.model || model,
+      input: response.usage?.input_tokens,
+      output: response.usage?.output_tokens,
+    });
+    if (response.stop_reason === 'refusal') return { text: null, model, reason: 'El proveedor se negó a responder.' };
+    const text = (response.content || [])
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('')
+      .trim();
+    return { text: text || null, model: response.model || model, usage: response.usage || null };
+  }
   return {
     name,
     model: name === 'claude' ? model : 'simulado',
     configured,
+    act,
     draft,
     rewrite,
     summarize,

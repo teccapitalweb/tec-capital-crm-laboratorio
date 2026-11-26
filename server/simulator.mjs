@@ -66,6 +66,22 @@ export function createSimulator({
   now = Date.now,
   log = console,
 }) {
+  // Quien decide las palabras de un cliente simulado en cada paso (la Jornada simulada registra a Claude aquí). Recibe el
+  // actor y { gist: lo que el guion diría, human: si contestó una persona } y devuelve un texto o null (guion de siempre).
+  let lineProvider = null;
+  const useLineProvider = fn => {
+    lineProvider = typeof fn === 'function' ? fn : null;
+  };
+  async function lineFor(a, gist, extra = {}) {
+    if (!lineProvider) return gist;
+    try {
+      const out = await lineProvider(a, { gist, ...extra });
+      return typeof out === 'string' && out.trim() ? out.trim().slice(0, 600) : gist;
+    } catch (e) {
+      log.error('Simulator line provider failed:', e?.message);
+      return gist;
+    }
+  }
   const tokens = new Map(),
     inFlight = new Set();
   const requireAdmin = user => {
@@ -389,7 +405,7 @@ export function createSimulator({
           return finish(a, 'done', 'pagado');
         }
       }
-      if (s.say) await say(a, pick(s.say));
+      if (s.say) await say(a, await lineFor(a, pick(s.say), { human: false, step: a.step }));
       if (!s.wait) return advance(a, base);
       db.prepare(
         "UPDATE simulator_actors SET phase='wait',waiting_since=?,last_seq=?,next_at=?,updated_at=? WHERE id=?",
@@ -411,7 +427,7 @@ export function createSimulator({
         'UPDATE simulator_actors SET got_bot=got_bot+?,got_human=got_human+?,last_seq=?,updated_at=? WHERE id=?',
       ).run(bots, humans, upTo, now(), a.id);
       if (human && s.onHuman) {
-        await say(a, pick(s.onHuman));
+        await say(a, await lineFor(a, pick(s.onHuman), { human: true, step: a.step }));
         return finish(a, 'done', persona.outcome);
       }
       return advance(a, base);
@@ -763,5 +779,6 @@ export function createSimulator({
     enroll,
     getRun,
     actorsOf,
+    useLineProvider,
   };
 }

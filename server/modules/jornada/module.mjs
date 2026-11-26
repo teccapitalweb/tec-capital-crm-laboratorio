@@ -12,10 +12,15 @@
 //   GET  /api/jornada/:id/conversations/:cid      el chat de una conversación de la jornada (texto plano)
 //   POST /api/jornada/:id/pause|resume|finish|archive
 //   POST /api/jornada/:id/alerts/:aid/resolve
+//   GET  /api/jornada/:id/report                  el informe (fallos agrupados, perfiles, cifras)
+//   POST /api/jornada/:id/report/knowledge        {question} → un borrador de conocimiento (sin aprobar)
+//   POST /api/jornada/:id/report/evaluation       {cases:[{inputText, expectAction, title}]} → casos del banco
 // Reloj: cada 5 s arranca las planeadas, suma las llegadas que tocan, asigna a la persona lo que espera, detecta
 // alertas y cierra la jornada cuando termina su tiempo y ya nadie está hablando. Aviso en vivo «jornada.changed».
 import { randomUUID } from 'node:crypto';
 import { PERSONAS, PACES } from '../../simulator-personas.mjs';
+import { costCents, customerLine } from './ai.mjs';
+import { buildReport } from './report.mjs';
 import { ALERT_KINDS, DEFAULT_ALERTS, LIMITS, RHYTHMS, blocks, detectAlerts, median, planArrivals } from './plan.mjs';
 
 const UUID = '[0-9a-f-]{36}';
@@ -82,6 +87,11 @@ export default {
           throw fail(400, 'La persona que atiende debe ser del equipo y tener acceso a la marca.');
         assigneeId = a.id;
       }
+      const ai = input.ai === 'claude' ? 'claude' : 'guiones';
+      if (ai === 'claude' && !aiAvailable())
+        throw fail(409, 'La IA de Claude no está activa en este servidor: los clientes hablarán con guiones.');
+      const capUsd = Number(input.aiCapUsd);
+      const aiCapCents = Number.isFinite(capUsd) && capUsd >= 0.5 && capUsd <= 100 ? Math.round(capUsd * 100) : 300;
       const alerts = { ...DEFAULT_ALERTS };
       if (input.alerts && typeof input.alerts === 'object') {
         for (const k of Object.keys(ALERT_KINDS)) if (typeof input.alerts[k] === 'boolean') alerts[k] = input.alerts[k];
@@ -106,8 +116,8 @@ export default {
       const plan = planArrivals({ count, startAt, minutes, rhythm, personas });
       host.transaction(db, () => {
         db.prepare(
-          `INSERT INTO jornada_runs(id,brand_id,title,count,minutes,rhythm,pace,personas,assignee_id,alerts,state,starts_at,ends_at,created_by,created_at,updated_at)
-           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO jornada_runs(id,brand_id,title,count,minutes,rhythm,pace,personas,assignee_id,alerts,state,starts_at,ends_at,created_by,created_at,updated_at,ai,ai_cap_cents)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         ).run(
           id,
           brandId,
@@ -125,6 +135,8 @@ export default {
           user.id,
           t,
           t,
+          ai,
+          aiCapCents,
         );
         const ins = db.prepare('INSERT INTO jornada_arrivals(id,run_id,planned_at,persona,channel) VALUES(?,?,?,?,?)');
         for (const a of plan) ins.run(randomUUID(), id, a.plannedAt, a.persona, a.channel);
@@ -146,6 +158,61 @@ export default {
         run.id,
       );
     }
+
+    // ---- Claude actúa cada cliente
+    const provider = () => host.services.aiProvider;
+    const aiAvailable = () => Boolean(provider()?.name === 'claude' && provider()?.configured);
+    const aiCost = run => costCents(provider()?.model, run.ai_input_tokens || 0, run.ai_output_tokens || 0);
+    const aiOn = run => run.ai === 'claude' && aiAvailable() && aiCost(run) < run.ai_cap_cents;
+    // Lo que el simulador llama antes de que un cliente escriba: si su jornada usa a Claude y hay tope, Claude pone las
+    // palabras; si no, va el guion. Nunca lanza: cualquier fallo vuelve al guion y se anota.
+    async function lineProvider(actor, { gist, human }) {
+      const run = one(
+        "SELECT * FROM jornada_runs WHERE simulator_run_id=? AND state IN ('running','paused')",
+        actor.run_id,
+      );
+      if (!run || !aiOn(run)) return null;
+      const persona = PERSONAS[actor.persona] || { label: actor.persona, description: '' };
+      const transcript = actor.conversation_id
+        ? all(
+            'SELECT sender_kind kind,text FROM messages WHERE conversation_id=? ORDER BY seq DESC LIMIT 8',
+            actor.conversation_id,
+          ).reverse()
+        : [];
+      const course = actor.course_id ? one('SELECT title FROM courses WHERE id=?', actor.course_id) : null;
+      const brand = one('SELECT name FROM brands WHERE id=?', run.brand_id);
+      const out = await customerLine(provider(), {
+        persona,
+        gist: String(gist || '')
+          .replaceAll('{{curso}}', course?.title || 'el curso')
+          .replaceAll('{{nombre}}', String(actor.name || '').split(' ')[0]),
+        transcript,
+        brandName: brand?.name || run.brand_id,
+        courseTitle: course?.title || '',
+        human: Boolean(human),
+      });
+      const inTok = Number(out.usage?.input_tokens) || 0,
+        outTok = Number(out.usage?.output_tokens) || 0;
+      if (inTok || outTok || out.text)
+        db.prepare(
+          'UPDATE jornada_runs SET ai_calls=ai_calls+1,ai_input_tokens=ai_input_tokens+?,ai_output_tokens=ai_output_tokens+?,updated_at=? WHERE id=?',
+        ).run(inTok, outTok, now(), run.id);
+      if (!out.text && out.reason)
+        db.prepare('UPDATE jornada_runs SET ai_note=? WHERE id=?').run(String(out.reason).slice(0, 200), run.id);
+      const after = getRun(run.id);
+      if (after && after.ai === 'claude' && aiCost(after) >= after.ai_cap_cents && !/tope/.test(after.ai_note))
+        db.prepare('UPDATE jornada_runs SET ai_note=? WHERE id=?').run(
+          'Se alcanzó el tope de gasto: los clientes siguen con guiones.',
+          run.id,
+        );
+      return out.text;
+    }
+    let hooked = false;
+    const hook = () => {
+      if (hooked || !sim()) return;
+      sim().useLineProvider(lineProvider);
+      hooked = true;
+    };
 
     // ---- lo que la jornada lee de cada conversación (para la lista, las cifras y las alertas)
     function conversationRows(run) {
@@ -202,6 +269,7 @@ export default {
 
     // ---- reloj
     function tick() {
+      hook();
       const t = now();
       for (const run of all("SELECT * FROM jornada_runs WHERE state='planned' AND starts_at<=?", t)) {
         try {
@@ -421,6 +489,19 @@ export default {
         ...summary(run),
         pace: run.pace,
         paceLabel: PACES[run.pace]?.label || run.pace,
+        ai: {
+          mode: run.ai,
+          label: run.ai === 'claude' ? 'Claude actúa cada cliente' : 'Guiones por perfil',
+          available: aiAvailable(),
+          capCents: run.ai_cap_cents,
+          costCents: aiCost(run),
+          calls: run.ai_calls || 0,
+          inputTokens: run.ai_input_tokens || 0,
+          outputTokens: run.ai_output_tokens || 0,
+          active: aiOn(run) && ['running', 'paused', 'planned'].includes(run.state),
+          note: run.ai_note || '',
+          model: run.ai === 'claude' ? provider()?.model || null : null,
+        },
         personas: parse(run.personas, []).map(p => ({ id: p, label: PERSONAS[p]?.label || p })),
         assigneeId: run.assignee_id,
         assigneeName: userName(run.assignee_id),
@@ -526,6 +607,75 @@ export default {
       }));
     }
 
+    // ---- informe
+    function report(run, user) {
+      const v = view(run, user);
+      let byPersona = {};
+      try {
+        byPersona = run.simulator_run_id ? sim().view(run.simulator_run_id)?.stats?.byPersona || {} : {};
+      } catch {
+        byPersona = {};
+      }
+      return buildReport({
+        alerts: v.alerts,
+        conversations: v.conversations,
+        byPersona,
+        stats: v.stats,
+        personaLabels: Object.fromEntries(Object.entries(PERSONAS).map(([k, p]) => [k, p.label])),
+      });
+    }
+    // Un borrador de conocimiento con la pregunta que el asistente no supo (una persona lo completa y aprueba).
+    function draftKnowledge(run, question, user) {
+      const q = String(question || '')
+        .trim()
+        .slice(0, 300);
+      if (q.length < 3) throw fail(400, 'Falta la pregunta.');
+      const existing = one(
+        "SELECT id FROM knowledge_entries WHERE brand_id=? AND status!='archived' AND lower(question)=lower(?)",
+        run.brand_id,
+        q,
+      );
+      if (existing) return { entry: { id: existing.id }, created: false };
+      const e = host.services.replies.createEntry(user, {
+        brandId: run.brand_id,
+        topic: 'general',
+        question: q,
+        variants: [],
+        answer:
+          'Por completar por el equipo: el asistente no supo contestar esto en la jornada simulada «' +
+          run.title +
+          '».',
+      });
+      audit(user, 'jornada.report.knowledge', e.id);
+      return { entry: e, created: true };
+    }
+    // Casos para el banco de evaluación: el mensaje del cliente y lo que debía pasar (por omisión, contestar).
+    function addCases(run, cases, user) {
+      const list = (Array.isArray(cases) ? cases : []).slice(0, 10);
+      const made = [];
+      for (const c of list) {
+        const inputText = String(c?.inputText || '')
+          .trim()
+          .slice(0, 500);
+        if (inputText.length < 3) continue;
+        const made1 = host.services.evaluation.create(
+          {
+            brandId: run.brand_id,
+            title: String(c?.title || 'Jornada simulada: ' + inputText).slice(0, 120),
+            inputText,
+            expectAction: ['replied', 'suggested', 'escalated', 'skipped'].includes(c?.expectAction)
+              ? c.expectAction
+              : 'replied',
+            tags: 'jornada',
+          },
+          user,
+        );
+        made.push(made1);
+      }
+      audit(user, 'jornada.report.evaluation', run.id);
+      return made;
+    }
+
     // ---- acciones
     function pause(run, user) {
       if (run.state !== 'running') throw fail(409, 'Sólo se pausa una jornada en curso.');
@@ -598,6 +748,7 @@ export default {
             alertKinds: Object.entries(ALERT_KINDS).map(([id, a]) => ({ id, ...a })),
             defaultAlerts: DEFAULT_ALERTS,
             limits: LIMITS,
+            ai: { available: aiAvailable(), model: aiAvailable() ? provider().model : null, defaultCapUsd: 3 },
             brands: all('SELECT id,name FROM brands ORDER BY name').filter(b => crm.canBrand(user, b.id)),
             team: all(
               "SELECT id,name,role FROM users WHERE role IN ('admin','agent') AND (disabled IS NULL OR disabled=0) ORDER BY name",
@@ -623,6 +774,26 @@ export default {
         if (!run || !crm.canBrand(user, run.brand_id)) throw fail(404, 'Jornada no encontrada.', { code: 'not_found' });
         json(res, 200, { messages: chat(run, m[2]) });
         return true;
+      }
+      m = path.match(new RegExp(`^/api/jornada/(${UUID})/report(?:/(knowledge|evaluation))?$`));
+      if (m) {
+        const run = getRun(m[1]);
+        if (!run || !crm.canBrand(user, run.brand_id)) throw fail(404, 'Jornada no encontrada.', { code: 'not_found' });
+        if (!m[2] && req.method === 'GET') {
+          json(res, 200, { report: report(run, user) });
+          return true;
+        }
+        if (m[2] === 'knowledge' && req.method === 'POST') {
+          const input = await body(req);
+          json(res, 201, draftKnowledge(run, input?.question, user));
+          return true;
+        }
+        if (m[2] === 'evaluation' && req.method === 'POST') {
+          const input = await body(req);
+          json(res, 201, { cases: addCases(run, input?.cases, user) });
+          return true;
+        }
+        throw fail(405, 'Método no permitido.');
       }
       m = path.match(new RegExp(`^/api/jornada/(${UUID})/alerts/(${UUID})/resolve$`));
       if (m && req.method === 'POST') {
