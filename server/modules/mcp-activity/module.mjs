@@ -42,7 +42,7 @@ export default {
         const entity = audited
           .map(([action, entityId]) => [ACTION.exec(String(action))?.[1], entityId])
           .find(([type, entityId]) => Object.hasOwn(ENTITY_LABELS, type ?? '') && ID.test(String(entityId ?? '')));
-        repo.insert({
+        const rowId = repo.insert({
           brandId: key.brand_id,
           source: oauth ? 'oauth' : 'key',
           keyId: oauth ? null : id,
@@ -56,6 +56,13 @@ export default {
           entityId: entity ? String(entity[1]) : null,
           at: now(),
         });
+        // Aviso en vivo para «Asistente en vivo» (sólo a quien puede ver esa marca): el id y nada más; la pantalla
+        // pide la fila por la ruta de siempre.
+        try {
+          host.realtime?.emit('mcp_activity.recorded', { brandId: key.brand_id, data: { id: rowId } });
+        } catch (e) {
+          console.error('mcp-activity: no se pudo avisar en vivo', e?.message);
+        }
       } catch (e) {
         console.error('mcp-activity: no se pudo registrar la llamada', e?.message);
       }
@@ -102,27 +109,27 @@ export default {
     };
     const int = v => (v !== null && /^\d{1,15}$/.test(v) ? Number(v) : null);
 
-    async function handle(req, res, path, user, url) {
+    // La misma lectura, para la ruta y para otros módulos del equipo (mcp-live). Todo pasa por las marcas que la
+    // persona administra; `after` trae sólo lo más nuevo que un id (para ponerse al día tras un aviso en vivo).
+    function query(user, q = {}) {
       host.requireStaff(user);
-      if (path !== '/api/mcp-activity') return false;
-      if (req.method !== 'GET') throw fail(405, 'Método no permitido.');
       const allowed = access.brandIds(user, ADMIN_PERMISSION);
-      const q = url.searchParams;
-      const brandId = q.get('brand') || null;
+      const brandId = q.brand || null;
       if (brandId && !allowed.includes(brandId)) throw fail(404, 'Marca no disponible.', { code: 'not_found' });
-      const source = q.get('source') || '';
+      const source = q.source || '';
       const m = /^(key|oauth):([A-Za-z0-9_-]{1,80})$/.exec(source);
       if (source && !m) throw fail(400, 'Conexión no válida.', { code: 'invalid' });
-      const limit = Math.min(PAGE_MAX, int(q.get('limit')) || 50);
+      const limit = Math.min(PAGE_MAX, int(q.limit) || 50);
       const rows = repo.list(allowed, {
         brandId,
         keyId: m?.[1] === 'key' ? m[2] : null,
         grantId: m?.[1] === 'oauth' ? m[2] : null,
-        writes: q.get('writes') === '1',
-        problems: q.get('problems') === '1',
-        from: int(q.get('from')),
-        to: int(q.get('to')),
-        before: int(q.get('before')),
+        writes: q.writes === '1',
+        problems: q.problems === '1',
+        from: int(q.from),
+        to: int(q.to),
+        before: int(q.before),
+        after: int(q.after),
         limit,
       });
       const page = rows.slice(0, limit);
@@ -133,7 +140,7 @@ export default {
           .all()
           .map(b => [b.id, b.name]),
       );
-      json(res, 200, {
+      return {
         allowed: allowed.length > 0,
         retentionDays: Math.round(KEEP_MS / (24 * 3600_000)),
         brands: allowed.map(id => ({ id, name: names[id] || id })),
@@ -157,7 +164,26 @@ export default {
         ],
         items: page.map(view),
         next: rows.length > limit ? page.at(-1).id : null,
-      });
+      };
+    }
+    // Lo que dejó el asistente en esas marcas (para «Asistente en vivo»): sólo tipo, id, marca y última vez.
+    function created(user, { brand = null, limit = 60 } = {}) {
+      host.requireStaff(user);
+      const allowed = access.brandIds(user, ADMIN_PERMISSION);
+      if (brand && !allowed.includes(brand)) throw fail(404, 'Marca no disponible.', { code: 'not_found' });
+      return repo.created(allowed, { brandId: brand, limit });
+    }
+    async function handle(req, res, path, user, url) {
+      host.requireStaff(user);
+      if (path !== '/api/mcp-activity') return false;
+      if (req.method !== 'GET') throw fail(405, 'Método no permitido.');
+      const q = url.searchParams;
+      const pick = (...names) => Object.fromEntries(names.map(n => [n, q.get(n)]).filter(([, v]) => v !== null));
+      json(
+        res,
+        200,
+        query(user, pick('brand', 'source', 'limit', 'writes', 'problems', 'from', 'to', 'before', 'after')),
+      );
       return true;
     }
 
@@ -174,6 +200,6 @@ export default {
       }
       return total;
     }
-    return { handle, record, purge };
+    return { handle, record, purge, query, created };
   },
 };

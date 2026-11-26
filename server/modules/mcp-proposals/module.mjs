@@ -655,7 +655,8 @@ export default {
     const useSourceCheck = fn => {
       if (typeof fn === 'function') sourceCheck = fn;
     };
-    return { handle, propose, listFor, withdraw, sweep, purge, useSourceCheck, actions: ACTIONS };
+    // `overview` también la lee «Asistente en vivo» (mcp-live), con la misma persona y las mismas reglas.
+    return { handle, propose, listFor, withdraw, sweep, purge, useSourceCheck, overview, actions: ACTIONS };
   },
   timers: [{ name: 'vencer', everyMs: 60_000, testEveryMs: 1000, run: api => api.sweep() }],
 };

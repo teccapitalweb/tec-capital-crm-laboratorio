@@ -1,0 +1,9 @@
+{
+  "id": "asistente-en-vivo",
+  "title": "Asistente en vivo",
+  "visibility": "live",
+  "nav": { "group": "Ajustes", "icon": "activity", "label": "Asistente en vivo", "order": 72 },
+  "roles": ["admin", "agent"],
+  "entry": "index.js",
+  "styles": ["screen.css"]
+}

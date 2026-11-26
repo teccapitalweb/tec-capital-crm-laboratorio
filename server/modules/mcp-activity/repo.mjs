@@ -18,20 +18,23 @@ export function createRepo(db) {
   );
   const marks = list => list.map(() => '?').join(',');
   return {
+    // Devuelve el id de la fila nueva (para avisar en vivo de qué fila se trata).
     insert: r =>
-      insert.run(
-        r.brandId,
-        r.source,
-        r.keyId,
-        r.grantId,
-        r.userId,
-        r.tool,
-        r.kind,
-        r.outcome,
-        r.reason,
-        r.entityType,
-        r.entityId,
-        r.at,
+      Number(
+        insert.run(
+          r.brandId,
+          r.source,
+          r.keyId,
+          r.grantId,
+          r.userId,
+          r.tool,
+          r.kind,
+          r.outcome,
+          r.reason,
+          r.entityType,
+          r.entityId,
+          r.at,
+        ).lastInsertRowid,
       ),
     // Borra un trozo de lo de más de 90 días; devuelve cuántas filas borró.
     purge: (at, limit = PURGE.chunk) => purge.run(at - KEEP_MS, limit).changes,
@@ -47,6 +50,7 @@ export function createRepo(db) {
         from = null,
         to = null,
         before = null,
+        after = null,
         limit = 50,
       } = {},
     ) {
@@ -65,6 +69,7 @@ export function createRepo(db) {
       if (from !== null) add('a.created_at>=?', from);
       if (to !== null) add('a.created_at<?', to);
       if (before !== null) add('a.id<?', before);
+      if (after !== null) add('a.id>?', after);
       return db
         .prepare(
           `SELECT a.*,b.name brand_name,u.name user_name,k.name key_name,k.status key_status,g.client_name grant_name,g.revoked_at grant_revoked_at
@@ -73,6 +78,25 @@ export function createRepo(db) {
            WHERE ${where.join(' AND ')} ORDER BY a.id DESC LIMIT ?`,
         )
         .all(...args, Math.min(PAGE_MAX, Math.max(1, limit)) + 1);
+    },
+    // Lo que el asistente dejó: cada entidad distinta (tipo e id) de las escrituras que salieron bien, con la última
+    // vez que la tocó, de la más reciente a la más antigua. Las propuestas y las direcciones de subida no cuentan.
+    created(brandIds, { brandId = null, limit = 60 } = {}) {
+      if (!brandIds.length) return [];
+      const where = [`brand_id IN (${marks(brandIds)})`, "kind='write'", "outcome='ok'", 'entity_type IS NOT NULL'];
+      const args = [...brandIds];
+      if (brandId) {
+        where.push('brand_id=?');
+        args.push(brandId);
+      }
+      where.push("entity_type NOT IN ('proposal','upload')");
+      return db
+        .prepare(
+          `SELECT brand_id,entity_type,entity_id,max(created_at) last_at,max(id) last_id,count(*) touches
+           FROM mcp_activity WHERE ${where.join(' AND ')} GROUP BY brand_id,entity_type,entity_id
+           ORDER BY last_id DESC LIMIT ?`,
+        )
+        .all(...args, Math.min(200, Math.max(1, limit)));
     },
     // Quiénes pueden aparecer en la actividad de esas marcas: sus llaves de la API y sus asistentes conectados.
     sources(brandIds) {
