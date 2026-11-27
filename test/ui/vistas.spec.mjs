@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 import { AUTH, ensureUser, expectNiebla, settled, watch } from './helpers.mjs';
 import { nieblaAudit } from './niebla-audit.mjs';
@@ -187,7 +188,29 @@ test('La entrada de los clientes (/) conserva su aspecto: sin bloque en tinta ni
       return [s.backgroundColor, s.backgroundImage, s.color, s.borderRadius, f.backgroundColor, f.padding].join('|');
     });
   const withSheet = await story();
-  await page.evaluate(() => (document.querySelector('link[href="/tinta-vistas.css"]').disabled = true));
+  // La portada carga las hojas en un solo paquete (server/app/static.mjs): se cambia por las hojas sueltas de
+  // public/index.html, todas menos tinta-vistas.css (siguen servidas una por una), y la entrada debe pintarse igual.
+  const loose = readFileSync('public/index.html', 'utf8')
+    .match(/<link rel="stylesheet" href="\/([^"]+)">/g)
+    .map(tag => tag.match(/href="\/([^"]+)"/)[1])
+    .filter(name => name !== 'tinta-vistas.css');
+  expect(loose.length).toBeGreaterThan(5);
+  await page.evaluate(async list => {
+    const packed = [...document.querySelectorAll('link[rel="stylesheet"]')];
+    await Promise.all(
+      list.map(
+        name =>
+          new Promise(done => {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = '/' + name;
+            link.onload = link.onerror = done;
+            document.head.appendChild(link);
+          }),
+      ),
+    );
+    for (const sheet of packed) sheet.disabled = true;
+  }, loose);
   expect(await story()).toBe(withSheet);
   watcher.done();
 });

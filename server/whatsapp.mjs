@@ -494,7 +494,7 @@ export function createWhatsApp({
   async function outbound(row, { closed = false } = {}) {
     const m = db
       .prepare(
-        'SELECT m.id,m.text,m.buttons,m.attachment_id,m.flyer_snapshot,m.conversation_id,m.category,m.wa_template,m.interactive,c.brand_id,c.wa_number,c.wa_peer,c.customer_id FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=?',
+        'SELECT m.id,m.text,m.buttons,m.attachment_id,m.flyer_snapshot,m.conversation_id,m.category,m.wa_template,m.interactive,c.brand_id,c.wa_number,c.wa_peer,c.customer_id,(SELECT q.provider_ref FROM messages q WHERE q.id=m.reply_to_id) quoted_ref FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=?',
       )
       .get(row.id);
     if (!m || !m.wa_number) throw fail(409, 'La conversación no tiene un número de WhatsApp de destino.');
@@ -602,6 +602,8 @@ export function createWhatsApp({
       buttons,
       media,
       ...(list && !media ? { list } : {}),
+      // Responder citando: el mensaje que la persona ve citado en su teléfono (sólo si el CRM conoce su referencia de Meta).
+      ...(m.quoted_ref ? { replyTo: { providerRef: String(m.quoted_ref) } } : {}),
     };
   }
   channel.useOutbound(outbound);

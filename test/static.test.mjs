@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { mkdtemp, mkdir, writeFile, rm, symlink, readdir } from 'node:fs/promises';
+import { gunzipSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join } from 'node:path';
 import { createStatic } from '../server/app/static.mjs';
@@ -24,14 +25,14 @@ const request = (origin, path, { method = 'GET', headers = {} } = {}) =>
   });
 
 // Un sitio de mentira servido sólo por createStatic, con el mismo trato de errores que el servidor real.
-async function site(t, files, generated = {}) {
+async function site(t, files, generated = {}, options = {}) {
   const root = await mkdtemp(join(tmpdir(), 'crm-static-'));
   for (const [name, content] of Object.entries(files)) {
     await mkdir(dirname(join(root, name)), { recursive: true });
     await writeFile(join(root, name), content);
   }
   const fail = (status, message) => Object.assign(new Error(message), { status });
-  const statics = createStatic({ root, fail, generated });
+  const statics = createStatic({ root, fail, generated, ...options });
   const server = http.createServer(async (req, res) => {
     try {
       res.setHeader('Cache-Control', 'no-store'); // como security(res) en el servidor real
@@ -206,6 +207,104 @@ test('un enlace simbólico no puede sacar de public/', async t => {
   }
 });
 
+// Paquete de la portada (docs/PLAN_ATENDER_COMO_WHATSAPP.md, «Velocidad»): las etiquetas de index.html se convierten en
+// un solo CSS y un solo JS con el hash del contenido en el nombre, caché inmutable y gzip; el módulo ES y lo demás
+// siguen aparte; cambia una parte y cambia el nombre, y el nombre anterior se sigue sirviendo.
+const PORTADA = `<html><head><link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/kit/kit.css">
+  <script defer src="/vendor/lucide.js"></script>
+  <script defer src="/crm.js"></script>
+  <script type="module" src="/kit/boot.js"></script>
+  <script defer src="/app.js"></script>
+</head><body>portada</body></html>`;
+const PARTES = {
+  'public/index.html': PORTADA,
+  'public/tokens.css': ':root{--a:1}',
+  'public/styles.css':
+    "@import url('https://fonts.example/css2?family=M:wght@400;700&display=swap');\nbody{color:var(--a)}",
+  'public/kit/kit.css': '.k{}',
+  'public/crm.js': 'const crm = 1;',
+  'public/app.js': 'console.log(crm)',
+  'public/kit/boot.js': 'export {}',
+  'public/manifest.webmanifest': '{}',
+  'node_modules/lucide/dist/umd/lucide.min.js': 'window.lucide={}',
+};
+const packOf = html => ({
+  css: html.match(/href="(\/paquete\/estilos\.[0-9a-f]{16}\.css)"/)?.[1],
+  js: html.match(/src="(\/paquete\/app\.[0-9a-f]{16}\.js)"/)?.[1],
+});
+
+test('paquete de la portada: un CSS y un JS con nombre por contenido, caché inmutable, gzip, y rearmado al cambiar una parte', async t => {
+  const { root, origin } = await site(t, PARTES);
+  const home = (await request(origin, '/crm')).body.toString();
+  const { css, js } = packOf(home);
+  assert.ok(css && js, home);
+  assert.equal((home.match(/<link rel="stylesheet"/g) || []).length, 1, 'una sola hoja');
+  // el módulo ES parte el paquete en dos tramos y se queda en su sitio: todo corre en el mismo orden que en la portada
+  assert.equal((home.match(/<script defer/g) || []).length, 2, 'un script clásico por tramo');
+  const order = [...home.matchAll(/<script (?:defer |type="module" )src="([^"]+)"/g)].map(m => m[1]);
+  assert.equal(order[1], '/kit/boot.js', 'el módulo ES sigue aparte, entre los dos tramos');
+  assert.ok(order[0].startsWith('/paquete/app.') && order[2].startsWith('/paquete/app.') && order[0] !== order[2]);
+  const tail = (await request(origin, order[2])).body.toString();
+  assert.match(tail, /console\.log\(crm\)/, 'app.js va en el tramo de después del módulo');
+  assert.doesNotMatch(tail, /const crm = 1/);
+  assert.match(home, /href="\/manifest\.webmanifest"/);
+  // la hoja: en el orden de la portada, con el @import (que lleva «;» dentro) hoisteado al principio y una sola vez
+  const sheet = await request(origin, css);
+  assert.equal(sheet.status, 200);
+  assert.equal(sheet.headers['content-type'], 'text/css; charset=utf-8');
+  assert.equal(sheet.headers['cache-control'], 'public, max-age=31536000, immutable');
+  assert.match(sheet.headers.etag, /^"[0-9a-f]{32}"$/);
+  const cssText = sheet.body.toString();
+  assert.ok(
+    cssText.startsWith("@import url('https://fonts.example/css2?family=M:wght@400;700&display=swap');"),
+    cssText,
+  );
+  assert.equal((cssText.match(/@import/g) || []).length, 1);
+  assert.ok(cssText.indexOf(':root{--a:1}') < cssText.indexOf('body{color:var(--a)}'), 'tokens antes que styles');
+  assert.ok(cssText.indexOf('body{color:var(--a)}') < cssText.indexOf('.k{}'), 'styles antes que el kit');
+  // el script: en el orden de la portada, sin el módulo
+  const script = await request(origin, js);
+  assert.equal(script.headers['content-type'], 'text/javascript; charset=utf-8');
+  assert.equal(script.headers['cache-control'], 'public, max-age=31536000, immutable');
+  const jsText = script.body.toString();
+  assert.ok(jsText.indexOf('window.lucide={}') < jsText.indexOf('const crm = 1;'), 'lucide primero');
+  assert.doesNotMatch(jsText, /export \{\}/);
+  // gzip ya calculado, sólo para quien lo acepta; 304 con la etiqueta
+  const zipped = await request(origin, js, { headers: { 'Accept-Encoding': 'gzip, br' } });
+  assert.equal(zipped.headers['content-encoding'], 'gzip');
+  assert.equal(zipped.headers.vary, 'Accept-Encoding');
+  assert.equal(gunzipSync(zipped.body).toString(), jsText);
+  assert.equal(script.headers['content-encoding'], undefined);
+  assert.equal((await request(origin, js, { headers: { 'If-None-Match': script.headers.etag } })).status, 304);
+  // sólo los paquetes armados aquí: otro nombre, 404 (aunque exista un archivo así en public/paquete/)
+  assert.equal((await request(origin, '/paquete/app.0000000000000000.js')).status, 404);
+  await mkdir(join(root, 'public', 'paquete'), { recursive: true });
+  await writeFile(join(root, 'public', 'paquete', 'suelto.js'), 'no');
+  assert.equal((await request(origin, '/paquete/suelto.js')).status, 404);
+  // la portada del cliente también va empaquetada
+  const customer = (await request(origin, '/')).body.toString();
+  assert.match(customer, /manifest-cliente/);
+  assert.equal(packOf(customer).js, js);
+  // cambia una parte: nombre nuevo con el contenido nuevo; el anterior se sigue sirviendo a una pestaña ya abierta
+  await writeFile(join(root, 'public', 'app.js'), 'console.log(crm, 2)');
+  const againHtml = (await request(origin, '/crm')).body.toString();
+  const again = packOf(againHtml),
+    againTail = [...againHtml.matchAll(/<script defer src="([^"]+)"/g)].map(m => m[1])[1];
+  assert.equal(again.js, js, 'el tramo de antes del módulo no cambió');
+  assert.equal(again.css, css, 'la hoja no cambió');
+  assert.notEqual(againTail, order[2], 'el tramo con app.js tiene nombre nuevo');
+  assert.match((await request(origin, againTail)).body.toString(), /console\.log\(crm, 2\)/);
+  assert.equal((await request(origin, order[2])).status, 200, 'el tramo anterior se sigue sirviendo');
+  // apagado (STATIC_BUNDLE=0): la portada sale tal cual
+  const off = await site(t, PARTES, {}, { bundle: false });
+  const plain = (await request(off.origin, '/crm')).body.toString();
+  assert.doesNotMatch(plain, /paquete/);
+  assert.equal((plain.match(/<script defer/g) || []).length, 3);
+});
+
 test('el servidor real sirve todo public/ con su tipo y su etiqueta, y sigue sin servir la portada por nombre ni los flyers', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'crm-static-real-'));
   const server = await startServer({ dir });
@@ -236,6 +335,22 @@ test('el servidor real sirve todo public/ con su tipo y su etiqueta, y sigue sin
   const home = await request(server.origin, '/crm');
   assert.equal(home.status, 200);
   assert.match(home.headers['content-security-policy'], /script-src 'self'/);
+  // la portada real sale empaquetada: una hoja, un script clásico y el módulo del kit; el paquete es JavaScript válido
+  const real = home.body.toString();
+  const realPack = packOf(real);
+  assert.ok(realPack.css && realPack.js, 'la portada real lleva el paquete');
+  assert.equal((real.match(/<link rel="stylesheet"/g) || []).length, 1);
+  const realOrder = [...real.matchAll(/<script (?:defer |type="module" )src="([^"]+)"/g)].map(m => m[1]);
+  assert.equal(realOrder.length, 3, 'un tramo, el módulo del kit y el tramo de app.js');
+  assert.equal(realOrder[1], '/kit/boot.js');
+  let realBytes = 0;
+  for (const path of [realOrder[0], realOrder[2]]) {
+    const realJs = await request(server.origin, path);
+    assert.equal(realJs.status, 200, path);
+    assert.doesNotThrow(() => new Function(realJs.body.toString()), 'el paquete de JavaScript se analiza entero');
+    realBytes += realJs.body.length;
+  }
+  assert.ok(realBytes > 500_000, 'trae los 42 archivos');
   assert.equal((await request(server.origin, '/crm', { headers: { 'If-None-Match': home.headers.etag } })).status, 304);
   assert.equal((await request(server.origin, '/index.html')).status, 404);
   const flyer = all.find(file => file.startsWith('flyers/') && file.endsWith('.png'));

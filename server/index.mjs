@@ -459,6 +459,7 @@ const statics = createStatic({
   root,
   fail,
   generated: { '/screens/index.json': { bytes: screens.bytes, type: 'application/json; charset=utf-8' } },
+  bundle: process.env.STATIC_BUNDLE !== '0', // un solo JS y un solo CSS para la portada (server/app/static.mjs)
 });
 // Primitivas de los módulos nuevos (docs/PLAN_ACCESO_TIEMPO_REAL.md): permisos con alcance por marca y tiempo real v2.
 const access = createAccess({ db, crm });
@@ -618,13 +619,30 @@ function conversationList(user) {
 function messageList(id, before = Number.MAX_SAFE_INTEGER) {
   return db
     .prepare(
-      `SELECT m.*,u.name sender_name,COALESCE(a.filename,lf.filename) filename,COALESCE(a.mime,lf.mime) mime,a.size,(SELECT r.status FROM receipts r WHERE r.message_id=m.id) receipt_status,EXISTS(SELECT 1 FROM reply_log rl WHERE rl.conversation_id=m.conversation_id AND rl.reply_message_id=m.id AND rl.reason LIKE 'Proveedor de IA:%') ai_drafted FROM messages m LEFT JOIN users u ON u.id=m.sender_id
+      `SELECT m.*,u.name sender_name,COALESCE(a.filename,lf.filename) filename,COALESCE(a.mime,lf.mime) mime,a.size,(SELECT r.status FROM receipts r WHERE r.message_id=m.id) receipt_status,EXISTS(SELECT 1 FROM reply_log rl WHERE rl.conversation_id=m.conversation_id AND rl.reply_message_id=m.id AND rl.reason LIKE 'Proveedor de IA:%') ai_drafted,
+    q.text quoted_text,q.sender_kind quoted_sender_kind,qu.name quoted_sender_name,q.attachment_id quoted_attachment_id,q.flyer_course_id quoted_flyer FROM messages m LEFT JOIN users u ON u.id=m.sender_id
+    LEFT JOIN messages q ON q.id=m.reply_to_id LEFT JOIN users qu ON qu.id=q.sender_id
     LEFT JOIN attachments a ON a.id=m.attachment_id LEFT JOIN library_files lf ON lf.id=json_extract(m.flyer_snapshot,'$.libraryFileId') WHERE m.conversation_id=? AND m.seq<? ORDER BY m.seq DESC LIMIT 150`,
     )
     .all(id, before)
     .reverse()
     .map(m => ({
       ...m,
+      quoted_text: undefined,
+      quoted_sender_kind: undefined,
+      quoted_sender_name: undefined,
+      quoted_attachment_id: undefined,
+      quoted_flyer: undefined,
+      // Responder citando (docs/PLAN_ATENDER_COMO_WHATSAPP.md): un resumen del mensaje citado, para pintar la cita.
+      quoted: m.reply_to_id
+        ? {
+            id: m.reply_to_id,
+            text:
+              String(m.quoted_text || '').slice(0, 240) || (m.quoted_attachment_id || m.quoted_flyer ? 'Archivo' : ''),
+            senderKind: m.quoted_sender_kind || null,
+            senderName: m.quoted_sender_name || null,
+          }
+        : null,
       flyer_snapshot: undefined,
       send_lease_until: undefined, // marcas internas del envío (docs/PLAN_RECEPCION_DURADERA.md): no salen por la API
       send_attempts: undefined,
@@ -1250,6 +1268,10 @@ const server = http.createServer(async (req, res) => {
           }
           if (c.status === 'resolved')
             throw fail(409, 'La conversación está cerrada. Abre una nueva para continuar la prueba.');
+          // Responder citando (docs/PLAN_ATENDER_COMO_WHATSAPP.md): el mensaje citado debe ser de esta conversación.
+          const replyToId = clean(input.replyToId, 60) || null;
+          if (replyToId && !db.prepare('SELECT 1 FROM messages WHERE id=? AND conversation_id=?').get(replyToId, c.id))
+            throw fail(400, 'El mensaje que quieres citar no está en esta conversación.');
           const isCustomer = c.customer_id === user.id && !input.asAgent;
           if (!isCustomer) {
             requireStaff(user);
@@ -1301,6 +1323,7 @@ const server = http.createServer(async (req, res) => {
               }
               if (isCustomer && !attachmentId) replies.resumeIfPausedByMode(current); // la marca ya responde sola y el chat solo esperaba por el nivel anterior
               messageId = insertMessage(c, user, text, isCustomer ? 'customer' : 'agent', ref, attachmentId);
+              if (replyToId) db.prepare('UPDATE messages SET reply_to_id=? WHERE id=?').run(replyToId, messageId);
               const receiptId =
                 isCustomer && attachmentId ? payments.attachReceipt(current, messageId, attachmentId) : null; // un adjunto con pedido vigente es un comprobante: cola humana, sin bot
               if (isCustomer && !receiptId && current.bot_enabled && !current.assigned_to)

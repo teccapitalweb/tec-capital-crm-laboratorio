@@ -130,7 +130,7 @@ test('Conversaciones: filtros, estado y herramientas del chat siguen todos a la 
       );
       expect(inside, 'la herramienta queda a la vista tras deslizar su fila').toBe(true);
     }).toPass({ timeout: 15_000 });
-  // Quién atiende y las diez herramientas (la fila se desliza de lado cuando no caben: cada una se alcanza).
+  // Quién atiende y las once herramientas (la fila se desliza de lado cuando no caben: cada una se alcanza).
   await expect(page.locator('.assist-actions .btn[data-chat-action]')).toBeVisible();
   await expect(page.locator('.assist-actions [data-chat-action="resolve"]')).toBeVisible();
   const tools = [
@@ -143,9 +143,10 @@ test('Conversaciones: filtros, estado y herramientas del chat siguen todos a la 
     '[data-action="crm-insert-signature"]',
     '[data-template="syllabus"]',
     '[data-template="price"]',
+    '[data-template="schedule"]',
     '[data-action="pay-new"]',
   ];
-  // A 1366 × 800 las diez están a la vista a la vez, sin deslizar nada: los atajos del catálogo son los más usados.
+  // A 1366 × 800 las once están a la vista a la vez, sin deslizar nada: los atajos del catálogo son los más usados.
   if (testInfo.project.name === 'escritorio') {
     const shown = await page.evaluate(selectors => {
       const strip = document.querySelector('.quick-replies');

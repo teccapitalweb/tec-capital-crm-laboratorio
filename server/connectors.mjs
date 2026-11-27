@@ -1041,12 +1041,15 @@ export function metaChannel({
         part.type === 'image' ||
         part.type === 'document' ||
         ['image', 'document'].includes(part.interactive?.header?.type);
+      // Responder citando: la primera parte lleva el `context` de Meta y la persona ve el mensaje citado en su teléfono.
+      const quoted = typeof m.replyTo?.providerRef === 'string' ? m.replyTo.providerRef.slice(0, 200) : '';
       const sendParts = async list => {
         let ref = null;
         for (const [i, part] of list.entries()) {
           try {
             if (i > 0 && MEDIA_GAP > 0 && isMedia(list[i - 1])) await new Promise(done => setTimeout(done, MEDIA_GAP));
-            ref = (await post(from, to, part)).messages?.[0]?.id || ref;
+            const payload = i === 0 && quoted ? { ...part, context: { message_id: quoted } } : part;
+            ref = (await post(from, to, payload)).messages?.[0]?.id || ref;
           } catch (e) {
             if (!ref) throw e;
             return {

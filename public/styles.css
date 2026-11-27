@@ -202,7 +202,9 @@ input[type='file'] {
   flex: 0 0 25px;
   border-radius: 8px;
   color: white;
-  background: var(--channel-fill, linear-gradient(145deg, #3a7fa0, #255a75));
+  /* un color sólido debajo del degradado: lo que mide la auditoría de contraste y lo que se ve sin imágenes */
+  background-color: var(--channel-solid, #2f6f8f);
+  background-image: var(--channel-fill, linear-gradient(145deg, #3a7fa0, #255a75));
   box-shadow: inset 0 1px 0 #ffffff3d;
   overflow: hidden;
 }
@@ -220,16 +222,19 @@ input[type='file'] {
 .whatsapp,
 [data-channel='whatsapp'] {
   --channel: var(--wa);
+  --channel-solid: #0a9a60;
   --channel-fill: linear-gradient(145deg, #12ae70, #008d54);
 }
 .instagram,
 [data-channel='instagram'] {
   --channel: var(--ig);
+  --channel-solid: #b8368f;
   --channel-fill: linear-gradient(145deg, #7836dc, #d42a8c 65%, #f36b45);
 }
 .facebook,
 [data-channel='facebook'] {
   --channel: var(--fb);
+  --channel-solid: #2a6fe6;
   --channel-fill: linear-gradient(145deg, #3288f4, #2258db);
 }
 .identity {
@@ -2379,4 +2384,43 @@ button.msg-button:hover {
 }
 .pay-actions .btn {
   justify-content: center;
+}
+
+/* Responder citando (docs/PLAN_ATENDER_COMO_WHATSAPP.md): la cita que el cliente ve en su chat de prueba */
+.msg-quote {
+  display: block;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 0;
+  border-left: 3px solid #2f6f8f;
+  border-radius: 6px;
+  background: #00000010;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+.msg-quote strong {
+  display: block;
+  font-size: 11px;
+}
+.msg-quote span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.customer-skin .msg-reply {
+  display: none;
+}
+.message-flash .bubble {
+  outline: 3px solid #2f6f8f;
+  outline-offset: 2px;
+}
+.conv-material[hidden] {
+  display: none;
 }

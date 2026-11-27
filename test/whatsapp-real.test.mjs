@@ -93,6 +93,18 @@ test('adaptador de Meta: explica los errores en español, no acepta un token mal
     media: { buffer: Buffer.from('%PDF-1.4'), mime: 'application/pdf', filename: 'temario.pdf' },
   });
   assert.deepEqual(JSON.parse(calls[4].init.body).document, { id: 'm1', filename: 'temario.pdf' });
+  // Responder citando (docs/PLAN_ATENDER_COMO_WHATSAPP.md): la primera parte lleva el `context` de Meta
+  await meta.send({ to: '5215512345678', text: 'Sobre eso: sí.', replyTo: { providerRef: 'wamid.cliente' } });
+  const quoted = JSON.parse(calls.at(-1).init.body);
+  assert.equal(quoted.type, 'text');
+  assert.deepEqual(quoted.context, { message_id: 'wamid.cliente' });
+  await meta.send({
+    to: '5215512345678',
+    text: 'Con imagen',
+    media: { buffer: PNG, mime: 'image/png', filename: 'a.png' },
+    replyTo: { providerRef: 'wamid.cliente' },
+  });
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body).context, { message_id: 'wamid.cliente' }, 'también con archivo');
   let step = 0;
   const half = metaChannel({
     env,
@@ -602,6 +614,39 @@ test('WhatsApp real de punta a punta con un Meta de mentira: entra un mensaje, s
   assert.equal(sent[before].text.body, 'Hola María, te atiende Administración.');
   assert.equal(sent[before + 1].type, 'image');
   assert.equal(sent[before + 1].image.caption, 'Aquí tienes el temario.');
+  assert.equal(sent[before].context, undefined, 'sin cita no hay context');
+  // Responder citando (docs/PLAN_ATENDER_COMO_WHATSAPP.md): el equipo cita el mensaje de la persona; Meta recibe el
+  // `context` con su referencia, el CRM devuelve la cita en la lista y un mensaje de otra conversación no se puede citar.
+  const cited = db
+    .prepare(
+      "SELECT id,provider_ref FROM messages WHERE conversation_id=? AND sender_kind='customer' AND provider_ref IS NOT NULL ORDER BY seq LIMIT 1",
+    )
+    .get(conv.id);
+  const beforeQuote = sent.length;
+  const quotedReply = await call(
+    '/api/conversations/' + conv.id + '/messages',
+    admin.cookie,
+    { text: 'Sobre tu pregunta: sí.', clientRef: randomUUID(), replyToId: cited.id },
+    'POST',
+    201,
+  );
+  await until(() => sent.length >= beforeQuote + 1, 'la respuesta con cita sale por Meta');
+  assert.equal(sent[beforeQuote].text.body, 'Sobre tu pregunta: sí.');
+  assert.deepEqual(sent[beforeQuote].context, { message_id: cited.provider_ref });
+  const listedQuote = (await call('/api/conversations/' + conv.id + '/messages', admin.cookie)).messages.find(
+    m => m.id === quotedReply.id,
+  );
+  assert.equal(listedQuote.reply_to_id, cited.id);
+  assert.equal(listedQuote.quoted.id, cited.id);
+  assert.equal(listedQuote.quoted.senderKind, 'customer');
+  assert.ok(listedQuote.quoted.text.length > 0);
+  await call(
+    '/api/conversations/' + conv.id + '/messages',
+    admin.cookie,
+    { text: 'x', clientRef: randomUUID(), replyToId: randomUUID() },
+    'POST',
+    400,
+  );
   // Dos subidas a Meta: el flyer del curso que el asistente mandó con la primera respuesta de precio (la marca tiene número
   // real pero no está en «modo real», así que el flyer de laboratorio sí sale) y ahora el temario del equipo.
   assert.equal(uploads.length, 2);

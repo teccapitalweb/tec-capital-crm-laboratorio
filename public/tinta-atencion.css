@@ -2302,3 +2302,254 @@
 .workspace:not(.customer-skin) .sale-strip a.btn {
   text-decoration: none;
 }
+
+/* ---- Atender como en WhatsApp (26 nov 2026, docs/PLAN_ATENDER_COMO_WHATSAPP.md) --------------------------------------
+   Materiales a un toque (la tarjeta bajo las herramientas), responder citando (la cita dentro del globo, el botón al
+   lado del mensaje y la franja «Respondiendo a» en el cuadro de escribir) y el deslizar en celular. */
+.workspace:not(.customer-skin) .conv-material[hidden] {
+  display: none;
+}
+.workspace:not(.customer-skin) .cm-card {
+  display: grid;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-block);
+  background: var(--soft);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .cm-card[data-kind='flyer'] {
+  background: var(--butter);
+}
+.workspace:not(.customer-skin) .cm-card[data-kind='syllabus'] {
+  background: var(--lilac);
+}
+.workspace:not(.customer-skin) .cm-card[data-kind='price'] {
+  background: var(--sky);
+}
+.workspace:not(.customer-skin) .cm-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.workspace:not(.customer-skin) .cm-head svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+.workspace:not(.customer-skin) .cm-head strong {
+  font-size: var(--font-lg);
+}
+.workspace:not(.customer-skin) .cm-head span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-size: var(--font-sm);
+}
+.workspace:not(.customer-skin) .cm-head .icon-btn {
+  width: var(--touch);
+  height: var(--touch);
+  flex: 0 0 auto;
+  margin-left: auto;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .cm-body {
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+.workspace:not(.customer-skin) .cm-image {
+  width: 96px;
+  max-height: 120px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: var(--radius-4);
+  background: var(--surface);
+}
+.workspace:not(.customer-skin) .cm-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: 150px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-4);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--font-md);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.workspace:not(.customer-skin) .cm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.workspace:not(.customer-skin) .cm-actions .crm-hint {
+  margin: 0 0 0 auto;
+}
+.workspace:not(.customer-skin) .cm-wait {
+  margin: 0;
+}
+/* La cita de lo que se responde, arriba del texto del globo */
+.workspace:not(.customer-skin) .msg-quote {
+  display: block;
+  width: 100%;
+  min-height: var(--touch);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-left: 3px solid var(--ink);
+  border-radius: var(--radius-2);
+  background: var(--soft);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--font-sm);
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+.workspace:not(.customer-skin) .msg-quote strong {
+  display: block;
+  font-size: var(--font-min);
+  font-weight: var(--weight-bold);
+}
+.workspace:not(.customer-skin) .msg-quote span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.workspace:not(.customer-skin) .message.outgoing[data-sender='agent'] .msg-quote {
+  border-left-color: var(--lime);
+  background: var(--ink-3);
+  color: var(--on-ink-soft);
+}
+.workspace:not(.customer-skin) .message.outgoing[data-sender='agent'] .msg-quote strong {
+  color: var(--on-ink);
+}
+/* El botón «Responder» vive al lado del globo y aparece al pasar el cursor; en celular se desliza el mensaje */
+.workspace:not(.customer-skin) .history .message {
+  position: relative;
+}
+.workspace:not(.customer-skin) .message .msg-reply {
+  position: absolute;
+  top: 0;
+  right: calc(-1 * var(--touch) - var(--space-2));
+  width: var(--touch);
+  height: var(--touch);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.workspace:not(.customer-skin) .message.outgoing .msg-reply {
+  right: auto;
+  left: calc(-1 * var(--touch) - var(--space-2));
+}
+.workspace:not(.customer-skin) .message .msg-reply svg {
+  width: 18px;
+  height: 18px;
+}
+.workspace:not(.customer-skin) .message:hover .msg-reply,
+.workspace:not(.customer-skin) .message:focus-within .msg-reply,
+.workspace:not(.customer-skin) .message .msg-reply:focus-visible {
+  opacity: 1;
+}
+.workspace:not(.customer-skin) .message .msg-reply:hover {
+  background: var(--lime);
+}
+.workspace:not(.customer-skin) .message.swiping .msg-reply {
+  opacity: 1;
+}
+.workspace:not(.customer-skin) .message.message-flash .bubble {
+  outline: 3px solid var(--lime);
+  outline-offset: 2px;
+}
+/* «Respondiendo a …» en el cuadro de escribir */
+.workspace:not(.customer-skin) .compose .reply-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
+  border-left: 3px solid var(--ink);
+  border-radius: var(--radius-3);
+  background: var(--soft);
+  color: var(--ink);
+}
+.workspace:not(.customer-skin) .compose .reply-bar > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+.workspace:not(.customer-skin) .compose .reply-bar-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  font-size: var(--font-sm);
+  line-height: 1.35;
+}
+.workspace:not(.customer-skin) .compose .reply-bar-copy strong {
+  font-size: var(--font-min);
+}
+.workspace:not(.customer-skin) .compose .reply-bar-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace:not(.customer-skin) .compose .reply-bar .icon-btn {
+  width: var(--touch);
+  height: var(--touch);
+  flex: 0 0 auto;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+}
+@media (max-width: 680px) {
+  .workspace:not(.customer-skin) .cm-body {
+    flex-direction: column;
+  }
+  .workspace:not(.customer-skin) .cm-image {
+    width: 100%;
+    max-height: 160px;
+  }
+  .workspace:not(.customer-skin) .cm-actions .crm-hint {
+    flex: 1 0 100%;
+    margin: 0;
+  }
+  .workspace:not(.customer-skin) .cm-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+@media (pointer: coarse) {
+  /* en pantalla táctil el gesto es deslizar el mensaje; el botón se queda arriba del globo, sin salirse de la pantalla */
+  .workspace:not(.customer-skin) .message .msg-reply {
+    top: auto;
+    right: var(--space-2);
+    left: auto;
+    bottom: 100%;
+  }
+  .workspace:not(.customer-skin) .message.outgoing .msg-reply {
+    right: auto;
+    left: var(--space-2);
+  }
+}

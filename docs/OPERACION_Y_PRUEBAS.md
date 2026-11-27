@@ -60,6 +60,7 @@ Para una prueba nueva usa un directorio de datos vacío e independiente. No cone
 | `PUSH_DISABLED` | vacío | `1` apaga las notificaciones push: `/api/push/config` responde `enabled:false`, suscribirse o probar da 503 y el barrido no corre |
 | `PUSH_DELAY_MS` | `15000` | Espera antes de enviar un aviso no leído (evita que suene mientras la persona lo ve); `0` en pruebas |
 | `PUSH_SUBJECT` | vacío (usa `APP_ORIGIN` o la dirección pública del CRM) | Contacto `sub` de la firma VAPID: una URL https o `mailto:` del equipo, nunca un correo personal |
+| `STATIC_BUNDLE` | vacío (encendido) | `0` apaga el paquete de la portada: vuelve a servir los 42 archivos de JavaScript y 13 hojas por separado con `no-cache` ([PLAN_ATENDER_COMO_WHATSAPP.md](PLAN_ATENDER_COMO_WHATSAPP.md), «Velocidad») |
 | `SIMULATOR_DISABLED` | vacío | `1` oculta el simulador de clientes: `/api/simulator` responde 404 y el barrido no corre. Úsalo en un entorno con clientes reales |
 | `MFA_KEY` | Opcional | Clave para cifrar los secretos de la verificación en dos pasos; si falta se usa `DATA_DIR/mfa.key`. Guárdala aparte; sin ella, los 2FA no se pueden verificar tras una restauración |
 | `PEER_HASH_KEY` | Opcional | Llave de la huella de quien escribe en la bandeja de webhooks; si falta se usa `DATA_DIR/peer.key` (se crea sola). No hace falta restaurarla con un respaldo |

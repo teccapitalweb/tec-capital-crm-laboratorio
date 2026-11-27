@@ -594,7 +594,90 @@ window.createCatalogueUI = function ({
     );
     $('#cat-material-form [name=content]').value = 'kind:' + kind;
   }
+  // Materiales a un toque (docs/PLAN_ATENDER_COMO_WHATSAPP.md): el chip (Flyer, Temario, Precio, Fechas) pide la vista
+  // previa y la pinta debajo de las herramientas del chat con un solo «Enviar»; «Elegir otro» abre la biblioteca de
+  // siempre. Es el mismo previsualizar/enviar de la biblioteca: el precio y la vigencia se vuelven a comprobar al enviar.
+  let quick = null;
+  const quickLabels = { flyer: 'Ficha con imagen', syllabus: 'Temario', price: 'Precio', schedule: 'Fecha y docente' },
+    quickIcons = { flyer: 'image', syllabus: 'list', price: 'tag', schedule: 'calendar' };
+  async function quickMaterial(id, kind) {
+    if (!$('#conv-material')) return materials(id, kind);
+    quick = { id, kind, loading: true };
+    renderQuick(id);
+    try {
+      const [preview, library] = await Promise.all([
+        api('/api/conversations/' + id + '/materials/preview', { method: 'POST', body: { kind } }),
+        api('/api/conversations/' + id + '/materials'),
+      ]);
+      if (quick?.id !== id || quick.kind !== kind) return;
+      const file = library.flyers.find(f => f.id === preview.commercial?.flyerId);
+      quick = {
+        id,
+        kind,
+        preview,
+        context: library.context,
+        pdf: file?.mime === 'application/pdf',
+        selection: { kind, previewToken: preview.previewToken, clientRef: crypto.randomUUID() },
+      };
+    } catch (e) {
+      if (quick?.id !== id || quick.kind !== kind) return;
+      quick = { id, kind, error: e.message };
+    }
+    renderQuick(id);
+  }
+  function renderQuick(id) {
+    const slot = $('#conv-material');
+    if (!slot) return;
+    if (!quick || quick.id !== id) {
+      slot.innerHTML = '';
+      slot.hidden = true;
+      return;
+    }
+    slot.hidden = false;
+    const label = quickLabels[quick.kind] || 'Material',
+      ctx = quick.context;
+    const body = quick.loading
+      ? '<p class="crm-hint cm-wait">Preparando la vista previa…</p>'
+      : quick.error
+        ? `<p class="form-error">${esc(quick.error)}</p>`
+        : `<div class="cm-body">${
+            quick.preview.flyerUrl
+              ? quick.pdf
+                ? `<a href="${quick.preview.flyerUrl}" target="_blank" rel="noopener" class="btn">${icon('file-text')} Abrir PDF adjunto</a>`
+                : `<img class="cm-image" src="${quick.preview.flyerUrl}" alt="Imagen que se enviará">`
+              : ''
+          }<pre class="cm-text">${esc(quick.preview.text)}</pre></div><div class="cm-actions"><button type="button" class="btn primary" data-action="cat-quick-send">${icon('send')} Enviar</button><button type="button" class="btn" data-action="cat-materials" data-kind="${quick.kind}">${icon('library')} Elegir otro</button><small class="crm-hint">Se vuelve a comprobar al enviar.</small></div>`;
+    slot.innerHTML = `<div class="cm-card" data-kind="${esc(quick.kind)}" role="region" aria-label="Material listo para enviar"><div class="cm-head">${icon(quickIcons[quick.kind] || 'library')}<strong>${label}</strong>${ctx ? `<span>${esc(ctx.course.title)} · ${esc(ctx.edition.name)}</span>` : ''}<button type="button" class="icon-btn" data-action="cat-quick-clear" aria-label="Quitar este material">${icon('x')}</button></div>${body}</div>`;
+    icons();
+  }
   async function action(name, el) {
+    if (name === 'cat-quick') {
+      await quickMaterial(state.selected, el.dataset.kind || 'flyer');
+      return true;
+    }
+    if (name === 'cat-quick-clear') {
+      quick = null;
+      renderQuick(state.selected);
+      return true;
+    }
+    if (name === 'cat-quick-send') {
+      if (!quick?.selection) return true;
+      el.disabled = true;
+      try {
+        await api('/api/conversations/' + quick.id + '/materials/send', { method: 'POST', body: quick.selection });
+        quick = null;
+        await refresh();
+        toast('Material enviado con su versión');
+      } catch (e) {
+        quick = {
+          id: quick.id,
+          kind: quick.kind,
+          error: e.message + ' Vuelve a tocar el botón para prepararlo otra vez.',
+        };
+        renderQuick(quick.id);
+      }
+      return true;
+    }
     if (name.startsWith('imp-')) return importUI.action(name, el);
     if (name.startsWith('kimp-')) return knowledgeImportUI.action(name, el);
     if (name === 'cat-ad-link') {
@@ -916,6 +999,7 @@ window.createCatalogueUI = function ({
   }
   return {
     render,
+    renderQuick,
     action: async (name, el) => {
       if (name === 'cat-customer-detail') {
         customerDetails(el.dataset.id);

@@ -363,6 +363,29 @@
     // sin almacenamiento: el menú oscuro
   }
   const menuThemeLabel = () => (menuTheme === 'dark' ? 'Usar el menú claro' : 'Usar el menú oscuro');
+  // Menú plegable (docs/PLAN_ATENDER_COMO_WHATSAPP.md): sólo iconos, con el nombre al pasar el cursor; se recuerda.
+  const MENU_COMPACT_KEY = 'tc-menu-compact';
+  let menuCompact = false;
+  try {
+    menuCompact = localStorage.getItem(MENU_COMPACT_KEY) === '1';
+  } catch {
+    // sin almacenamiento: el menú completo
+  }
+  const menuCompactLabel = () => (menuCompact ? 'Mostrar el menú completo' : 'Plegar el menú a iconos');
+  function toggleMenuCompact(button) {
+    menuCompact = !menuCompact;
+    try {
+      localStorage.setItem(MENU_COMPACT_KEY, menuCompact ? '1' : '0');
+    } catch {
+      // sin almacenamiento: vale para esta visita
+    }
+    button.closest('.workspace')?.classList.toggle('menu-compact', menuCompact);
+    button.setAttribute('aria-pressed', String(menuCompact));
+    button.title = menuCompactLabel();
+    button.setAttribute('aria-label', menuCompactLabel());
+    button.innerHTML = icon(menuCompact ? 'panel-left-open' : 'panel-left-close');
+    icons();
+  }
   function toggleMenuTheme(button) {
     menuTheme = menuTheme === 'dark' ? 'light' : 'dark';
     try {
@@ -443,9 +466,9 @@
     const scrollOf = el => (el ? [el.scrollTop, el.scrollLeft] : [0, 0]);
     const navScroll = [scrollOf(navNow()), scrollOf(navNow()?.parentElement)];
     const themeSwitch = team
-      ? `<button type="button" class="icon-btn menu-theme" data-menu-theme-toggle aria-label="Menú claro" aria-pressed="${menuTheme === 'light'}" title="${menuThemeLabel()}">${icon('sun-moon')}</button>`
+      ? `<button type="button" class="icon-btn menu-theme" data-menu-theme-toggle aria-label="Menú claro" aria-pressed="${menuTheme === 'light'}" title="${menuThemeLabel()}">${icon('sun-moon')}</button><button type="button" class="icon-btn menu-theme menu-compact-toggle" data-menu-compact-toggle aria-label="${menuCompactLabel()}" aria-pressed="${menuCompact}" title="${menuCompactLabel()}">${icon(menuCompact ? 'panel-left-open' : 'panel-left-close')}</button>`
       : '';
-    app.innerHTML = `<div class="workspace ${state.mobileChat ? 'mobile-chat' : ''} ${team ? '' : 'customer-skin'}" data-menu="${menuTheme}"><aside class="sidebar"><div class="brand">${brandBlock(team, 'Laboratorio CRM')}</div><div class="workspace-picker">${icon('building-2')}<select aria-label="Filtrar por marca" id="brand-picker">${brandOptions}</select></div><div>${team ? '' : '<div class="nav-label">Tu espacio</div>'}<nav class="nav ${team ? 'nav-grouped' : ''}" aria-label="Navegación principal">${sideNav(team)}</nav></div><div class="sidebar-bottom">${!isStaff() ? '<a class="customer-team-link" href="/crm">Entrar al CRM</a>' : ''}${isStaff() ? `<div class="sidebar-switches"><div class="mode-picker" aria-label="Cambiar experiencia"><button data-mode="customer" class="${!team ? 'active' : ''}">Cliente</button><button data-mode="agent" class="${team ? 'active' : ''}">Equipo</button></div>${themeSwitch}</div>` : ''}<div class="lab-note"><strong>${team ? 'Un equipo. Un espacio.' : 'Tu número de prueba: ' + state.user.testNumber}</strong>${team ? 'Mensajes, cursos y atención en tiempo real.' : 'Este perfil identifica tus mensajes. No es un número de WhatsApp.'}</div><div class="user-card"><button data-action="profile" aria-label="Mi perfil"><span class="avatar">${esc(initials(state.user.name))}</span><span class="user-copy"><strong title="${esc(state.user.name)}">${esc(state.user.name)}</strong><small>${state.user.role === 'admin' ? 'Administrador' : state.user.role === 'agent' ? 'Asesor' : 'Cliente de prueba'}</small></span></button><button class="icon-btn" data-action="logout" aria-label="Cerrar sesión">${icon('log-out')}</button></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb"><span>Laboratorio</span>${icon('chevron-right')}<strong id="breadcrumb-title">${pageTitle()}</strong></div><div class="top-status"><span id="connection" class="connection">Conectando</span><span class="lab-label">DATOS Y PAGOS DE PRUEBA</span>${!team ? `<button class="btn" data-action="new-chat">${icon('plus')}<span>Nueva conversación</span></button>` : ''}<button class="icon-btn mobile-profile" data-action="profile" aria-label="Mi perfil">${icon('user-round')}</button></div></header><div class="notice" id="notice"></div><div class="page-slot" id="page"></div></main></div>`;
+    app.innerHTML = `<div class="workspace ${state.mobileChat ? 'mobile-chat' : ''} ${team ? '' : 'customer-skin'}${team && menuCompact ? ' menu-compact' : ''}" data-menu="${menuTheme}"><aside class="sidebar"><div class="brand">${brandBlock(team, 'Laboratorio CRM')}</div><div class="workspace-picker">${icon('building-2')}<select aria-label="Filtrar por marca" id="brand-picker">${brandOptions}</select></div><div>${team ? '' : '<div class="nav-label">Tu espacio</div>'}<nav class="nav ${team ? 'nav-grouped' : ''}" aria-label="Navegación principal">${sideNav(team)}</nav></div><div class="sidebar-bottom">${!isStaff() ? '<a class="customer-team-link" href="/crm">Entrar al CRM</a>' : ''}${isStaff() ? `<div class="sidebar-switches"><div class="mode-picker" aria-label="Cambiar experiencia"><button data-mode="customer" class="${!team ? 'active' : ''}">Cliente</button><button data-mode="agent" class="${team ? 'active' : ''}">Equipo</button></div>${themeSwitch}</div>` : ''}<div class="lab-note"><strong>${team ? 'Un equipo. Un espacio.' : 'Tu número de prueba: ' + state.user.testNumber}</strong>${team ? 'Mensajes, cursos y atención en tiempo real.' : 'Este perfil identifica tus mensajes. No es un número de WhatsApp.'}</div><div class="user-card"><button data-action="profile" aria-label="Mi perfil"><span class="avatar">${esc(initials(state.user.name))}</span><span class="user-copy"><strong title="${esc(state.user.name)}">${esc(state.user.name)}</strong><small>${state.user.role === 'admin' ? 'Administrador' : state.user.role === 'agent' ? 'Asesor' : 'Cliente de prueba'}</small></span></button><button class="icon-btn" data-action="logout" aria-label="Cerrar sesión">${icon('log-out')}</button></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb"><span>Laboratorio</span>${icon('chevron-right')}<strong id="breadcrumb-title">${pageTitle()}</strong></div><div class="top-status"><span id="connection" class="connection">Conectando</span><span class="lab-label">DATOS Y PAGOS DE PRUEBA</span>${!team ? `<button class="btn" data-action="new-chat">${icon('plus')}<span>Nueva conversación</span></button>` : ''}<button class="icon-btn mobile-profile" data-action="profile" aria-label="Mi perfil">${icon('user-round')}</button></div></header><div class="notice" id="notice"></div><div class="page-slot" id="page"></div></main></div>`;
     for (const [el, [top, left]] of [
       [navNow(), navScroll[0]],
       [navNow()?.parentElement, navScroll[1]],
@@ -665,7 +688,7 @@
             .map(([id, name]) => `<option value="${id}" ${id === c.stage ? 'selected' : ''}>${name}</option>`)
             .join('')}</select>`
         : `<span class="pill">${stages[c.stage]}</span>`
-    }</div>${team ? lcBar(c) : ''}${team ? '<div id="conv-summary" class="conv-summary"></div>' : ''}${chatWindow(c, team)}<div class="history" id="history" role="log" aria-label="Mensajes de la conversación" aria-live="polite"></div><div class="chat-bottom"><div class="typing" id="typing"></div><div class="assist-row"><span class="assist-label">${icon(c.bot_enabled ? 'workflow' : c.status === 'waiting' ? 'clock-3' : 'user-round')}<span>${esc(c.status === 'resolved' ? 'Conversación cerrada' : c.bot_enabled ? 'Automatización por reglas' : c.agent_name ? 'Atiende ' + c.agent_name : 'Esperando a un asesor')}</span></span>${team && c.status !== 'resolved' ? `<div class="assist-actions"><button class="btn" data-chat-action="${c.bot_enabled || !c.assigned_to ? 'take' : 'automate'}">${c.bot_enabled || !c.assigned_to ? 'Tomar chat' : 'Reactivar reglas'}</button>${c.status !== 'resolved' ? '<button class="icon-btn" data-chat-action="resolve" aria-label="Cerrar conversación">' + icon('check-check') + '</button>' : ''}</div>` : ''}</div>${c.status === 'resolved' ? `<div class="closed-notice"><span>Esta conversación terminó.</span>${!team ? '<button class="btn" data-action="new-chat">Nueva prueba</button>' : ''}</div>` : `<div class="quick-replies">${team ? `<button data-action="ops-detail">${icon('users-round')} Equipo</button><button data-action="tg-open">${icon('tag')} Etiquetas</button><button data-action="qr-open">${icon('zap')} Respuestas</button><button data-action="qr-remind">${icon('alarm-clock')} Recordarme</button><button data-action="cat-materials">${icon('library')} Biblioteca</button><button data-template="flyer">${icon('image')} Flyer</button><button data-action="crm-insert-signature">Mi firma</button><button data-template="syllabus">Temario</button><button data-template="price">Precio</button><button data-action="pay-new">${icon('credit-card')} Cobrar</button>` : ['Información', 'Precio', 'Temario', 'Hablar con asesor'].map(x => `<button data-quick="${x}">${x}</button>`).join('')}</div>${team ? '<div id="conv-sale" class="conv-sale"></div><div id="conv-appointments" class="conv-scheduled"></div><div id="conv-scheduled" class="conv-scheduled"></div>' : ''}<form class="compose" id="message-form">${state.attachment ? `<div class="attachment-preview">${icon('paperclip')}<span>${esc(state.attachment.name)}</span><button type="button" class="icon-btn" data-action="remove-attachment" aria-label="Quitar archivo">${icon('x')}</button></div>` : ''}<textarea id="message-input" aria-label="Escribir mensaje" placeholder="${team ? 'Responder por ' + channels[c.channel].name + '…' : 'Escribe un mensaje'}" rows="${team ? 2 : 1}" maxlength="5000">${esc(state.drafts[c.id] || '')}</textarea><div class="compose-footer"><div class="compose-left"><button type="button" class="icon-btn" data-action="attach" aria-label="Adjuntar imagen o PDF">${icon('paperclip')}</button><button type="button" class="icon-btn compose-expand" data-action="compose-expand" aria-label="Ampliar el cuadro para escribir" aria-pressed="false" title="Ampliar o reducir el cuadro">${icon('maximize-2')}</button>${team ? `<button type="button" class="btn sch-open" data-action="sch-open" aria-label="Programar el envío de un mensaje">${icon('clock')}<span>Programar</span></button><button type="button" class="btn sch-open" data-action="apt-open" aria-label="Agendar una cita con esta persona">${icon('calendar-plus')}<span>Agendar cita</span></button>` : ''}<small>${channels[c.channel].name} · ${c.real || c.wa_peer ? 'número real' : 'Laboratorio'}</small></div><button class="btn primary" id="send-button" type="submit" ${state.sending ? 'disabled' : ''}><span>${state.sending ? 'Enviando' : 'Enviar'}</span>${icon(state.sending ? 'loader-circle' : 'arrow-up')}</button></div><input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"></form>`}</div>`;
+    }</div>${team ? lcBar(c) : ''}${team ? '<div id="conv-summary" class="conv-summary"></div>' : ''}${chatWindow(c, team)}<div class="history" id="history" role="log" aria-label="Mensajes de la conversación" aria-live="polite"></div><div class="chat-bottom"><div class="typing" id="typing"></div><div class="assist-row"><span class="assist-label">${icon(c.bot_enabled ? 'workflow' : c.status === 'waiting' ? 'clock-3' : 'user-round')}<span>${esc(c.status === 'resolved' ? 'Conversación cerrada' : c.bot_enabled ? 'Automatización por reglas' : c.agent_name ? 'Atiende ' + c.agent_name : 'Esperando a un asesor')}</span></span>${team && c.status !== 'resolved' ? `<div class="assist-actions"><button class="btn" data-chat-action="${c.bot_enabled || !c.assigned_to ? 'take' : 'automate'}">${c.bot_enabled || !c.assigned_to ? 'Tomar chat' : 'Reactivar reglas'}</button>${c.status !== 'resolved' ? '<button class="icon-btn" data-chat-action="resolve" aria-label="Cerrar conversación">' + icon('check-check') + '</button>' : ''}</div>` : ''}</div>${c.status === 'resolved' ? `<div class="closed-notice"><span>Esta conversación terminó.</span>${!team ? '<button class="btn" data-action="new-chat">Nueva prueba</button>' : ''}</div>` : `<div class="quick-replies">${team ? `<button data-action="ops-detail">${icon('users-round')} Equipo</button><button data-action="tg-open">${icon('tag')} Etiquetas</button><button data-action="qr-open">${icon('zap')} Respuestas</button><button data-action="qr-remind">${icon('alarm-clock')} Recordarme</button><button data-action="cat-materials">${icon('library')} Biblioteca</button><button data-template="flyer">${icon('image')} Flyer</button><button data-action="crm-insert-signature">Mi firma</button><button data-template="syllabus">Temario</button><button data-template="price">Precio</button><button data-template="schedule">${icon('calendar')} Fechas</button><button data-action="pay-new">${icon('credit-card')} Cobrar</button>` : ['Información', 'Precio', 'Temario', 'Hablar con asesor'].map(x => `<button data-quick="${x}">${x}</button>`).join('')}</div>${team ? '<div id="conv-material" class="conv-material"></div><div id="conv-sale" class="conv-sale"></div><div id="conv-appointments" class="conv-scheduled"></div><div id="conv-scheduled" class="conv-scheduled"></div>' : ''}<form class="compose" id="message-form">${replyBar(c)}${state.attachment ? `<div class="attachment-preview">${icon('paperclip')}<span>${esc(state.attachment.name)}</span><button type="button" class="icon-btn" data-action="remove-attachment" aria-label="Quitar archivo">${icon('x')}</button></div>` : ''}<textarea id="message-input" aria-label="Escribir mensaje" placeholder="${team ? 'Responder por ' + channels[c.channel].name + '…' : 'Escribe un mensaje'}" rows="${team ? 2 : 1}" maxlength="5000">${esc(state.drafts[c.id] || '')}</textarea><div class="compose-footer"><div class="compose-left"><button type="button" class="icon-btn" data-action="attach" aria-label="Adjuntar imagen o PDF">${icon('paperclip')}</button><button type="button" class="icon-btn compose-expand" data-action="compose-expand" aria-label="Ampliar el cuadro para escribir" aria-pressed="false" title="Ampliar o reducir el cuadro">${icon('maximize-2')}</button>${team ? `<button type="button" class="btn sch-open" data-action="sch-open" aria-label="Programar el envío de un mensaje">${icon('clock')}<span>Programar</span></button><button type="button" class="btn sch-open" data-action="apt-open" aria-label="Agendar una cita con esta persona">${icon('calendar-plus')}<span>Agendar cita</span></button>` : ''}<small>${channels[c.channel].name} · ${c.real || c.wa_peer ? 'número real' : 'Laboratorio'}</small></div><button class="btn primary" id="send-button" type="submit" ${state.sending ? 'disabled' : ''}><span>${state.sending ? 'Enviando' : 'Enviar'}</span>${icon(state.sending ? 'loader-circle' : 'arrow-up')}</button></div><input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"></form>`}</div>`;
     renderMessages(atBottom, oldTop);
     updateTyping();
     icons();
@@ -680,6 +703,7 @@
       scheduledUI.mount({ id: state.selected });
       appointmentsUI.mount({ id: state.selected });
       saleUI.mount({ id: state.selected });
+      catalogueUI.renderQuick(state.selected);
     }
   }
   // Canal simulado: ventana de servicio y origen por anuncio en la cabecera; estados de entrega y botones en cada mensaje.
@@ -784,6 +808,38 @@
       ? `<div class="msg-buttons"><span class="msg-button">${icon('clipboard-list')} Encuesta</span></div>`
       : `<div class="msg-buttons"><button type="button" class="msg-button" data-action="survey-open" data-id="${x[1]}">${icon('clipboard-list')} Responder encuesta</button></div>`;
   }
+  // Responder citando (docs/PLAN_ATENDER_COMO_WHATSAPP.md): lo que se va a citar, por conversación, hasta enviar.
+  const replyDraft = {};
+  const senderLabel = (kind, name) =>
+    kind === 'customer'
+      ? name || 'Cliente'
+      : kind === 'automation'
+        ? 'Automatización'
+        : kind === 'system'
+          ? 'Sistema'
+          : name || 'Equipo';
+  function quoteOf(m) {
+    const q = m.quoted;
+    if (!q) return '';
+    return `<button type="button" class="msg-quote" data-action="msg-jump" data-id="${esc(q.id)}" title="Ir al mensaje citado"><strong>${esc(senderLabel(q.senderKind, q.senderName))}</strong><span>${esc(q.text || 'Mensaje')}</span></button>`;
+  }
+  function replyBar(c) {
+    const r = replyDraft[c.id];
+    if (!r || c.status === 'resolved') return '';
+    return `<div class="reply-bar" id="reply-bar">${icon('reply')}<div class="reply-bar-copy"><strong>Respondiendo a ${esc(r.name)}</strong><span>${esc(r.text)}</span></div><button type="button" class="icon-btn" data-action="msg-reply-cancel" aria-label="Quitar la cita">${icon('x')}</button></div>`;
+  }
+  function startReply(id) {
+    const c = current(),
+      m = state.messages.find(x => x.id === id);
+    if (!c || !m) return;
+    replyDraft[c.id] = {
+      id,
+      name: senderLabel(m.sender_kind, m.sender_kind === 'customer' ? c.customer_name : m.sender_name),
+      text: (m.text || '').slice(0, 160) || (m.attachmentUrl ? 'Archivo' : 'Mensaje'),
+    };
+    renderChat();
+    $('#message-input')?.focus({ preventScroll: true });
+  }
   function renderButtons(m, outgoing) {
     if (!m.buttons?.length) return '';
     return `<div class="msg-buttons">${m.buttons.map(b => (outgoing || agentMode() ? `<span class="msg-button">${esc(b)}</span>` : `<button type="button" class="msg-button" data-quick="${esc(b)}">${esc(b)}</button>`)).join('')}</div>`;
@@ -808,7 +864,7 @@
           else
             attachment = `<a class="file-link" href="${esc(m.attachmentUrl)}" target="_blank" rel="noopener">${icon('file-text')}<span>${esc(m.filename)}</span>${icon('download')}</a>`;
         }
-        return `<article class="message ${outgoing ? 'outgoing' : ''}" data-sender="${esc(m.sender_kind)}"><div class="bubble">${attachment}${rich(m.text)}${renderButtons(m, outgoing)}${payLink(m, outgoing)}${surveyLink(m, outgoing)}</div><div class="message-meta">${m.sender_kind === 'automation' ? icon(m.ai_drafted ? 'sparkles' : 'workflow') : ''}<span>${esc(name)} · ${time(m.created_at)}</span>${outgoing ? deliveryMark(m, c) : ''}${agentMode() && String(m.client_ref || '').startsWith('campaign:') ? `<span class="msg-tag">${esc('Difusión')}</span>` : ''}${m.receipt_status ? `<span class="msg-tag">${{ pending: 'Comprobante en revisión', accepted: 'Comprobante aceptado', rejected: 'Comprobante rechazado' }[m.receipt_status]}</span>` : ''}</div></article>`;
+        return `<article class="message ${outgoing ? 'outgoing' : ''}" data-sender="${esc(m.sender_kind)}" data-id="${esc(m.id)}"><div class="bubble">${quoteOf(m)}${attachment}${rich(m.text)}${renderButtons(m, outgoing)}${payLink(m, outgoing)}${surveyLink(m, outgoing)}</div><div class="message-meta">${m.sender_kind === 'automation' ? icon(m.ai_drafted ? 'sparkles' : 'workflow') : ''}<span>${esc(name)} · ${time(m.created_at)}</span>${agentMode() && c.status !== 'resolved' && m.sender_kind !== 'system' ? `<button type="button" class="msg-reply" data-action="msg-reply" data-id="${esc(m.id)}" aria-label="Responder a este mensaje" title="Responder">${icon('reply')}</button>` : ''}${outgoing ? deliveryMark(m, c) : ''}${agentMode() && String(m.client_ref || '').startsWith('campaign:') ? `<span class="msg-tag">${esc('Difusión')}</span>` : ''}${m.receipt_status ? `<span class="msg-tag">${{ pending: 'Comprobante en revisión', accepted: 'Comprobante aceptado', rejected: 'Comprobante rechazado' }[m.receipt_status]}</span>` : ''}</div></article>`;
       })
       .join(
         '',
@@ -1039,6 +1095,7 @@
       text,
       clientRef: state.retry.clientRef,
       asAgent: agentMode(),
+      ...(agentMode() && replyDraft[c.id] ? { replyToId: replyDraft[c.id].id } : {}),
       ...(attachment
         ? { attachment: { name: attachment.name, type: attachment.type, base64: attachment.base64 } }
         : {}),
@@ -1052,6 +1109,7 @@
         localStorage.removeItem('tc-draft-' + state.user.id + '-' + c.id);
       }
       if (state.selected === c.id) state.attachment = null;
+      delete replyDraft[c.id];
       state.retry = null;
       await refresh();
     } catch (error) {
@@ -1509,6 +1567,20 @@
       }
       return;
     }
+    if (name === 'msg-reply') return startReply(element.dataset.id);
+    if (name === 'msg-reply-cancel') {
+      delete replyDraft[state.selected];
+      renderChat();
+      return;
+    }
+    if (name === 'msg-jump') {
+      const target = document.querySelector(`#history .message[data-id="${element.dataset.id}"]`);
+      if (!target) return toast('Ese mensaje no está a la vista; usa «Ver mensajes anteriores».');
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      target.classList.add('message-flash');
+      setTimeout(() => target.classList.remove('message-flash'), 1600);
+      return;
+    }
     if (name === 'msg-retry') {
       await api('/api/messages/' + element.dataset.id + '/retry', { method: 'POST', body: {} });
       toast('Mensaje reenviado al canal simulado.');
@@ -1599,6 +1671,7 @@
       if (button.dataset.action) return await action(button.dataset.action, button);
       if (button.dataset.navGroup) return toggleNavGroup(button);
       if (button.hasAttribute('data-menu-theme-toggle')) return toggleMenuTheme(button);
+      if (button.hasAttribute('data-menu-compact-toggle')) return toggleMenuCompact(button);
       if (button.dataset.view) return setView(button.dataset.view);
       if (button.dataset.mode) {
         state.mode = button.dataset.mode;
@@ -1645,7 +1718,7 @@
         return refresh();
       }
       if (button.dataset.template)
-        return catalogueUI.action('cat-materials', { dataset: { kind: button.dataset.template } });
+        return catalogueUI.action('cat-quick', { dataset: { kind: button.dataset.template } });
       if (button.dataset.startCourse) {
         if (agentMode()) {
           state.mode = 'customer';
@@ -1691,6 +1764,42 @@
     document.getElementById('message-input')?.focus();
   });
   window.addEventListener('resize', () => fitComposer());
+  // Deslizar un mensaje a la derecha (celular) = Responder, como en la app de mensajería. Sólo el equipo.
+  let swipe = null;
+  document.addEventListener(
+    'touchstart',
+    e => {
+      const msg = e.target.closest('#history .message');
+      if (!msg || !agentMode() || e.touches.length !== 1) return (swipe = null);
+      swipe = { el: msg, x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0, live: true };
+    },
+    { passive: true },
+  );
+  document.addEventListener(
+    'touchmove',
+    e => {
+      if (!swipe?.live) return;
+      const dx = e.touches[0].clientX - swipe.x,
+        dy = e.touches[0].clientY - swipe.y;
+      if (Math.abs(dy) > 28 && Math.abs(dy) > Math.abs(dx)) {
+        swipe.live = false;
+        swipe.el.style.transform = '';
+        return;
+      }
+      swipe.dx = Math.max(0, Math.min(72, dx));
+      swipe.el.classList.add('swiping');
+      swipe.el.style.transform = swipe.dx ? `translateX(${swipe.dx}px)` : '';
+    },
+    { passive: true },
+  );
+  document.addEventListener('touchend', () => {
+    if (!swipe) return;
+    const { el, dx, live } = swipe;
+    swipe = null;
+    el.style.transform = '';
+    el.classList.remove('swiping');
+    if (live && dx >= 56 && el.dataset.id && el.dataset.sender !== 'system') startReply(el.dataset.id);
+  });
   document.addEventListener('input', e => {
     if (e.target.id === 'thread-search') {
       state.query = e.target.value;
