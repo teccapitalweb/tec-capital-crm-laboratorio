@@ -1,6 +1,6 @@
 # Atender como en WhatsApp: materiales a un toque, responder citando, menú plegable y velocidad
 
-**Estado:** **publicado en `main` el 27 nov 2026** (commit `dfcf248`; comprobado sin sesión: la portada servida trae la hoja y los dos tramos con caché inmutable y gzip, `/crm` 200, `/` 200, `/mcp` 401, `/api/health` ok; falta probar la cita en WhatsApp real). Sin esquema, rutas ni permisos nuevos (el envío de mensajes acepta un campo más; la portada se sirve empaquetada).
+**Estado:** **publicado en `main` el 27 nov 2026** (commit `dfcf248`; comprobado sin sesión: la portada servida trae la hoja y los dos tramos con caché inmutable y gzip, `/crm` 200, `/` 200, `/mcp` 401, `/api/health` ok). **Cita probada en WhatsApp real el 27 nov 2026:** el dueño respondió desde el CRM a un «HOLA» de un número real y en el teléfono llegó citado («Tú · HOLA» sobre la respuesta). Sin esquema, rutas ni permisos nuevos (el envío de mensajes acepta un campo más; la portada se sirve empaquetada).
 
 ## Por qué
 
@@ -81,4 +81,3 @@ GET  /paquete/estilos.<hash>.css       las hojas de estilo de la portada, igual
 
 - **Cobrar:** preguntar a la vendedora qué le costó o qué querían cambiar antes de tocarlo.
 - Repintar sólo el mensaje nuevo en Conversaciones en lugar de todo el chat cuando llega algo (hoy `renderChat` repinta el historial conservando desplazamiento y foco).
-- Probar «Responder» con WhatsApp real: que la cita se vea en el teléfono.
