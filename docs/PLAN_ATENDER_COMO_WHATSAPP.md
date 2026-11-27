@@ -1,6 +1,6 @@
 # Atender como en WhatsApp: materiales a un toque, responder citando, menú plegable y velocidad
 
-**Estado:** en la rama `feat/atender-como-whatsapp`, **sin publicar**. Sin esquema, rutas ni permisos nuevos (el envío de mensajes acepta un campo más; la portada se sirve empaquetada).
+**Estado:** **publicado en `main` el 27 nov 2026** (commit `dfcf248`; comprobado sin sesión: la portada servida trae la hoja y los dos tramos con caché inmutable y gzip, `/crm` 200, `/` 200, `/mcp` 401, `/api/health` ok; falta probar la cita en WhatsApp real). Sin esquema, rutas ni permisos nuevos (el envío de mensajes acepta un campo más; la portada se sirve empaquetada).
 
 ## Por qué
 
