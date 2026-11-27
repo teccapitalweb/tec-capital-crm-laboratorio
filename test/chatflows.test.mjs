@@ -969,7 +969,7 @@ test('«¿Qué curso te interesa?»: pasa de largo, toma el del mensaje, pregunt
   const ana = await L.customer('Ana Pérez');
   await ana.say('Hola');
   assert.deepEqual(exits(ana.conv), [['next', 'known']]);
-  assert.ok(texts(ana.conv)[0].includes(titles.aves));
+  assert.ok(texts(ana.conv)[0].toLowerCase().includes(titles.aves.toLowerCase())); // en tono vendedor el título va en mayúsculas
   assert.equal(texts(ana.conv).at(-1), `Listo con ${titles.aves}.`);
 
   // 2) curso por elegir y el primer mensaje lo nombra: lo toma sin preguntar y todo lo siguiente es de ese curso
@@ -980,7 +980,10 @@ test('«¿Qué curso te interesa?»: pasa de largo, toma el del mensaje, pregunt
     { ...db.prepare('SELECT course_id,course_pending FROM conversations WHERE id=?').get(beto.conv) },
     { course_id: 'nutricion', course_pending: 0 },
   );
-  assert.ok(texts(beto.conv)[0].includes(titles.nutricion), 'la ficha es la del curso elegido');
+  assert.ok(
+    texts(beto.conv)[0].toLowerCase().includes(titles.nutricion.toLowerCase()),
+    'la ficha es la del curso elegido',
+  );
   assert.equal(texts(beto.conv).at(-1), `Listo con ${titles.nutricion}.`);
   assert.equal(
     db
@@ -1002,7 +1005,7 @@ test('«¿Qué curso te interesa?»: pasa de largo, toma el del mensaje, pregunt
   assert.deepEqual(exits(caro.conv), [['next', 'answer']]);
   assert.equal(L.conversation(caro.conv).course_id, 'nutricion');
   assert.equal(texts(caro.conv).filter(x => /¿Sobre qué curso/.test(x)).length, 1, 'la pregunta salió una vez');
-  assert.ok(texts(caro.conv).at(-2).includes(titles.nutricion));
+  assert.ok(texts(caro.conv).at(-2).toLowerCase().includes(titles.nutricion.toLowerCase()));
   assert.equal(texts(caro.conv).at(-1), `Listo con ${titles.nutricion}.`);
   assert.equal(L.session(caro.conv).outcome, 'completed');
 
@@ -1060,12 +1063,12 @@ test('«¿Qué curso te interesa?»: pasa de largo, toma el del mensaje, pregunt
     body: { state: sim.state, input: { text: simLine.split('.')[0] } },
   });
   assert.ok(sim.notes.some(n => n.includes(`quedaría en el curso «${titles.nutricion}»`)));
-  assert.ok(sim.messages.some(m => m.from === 'flow' && m.text.includes(titles.nutricion)));
+  assert.ok(sim.messages.some(m => m.from === 'flow' && m.text.toLowerCase().includes(titles.nutricion.toLowerCase())));
   assert.equal(sim.outcome, 'completed');
   // con un curso elegido en la prueba, pasa de largo
   sim = await api('/api/chatflows/' + flow.id + '/simulate', { body: { courseId: 'aves' } });
   assert.equal(sim.waiting, null);
-  assert.ok(sim.messages.some(m => m.text.includes(titles.aves)));
+  assert.ok(sim.messages.some(m => m.text.toLowerCase().includes(titles.aves.toLowerCase())));
   assert.equal(JSON.stringify(snapshot()), before, 'la prueba no movió ninguna conversación');
 });
 

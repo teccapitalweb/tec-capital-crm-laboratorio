@@ -354,14 +354,17 @@ test('sin respuesta: primero opciones, luego se PREGUNTA si quiere una persona y
   const mar = await person('Mar Soto');
   await mar.say('Hola');
   const dates = await mar.say('fechas');
-  assert.match(dates.text, /¿Quieres apartar tu lugar\?/);
+  assert.match(dates.text, /Responde \*Quiero inscribirme\* para asegurar tu lugar\.|¿Quieres apartar tu lugar\?/);
   for (const soft of ['ok', 'va', 'vale']) {
     const r = await mar.say(soft);
     assert.notEqual(r.log.intent, 'enroll', soft);
     assert.equal(r.log.action, 'replied', soft);
   }
   assert.deepEqual(mar.state(), { bot_enabled: 1, status: 'open' });
-  assert.match((await mar.say('fechas')).text, /¿Quieres apartar tu lugar\?/);
+  assert.match(
+    (await mar.say('fechas')).text,
+    /Responde \*Quiero inscribirme\* para asegurar tu lugar\.|¿Quieres apartar tu lugar\?/,
+  );
   const go = await mar.say('sí');
   assert.equal(go.log.intent, 'enroll');
   assert.match(go.log.reason, /^Respondió que sí a la invitación a inscribirse/);

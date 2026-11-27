@@ -42,11 +42,13 @@ test('chat: material a un toque, responder citando y menú plegable', async ({ b
   const card = page.locator('#conv-material .cm-card');
   await expect(card).toBeVisible();
   await expect(card).toHaveAttribute('data-kind', 'syllabus');
-  await expect(card.locator('.cm-text')).toContainText('Temario');
+  await expect(card.locator('.cm-text')).toContainText('Esto es lo que verás en'); // el texto del temario del asistente
   await expect(card.locator('[data-action="cat-materials"]')).toBeVisible();
   await expect(page.locator('.quick-replies [data-template="schedule"]')).toBeVisible();
   await card.locator('[data-action="cat-quick-send"]').click();
-  await expect(page.locator('#history .message.outgoing .bubble').last()).toContainText('Temario', { timeout: 10_000 });
+  await expect(page.locator('#history .message.outgoing .bubble').last()).toContainText('Esto es lo que verás en', {
+    timeout: 10_000,
+  });
   await expect(card).toHaveCount(0);
   // «Quitar» cierra la tarjeta sin enviar
   await page.locator('.quick-replies [data-template="price"]').click();

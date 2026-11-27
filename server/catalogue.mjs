@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
+import * as copy from './reply-copy.mjs';
 import { noHour, whenText, zoneWords } from './reply-copy.mjs';
 import { forBrand, isRealBrand } from './lib/real-mode.mjs';
 import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
@@ -257,10 +258,35 @@ export function createCatalogue({
       promotion: p,
       brand,
       priceCents: p?.price_cents ?? e.price_cents,
+      regularPriceCents: e.price_cents, // el precio sin promoción: el «antes» tachado cuando hay una vigente
       currency: e.currency,
       reason,
       dateLabel: e.starts_at === null ? (e.legacy ? c.date_label : 'Por confirmar') : timeText(e.starts_at, e.timezone),
+      sessions: sessionsOf(e.id), // el horario sesión por sesión de Coordinación, si la apertura lo tiene
+      style: styleOf(c.brand_id), // emojis y tono de la marca (Operación → Seguimientos)
     };
+  }
+  // Sesiones programadas de la apertura, en orden (docs/PLAN_MENSAJES_VENDEDORA.md): sólo lo que necesita el texto.
+  function sessionsOf(editionId) {
+    try {
+      return db
+        .prepare(
+          "SELECT number,title,starts_at,duration_min FROM edition_sessions WHERE edition_id=? AND status!='cancelled' ORDER BY starts_at,number",
+        )
+        .all(editionId)
+        .map(s => ({ ...s }));
+    } catch {
+      return [];
+    }
+  }
+  // Estilo de los mensajes de la marca (reply_settings.emojis y .tone); sin fila, los valores por omisión.
+  function styleOf(brandId) {
+    try {
+      const s = db.prepare('SELECT emojis,tone FROM reply_settings WHERE brand_id=?').get(brandId);
+      return { emojis: s ? Boolean(s.emojis) : true, tone: s?.tone === 'sereno' ? 'sereno' : 'vendedor' };
+    } catch {
+      return { emojis: true, tone: 'vendedor' };
+    }
   }
   function templateText(t, ctx, name) {
     const rendered = fillTemplate(t.body, templateValues(ctx, name));
@@ -309,12 +335,10 @@ export function createCatalogue({
       const person = name || db.prepare('SELECT name FROM users WHERE id=?').get(c.customer_id)?.name;
       text = templateText(template, ctx, person?.split(' ')[0]);
     } else if (kind === 'price')
-      text = `Precio de ejemplo: ${money(ctx.priceCents, e.currency)}. ${e.name}. ${p ? p.name + ' · Vigente hasta ' + timeText(p.ends_at, e.timezone) : 'Sin promoción vigente.'} Datos de práctica.`;
-    else if (kind === 'syllabus') text = 'Temario:\n\n' + k.syllabus;
-    else if (kind === 'schedule')
-      text = `${k.title} · ${e.name}\nFecha: ${ctx.dateLabel}\nDocente: ${e.instructor || 'Por confirmar'}`;
-    else
-      text = `Te comparto la información de ${k.title} · ${e.name}.\n${ctx.dateLabel}\nPrecio de ejemplo: ${money(ctx.priceCents, e.currency)}.\nLaboratorio: no constituye una oferta comercial real.`;
+      text = copy.price(ctx); // los mismos textos del asistente (docs/PLAN_MENSAJES_VENDEDORA.md)
+    else if (kind === 'syllabus') text = copy.syllabus(ctx);
+    else if (kind === 'schedule') text = copy.schedule(ctx);
+    else text = copy.card(ctx);
     text = forBrand(db, c.brand_id, text); // modo real (docs/PLAN_MODO_REAL.md): ni «precio de ejemplo» ni avisos de prueba
     // Modo real: los flyers de demostración (el arte incluido con los cursos de ejemplo y el generado con «PRECIO DE
     // EJEMPLO») no salen a un cliente real. Uno elegido a mano se rechaza con el motivo; en la elección automática se

@@ -178,7 +178,7 @@ test('reglas de intención: cada frase del banco va a la ruta correcta y las res
   const two = await sim('Que temas incluye, y tiene certificado?');
   assert.equal(two.intent, 'syllabus');
   assert.match(two.reply, /Esto es lo que verás en /);
-  assert.match(two.reply, /• /);
+  assert.match(two.reply, /• |1️⃣ /); // viñetas, o numerado en tono vendedor
   assert.match(two.reply, /certificad|constancia/i, 'también responde lo del certificado');
   assert.deepEqual([...new Set(two.sources.map(s => s.type))].sort(), ['catalogue', 'knowledge']);
   assert.match(two.reason, /Varias preguntas en un mensaje \(syllabus, certificate\)/);

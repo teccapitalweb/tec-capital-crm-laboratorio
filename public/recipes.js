@@ -133,7 +133,7 @@ window.createRecipesUI = function ({ state, api, esc, icon, showModal, toast }) 
               .map(([k, v]) => `<option value="${k}" ${s.mode === k ? 'selected' : ''}>${v}</option>`)
               .join(
                 '',
-              )}</select></label><small class="rcp-reply-help">${esc(REPLY_HELP[s.mode] || '')}</small>${aiToggle(s)}<label class="rcp-ai"><input type="checkbox" class="rcp-reply-emojis" data-brand="${esc(s.brand_id)}" data-revision="${s.revision}" ${s.emojis ? 'checked' : ''}> Mensajes con emojis<small>Datos en renglones con emoji y negritas en el nombre del curso. Apagado: viñetas y texto plano. Los mensajes serios (pagos, quejas, pasar con una persona) nunca llevan emojis.</small></label><label class="rcp-ai"><input type="checkbox" class="rcp-reply-flyer" data-brand="${esc(s.brand_id)}" data-revision="${s.revision}" ${s.flyer ? 'checked' : ''}> Flyer del curso al informar<small>La primera respuesta sobre un curso (precio, temario, fechas o recomendación) acompaña el texto con su flyer, una vez por conversación. Apagado: sólo texto. Cae a texto si el curso no tiene flyer; en modo real nunca sale un flyer de demostración.</small></label><small>Sin respuesta antes de proponer un asesor: ${s.max_unknown}</small></div>`,
+              )}</select></label><small class="rcp-reply-help">${esc(REPLY_HELP[s.mode] || '')}</small>${aiToggle(s)}<label class="rcp-ai"><input type="checkbox" class="rcp-reply-emojis" data-brand="${esc(s.brand_id)}" data-revision="${s.revision}" ${s.emojis ? 'checked' : ''}> Mensajes con emojis<small>Datos en renglones con emoji y negritas en el nombre del curso. Apagado: viñetas y texto plano. Los mensajes serios (pagos, quejas, pasar con una persona) nunca llevan emojis.</small></label><label class="rcp-reply-field">Tono de los mensajes<select class="rcp-reply-tone" data-brand="${esc(s.brand_id)}" data-revision="${s.revision}" aria-label="Tono de los mensajes de ${esc(s.brand_name)}"><option value="vendedor" ${s.tone !== 'sereno' ? 'selected' : ''}>Vendedor (como las consultoras)</option><option value="sereno" ${s.tone === 'sereno' ? 'selected' : ''}>Sereno (sin urgencia)</option></select></label><small class="rcp-reply-help">Vendedor: título del curso con gancho, promoción con el precio anterior tachado, horario sesión por sesión, cupo cuando quedan pocos lugares y «Responde Quiero inscribirme para asegurar tu lugar». Sereno: los mismos datos sin urgencia. Nada se inventa: todo sale del catálogo y de Coordinación.</small><label class="rcp-ai"><input type="checkbox" class="rcp-reply-flyer" data-brand="${esc(s.brand_id)}" data-revision="${s.revision}" ${s.flyer ? 'checked' : ''}> Flyer del curso al informar<small>La primera respuesta sobre un curso (precio, temario, fechas o recomendación) acompaña el texto con su flyer, una vez por conversación. Apagado: sólo texto. Cae a texto si el curso no tiene flyer; en modo real nunca sale un flyer de demostración.</small></label><small>Sin respuesta antes de proponer un asesor: ${s.max_unknown}</small></div>`,
         )
         .join('')}</div>
       <h3 class="rcp-subtitle">Canal simulado</h3>${note('Por marca y apagado por omisión. Al activarlo, los mensajes salientes pasan por enviado → entregado → leído (o fallido, con reintento), la ventana de servicio de 24 h exige plantillas aprobadas fuera de ella (72 h si el cliente llegó por anuncio) y la bienvenida automática lleva botones de respuesta rápida. Nada se conecta a Meta; sirve para ensayar el flujo real.')}<div class="rcp-brands">${channelSettings
@@ -301,6 +301,23 @@ window.createRecipesUI = function ({ state, api, esc, icon, showModal, toast }) 
     return `<label class="rcp-ai"><input type="checkbox" class="rcp-reply-ai" data-brand="${esc(s.brand_id)}" data-revision="${s.revision}" ${s.provider_enabled ? 'checked' : ''} ${real && usable ? '' : 'disabled'}> Usar la IA para redactar<small>${!real ? 'Requiere Claude configurado (Operación → Sistema → Inteligencia artificial).' : !usable ? 'Elige «Sugerir al asesor» o «Autónomo con IA».' : s.mode === 'suggest' ? 'La IA propone un borrador; una persona decide.' : 'La IA responde sola con conocimiento aprobado.'}</small></label>`;
   }
   async function change(el) {
+    if (el.classList?.contains('rcp-reply-tone')) {
+      try {
+        await api('/api/replies/brands/' + el.dataset.brand, {
+          method: 'PATCH',
+          body: { tone: el.value, expectedRevision: Number(el.dataset.revision) },
+        });
+        toast(
+          el.value === 'sereno'
+            ? 'Los mensajes de esta marca van en tono sereno.'
+            : 'Los mensajes de esta marca van en tono vendedor.',
+        );
+      } catch (e) {
+        toast(e.message);
+      }
+      await load();
+      return true;
+    }
     if (el.classList?.contains('rcp-reply-emojis')) {
       try {
         await api('/api/replies/brands/' + el.dataset.brand, {

@@ -2,5 +2,6 @@
 import m0001 from './0001-certificate-name-requests.mjs';
 import m0002 from './0002-message-style.mjs';
 import m0003 from './0003-course-flyer.mjs';
+import m0004 from './0004-tone.mjs';
 
-export default [m0001, m0002, m0003];
+export default [m0001, m0002, m0003, m0004];

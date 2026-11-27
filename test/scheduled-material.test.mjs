@@ -107,7 +107,7 @@ test('programar un material del catálogo: se valida hoy, se arma al enviar con 
   // programar el temario: queda como material, con su nombre y una vista del texto de hoy
   const syl = (await mk({ kind: 'syllabus' })).item;
   assert.deepEqual(syl.material, { label: 'Temario' });
-  assert.match(syl.text, /^Temario:/);
+  assert.match(syl.text, /^📚 Esto es lo que verás en /); // el mismo texto que el asistente (PLAN_MENSAJES_VENDEDORA.md)
   assert.equal(syl.state, 'pending');
   assert.equal(
     db.prepare('SELECT material FROM scheduled_messages WHERE id=?').get(syl.id).material,

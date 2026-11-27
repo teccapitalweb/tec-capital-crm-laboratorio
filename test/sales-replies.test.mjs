@@ -219,7 +219,12 @@ test('migración replies/0001: sobre una base sin el área «replies» (como la 
     await rm(dir, { recursive: true, force: true });
   });
   // main no tiene ninguna migración del área «replies» (ninguna se publicó): la base de partida es el registro sin ella
-  const names = ['replies/0001-certificate-name-requests', 'replies/0002-message-style', 'replies/0003-course-flyer'];
+  const names = [
+    'replies/0001-certificate-name-requests',
+    'replies/0002-message-style',
+    'replies/0003-course-flyer',
+    'replies/0004-tone',
+  ];
   assert.deepEqual(
     NAMED.filter(m => m.name.startsWith('replies/')).map(m => m.name),
     names,
@@ -242,6 +247,14 @@ test('migración replies/0001: sobre una base sin el área «replies» (como la 
   assert.ok(
     flyer && flyer.notnull === 1 && String(flyer.dflt_value) === '1',
     'reply_settings.flyer, encendida por omisión',
+  );
+  const tone = db
+    .prepare('PRAGMA table_info(reply_settings)')
+    .all()
+    .find(c => c.name === 'tone');
+  assert.ok(
+    tone && tone.notnull === 1 && /vendedor/.test(String(tone.dflt_value)),
+    'reply_settings.tone, vendedor por omisión',
   );
   assertSchemaCurrent(db);
   const tables = db
@@ -563,7 +576,7 @@ test('respuestas de venta de punta a punta', async t => {
   assert.equal(pricey.intent, 'objection');
   assert.match(
     pricey.reply,
-    /^Te entiendo\.\n\nEl precio vigente de .* es de \$379\.00 MXN\. Lo que incluye ese precio: modalidad en línea, del \d+ de \w+ al \d+ de \w+\./,
+    /^Te entiendo\.\n\n💳 El precio vigente de \*.*\* es de \$379\.00 MXN\. Lo que incluye ese precio: modalidad en línea, del \d+ de \w+ al \d+ de \w+\./,
   );
   assert.match(pricey.reply, /apartas con la mitad y liquidas antes del inicio/);
   assert.match(pricey.reply, /no puedo ofrecerte otro precio/);
@@ -586,7 +599,7 @@ test('respuestas de venta de punta a punta', async t => {
   const think = await sim('déjame pensarlo');
   assert.equal(think.intent, 'later');
   assert.match(think.reply, /tómate tu tiempo/);
-  assert.match(think.reply, /el curso inicia el \d+ de \w+ y las inscripciones siguen abiertas/);
+  assert.match(think.reply, /El curso inicia el \d+ de \w+ y las inscripciones siguen abiertas/);
   assert.doesNotMatch(think.reply, /promoción|descuento/);
   const wait = await sim('espera un momento');
   assert.equal(wait.intent, 'later');
@@ -605,11 +618,11 @@ test('respuestas de venta de punta a punta', async t => {
   db.prepare(
     "INSERT INTO promotions(id,brand_id,edition_id,name,price_cents,starts_at,ends_at,status,created_at,updated_at) VALUES('promo-ficticia','globalvet',?,'Preventa ficticia',1000,?,?,'published',?,?)",
   ).run(edition, Date.now() - day, Date.now() + 3 * day, Date.now(), Date.now());
-  assert.match((await sim('¿hasta cuándo es la promoción?')).reply, /Preventa ficticia», vigente hasta el /);
+  assert.match((await sim('¿hasta cuándo es la promoción?')).reply, /«Preventa ficticia»[\s\S]*[Vv]igente hasta el /);
   // con promoción vigente, «lo pienso» la recuerda con su fecha real, y «está caro» la lleva en el precio
   assert.match(
     (await sim('lo voy a pensar')).reply,
-    /Sólo para que lo tengas en cuenta: la promoción «Preventa ficticia» está vigente hasta el \d+ de \w+, y el curso inicia el/,
+    /Sólo para que lo tengas en cuenta:\n🔥 La promoción «Preventa ficticia» \(\$[\d,.]+ MXN\) está vigente hasta el \d+ de \w+\n(🎈 Quedan? \d+ lugar|📅 El curso inicia el)/,
   );
   assert.match((await sim('está caro')).reply, /con la promoción «Preventa ficticia», vigente hasta el/);
   db.prepare("DELETE FROM promotions WHERE id='promo-ficticia'").run();
@@ -619,7 +632,10 @@ test('respuestas de venta de punta a punta', async t => {
   const emoji = /\p{Extended_Pictographic}/u;
   const styled = await sim('¿cuánto cuesta?');
   assert.match(styled.reply, /^💳 El precio de \*.+\* es de \$379\.00 MXN\./);
-  assert.match(styled.reply, /👉 Si quieres apartar tu lugar, escribe \*Quiero inscribirme\*/);
+  assert.match(
+    styled.reply,
+    /👉 Responde \*Quiero inscribirme\* para asegurar tu lugar y te mando tu enlace de pago\./,
+  );
   // botones de siguiente paso tras las respuestas informativas (precio, temario, fechas)
   assert.deepEqual(styled.buttons, ['Temario', 'Fechas', 'Quiero inscribirme']);
   assert.deepEqual((await sim('¿me pasas el temario?')).buttons, ['Precio', 'Fechas', 'Quiero inscribirme']);
@@ -661,7 +677,7 @@ test('respuestas de venta de punta a punta', async t => {
   }
   const cows = await sim('tengo un rancho de bovinos, ¿cuál me conviene?');
   assert.equal(cows.intent, 'courses');
-  assert.match(cows.reply, /Bovinos de leche: manejo sanitario\*? — inicia .+ · \$480\.00 MXN/);
+  assert.match(cows.reply, /Bovinos de leche: manejo sanitario\*?\n\s+📅 Inicia .+ · 💳 \$480\.00 MXN/);
   assert.doesNotMatch(cows.reply, /Reptiles en cautiverio/);
   assert.match((await sim('¿tienen algo de reptiles?')).reply, /Reptiles en cautiverio/);
   const open = await sim('¿cuál me recomiendas?');
@@ -670,7 +686,7 @@ test('respuestas de venta de punta a punta', async t => {
   assert.match((await sim('¿tienen algo de cirugía?')).reply, /No encontré un curso con ese tema/);
   assert.doesNotMatch(
     (await sim('no soy veterinario, soy tecnico, puedo tomarlo?')).reply,
-    / — inicia /,
+    /📅 Inicia | — inicia /,
     'pregunta por ESTE curso: no se le suelta una lista',
   );
   assert.match((await sim('¿qué otros cursos tienen?')).reply, /también tenemos/, 'vecino: la lista de siempre');
@@ -734,7 +750,7 @@ test('respuestas de venta de punta a punta', async t => {
   const recalled = await memo.say('¿cuál me recomiendas?');
   assert.equal(recalled.log.intent, 'courses');
   assert.match(recalled.text, /Por lo que me contaste antes/);
-  assert.match(recalled.text, /Bovinos de leche: manejo sanitario\*? — inicia /);
+  assert.match(recalled.text, /Bovinos de leche: manejo sanitario\*?\n\s+📅 Inicia /);
   assert.doesNotMatch(recalled.text, /Reptiles en cautiverio|¿Qué tema te interesa\?/);
   assert.match(recalled.log.reason, /lo que contó antes en esta conversación/);
   // Después de «¿Qué tema te interesa?», la respuesta con el tema recomienda (en WhatsApp real caía en «no la tengo a la mano»)
@@ -745,7 +761,7 @@ test('respuestas de venta de punta a punta', async t => {
   const topic = await lucia.say('reptiles');
   assert.equal(topic.log.intent, 'courses');
   assert.match(topic.text, /Por lo que me cuentas, te pueden servir/);
-  assert.match(topic.text, /Reptiles en cautiverio\*? — inicia /);
+  assert.match(topic.text, /Reptiles en cautiverio\*?\n\s+📅 Inicia /);
   assert.doesNotMatch(topic.text, /Bovinos de leche/);
   assert.match(topic.log.reason, /^Contesta a «¿Qué tema te interesa\?» del mensaje anterior\./);
   const recalledTopic = await lucia.say('¿y cuál me recomiendas?');
@@ -765,7 +781,7 @@ test('respuestas de venta de punta a punta', async t => {
   );
   const yes = await pepe.say('sí');
   assert.notEqual(yes.log.intent, 'courses');
-  assert.doesNotMatch(yes.text, / — inicia /);
+  assert.doesNotMatch(yes.text, /📅 Inicia | — inicia /);
   // «no entendí» después de la pregunta no es un tema; «cualquiera» recibe la lista de siempre, no «no encontré un curso»
   assert.match((await pepe.say('¿cuál me recomiendas?')).text, /¿Qué tema te interesa\?/);
   const lost = await pepe.say('no entendí');

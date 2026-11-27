@@ -134,6 +134,75 @@ const li = (ctx, emoji, label, value) => (on(ctx) ? emoji + ' ' : '• ') + labe
 const item = (ctx, emoji, text) => (on(ctx) ? emoji + ' ' : '• ') + text;
 const step = (ctx, text) => (on(ctx) ? '👉 ' : '') + text;
 const MODALITY_EMOJI = { online: '💻', in_person: '📍', hybrid: '🏫' };
+// ---- Tono (docs/PLAN_MENSAJES_VENDEDORA.md): «vendedor» es el estilo de las consultoras (título con gancho, promoción
+// con el precio anterior tachado, horario sesión por sesión, cupo cuando quedan pocos lugares y «Responde … para asegurar
+// tu lugar»); «sereno» es el estilo anterior. Por marca, `ctx.style.tone`; un `ctx` sin estilo es sereno (las funciones
+// puras no cambian solas). Nada se inventa: cada renglón sale del catálogo o de Coordinación, y si el dato no existe, no va.
+export const seller = ctx => ctx?.style?.tone === 'vendedor';
+const strike = (ctx, t) => (on(ctx) ? '~' + t + '~' : t);
+const NUMBERS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+// El nombre del curso como primer renglón: con gancho en tono vendedor (mayúsculas y emoji), en negritas si no.
+const hook = ctx =>
+  seller(ctx) ? (on(ctx) ? '🎓 ' : '') + b(ctx, '¡' + title(ctx).toUpperCase() + '!') : b(ctx, title(ctx));
+const dayWords = (t, zone) =>
+  new Intl.DateTimeFormat('es-MX', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: zone || 'America/Mexico_City',
+  })
+    .format(t)
+    .replace(',', '');
+const hourWords = (t, zone) =>
+  new Intl.DateTimeFormat('es-MX', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: zone || 'America/Mexico_City',
+  }).format(t);
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+// Horario sesión por sesión (Coordinación): hasta ocho renglones; con más, cuántas son y de qué día a qué día.
+export function sessionLines(ctx) {
+  const list = Array.isArray(ctx?.sessions) ? ctx.sessions.filter(x => Number.isFinite(Number(x?.starts_at))) : [];
+  if (!list.length) return [];
+  const zone = ctx.edition?.timezone || 'America/Mexico_City';
+  if (list.length > 8)
+    return [
+      li(
+        ctx,
+        '🗓️',
+        'Sesiones',
+        list.length + ', del ' + dayWords(list[0].starts_at, zone) + ' al ' + dayWords(list.at(-1).starts_at, zone),
+      ),
+    ];
+  return [
+    (on(ctx) ? '🗓️ ' : '') + 'Horario:',
+    ...list.map(
+      x =>
+        '• ' +
+        cap(dayWords(x.starts_at, zone)) +
+        ': ' +
+        hourWords(x.starts_at, zone) +
+        ' a ' +
+        hourWords(Number(x.starts_at) + (Number(x.duration_min) || 90) * 60000, zone),
+    ),
+  ];
+}
+const sessionBlock = ctx => {
+  const lines = sessionLines(ctx);
+  return lines.length ? '\n' + lines.join('\n') : '';
+};
+// Cupo y cierre, sólo en tono vendedor y sólo con el dato del catálogo: pocos lugares (10 o menos) y, con 3 o menos, el cierre.
+export function urgency(ctx) {
+  if (!seller(ctx)) return '';
+  const n = ctx.edition?.available_seats;
+  if (!Number.isInteger(n) || n <= 0 || n > 10) return '';
+  const lines = [
+    (on(ctx) ? '🎈 ' : '') + 'Cupo limitado: ' + (n === 1 ? 'queda 1 lugar' : 'quedan ' + n + ' lugares') + '.',
+  ];
+  if (n <= 3) lines.push((on(ctx) ? '✅ ' : '') + '¡Estamos cerrando inscripciones!');
+  return lines.join('\n');
+}
+const withUrgency = (ctx, text) => (urgency(ctx) ? text + '\n\n' + urgency(ctx) : text);
 // Datos de la edición en renglones; lo que no se sabe se omite o se dice claro, sin «Por confirmar» sueltos.
 export function facts(ctx, { price = true } = {}) {
   const e = ctx.edition,
@@ -151,14 +220,29 @@ export function facts(ctx, { price = true } = {}) {
         MODALITY[e.modality] + (e.location ? ' · ' + e.location : ''),
       ),
     );
-  if (price) lines.push(li(ctx, '💳', 'Precio', priceText(ctx)));
+  if (price)
+    lines.push(
+      seller(ctx) && ctx.promotion && before(ctx)
+        ? // tono vendedor con promoción: el precio de hoy en negritas y el anterior tachado, en el mismo renglón
+          (on(ctx) ? '🔥 ' : '• ') +
+            'Precio promocional: ' +
+            b(ctx, money(ctx.priceCents, ctx.currency || e.currency)) +
+            ' ' +
+            strike(ctx, money(ctx.regularPriceCents, ctx.currency || e.currency)) +
+            (ctx.promotion.ends_at ? ' · hasta el ' + shortDay(ctx.promotion.ends_at, e.timezone) : '')
+        : li(ctx, '💳', 'Precio', priceText(ctx)),
+    );
   return lines;
 }
 const title = ctx => ctx.course.title + ' · ' + ctx.edition.name;
 export const LAB_NOTE = 'Chat de prueba: los precios y las fechas son de ejemplo.';
 
 // Ficha del curso que acompaña a la bienvenida.
-export const card = ctx => b(ctx, title(ctx)) + '\n' + facts(ctx).join('\n') + '\n\n' + LAB_NOTE;
+export const card = ctx =>
+  withUrgency(ctx, hook(ctx) + '\n' + facts(ctx).join('\n') + sessionBlock(ctx)) +
+  '\n\n' +
+  (seller(ctx) ? seatCta(ctx) + '\n\n' : '') +
+  LAB_NOTE;
 // El saludo lo escribe la marca; si viene en un solo párrafo, su pregunta final («¿Quieres conocer…?») pasa a su propio párrafo.
 const greeting = t => (/\n/.test(t) ? t : t.replace(/([.!])\s+(¿[^¿?]+\?)\s*$/, '$1\n\n$2'));
 export const welcome = (ctx, name) =>
@@ -173,27 +257,73 @@ const ENROLL_CTA = 'Si quieres apartar tu lugar, escribe «Quiero inscribirme» 
 const enrollCta = ctx =>
   step(
     ctx,
-    'Si quieres apartar tu lugar, escribe ' + key(ctx, 'Quiero inscribirme') + ' y te mando tu enlace de pago.',
+    seller(ctx)
+      ? 'Responde ' + key(ctx, 'Quiero inscribirme') + ' para asegurar tu lugar y te mando tu enlace de pago.'
+      : 'Si quieres apartar tu lugar, escribe ' + key(ctx, 'Quiero inscribirme') + ' y te mando tu enlace de pago.',
   );
-const seatCta = ctx => step(ctx, '¿Quieres apartar tu lugar? Escribe ' + key(ctx, 'Quiero inscribirme') + '.');
+const seatCta = ctx =>
+  step(
+    ctx,
+    seller(ctx)
+      ? 'Responde ' + key(ctx, 'Quiero inscribirme') + ' para asegurar tu lugar.'
+      : '¿Quieres apartar tu lugar? Escribe ' + key(ctx, 'Quiero inscribirme') + '.',
+  );
 const PRICE_NOTE = '(Precio de ejemplo: este es un chat de prueba.)';
+// El «antes» tachado: sólo con una promoción vigente y un precio regular mayor (datos del catálogo).
+const before = ctx =>
+  ctx.promotion && Number.isFinite(ctx.regularPriceCents) && ctx.regularPriceCents > ctx.priceCents
+    ? '\n' + strike(ctx, 'Antes: ' + money(ctx.regularPriceCents, ctx.currency || ctx.edition.currency))
+    : '';
+// Lo que incluye el precio, sólo con datos: sesiones de Coordinación y la modalidad.
+const includes = ctx => {
+  const n = Array.isArray(ctx.sessions) ? ctx.sessions.length : 0,
+    e = ctx.edition;
+  if (!n) return '';
+  return (
+    'Incluye ' +
+    (n === 1 ? '1 sesión' : n + ' sesiones') +
+    (e.modality === 'online' ? ' en vivo' : '') +
+    (e.location ? ' por ' + e.location : '') +
+    '.'
+  );
+};
 export const priceBody = ctx =>
-  (on(ctx) ? '💳 ' : '') + 'El precio de ' + b(ctx, title(ctx)) + ' es de ' + priceText(ctx) + '.';
-export const price = ctx => priceBody(ctx) + '\n\n' + enrollCta(ctx) + '\n\n' + PRICE_NOTE;
+  seller(ctx) && ctx.promotion
+    ? (on(ctx) ? '🔥 ' : '') +
+      'Promoción «' +
+      ctx.promotion.name +
+      '»: ' +
+      b(ctx, money(ctx.priceCents, ctx.currency || ctx.edition.currency)) +
+      before(ctx) +
+      (ctx.promotion.ends_at
+        ? '\n' + (on(ctx) ? '⏳ ' : '') + 'Vigente hasta el ' + shortDay(ctx.promotion.ends_at, ctx.edition.timezone)
+        : '') +
+      (includes(ctx) ? '\n\n' + includes(ctx) : '')
+    : (on(ctx) ? '💳 ' : '') +
+      'El precio de ' +
+      b(ctx, title(ctx)) +
+      ' es de ' +
+      priceText(ctx) +
+      '.' +
+      before(ctx) +
+      (seller(ctx) && includes(ctx) ? '\n\n' + includes(ctx) : '');
+export const price = ctx => withUrgency(ctx, priceBody(ctx)) + '\n\n' + enrollCta(ctx) + '\n\n' + PRICE_NOTE;
 
 export function syllabusBody(ctx) {
   const items = String(ctx.course.syllabus || '')
     .split('\n')
     .map(l => l.trim())
     .filter(Boolean)
-    .map(l => (/^([•\-–*]|\d+[.)])\s/.test(l) ? l : '• ' + l));
+    .map((l, i, all) =>
+      /^([•\-–*]|\d+[.)])\s/.test(l) ? l : (seller(ctx) && on(ctx) && all.length <= 10 ? NUMBERS[i] : '•') + ' ' + l,
+    );
   return (on(ctx) ? '📚 ' : '') + 'Esto es lo que verás en ' + b(ctx, ctx.course.title) + ':\n\n' + items.join('\n');
 }
 export const syllabus = ctx => syllabusBody(ctx) + '\n\n¿Te cuento el precio o las fechas?';
 export function scheduleBody(ctx) {
   const lines = facts(ctx, { price: false });
   if (!ctx.edition.instructor) lines.splice(1, 0, li(ctx, '🧑', 'Docente', 'por confirmar'));
-  return b(ctx, title(ctx)) + '\n' + lines.join('\n');
+  return b(ctx, title(ctx)) + '\n' + lines.join('\n') + sessionBlock(ctx);
 }
 export const schedule = ctx =>
   scheduleBody(ctx) +
@@ -377,12 +507,15 @@ function included(ctx, sessions = 0) {
 // «Está caro»: el precio vigente, lo que incluye y, si la marca la tiene, su respuesta aprobada de pago en partes (`installments`),
 // tal cual. Nunca un descuento ni otro precio: eso lo ve una persona.
 export const objection = (ctx, { sessions = 0, installments = '' } = {}) =>
-  'Te entiendo.\n\nEl precio vigente de ' +
-  title(ctx) +
+  'Te entiendo.\n\n' +
+  (seller(ctx)
+    ? (on(ctx) ? '💳 ' : '') + 'El precio vigente de ' + b(ctx, title(ctx))
+    : 'El precio vigente de ' + title(ctx)) +
   ' es de ' +
   priceText(ctx) +
   '.' +
-  included(ctx, sessions) +
+  before(ctx) +
+  included(ctx, sessions).replace(/^ /, before(ctx) ? '\n' : ' ') +
   (installments ? '\n\n' + installments : '') +
   '\n\nPor este chat no puedo ofrecerte otro precio, pero una persona del equipo puede revisar las opciones contigo: escribe «asesor» y le aviso.\n\n' +
   PRICE_NOTE;
@@ -401,12 +534,44 @@ export function thinking(ctx, name, { seats = null } = {}) {
     );
   else if (startText(e))
     facts.push('el curso inicia el ' + shortDay(e.starts_at, e.timezone) + ' y las inscripciones siguen abiertas');
+  const lines = [];
+  if (seller(ctx)) {
+    if (p?.ends_at)
+      lines.push(
+        (on(ctx) ? '🔥 ' : '') +
+          'La promoción «' +
+          p.name +
+          '» (' +
+          money(ctx.priceCents, ctx.currency || e.currency) +
+          ') está vigente hasta el ' +
+          shortDay(p.ends_at, e.timezone),
+      );
+    if (typeof seats === 'number' && seats > 0 && seats <= 10)
+      lines.push(
+        (on(ctx) ? '🎈 ' : '') +
+          (seats === 1 ? 'Queda 1 lugar' : 'Quedan ' + seats + ' lugares') +
+          ' al momento de responderte',
+      );
+    else if (startText(e))
+      lines.push(
+        (on(ctx) ? '📅 ' : '') +
+          'El curso inicia el ' +
+          shortDay(e.starts_at, e.timezone) +
+          ' y las inscripciones siguen abiertas',
+      );
+  }
   return (
     '¡Claro' +
     hi(name) +
     ', tómate tu tiempo!' +
     (on(ctx) ? ' 🙂' : '') +
-    (facts.length ? '\n\nSólo para que lo tengas en cuenta: ' + facts.join(', y ') + '.' : '') +
+    (seller(ctx)
+      ? lines.length
+        ? '\n\nSólo para que lo tengas en cuenta:\n' + lines.join('\n')
+        : ''
+      : facts.length
+        ? '\n\nSólo para que lo tengas en cuenta: ' + facts.join(', y ') + '.'
+        : '') +
     '\n\nSi te queda alguna duda del precio, las fechas o el temario, dime y te la resuelvo por aquí.\n\n' +
     step(ctx, 'Cuando quieras seguir, escribe ' + key(ctx, 'Quiero inscribirme') + '.')
   );
@@ -414,6 +579,7 @@ export function thinking(ctx, name, { seats = null } = {}) {
 
 // ---- Cuando no hay respuesta: primero opciones, después se PREGUNTA si quiere una persona, y sólo al final se pasa.
 export const fallback = ctx =>
+  (on(ctx) ? '🤔 ' : '') +
   'Esa pregunta todavía no la tengo a la mano.\n\nLo que sí puedo contarte ahora mismo es el precio, el temario o las fechas de ' +
   ctx.course.title +
   '.\n\nSi prefieres que te responda una persona, escribe «asesor».';
@@ -488,7 +654,7 @@ export function paymentConfirmed({ name, reference, course, edition, perSession 
 // oraciones de aviso. Sólo hace falta una entrada cuando el texto de laboratorio promete algo que en una marca real no existe
 // (tarjeta u OXXO simulados, «Paga aquí» con un botón de pago de prueba); los avisos sueltos se quitan solos.
 export const REAL_PAYMENT_METHODS =
-  'Al inscribirte te mando tu pedido con un enlace donde verás cómo pagar. Cuando hayas pagado, envía tu comprobante por este chat y una persona del equipo lo valida. Si quieres empezar, escribe «Quiero inscribirme».';
+  'Al inscribirte te mando tu pedido con las formas de pago.\n\nPara completar tu inscripción, mándame en un solo mensaje:\n✅ Tu comprobante de pago\n✅ Tu nombre completo, como quieres que aparezca en tu certificado\n✅ Tu correo electrónico\n✅ Tu número de WhatsApp\n\nAl transferir, escribe tu nombre en el concepto. Una persona del equipo valida tu pago y te confirma por aquí.\n\nSi quieres empezar, escribe «Quiero inscribirme».';
 export const LAB_SWAPS = Object.freeze([
   [PAYMENT_METHODS, REAL_PAYMENT_METHODS],
   [
@@ -669,7 +835,16 @@ export const certDataNoOrder =
   '¡Gracias! Tus datos para el certificado te los pido cuando apartes tu lugar. Si quieres empezar, escribe «Quiero inscribirme».';
 export const certDataAsk = (ctx = null) =>
   (on(ctx) ? '📝 ' : '') +
-  'Claro. Escríbeme en un solo mensaje tu nombre completo tal como quieres que aparezca en tu certificado (con acentos y mayúsculas donde van), tu correo y tu teléfono.';
+  'Claro. Escríbeme en un solo mensaje:\n' +
+  item(
+    ctx,
+    '✅',
+    'Tu nombre completo, tal como quieres que aparezca en tu certificado (con acentos y mayúsculas donde van)',
+  ) +
+  '\n' +
+  item(ctx, '✅', 'Tu correo') +
+  '\n' +
+  item(ctx, '✅', 'Tu teléfono');
 // Accesos después de pagar.
 export const accessResend = (name, text, ctx = null) =>
   (on(ctx) ? '🔑 ' : '') + 'Claro' + hi(name) + ', aquí tienes de nuevo tus accesos:\n\n' + text;
@@ -729,8 +904,10 @@ export const timeObjection = (ctx, recording = '', sessions = 0) =>
 export function durationExtra(ctx, sessions = 0) {
   const e = ctx.edition,
     end = e.ends_at ? startText({ ...e, starts_at: e.ends_at }) : null;
+  const rows = sessionLines(ctx);
   return (
-    (end ? '\n' + li(ctx, '🏁', 'Termina', end) : '') + (sessions ? '\n' + li(ctx, '🗓️', 'Sesiones', sessions) : '')
+    (end ? '\n' + li(ctx, '🏁', 'Termina', end) : '') +
+    (rows.length ? '\n' + rows.join('\n') : sessions ? '\n' + li(ctx, '🗓️', 'Sesiones', sessions) : '')
   );
 }
 export const durationBody = (ctx, sessions = 0) =>
@@ -757,8 +934,16 @@ export function recommend(ctx, items, { multi = false, remembered = false } = {}
     ctx.brand.name +
     ':\n\n' +
     items
-      .map(i =>
-        item(ctx, '🎓', b(ctx, i.title) + ' — inicia ' + (i.start || 'en fecha por confirmar') + ' · ' + i.price),
+      .map((i, n) =>
+        seller(ctx) && on(ctx) && items.length <= 10
+          ? NUMBERS[n] +
+            ' ' +
+            b(ctx, i.title) +
+            '\n   📅 Inicia ' +
+            (i.start || 'en fecha por confirmar') +
+            ' · 💳 ' +
+            i.price
+          : item(ctx, '🎓', b(ctx, i.title) + ' — inicia ' + (i.start || 'en fecha por confirmar') + ' · ' + i.price),
       )
       .join('\n') +
     '\n\n' +

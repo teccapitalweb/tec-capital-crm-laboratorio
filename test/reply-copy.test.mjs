@@ -236,3 +236,110 @@ test('estilo de los mensajes: con emojis por omisión, texto plano al apagarlo, 
   ])
     assert.doesNotMatch(t, emoji, t);
 });
+
+// Tono vendedor (docs/PLAN_MENSAJES_VENDEDORA.md): el estilo de las consultoras, sólo con datos del catálogo y de
+// Coordinación. Sin esos datos (sin sesiones, sin promoción, con cupo amplio) no inventa ningún renglón.
+test('tono vendedor: gancho, promoción tachada, horario por sesión, cupo y «para asegurar tu lugar», sólo con datos', () => {
+  const mx = (m, d, h) => Date.UTC(2026, m, d, h + 6, 0); // hora del centro de México
+  const seller = {
+    ...full,
+    edition: { ...full.edition, available_seats: 3, price_cents: 44900, starts_at: mx(10, 30, 19) },
+    promotion: { name: 'Pronto pago', ends_at: mx(10, 29, 23), price_cents: 37900 },
+    priceCents: 37900,
+    regularPriceCents: 44900,
+    brand: { name: 'GlobalVet' },
+    sessions: [
+      { number: 1, starts_at: mx(10, 30, 19), duration_min: 120 },
+      { number: 2, starts_at: mx(11, 1, 19), duration_min: 120 },
+      { number: 3, starts_at: mx(11, 2, 19), duration_min: 120 },
+    ],
+    style: { emojis: true, tone: 'vendedor' },
+  };
+  const card = copy.card(seller);
+  assert.match(card, /^🎓 \*¡NUTRICIÓN EN PERROS Y GATOS · EDICIÓN GENERAL!\*\n📅 Inicio: lunes, 30 de noviembre/);
+  assert.match(card, /\n🔥 Precio promocional: \*\$379\.00 MXN\* ~\$449\.00 MXN~ · hasta el 29 de noviembre\n/);
+  assert.match(
+    card,
+    /\n🗓️ Horario:\n• Lunes 30 de noviembre: 7:00 p\.m\. a 9:00 p\.m\.\n• Martes 1 de diciembre: 7:00 p\.m\. a 9:00 p\.m\.\n• Miércoles 2 de diciembre: 7:00 p\.m\. a 9:00 p\.m\.\n/,
+  );
+  assert.match(
+    card,
+    /\n\n🎈 Cupo limitado: quedan 3 lugares\.\n✅ ¡Estamos cerrando inscripciones!\n\n👉 Responde \*Quiero inscribirme\* para asegurar tu lugar\.\n\n/,
+  );
+  assert.ok(card.endsWith(copy.LAB_NOTE));
+  // precio con promoción: bloque con el «antes» tachado, la vigencia y lo que incluye
+  const p = copy.price(seller);
+  assert.match(
+    p,
+    /^🔥 Promoción «Pronto pago»: \*\$379\.00 MXN\*\n~Antes: \$449\.00 MXN~\n⏳ Vigente hasta el 29 de noviembre\n\nIncluye 3 sesiones en vivo por Google Meet\.\n\n🎈 Cupo limitado/,
+  );
+  assert.match(p, /👉 Responde \*Quiero inscribirme\* para asegurar tu lugar y te mando tu enlace de pago\./);
+  // temario numerado, fechas con el horario, «lo pienso» con cada dato en su renglón
+  assert.match(copy.syllabus(seller), /\n\n1️⃣ Etapas de vida\n2️⃣ Evaluación nutricional\n- Casos de estudio\n/);
+  assert.match(copy.schedule(seller), /\n🗓️ Horario:\n• Lunes 30 de noviembre/);
+  assert.match(
+    copy.thinking(seller, 'Ana', { seats: 3 }),
+    /\n\nSólo para que lo tengas en cuenta:\n🔥 La promoción «Pronto pago» \(\$379\.00 MXN\) está vigente hasta el 29 de noviembre\n🎈 Quedan 3 lugares al momento de responderte\n\n/,
+  );
+  assert.match(
+    copy.objection(seller, { sessions: 3 }),
+    /\n~Antes: \$449\.00 MXN~\nLo que incluye ese precio: 3 sesiones/,
+  );
+  assert.match(copy.certDataAsk(seller), /^📝 Claro\. Escríbeme en un solo mensaje:\n✅ Tu nombre completo/);
+  assert.match(copy.fallback(seller), /^🤔 Esa pregunta/);
+  assert.match(
+    copy.recommend(seller, [{ title: 'Aves', start: 'el 8 de diciembre', price: '$599.00 MXN' }], { multi: true }),
+    /\n1️⃣ \*Aves\*\n {3}📅 Inicia el 8 de diciembre · 💳 \$599\.00 MXN\n/,
+  );
+  // sin datos no hay renglones: ni horario, ni cupo, ni «antes», ni cierre
+  const thin = {
+    ...full,
+    edition: { ...full.edition, available_seats: 40 },
+    sessions: [],
+    style: { emojis: true, tone: 'vendedor' },
+  };
+  const bare = copy.card(thin);
+  assert.doesNotMatch(bare, /Horario|Cupo|cerrando|Antes|~/);
+  assert.match(bare, /^🎓 \*¡NUTRICIÓN EN PERROS Y GATOS · EDICIÓN GENERAL!\*\n📅 Inicio/);
+  assert.match(bare, /\n💳 Precio: \$449\.00 MXN\n\n👉 Responde \*Quiero inscribirme\* para asegurar tu lugar\./);
+  assert.doesNotMatch(copy.price(thin), /Incluye|~/);
+  // con más de ocho sesiones se resume; el tono sereno no cambia nada de lo de antes
+  const many = {
+    ...seller,
+    sessions: Array.from({ length: 12 }, (_, i) => ({
+      number: i + 1,
+      starts_at: mx(10, 30 + i, 19),
+      duration_min: 60,
+    })),
+  };
+  assert.match(copy.schedule(many), /\n🗓️ Sesiones: 12, del lunes 30 de noviembre al viernes 11 de diciembre\n/);
+  assert.doesNotMatch(copy.schedule(many), /Horario:/);
+  const calm = { ...seller, style: { emojis: true, tone: 'sereno' } };
+  assert.match(copy.card(calm), /^\*Nutrición en perros y gatos · Edición general\*\n📅 /);
+  assert.doesNotMatch(copy.card(calm), /Cupo|cerrando|🎓 \*¡/);
+  assert.match(copy.card(calm), /\n🗓️ Horario:\n/, 'el horario es dato: sale en los dos tonos');
+  assert.match(
+    copy.price(calm),
+    /^💳 El precio de \*Nutrición[^\n]+\$379\.00 MXN con la promoción «Pronto pago», vigente hasta el 29 de noviembre\.\n~Antes: \$449\.00 MXN~\n\n👉 Si quieres apartar tu lugar/,
+  );
+  // texto plano en tono vendedor: sin emojis, sin negritas ni tachado, mismo contenido
+  const plainSeller = { ...seller, style: { emojis: false, tone: 'vendedor' } };
+  for (const t of [
+    copy.card(plainSeller),
+    copy.price(plainSeller),
+    copy.syllabus(plainSeller),
+    copy.thinking(plainSeller, 'Ana', { seats: 3 }),
+  ]) {
+    assert.doesNotMatch(t, /\p{Extended_Pictographic}/u, t);
+    assert.doesNotMatch(t, /[*~]/, t);
+  }
+  assert.match(copy.card(plainSeller), /^¡NUTRICIÓN EN PERROS Y GATOS · EDICIÓN GENERAL!\n• Inicio/);
+  assert.match(
+    copy.card(plainSeller),
+    /\n• Precio promocional: \$379\.00 MXN \$449\.00 MXN · hasta el 29 de noviembre\n/,
+  );
+  // un emoji por renglón también aquí
+  for (const t of [card, p, copy.schedule(seller)])
+    for (const line of t.split('\n'))
+      assert.ok((line.match(/\p{Extended_Pictographic}/gu) || []).length <= 1, 'un emoji por renglón: ' + line);
+});

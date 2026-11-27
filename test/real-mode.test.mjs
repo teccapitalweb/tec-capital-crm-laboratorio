@@ -52,12 +52,27 @@ const ORDER = {
 // así nadie añade un texto sin comprobar su versión real.
 const TEXTS = {
   LAB_NOTE: () => copy.LAB_NOTE,
-  card: () => copy.card(ctx),
+  card: () =>
+    copy.card(ctx) +
+    '\n' +
+    copy.card({
+      ...ctx,
+      regularPriceCents: 250000,
+      sessions: [{ starts_at: ctx.edition.starts_at, duration_min: 90 }],
+      style: { emojis: true, tone: 'vendedor' },
+    }) +
+    '\n' +
+    copy.price({ ...ctx, regularPriceCents: 250000, style: { emojis: true, tone: 'vendedor' } }),
   welcome: () => copy.welcome(ctx, 'Ana Ruiz'),
   priceBody: () => copy.priceBody(ctx),
   price: () => copy.price(ctx),
   syllabusBody: () => copy.syllabusBody(ctx),
   syllabus: () => copy.syllabus(ctx),
+  // tono vendedor (PLAN_MENSAJES_VENDEDORA.md): ayudantes puros y la ficha completa con sesiones, promoción y cupo
+  seller: () => String(copy.seller({ style: { tone: 'vendedor' } })),
+  sessionLines: () =>
+    copy.sessionLines({ ...ctx, sessions: [{ starts_at: ctx.edition.starts_at, duration_min: 90 }] }).join('\n'),
+  urgency: () => copy.urgency({ ...ctx, style: { emojis: true, tone: 'vendedor' } }),
   scheduleBody: () => copy.scheduleBody(ctx),
   schedule: () => copy.schedule(ctx),
   several: () => copy.several(['a', 'b'], { price: true }) + '\n' + copy.several(['a']),
@@ -542,8 +557,8 @@ test('modo real de punta a punta: interruptor, respuestas, página de pago, pago
     'Preparar marca señala las plantillas propias que todavía avisan de la prueba',
   );
   assert.ok(
-    auto().some(m => /^Precio: \$379\.00 MXN\./.test(m)),
-    'el material de precio dice «Precio:» con el del catálogo',
+    auto().some(m => /El precio de \*.+\* es de \$379\.00 MXN\./.test(m)),
+    'el material de precio lleva el precio del catálogo, con el texto del asistente',
   );
 
   // ---- marcar pagado: sólo con permiso, con cómo y referencia, una sola vez

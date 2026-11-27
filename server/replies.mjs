@@ -326,6 +326,7 @@ export function createReplies({
     max_unknown: 2,
     emojis: 1,
     flyer: 1,
+    tone: 'vendedor',
     revision: 0,
     updated_by: null,
     updated_at: null,
@@ -606,7 +607,10 @@ export function createReplies({
     const bought = c.id !== 'simulacion' && (enrolledHere(c) || ['paid', 'review'].includes(lastOrder(c)?.status));
     // Con un pedido pendiente, «¿cómo entro a la clase?» recibe que los accesos llegan al confirmarse el pago (sin pase).
     const pendingOrder = c.id !== 'simulacion' && lastOrder(c)?.status === 'pending';
-    const ctx = { ...catalogue.info(c.course_id, c.edition_id), style: { emojis: Boolean(s.emojis) } },
+    const ctx = {
+        ...catalogue.info(c.course_id, c.edition_id),
+        style: { emojis: Boolean(s.emojis), tone: s.tone === 'sereno' ? 'sereno' : 'vendedor' },
+      },
       course = ctx.course,
       cls = forced
         ? { intent: forced, confidence: 1 }
@@ -2441,6 +2445,8 @@ export function createReplies({
       throw fail(400, 'El máximo de respuestas sin reconocer va de 1 a 5.');
     if (input.emojis !== undefined && typeof input.emojis !== 'boolean') throw fail(400, '«emojis» es sí o no.');
     if (input.flyer !== undefined && typeof input.flyer !== 'boolean') throw fail(400, '«flyer» es sí o no.');
+    if (input.tone !== undefined && !['vendedor', 'sereno'].includes(input.tone))
+      throw fail(400, 'El tono es «vendedor» o «sereno».');
     return transaction(db, () => {
       const cur = settings(brandId);
       if (!Number.isInteger(input.expectedRevision) || input.expectedRevision !== cur.revision)
@@ -2451,12 +2457,23 @@ export function createReplies({
         max_unknown: maxUnknown ?? cur.max_unknown,
         emojis: input.emojis === undefined ? cur.emojis : input.emojis ? 1 : 0,
         flyer: input.flyer === undefined ? cur.flyer : input.flyer ? 1 : 0,
+        tone: input.tone === undefined ? cur.tone || 'vendedor' : input.tone,
       };
       if (next.provider_enabled && !provider.configured)
         throw fail(400, 'El proveedor de IA no está configurado en el servidor.');
       db.prepare(
-        'INSERT INTO reply_settings(brand_id,mode,provider_enabled,max_unknown,emojis,flyer,revision,updated_by,updated_at) VALUES(?,?,?,?,?,?,1,?,?) ON CONFLICT(brand_id) DO UPDATE SET mode=excluded.mode,provider_enabled=excluded.provider_enabled,max_unknown=excluded.max_unknown,emojis=excluded.emojis,flyer=excluded.flyer,revision=reply_settings.revision+1,updated_by=excluded.updated_by,updated_at=excluded.updated_at',
-      ).run(brandId, next.mode, next.provider_enabled, next.max_unknown, next.emojis, next.flyer, user.id, now());
+        'INSERT INTO reply_settings(brand_id,mode,provider_enabled,max_unknown,emojis,flyer,tone,revision,updated_by,updated_at) VALUES(?,?,?,?,?,?,?,1,?,?) ON CONFLICT(brand_id) DO UPDATE SET mode=excluded.mode,provider_enabled=excluded.provider_enabled,max_unknown=excluded.max_unknown,emojis=excluded.emojis,flyer=excluded.flyer,tone=excluded.tone,revision=reply_settings.revision+1,updated_by=excluded.updated_by,updated_at=excluded.updated_at',
+      ).run(
+        brandId,
+        next.mode,
+        next.provider_enabled,
+        next.max_unknown,
+        next.emojis,
+        next.flyer,
+        next.tone,
+        user.id,
+        now(),
+      );
       return settings(brandId);
     });
   }
