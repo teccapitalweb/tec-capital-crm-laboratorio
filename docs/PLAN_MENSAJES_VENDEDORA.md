@@ -1,6 +1,6 @@
 # Mensajes al estilo de las consultoras: tono vendedor
 
-**Estado:** en la rama `feat/mensajes-vendedora`, **sin publicar**. Migración con nombre `replies/0004-tone` (una columna aditiva); sin rutas ni permisos nuevos (el ajuste de respuestas acepta `tone`).
+**Estado:** **publicado en `main` el 27 nov 2026** (commit `8f807fd`; migración con nombre `replies/0004-tone`, producción en `41+38.d10893ac`; comprobado sin sesión: el código servido trae el selector, `/crm` 200, `/api/replies/settings` 401, `/mcp` 401; falta ver el tachado y los números en emoji en un teléfono real). Sin rutas ni permisos nuevos (el ajuste de respuestas acepta `tone`).
 
 ## Por qué
 
