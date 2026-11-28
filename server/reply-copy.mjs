@@ -189,7 +189,7 @@ export function sessionLines(ctx) {
 }
 const sessionBlock = ctx => {
   const lines = sessionLines(ctx);
-  return lines.length ? '\n' + lines.join('\n') : '';
+  return lines.length ? '\n\n' + lines.join('\n') : ''; // el horario va en su propio bloque
 };
 // Cupo y cierre, sólo en tono vendedor y sólo con el dato del catálogo: pocos lugares (10 o menos) y, con 3 o menos, el cierre.
 export function urgency(ctx) {
@@ -239,7 +239,7 @@ export const LAB_NOTE = 'Chat de prueba: los precios y las fechas son de ejemplo
 
 // Ficha del curso que acompaña a la bienvenida.
 export const card = ctx =>
-  withUrgency(ctx, hook(ctx) + '\n' + facts(ctx).join('\n') + sessionBlock(ctx)) +
+  withUrgency(ctx, hook(ctx) + (seller(ctx) ? '\n\n' : '\n') + facts(ctx).join('\n') + sessionBlock(ctx)) +
   '\n\n' +
   (seller(ctx) ? seatCta(ctx) + '\n\n' : '') +
   LAB_NOTE;

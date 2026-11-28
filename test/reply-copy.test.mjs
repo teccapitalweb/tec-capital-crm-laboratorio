@@ -256,11 +256,11 @@ test('tono vendedor: gancho, promoción tachada, horario por sesión, cupo y «p
     style: { emojis: true, tone: 'vendedor' },
   };
   const card = copy.card(seller);
-  assert.match(card, /^🎓 \*¡NUTRICIÓN EN PERROS Y GATOS · EDICIÓN GENERAL!\*\n📅 Inicio: lunes, 30 de noviembre/);
+  assert.match(card, /^🎓 \*¡NUTRICIÓN EN PERROS Y GATOS · EDICIÓN GENERAL!\*\n\n📅 Inicio: lunes, 30 de noviembre/);
   assert.match(card, /\n🔥 Precio promocional: \*\$379\.00 MXN\* ~\$449\.00 MXN~ · hasta el 29 de noviembre\n/);
   assert.match(
     card,
-    /\n🗓️ Horario:\n• Lunes 30 de noviembre: 7:00 p\.m\. a 9:00 p\.m\.\n• Martes 1 de diciembre: 7:00 p\.m\. a 9:00 p\.m\.\n• Miércoles 2 de diciembre: 7:00 p\.m\. a 9:00 p\.m\.\n/,
+    /\n\n🗓️ Horario:\n• Lunes 30 de noviembre: 7:00 p\.m\. a 9:00 p\.m\.\n• Martes 1 de diciembre: 7:00 p\.m\. a 9:00 p\.m\.\n• Miércoles 2 de diciembre: 7:00 p\.m\. a 9:00 p\.m\.\n/,
   );
   assert.match(
     card,
@@ -276,7 +276,7 @@ test('tono vendedor: gancho, promoción tachada, horario por sesión, cupo y «p
   assert.match(p, /👉 Responde \*Quiero inscribirme\* para asegurar tu lugar y te mando tu enlace de pago\./);
   // temario numerado, fechas con el horario, «lo pienso» con cada dato en su renglón
   assert.match(copy.syllabus(seller), /\n\n1️⃣ Etapas de vida\n2️⃣ Evaluación nutricional\n- Casos de estudio\n/);
-  assert.match(copy.schedule(seller), /\n🗓️ Horario:\n• Lunes 30 de noviembre/);
+  assert.match(copy.schedule(seller), /\n\n🗓️ Horario:\n• Lunes 30 de noviembre/);
   assert.match(
     copy.thinking(seller, 'Ana', { seats: 3 }),
     /\n\nSólo para que lo tengas en cuenta:\n🔥 La promoción «Pronto pago» \(\$379\.00 MXN\) está vigente hasta el 29 de noviembre\n🎈 Quedan 3 lugares al momento de responderte\n\n/,
@@ -300,7 +300,7 @@ test('tono vendedor: gancho, promoción tachada, horario por sesión, cupo y «p
   };
   const bare = copy.card(thin);
   assert.doesNotMatch(bare, /Horario|Cupo|cerrando|Antes|~/);
-  assert.match(bare, /^🎓 \*¡NUTRICIÓN EN PERROS Y GATOS · EDICIÓN GENERAL!\*\n📅 Inicio/);
+  assert.match(bare, /^🎓 \*¡NUTRICIÓN EN PERROS Y GATOS · EDICIÓN GENERAL!\*\n\n📅 Inicio/);
   assert.match(bare, /\n💳 Precio: \$449\.00 MXN\n\n👉 Responde \*Quiero inscribirme\* para asegurar tu lugar\./);
   assert.doesNotMatch(copy.price(thin), /Incluye|~/);
   // con más de ocho sesiones se resume; el tono sereno no cambia nada de lo de antes
@@ -312,12 +312,12 @@ test('tono vendedor: gancho, promoción tachada, horario por sesión, cupo y «p
       duration_min: 60,
     })),
   };
-  assert.match(copy.schedule(many), /\n🗓️ Sesiones: 12, del lunes 30 de noviembre al viernes 11 de diciembre\n/);
+  assert.match(copy.schedule(many), /\n\n🗓️ Sesiones: 12, del lunes 30 de noviembre al viernes 11 de diciembre\n/);
   assert.doesNotMatch(copy.schedule(many), /Horario:/);
   const calm = { ...seller, style: { emojis: true, tone: 'sereno' } };
   assert.match(copy.card(calm), /^\*Nutrición en perros y gatos · Edición general\*\n📅 /);
   assert.doesNotMatch(copy.card(calm), /Cupo|cerrando|🎓 \*¡/);
-  assert.match(copy.card(calm), /\n🗓️ Horario:\n/, 'el horario es dato: sale en los dos tonos');
+  assert.match(copy.card(calm), /\n\n🗓️ Horario:\n/, 'el horario es dato: sale en los dos tonos');
   assert.match(
     copy.price(calm),
     /^💳 El precio de \*Nutrición[^\n]+\$379\.00 MXN con la promoción «Pronto pago», vigente hasta el 29 de noviembre\.\n~Antes: \$449\.00 MXN~\n\n👉 Si quieres apartar tu lugar/,
@@ -333,7 +333,7 @@ test('tono vendedor: gancho, promoción tachada, horario por sesión, cupo y «p
     assert.doesNotMatch(t, /\p{Extended_Pictographic}/u, t);
     assert.doesNotMatch(t, /[*~]/, t);
   }
-  assert.match(copy.card(plainSeller), /^¡NUTRICIÓN EN PERROS Y GATOS · EDICIÓN GENERAL!\n• Inicio/);
+  assert.match(copy.card(plainSeller), /^¡NUTRICIÓN EN PERROS Y GATOS · EDICIÓN GENERAL!\n\n• Inicio/);
   assert.match(
     copy.card(plainSeller),
     /\n• Precio promocional: \$379\.00 MXN \$449\.00 MXN · hasta el 29 de noviembre\n/,
